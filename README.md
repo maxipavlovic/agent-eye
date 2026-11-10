@@ -14,6 +14,7 @@
   <a href="https://github.com/maxipavlovic/agent-eye/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/maxipavlovic/agent-eye/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://sonarcloud.io/summary/overall?id=maxipavlovic_agent-eye"><img alt="Quality gate" src="https://sonarcloud.io/api/project_badges/measure?project=maxipavlovic_agent-eye&metric=alert_status"></a>
   <a href="https://sonarcloud.io/summary/overall?id=maxipavlovic_agent-eye"><img alt="Coverage" src="https://sonarcloud.io/api/project_badges/measure?project=maxipavlovic_agent-eye&metric=coverage"></a>
+  <a href="https://crates.io/crates/agent-eye"><img alt="crates.io" src="https://img.shields.io/crates/v/agent-eye"></a>
   <a href="https://github.com/maxipavlovic/agent-eye/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/maxipavlovic/agent-eye"></a>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue"></a>
   <img alt="Platform: macOS | Linux" src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey">
