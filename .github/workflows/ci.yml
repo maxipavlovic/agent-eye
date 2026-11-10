@@ -39,7 +39,7 @@ jobs:
 
       - name: Face install
         working-directory: face
-        run: npm ci
+        run: npm ci --ignore-scripts
       - name: Face typecheck
         working-directory: face
         run: npm run typecheck
@@ -98,7 +98,7 @@ jobs:
       - name: Face build
         working-directory: face
         run: |
-          npm ci
+          npm ci --ignore-scripts
           npm run build
       - run: rustup toolchain install stable --profile minimal
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
@@ -121,7 +121,7 @@ jobs:
       - name: Face build
         working-directory: face
         run: |
-          npm ci
+          npm ci --ignore-scripts
           npm run build
       - name: Rust toolchain
         run: rustup toolchain install stable --profile minimal --component clippy,rustfmt

@@ -40,7 +40,7 @@ jobs:
           package-manager-cache: false
       - name: Install
         working-directory: face
-        run: npm ci
+        run: npm ci --ignore-scripts
       - name: Build the site
         working-directory: face
         run: npm run "$SITE_BUILD"

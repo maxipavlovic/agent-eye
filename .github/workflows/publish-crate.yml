@@ -30,7 +30,7 @@ jobs:
       - name: Build the board
         working-directory: face
         run: |
-          npm ci
+          npm ci --ignore-scripts
           npm run build
       - run: rustup toolchain install stable --profile minimal
       - name: Publish
