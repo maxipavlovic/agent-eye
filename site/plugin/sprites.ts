@@ -1,5 +1,5 @@
 import { rects, size, type Palette, type Rows } from '../../face/src/pixel/sprite.ts';
-import { ARROW, AUTO, EYE_FRAMES, ICONS, INK, INK_CC, IRIS, MARKS, MOON, RAYS, SUN, only } from '../../face/src/looks/ink/art.ts';
+import { ARROW, AUTO, EYE_FRAMES, ICONS, INK, INK_CC, IRIS, MARKS, MOON, SUN, only } from '../../face/src/looks/ink/art.ts';
 
 /** Pixel icons only the site uses. Same alphabet as the board: # ink, o paper, v vermilion. */
 const SITE_ICONS: Record<string, Rows> = {
@@ -93,10 +93,10 @@ export function pix(rows: Rows, pal: Palette = INK, scale = 4, label?: string): 
   return `<svg viewBox="0 0 ${w} ${h}" width="${w * scale}" height="${h * scale}" shape-rendering="crispEdges" ${a11y}>${rects(rows, pal)}</svg>`;
 }
 
-/** The brand eye as the board draws it (see Eye.tsx), ready for trackEye. */
+/** The brand eye as the board draws it (see Eye.tsx), ready for trackEye. No lashes: they are the board's alone. */
 export function eyeMarkup(): string {
   const layers = (ch: string) => EYE_FRAMES.map((f, i) => `<div class="lay f${i}">${pix(only(f, ch))}</div>`).join('');
-  return `<div class="eye" data-f="0" aria-hidden="true"><div class="rays">${pix(RAYS)}</div>${layers('o')}<div class="pclip"><div class="pupil">${pix(IRIS)}</div></div>${layers('#')}</div>`;
+  return `<div class="eye" data-f="0" aria-hidden="true">${layers('o')}<div class="pclip"><div class="pupil">${pix(IRIS)}</div></div>${layers('#')}</div>`;
 }
 
 /** Replaces {{sprite:name}}, {{sprite:name:scale}}, {{sprite:name:scale:currentColor}} and {{eye}}. */

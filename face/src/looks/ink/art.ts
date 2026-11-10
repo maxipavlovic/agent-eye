@@ -1,8 +1,9 @@
 import { hash, rng, type Rows } from '../../pixel/sprite.ts';
 import type { ColumnId, OutputKind, TopicStatus } from '../../api/types.ts';
+import { GLINT, PUPIL } from './eyeArt.ts';
 
-/** '#' = ink, 'o' = paper (filled inside), 'v' = vermilion, '.' = clear. */
-export const INK = { '#': 'var(--ink)', o: 'var(--paper)', v: 'var(--accent)' } as const;
+/** '#' = ink, 'o' = paper (filled inside), 'v' = vermilion, 'p' = the eye's pupil, 'h' = its highlight, '.' = clear. */
+export const INK = { '#': 'var(--ink)', o: 'var(--paper)', v: 'var(--accent)', p: PUPIL, h: GLINT } as const;
 export const INK_CC = { '#': 'currentColor', o: 'var(--paper)' } as const;
 
 export const ICONS: Record<ColumnId, Rows> = {
@@ -132,45 +133,9 @@ export const OUT_ICON: Record<OutputKind, Rows> = {
 
 export const OUT_TAG: Record<OutputKind, string> = { pr: 'PR', artifact: 'ART', jira: 'JIRA', commit: 'CMT', folder: 'DIR' };
 
-// ---- eye (17 x 9) ----
-const EYE_OPEN: Rows = [
-  '....#########....',
-  '..##ooooooooo##..',
-  '.#ooooooooooooo#.',
-  '#ooooooooooooooo#',
-  '#ooooooooooooooo#',
-  '#ooooooooooooooo#',
-  '.#ooooooooooooo#.',
-  '..##ooooooooo##..',
-  '....#########....',
-];
-const EYE_HALF: Rows = [
-  '.................',
-  '.................',
-  '....#########....',
-  '.##ooooooooooo##.',
-  '#ooooooooooooooo#',
-  '.##ooooooooooo##.',
-  '....#########....',
-  '.................',
-  '.................',
-];
-const EYE_SHUT: Rows = [
-  '.................',
-  '.................',
-  '.................',
-  '...##.......##...',
-  '#################',
-  '...##.......##...',
-  '.................',
-  '.................',
-  '.................',
-];
-export const EYE_FRAMES = [EYE_OPEN, EYE_HALF, EYE_SHUT];
-export const IRIS: Rows = ['.###.', '#o###', '#####', '#####', '.###.'].map((r) => r);
-/** The open eye with its pupil straight ahead, as one sprite: the empty board (the header eye moves). */
-export const EYE_STILL: Rows = EYE_OPEN.map((row, y) => [...row].map((ch, x) => { const p = IRIS[y - 2]?.[x - 6]; return p && p !== '.' ? p : ch; }).join(''));
-export const IRIS_ALERT: Rows = ['.vvv.', 'vovvv', 'vv#vv', 'vvvvv', '.vvv.'];
+// ---- eye: the sprite rows are shared with the site and the README art (eyeArt.ts) ----
+export { EYE_FRAMES, EYE_STILL, IRIS } from './eyeArt.ts';
+/** The three lashes: only the board draws them, and only while something needs you. */
 export const RAYS: Rows = ['..v.....v.....v..', '...v....v....v...'];
 
 /** Pick one char kind from a frame: keeps only `ch`. */

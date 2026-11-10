@@ -1,13 +1,18 @@
 #!/usr/bin/env node
 // Draws the README art into assets/: banner (light and dark), logo, feature icons and the
-// social preview. Everything is pixel art on a grid, written as SVG rects (and one PNG), so the
-// files stay crisp and small. Run: node scripts/make-assets.mjs
+// social preview, and the site's favicon. Everything is pixel art on a grid, written as SVG paths
+// (and one PNG), so the files stay crisp and small. The eye is the board's own: its rows come from
+// face/src/looks/ink/eyeArt.ts. Run: node scripts/make-assets.mjs (Node 22.18 or newer, which reads
+// that TypeScript file as it is).
 import { deflateSync, crc32 } from 'node:zlib';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { EYE_STILL, GLINT, PUPIL } from '../face/src/looks/ink/eyeArt.ts';
 
-const OUT = join(dirname(fileURLToPath(import.meta.url)), '..', 'assets');
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+const OUT = join(ROOT, 'assets');
+const FAVICON = join(ROOT, 'site', 'public', 'favicon.svg');
 
 // Same palette as the board's "ink" look (face/src/looks/ink/ink.css).
 const LIGHT = { paper: '#f2efe6', ink: '#161616', accent: '#ff4a1c' };
@@ -46,20 +51,6 @@ const FONT = {
   ',': ['.....', '.....', '.....', '.....', '..#..', '..#..', '.#...'],
   ' ': ['.....', '.....', '.....', '.....', '.....', '.....', '.....'],
 };
-
-// The eye (17 x 9) from face/src/looks/ink/art.ts, with the iris and its glint.
-const EYE = [
-  '....#########....',
-  '..##ooooooooo##..',
-  '.#ooooooooooooo#.',
-  '#ooooooooooooooo#',
-  '#ooooooooooooooo#',
-  '#ooooooooooooooo#',
-  '.#ooooooooooooo#.',
-  '..##ooooooooo##..',
-  '....#########....',
-];
-const IRIS = ['.vvv.', 'vovvv', 'vvvvv', 'vvvvv', '.vvv.'];
 
 // 16 x 16 feature icons. They sit on their own paper tile, so one file works on any page.
 const ICONS = {
@@ -216,6 +207,7 @@ class Canvas {
     });
     return cx - x - s;
   }
+  /** `scale` is the display size of one art pixel; 0 leaves width and height out (a favicon). */
   svg(scale) {
     const rects = new Map();
     for (let y = 0; y < this.h; y++) {
@@ -234,7 +226,7 @@ class Canvas {
       }
     }
     const paths = [...rects].map(([c, d]) => `<path fill="${c}" d="${d.join('')}"/>`).join('');
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${this.w} ${this.h}" width="${this.w * scale}" height="${this.h * scale}" shape-rendering="crispEdges">${paths}</svg>\n`;
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${this.w} ${this.h}"${scale ? ` width="${this.w * scale}" height="${this.h * scale}"` : ''} shape-rendering="crispEdges">${paths}</svg>\n`;
   }
   png(scale) {
     const W = this.w * scale;
@@ -286,10 +278,9 @@ function shadow(cv, mask, color) {
   }
 }
 
+/** The brand eye, open and looking ahead (17 x 9 art pixels): the same rows the board and the site draw. */
 function eyeSprite(cv, x, y, p, s = 1) {
-  const pal = { '#': p.ink, o: p.paper };
-  cv.sprite(EYE, x, y, pal, s);
-  cv.sprite(IRIS, x + 6 * s, y + 2 * s, { v: p.accent, o: p.paper }, s);
+  cv.sprite(EYE_STILL, x, y, { '#': p.ink, o: p.paper, v: p.accent, p: PUPIL, h: GLINT }, s);
 }
 
 function frame(cv, p) {
@@ -331,6 +322,14 @@ function logo() {
   const cv = new Canvas(21, 21);
   cv.fill(LIGHT.paper);
   eyeSprite(cv, 2, 6, LIGHT);
+  return cv;
+}
+
+/** The site's tab icon: 17 x 17, so the 17-pixel-wide eye fills it and a 16 or 32 pixel icon keeps one art pixel to about one device pixel. */
+function favicon() {
+  const cv = new Canvas(17, 17);
+  cv.fill(LIGHT.paper);
+  eyeSprite(cv, 0, 4, LIGHT);
   return cv;
 }
 
@@ -376,4 +375,5 @@ for (const [name, [cv, scale]] of Object.entries(files)) {
   if (process.env.PREVIEW) writeFileSync(join(process.env.PREVIEW, name.replace('.svg', '.png')), cv.png(scale));
 }
 writeFileSync(join(OUT, 'social.png'), social().png(4));
-console.log('assets written to', OUT);
+writeFileSync(FAVICON, favicon().svg(0));
+console.log('assets written to', OUT, 'and', FAVICON);
