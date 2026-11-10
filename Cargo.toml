@@ -36,7 +36,7 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = "1"
-axum = { version = "0.7", default-features = false, features = ["http1", "tokio", "json", "query"] }
+axum = { version = "0.8", default-features = false, features = ["http1", "tokio", "json", "query"] }
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 clap = { version = "4", features = ["derive", "env"] }
 libc = "0.2"
@@ -44,10 +44,10 @@ regex = "1"
 rusqlite = { version = "0.41", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
-zstd = "0.13"
+zstd = "0.14"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "signal", "sync"] }
 tokio-stream = { version = "0.1", features = ["sync"] }
-toml = "0.8"
+toml = "1.1"
 ratatui = "0.30.2"
 crossterm = { version = "0.29", features = ["use-dev-tty"] }
 nucleo-matcher = "0.3.1"
