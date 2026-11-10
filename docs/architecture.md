@@ -49,16 +49,16 @@ leaves the machine except the excerpts sent to your agent for summaries (see `se
 | `ideas.rs`, `mark.rs` | Parked ideas and starting them; putting a session in a column by hand. |
 | `archive.rs`, `conversation.rs` | Where and when sessions are copied to the archive and put back (how is the adapter's call); reading a conversation from the session or from a temporary copy of the archive. |
 | `hook.rs`, `daemon.rs`, `install/`, `report.rs` | The hook entry point; the background process; install, uninstall and doctor (`install/` also holds the choice of agents and what is said about the daemon's service); the one-line-per-area summary that install, uninstall and `board on\|off` print. |
-| `platform/` | Everything that differs between macOS and Linux, and nothing else does: the service manager (`service.rs` builds the launchd plist or the systemd unit, knows their commands and runs them, `launchd.rs`, `systemd.rs`), opening a URL, the clipboard tools. See "Platforms" below. |
+| `platform/` | Everything that differs between macOS and Linux, and nothing else does: the service manager (`service.rs` builds the launchd plist or the systemd unit, knows their commands and runs them, `launchd.rs`, `systemd.rs`), opening a URL, the clipboard tools, and the terminal a resume opens (`terminal.rs`: what `[board] resume` comes to on this machine, and the `.command` file or terminal program that runs the command). See "Platforms" below. |
 | `server/` | The board API: router and state, guard (token, Host, Origin), face files, cards, board, ideas, prefs. |
 | `tui/`, `cli/` | The picker screen (state, input, render, terminal); the command line. |
-| `config.rs`, `paths.rs`, `files.rs`, `util.rs`, `resume.rs` | Config; eye's home; safe file writes; helpers (quoting, ids, formatting); opening a command in an iTerm2 tab (macOS) or copying it. |
+| `config.rs`, `paths.rs`, `files.rs`, `util.rs`, `resume.rs` | Config; eye's home; safe file writes; helpers (quoting, ids, formatting); opening a command in an iTerm2 tab or a terminal window, or copying it. |
 
 ## Storage
 
 Everything is under `~/.agent-eye` (mode 0700): `eye.db` (SQLite, WAL), `archive/`, `queue/`,
 `logs/`, `config.toml`, `board.token`, `ui.json`, `daemon.lock`, `work/` (an empty folder the
-summaries run in), `tmp/` (a copy of an archived session, only while its conversation is read). The
+summaries run in), `tmp/` (a copy of an archived session, only while its conversation is read; the `.command` files Resume opens in Terminal on macOS, removed after a day). The
 database holds one row per session (with the agent that owns it), streams (sub-agents, background
 sessions, topics, outputs), outputs, ideas, hook events, read cursors (change stamp and the
 adapter's opaque marker) and a full-text index.
@@ -72,7 +72,7 @@ macOS and Linux share all the code except `src/platform/`, which has the three t
 | Background service | launch agent `dev.agent-eye.daemon` in `~/Library/LaunchAgents`, run with `launchctl` | systemd user unit `agent-eye.service` in `~/.config/systemd/user`, run with `systemctl --user` |
 | Open a URL | `open` | `xdg-open` |
 | Copy text | `pbcopy` | the first of `wl-copy`, `xclip`, `xsel` that works |
-| Resume and Start | an iTerm2 tab, or the command copied (`[board] resume`) | the command copied |
+| Resume and Start (`[board] resume`) | an iTerm2 tab if installed, else a Terminal window (a `.command` file opened with `open`), or the command copied | a window of `xdg-terminal-exec`, `x-terminal-emulator` or `$TERMINAL` when there is a display, else the command copied |
 
 Both service managers are compiled on every OS and tested on every OS; `Manager::current()` is the
 one place that picks by the OS. A manager builds the service file and knows its commands; a

@@ -19,8 +19,11 @@ machine, and how to report a problem.
   Codex's trust or its `notify` setting. For Codex the `PostToolUse` hook runs after every tool call
   and Codex hands it the tool's input and output; eye keeps only the session id from it, so no
   command, file or output is stored.
-- Resume and Start drive iTerm2 with AppleScript (macOS only; it asks permission once) or copy the
-  command. On Linux they copy the command, with `wl-copy`, `xclip` or `xsel`.
+- Resume and Start drive iTerm2 with AppleScript (macOS only; it asks permission once), open a
+  `.command` file with `open` (macOS), run a terminal program (`xdg-terminal-exec`,
+  `x-terminal-emulator` or `$TERMINAL`; Linux) or copy the command, with `pbcopy` on macOS and
+  `wl-copy`, `xclip` or `xsel` on Linux. The `.command` file is made in `~/.agent-eye/tmp/` (mode
+  0700, owner only) and holds the same quoted line that iTerm would be given.
 
 eye never needs root and never runs `launchctl` or `systemctl` for anything but its own service.
 
@@ -88,7 +91,8 @@ untrusted:
   fork command at all; the board, `eye resume` and the picker say why.
 - A first message that starts with `-` is prefixed so it cannot be read as an option.
 - The picker starts the agent directly, without a shell. The text typed into iTerm is escaped for
-  AppleScript and stripped of control characters.
+  AppleScript and stripped of control characters. The same goes for the line in a `.command` file; a
+  Linux terminal gets the line as one argument of `sh -c`, never through another shell.
 - The terminal views and the plain output of `eye show`, `find`, `ls` and `pick --filter` replace control characters in session text (titles, folders, prompts, replies) with spaces, so it cannot move the cursor, retitle the window or write to the clipboard.
 
 ## Reporting a problem

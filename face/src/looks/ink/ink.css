@@ -268,7 +268,8 @@ mark { background: var(--ink); color: var(--paper); padding: 0 3px; }
 .where dd { margin: 0; overflow-wrap: anywhere; }
 
 .receipt { margin-top: 34px; background: var(--ink); color: var(--paper); padding: 30px 22px 28px; }
-.receipt .rt { display: flex; justify-content: space-between; font: 700 16px/1 var(--f-label); letter-spacing: 2px; padding-bottom: 12px; border-bottom: 2px dashed var(--paper); margin-bottom: 14px; }
+.receipt .rt { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px 14px; font: 700 16px/1 var(--f-label); letter-spacing: 2px; padding-bottom: 12px; border-bottom: 2px dashed var(--paper); margin-bottom: 14px; }
+.receipt .rt small { margin-left: 10px; font: 400 14px/1 var(--f-body); letter-spacing: 0; }
 .receipt code { display: block; font: 400 16px/1.4 var(--f-body); word-break: break-all; user-select: text; cursor: text; }
 /* The receipt is ink on paper reversed, so the usual selection colours would be invisible here. */
 .receipt ::selection { background: var(--accent); color: var(--on-accent); }

@@ -12,6 +12,12 @@ export function ago(ms: number | null | undefined, now = Date.now()): string {
   return new Date(ms).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 }
 
+/** What Resume does, as the receipt says it: ITERM, TERMINAL or COPY, and the Linux terminal's name when it is known. */
+export function resumeLabel(mode: string | null | undefined, terminal?: string | null): { label: string; via: string } {
+  const label = mode === 'iterm' || mode === 'terminal' ? mode.toUpperCase() : 'COPY';
+  return { label, via: label === 'TERMINAL' && terminal ? terminal : '' };
+}
+
 /** Who a "next" line is for: the user, the card's agent, or another person. */
 export type Who = 'you' | 'agent' | 'others';
 

@@ -310,7 +310,7 @@ pub fn resume(g: &Global, id: &str, dry_run: bool, fork: bool) -> Result<()> {
         println!("{line}");
     } else {
         crate::archive::restore_if_missing(&env.db, &env.paths, &env.agents, &s)?;
-        let plan = resume::plan_command(line, resume::Mode::from_config(&env.cfg));
+        let plan = resume::plan_command(line, &resume::target(&env.cfg, &env.paths));
         println!("{}", plan.command);
         println!("{}", resume::execute(&plan)?);
     }

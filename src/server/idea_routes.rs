@@ -103,12 +103,12 @@ pub(super) async fn api_idea_start(
     // a start runs the agent (or osascript, or a clipboard tool) and can take a while
     let (idea_id, background) = (idea.id, b.background);
     let r = blocking(move || {
-        ideas::start(&db, &st.cfg, idea_id, background, dry, false)
+        ideas::start(&db, &st.cfg, &st.paths, idea_id, background, dry, false)
             .map_err(|e| ApiError::bad(format!("{e:#}")))
     })
     .await?;
     Ok(Json(json!({
-        "dry_run": r.dry_run, "mode": r.mode.as_str(), "command": r.command,
+        "dry_run": r.dry_run, "mode": r.mode.as_str(), "terminal": r.terminal, "command": r.command,
         "applescript": r.applescript, "session_id": r.session_id,
         "job": r.job, "note": r.output,
     })))
@@ -221,13 +221,14 @@ mod tests {
         )
         .await;
         assert_eq!(r["command"], "cd '/tmp/demo' && claude --resume aaaaaaaa-1");
-        assert_eq!(r["mode"], crate::platform::default_resume());
+        let mode = r["mode"].as_str().unwrap();
+        assert!(["iterm", "terminal", "copy"].contains(&mode), "{r}");
         match r["applescript"].as_str() {
             Some(script) => {
-                assert!(crate::platform::can_open_terminal_tab());
+                assert_eq!(mode, "iterm");
                 assert!(script.contains("iTerm2"));
             }
-            None => assert!(!crate::platform::can_open_terminal_tab()),
+            None => assert_ne!(mode, "iterm"),
         }
         let (_, s) = call(&e, req("GET", "/api/search?q=catalog", None)).await;
         assert_eq!(s["results"][0]["card"]["id"], "aaaaaaaa-1");

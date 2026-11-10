@@ -77,7 +77,7 @@ async function copyText(text: string): Promise<boolean> {
  */
 async function planNote(plan: ResumePlan, doing: string): Promise<string> {
   if (plan.mode === 'copy') return (await copyText(plan.command)) ? 'Command copied' : plan.note || 'Copy the command from the panel';
-  return plan.note || `${doing} in a new terminal tab`;
+  return plan.note || `${doing} in a new terminal`;
 }
 
 function readPref(fallback: ThemePref): ThemePref {

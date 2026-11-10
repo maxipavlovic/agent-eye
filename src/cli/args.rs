@@ -204,7 +204,7 @@ pub enum Cmd {
         #[arg(short = 'n', default_value_t = 10)]
         n: usize,
     },
-    /// Resume a session in a new iTerm tab (macOS) or copy its command (`[board] resume`)
+    /// Resume a session in a new terminal tab or window, or copy its command (`[board] resume`)
     Resume {
         id: String,
         /// Only print the command

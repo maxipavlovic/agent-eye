@@ -29,7 +29,7 @@ pub(super) async fn api_card(State(st): State<Shared>, Path(id): Path<String>) -
         v["prompts"] = json!([]);
         v["first_prompt"] = Value::Null;
         v["last_assistant_text"] = Value::Null;
-        v["resume_mode"] = json!(resume::Mode::from_config(&st.cfg).as_str());
+        resume_fields(&mut v, &resume::target(&st.cfg, &st.paths));
         return Ok(Json(v));
     }
     let id = resolve(&db, &id)?;
@@ -69,7 +69,7 @@ pub(super) async fn api_card(State(st): State<Shared>, Path(id): Path<String>) -
         .last_assistant_text
         .as_deref()
         .map(|p| crate::util::tail_chars(p, 600)));
-    v["resume_mode"] = json!(resume::Mode::from_config(&st.cfg).as_str());
+    resume_fields(&mut v, &resume::target(&st.cfg, &st.paths));
     // A session started from an idea keeps the idea's notes in view.
     v["idea"] = match s.idea_id.map(|n| ideas::get(&db, n)).transpose()?.flatten() {
         Some(i) => json!({"id": i.id, "title": i.title, "notes": i.notes, "prompt": i.prompt}),
@@ -167,8 +167,16 @@ pub(super) struct ResumeBody {
     fork: Option<bool>,
 }
 
+/// What Resume will do on this machine, for the card detail: `resume_mode` (`iterm`, `terminal` or
+/// `copy`) and `resume_terminal` (the Linux terminal's name, or null).
+fn resume_fields(v: &mut Value, target: &resume::Target) {
+    v["resume_mode"] = json!(target.mode().as_str());
+    v["resume_terminal"] = json!(target.terminal());
+}
+
 pub(super) fn plan_json(p: &resume::Plan) -> Value {
-    json!({"dry_run": true, "mode": p.mode.as_str(), "command": p.command, "applescript": p.applescript})
+    json!({"dry_run": true, "mode": p.mode().as_str(), "terminal": p.target.terminal(),
+           "command": p.command, "applescript": p.applescript})
 }
 
 pub(super) async fn api_resume(
@@ -197,7 +205,7 @@ pub(super) async fn api_resume(
             .resume_line(&s)
             .ok_or_else(|| ApiError::bad("this session has no resume command"))?
     };
-    let plan = resume::plan_command(line, resume::Mode::from_config(&st.cfg));
+    let plan = resume::plan_command(line, &resume::target(&st.cfg, &st.paths));
     let mut v = plan_json(&plan);
     if !dry {
         // restoring a transcript reads files and opening a tab or copying runs a program: neither on the async threads
@@ -532,6 +540,52 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn the_card_and_the_plan_say_what_resume_will_do() {
+        let cfg = |setting: &str| {
+            crate::config::Config::parse(&format!("[board]\nresume = \"{setting}\"")).unwrap()
+        };
+        let e = env_cfg(cfg("copy"));
+        add_session(&e.db, "aaaaaaaa-1", "t", None, 1, now_ms());
+        let (_, c) = call(&e, req("GET", "/api/cards/aaaaaaaa-1", None)).await;
+        assert_eq!(c["resume_mode"], "copy");
+        assert!(c["resume_terminal"].is_null(), "{c}");
+        let uri = "/api/cards/aaaaaaaa-1/resume";
+        let (_, r) = call(&e, req("POST", uri, None)).await;
+        assert_eq!(r["mode"], "copy");
+        assert!(r["terminal"].is_null() && r["applescript"].is_null(), "{r}");
+        // the detail and the plan come from the same answer
+        let e = env_cfg(cfg("auto"));
+        add_session(&e.db, "aaaaaaaa-1", "t", None, 1, now_ms());
+        let (_, c) = call(&e, req("GET", "/api/cards/aaaaaaaa-1", None)).await;
+        let (_, r) = call(&e, req("POST", uri, None)).await;
+        assert_eq!(c["resume_mode"], r["mode"]);
+        assert_eq!(c["resume_terminal"], r["terminal"]);
+        // a command line of an idea that has no session yet
+        let (_, i) = call(
+            &e,
+            req(
+                "POST",
+                "/api/ideas",
+                Some(json!({"title": "x", "folder": "/tmp/x"})),
+            ),
+        )
+        .await;
+        let (_, c) = call(
+            &e,
+            req(
+                "GET",
+                &format!("/api/cards/{}", i["id"].as_str().unwrap()),
+                None,
+            ),
+        )
+        .await;
+        assert!(
+            ["iterm", "terminal", "copy"].contains(&c["resume_mode"].as_str().unwrap()),
+            "{c}"
+        );
+    }
+
+    #[tokio::test]
     async fn resume_can_fork() {
         let e = env();
         add_session(&e.db, "aaaaaaaa-1", "t", None, 1, now_ms());
@@ -542,15 +596,18 @@ mod tests {
             r["command"],
             "cd '/tmp/demo' && claude --resume aaaaaaaa-1 --fork-session"
         );
-        // a tab is opened where eye can open one (macOS); elsewhere the command is copied
-        assert_eq!(r["mode"], crate::platform::default_resume());
-        match r["applescript"].as_str() {
-            Some(script) => {
-                assert!(crate::platform::can_open_terminal_tab());
-                assert!(script.contains("--fork-session"));
-            }
-            None => assert!(!crate::platform::can_open_terminal_tab()),
+        // `auto` comes to what this machine can do: an iTerm2 tab carries its AppleScript, the
+        // other modes have none, and only a Linux terminal has a name
+        let mode = r["mode"].as_str().unwrap();
+        assert!(["iterm", "terminal", "copy"].contains(&mode), "{r}");
+        assert_eq!(r["applescript"].is_string(), mode == "iterm", "{r}");
+        if mode == "iterm" {
+            assert!(r["applescript"]
+                .as_str()
+                .unwrap()
+                .contains("--fork-session"));
         }
+        assert!(r["terminal"].is_null() || mode == "terminal", "{r}");
         let (_, r) = call(
             &e,
             req("POST", uri, Some(json!({"fork": false, "dry_run": true}))),

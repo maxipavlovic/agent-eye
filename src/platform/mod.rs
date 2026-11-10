@@ -9,6 +9,7 @@ pub mod clipboard;
 mod launchd;
 pub mod service;
 mod systemd;
+pub mod terminal;
 #[cfg(test)]
 pub(crate) mod test_support;
 
@@ -71,19 +72,9 @@ fn open_url_with(path: &OsStr, url: &str) -> Result<()> {
     Ok(())
 }
 
-/// Can eye open a command in a new terminal tab? Only iTerm2 on macOS is supported; elsewhere the
-/// command is copied.
-pub fn can_open_terminal_tab() -> bool {
-    MACOS
-}
-
-/// The `[board] resume` value a new config gets.
+/// The `[board] resume` value a new config gets: `auto` (see `terminal.rs`) on every OS.
 pub fn default_resume() -> &'static str {
-    if can_open_terminal_tab() {
-        "iterm"
-    } else {
-        "copy"
-    }
+    "auto"
 }
 
 /// Folders the daemon always gets on its `PATH`, after the agents' own and eye's.
@@ -132,19 +123,6 @@ mod tests {
         stub(t.path(), open_program(), 3);
         let e = open_url_with(t.path().as_os_str(), "http://x").unwrap_err();
         assert!(format!("{e:#}").contains("failed"), "{e:#}");
-    }
-
-    #[test]
-    fn only_macos_opens_terminal_tabs_and_the_others_copy() {
-        assert_eq!(can_open_terminal_tab(), cfg!(target_os = "macos"));
-        assert_eq!(
-            default_resume(),
-            if cfg!(target_os = "macos") {
-                "iterm"
-            } else {
-                "copy"
-            }
-        );
     }
 
     #[test]

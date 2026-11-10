@@ -23,7 +23,7 @@ concurrency = 2
 [board]
 enabled = false    # the web board is optional: eye board on
 port = 7420
-resume = "{resume}"   # "iterm" opens an iTerm2 tab (macOS only); "copy" copies the command
+resume = "{resume}"   # how Resume/Start open a session: "auto" (iTerm2 or Terminal on a Mac, your terminal on Linux, else copy), "iterm", "terminal", "copy"
 done_days = 7      # Done sessions older than this leave the board for the archive view; 0 = keep them
 
 [user]

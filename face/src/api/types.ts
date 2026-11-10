@@ -107,7 +107,10 @@ export interface CardDetail extends Card {
   prompts: string[];
   first_prompt: string | null;
   last_assistant_text: string | null;
-  resume_mode: 'iterm' | 'copy' | string;
+  /** What Resume does on this machine: 'iterm', 'terminal' or 'copy'. */
+  resume_mode: 'iterm' | 'terminal' | 'copy' | string;
+  /** The Linux terminal program that Resume opens, when known. */
+  resume_terminal?: string | null;
   /** Idea detail only: yours, never sent to the agent. */
   notes?: string | null;
   /** Idea detail only: the first message a start sends. */
@@ -192,7 +195,10 @@ export interface IdeaInput {
 
 export interface ResumePlan {
   dry_run: boolean;
+  /** What happened or would: 'iterm', 'terminal' or 'copy'. */
   mode: string;
+  /** The Linux terminal program, when `mode` is 'terminal' and it is known. */
+  terminal?: string | null;
   command: string;
   applescript?: string | null;
   note?: string;

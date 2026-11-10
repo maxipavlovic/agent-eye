@@ -2,6 +2,7 @@ use crate::agents::{self, AgentRef, Agents, Invocation, StartRequest};
 use crate::config::Config;
 use crate::db::{meta_set, Db};
 use crate::model::Idea;
+use crate::paths::Paths;
 use crate::resume;
 use crate::util::now_ms;
 use anyhow::{Context, Result};
@@ -250,6 +251,8 @@ pub struct Started {
     pub command: String,
     pub applescript: Option<String>,
     pub mode: resume::Mode,
+    /// The Linux terminal that opens the session, when it is known.
+    pub terminal: Option<String>,
     pub session_id: Option<String>,
     /// Background start: the short job id the agent printed.
     pub job: Option<String>,
@@ -258,12 +261,13 @@ pub struct Started {
     pub output: String,
 }
 
-/// Start an idea. Foreground: pick the session id, store it on the idea, open an iTerm tab (or
-/// copy the command). Background: run the agent's background command and link the idea through
-/// its job.
+/// Start an idea. Foreground: pick the session id, store it on the idea, open an iTerm tab or a
+/// terminal window (or copy the command). Background: run the agent's background command and link
+/// the idea through its job.
 pub fn start(
     db: &Db,
     cfg: &Config,
+    paths: &Paths,
     id: i64,
     background: bool,
     dry_run: bool,
@@ -276,18 +280,19 @@ pub fn start(
     let agents = agents::enabled(cfg);
     let plan = plan_start(&agents, &idea, background)?;
     let command = plan.command();
-    let mode = if background {
-        resume::Mode::Copy
+    let target = if background {
+        resume::Target::copy()
     } else {
-        resume::Mode::from_config(cfg)
+        resume::target(cfg, paths)
     };
-    let run = resume::plan_command(command.clone(), mode.clone());
+    let run = resume::plan_command(command.clone(), &target);
     let mut out = Started {
         dry_run,
         background,
         command: command.clone(),
         applescript: run.applescript.clone(),
-        mode,
+        mode: run.mode(),
+        terminal: target.terminal().map(String::from),
         session_id: plan.session_id.clone(),
         job: None,
         output: String::new(),
@@ -605,10 +610,13 @@ mod tests {
             },
         )
         .unwrap();
-        let st = start(&db, &cfg, i.id, false, true, false).unwrap();
+        let paths = Paths {
+            home: tmp.path().join("eye"),
+        };
+        let st = start(&db, &cfg, &paths, i.id, false, true, false).unwrap();
         assert!(st.dry_run && st.command.contains("--session-id"));
         assert!(get(&db, i.id).unwrap().unwrap().session_id.is_none());
-        let bg = start(&db, &cfg, i.id, true, true, false).unwrap();
+        let bg = start(&db, &cfg, &paths, i.id, true, true, false).unwrap();
         assert!(bg.command.contains("claude --bg") && bg.session_id.is_none());
     }
 

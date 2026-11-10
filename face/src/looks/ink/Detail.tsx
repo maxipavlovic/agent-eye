@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'preact/hooks';
 import type { Store } from '../../store';
 import type { CardDetail, ColumnId } from '../../api/types';
-import { ago, isBusy, snippetParts } from '../../format';
+import { ago, isBusy, resumeLabel, snippetParts } from '../../format';
 import { LANE_LABEL } from './columns';
 import { copy } from './copy';
 import { Conversation } from './Conversation';
@@ -54,9 +54,10 @@ function WalkNav({ walk }: { walk: Walk }) {
 /** The command that resumes the session, printed like a till receipt. */
 function Receipt({ d }: { d: CardDetail }) {
   if (!d.resumable || !d.resume_cmd) return null;
+  const { label, via } = resumeLabel(d.resume_mode, d.resume_terminal);
   return (
     <div class="receipt" style={`clip-path:${ZIG}`}>
-      <div class="rt"><span>RESUME</span><span>{(d.resume_mode || 'copy').toUpperCase()}</span></div>
+      <div class="rt"><span>RESUME</span><span>{label}{via && <small>{via}</small>}</span></div>
       <code>{d.resume_cmd}</code>
       <div class="barcode" aria-hidden="true" />
     </div>

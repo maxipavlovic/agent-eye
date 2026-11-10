@@ -281,7 +281,7 @@ describe('copy mode', () => {
   it('opens a tab without naming the terminal when the daemon said nothing', async () => {
     const s = createStore(source());
     await s.startIdea({ ...card('idea:1', 'ideas'), idea_id: 1 }, false);
-    expect(s.toasts.value.at(-1)!.text).toBe('Starting in a new terminal tab');
+    expect(s.toasts.value.at(-1)!.text).toBe('Starting in a new terminal');
   });
 });
 
@@ -291,10 +291,10 @@ describe('fork and conversation', () => {
     const s = createStore(source({ resume }));
     await s.resume('a', true);
     expect(resume).toHaveBeenCalledWith('a', false, true);
-    expect(s.toasts.value.at(-1)!.text).toBe('Forking in a new terminal tab');
+    expect(s.toasts.value.at(-1)!.text).toBe('Forking in a new terminal');
     await s.resume('a');
     expect(resume).toHaveBeenLastCalledWith('a', false, false);
-    expect(s.toasts.value.at(-1)!.text).toBe('Opening in a new terminal tab');
+    expect(s.toasts.value.at(-1)!.text).toBe('Opening in a new terminal');
   });
 
   it('passes the page cursor and fails quietly', async () => {

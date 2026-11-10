@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { artifactName, codeParts, folderGroup, homePath, nextParts, outputLabel, tok } from './format';
+import { artifactName, codeParts, folderGroup, homePath, nextParts, outputLabel, resumeLabel, tok } from './format';
 import type { Output } from './api/types';
 
 describe('nextParts', () => {
@@ -43,6 +43,17 @@ describe('folders', () => {
     });
   });
   it('never trims a folder away', () => expect(folderGroup(['/Users/you/a', '/Users/you/a/b']).rels).toEqual(['a', 'a/b']));
+});
+
+describe('resumeLabel', () => {
+  it('says what Resume does, and which Linux terminal it is when known', () => {
+    expect(resumeLabel('iterm')).toEqual({ label: 'ITERM', via: '' });
+    expect(resumeLabel('terminal')).toEqual({ label: 'TERMINAL', via: '' });
+    expect(resumeLabel('terminal', 'xdg-terminal-exec')).toEqual({ label: 'TERMINAL', via: 'xdg-terminal-exec' });
+    expect(resumeLabel('copy', 'ignored')).toEqual({ label: 'COPY', via: '' });
+    expect(resumeLabel('', null)).toEqual({ label: 'COPY', via: '' });
+    expect(resumeLabel(undefined)).toEqual({ label: 'COPY', via: '' });
+  });
 });
 
 describe('tok', () => {

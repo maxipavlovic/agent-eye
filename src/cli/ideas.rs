@@ -106,7 +106,7 @@ pub fn run(g: &Global, c: IdeaCmd) -> Result<()> {
             }
         }
         IdeaCmd::Start { id, bg, dry_run } => {
-            let r = ideas::start(&env.db, &env.cfg, id, bg, dry_run, true)?;
+            let r = ideas::start(&env.db, &env.cfg, &env.paths, id, bg, dry_run, true)?;
             if r.dry_run {
                 println!("{}", r.command);
                 if let Some(a) = &r.applescript {
