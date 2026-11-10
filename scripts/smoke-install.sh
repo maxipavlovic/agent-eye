@@ -18,32 +18,32 @@ usage() {
 
 BIN=""
 HOME_ARG=""
-while [ $# -gt 0 ]; do
+while [[ $# -gt 0 ]]; do
   case "$1" in
-    --home) [ $# -ge 2 ] || usage; HOME_ARG="$2"; shift 2 ;;
+    --home) [[ $# -ge 2 ]] || usage; HOME_ARG="$2"; shift 2 ;;
     -h|--help) usage ;;
     -*) usage ;;
-    *) [ -z "$BIN" ] || usage; BIN="$1"; shift ;;
+    *) [[ -z "$BIN" ]] || usage; BIN="$1"; shift ;;
   esac
 done
-[ -n "$BIN" ] || usage
-[ -x "$BIN" ] || { echo "not an executable: $BIN" >&2; exit 2; }
+[[ -n "$BIN" ]] || usage
+[[ -x "$BIN" ]] || { echo "not an executable: $BIN" >&2; exit 2; }
 BIN="$(cd "$(dirname "$BIN")" && pwd)/$(basename "$BIN")"
 
-if [ -n "$HOME_ARG" ]; then
+if [[ -n "$HOME_ARG" ]]; then
   mkdir -p "$HOME_ARG"
   NEW_HOME="$(cd "$HOME_ARG" && pwd)"
   # the folder you are logged in with is never a test home
   REAL_HOME="$(cd ~ 2>/dev/null && pwd || true)"
   ACCOUNT_HOME="$(eval echo "~$(id -un)")"
   for real in "$REAL_HOME" "$ACCOUNT_HOME"; do
-    if [ -n "$real" ] && [ "$NEW_HOME" = "$(cd "$real" 2>/dev/null && pwd || echo "$real")" ]; then
+    if [[ -n "$real" ]] && [[ "$NEW_HOME" = "$(cd "$real" 2>/dev/null && pwd || echo "$real")" ]]; then
       echo "refusing: --home is your real home folder ($NEW_HOME)" >&2
       exit 2
     fi
   done
   export HOME="$NEW_HOME"
-elif [ "${CI:-}" = "true" ]; then
+elif [[ "${CI:-}" = "true" ]]; then
   : "${HOME:?HOME is not set}"
 else
   echo "refusing to run: this changes files under HOME. Set CI=true on a throw-away runner, or pass --home <empty temp dir>." >&2
@@ -57,7 +57,7 @@ SETTINGS="$CLAUDE_DIR/settings.json"
 INSTALLED="$HOME/.local/bin/agent-eye"
 SEEDED=""
 # the file that keeps the daemon running, and what is in it
-if [ "$(uname -s)" = "Darwin" ]; then
+if [[ "$(uname -s)" = "Darwin" ]]; then
   SERVICE_FILE="$HOME/Library/LaunchAgents/dev.agent-eye.daemon.plist"
   SERVICE_TEXT="<string>daemon</string>"
   SERVICE_COMMAND="launchctl bootstrap"
@@ -75,7 +75,7 @@ contains() { # contains <text> <needle> <what>
 
 # 1. A Claude Code folder to work with: keep the one that is there, else make a small one with a
 # foreign hook (which install must leave alone) and one transcript.
-if [ ! -e "$CLAUDE_DIR" ]; then
+if [[ ! -e "$CLAUDE_DIR" ]]; then
   SEEDED=1
   mkdir -p "$CLAUDE_DIR/projects/-smoke"
   cat > "$SETTINGS" <<'JSON'
@@ -101,7 +101,7 @@ JSON
     printf '{"type":"user","timestamp":"2026-11-01T10:01:00Z","cwd":"/tmp","sessionId":"%s","message":{"content":"Thanks"}}\n' "$SID"
   } > "$CLAUDE_DIR/projects/-smoke/$SID.jsonl"
 fi
-[ -f "$SETTINGS" ] || echo '{}' > "$SETTINGS"
+[[ -f "$SETTINGS" ]] || echo '{}' > "$SETTINGS"
 BEFORE="$(cat "$SETTINGS")"
 
 # 2. install
@@ -109,14 +109,14 @@ out="$("$BIN" install --no-service 2>&1)" || { echo "$out" >&2; fail "install"; 
 contains "$out" "hooks added (8 events)" "install adds the hooks"
 contains "$out" "not started (--no-service)" "install prints the service commands and does not run them"
 contains "$out" "$SERVICE_COMMAND" "the service command is the one of this OS"
-[ -x "$INSTALLED" ] || fail "binary was not installed at $INSTALLED"
-[ -L "$HOME/.local/bin/eye" ] || fail "the eye alias was not linked"
-[ -f "$SERVICE_FILE" ] || fail "service file missing: $SERVICE_FILE"
+[[ -x "$INSTALLED" ]] || fail "binary was not installed at $INSTALLED"
+[[ -L "$HOME/.local/bin/eye" ]] || fail "the eye alias was not linked"
+[[ -f "$SERVICE_FILE" ]] || fail "service file missing: $SERVICE_FILE"
 grep -qF "$SERVICE_TEXT" "$SERVICE_FILE" || fail "the service file does not run the daemon"
-[ -f "$CLAUDE_DIR/skills/eye/SKILL.md" ] || fail "skill missing"
+[[ -f "$CLAUDE_DIR/skills/eye/SKILL.md" ]] || fail "skill missing"
 n="$(grep -c 'agent-eye hook ' "$SETTINGS" || true)"
-[ "$n" -eq 8 ] || fail "expected 8 hook entries in settings.json, found $n"
-if [ -n "$SEEDED" ]; then contains "$(cat "$SETTINGS")" "/opt/notify/bin/notify stop" "the other tool's hook is untouched"; fi
+[[ "$n" -eq 8 ]] || fail "expected 8 hook entries in settings.json, found $n"
+if [[ -n "$SEEDED" ]]; then contains "$(cat "$SETTINGS")" "/opt/notify/bin/notify stop" "the other tool's hook is untouched"; fi
 pass "install"
 
 # 3. doctor looks and reports; warnings (daemon not running) are fine, a crash is not
@@ -124,13 +124,13 @@ set +e
 out="$("$INSTALLED" doctor 2>&1)"
 code=$?
 set -e
-[ "$code" -le 1 ] || { echo "$out" >&2; fail "doctor exited with $code"; }
+[[ "$code" -le 1 ]] || { echo "$out" >&2; fail "doctor exited with $code"; }
 contains "$out" "hooks present for all 8 events" "doctor sees the hooks"
 
 # 4. scan and the picker's plain list (no terminal)
 out="$("$INSTALLED" scan 2>&1 </dev/null)" || { echo "$out" >&2; fail "scan"; }
 contains "$out" "scanned" "scan runs"
-if [ -n "$SEEDED" ]; then
+if [[ -n "$SEEDED" ]]; then
   contains "$out" "scanned 1 transcripts" "scan finds the transcript"
   out="$("$INSTALLED" pick --filter zebra </dev/null 2>&1)" || { echo "$out" >&2; fail "pick"; }
   contains "$out" "Smoke test the zebra importer" "pick lists the session"
@@ -141,25 +141,25 @@ fi
 
 # 5. a hook call prints nothing and queues one line
 out="$(echo '{"session_id":"s1","hook_event_name":"Stop"}' | "$INSTALLED" hook Stop 2>&1)" || fail "hook"
-[ -z "$out" ] || fail "a hook must print nothing, got: $out"
-[ -s "$HOME/.agent-eye/queue/events.jsonl" ] || fail "the hook queued nothing"
+[[ -z "$out" ]] || fail "a hook must print nothing, got: $out"
+[[ -s "$HOME/.agent-eye/queue/events.jsonl" ]] || fail "the hook queued nothing"
 pass "hook"
 
 # 6. uninstall puts settings.json back exactly as it was
 out="$("$INSTALLED" uninstall --no-service 2>&1)" || { echo "$out" >&2; fail "uninstall"; }
 AFTER="$(cat "$SETTINGS")"
-[ "$AFTER" = "$BEFORE" ] || { diff <(echo "$BEFORE") <(echo "$AFTER") >&2 || true; fail "settings.json was not restored"; }
+[[ "$AFTER" = "$BEFORE" ]] || { diff <(echo "$BEFORE") <(echo "$AFTER") >&2 || true; fail "settings.json was not restored"; }
 pass "settings.json is restored"
-[ ! -e "$INSTALLED" ] && [ ! -e "$HOME/.local/bin/eye" ] || fail "the binary or alias is still there"
-[ ! -e "$SERVICE_FILE" ] || fail "the service file is still there"
-[ ! -e "$CLAUDE_DIR/skills/eye" ] || fail "the skill is still there"
-[ -d "$HOME/.agent-eye" ] || fail "uninstall must keep the data without --purge"
+[[ ! -e "$INSTALLED" ]] && [[ ! -e "$HOME/.local/bin/eye" ]] || fail "the binary or alias is still there"
+[[ ! -e "$SERVICE_FILE" ]] || fail "the service file is still there"
+[[ ! -e "$CLAUDE_DIR/skills/eye" ]] || fail "the skill is still there"
+[[ -d "$HOME/.agent-eye" ]] || fail "uninstall must keep the data without --purge"
 pass "uninstall"
 
 # 7. a machine with only Codex CLI (only when this script made the Claude folder, so nothing real
 # is touched): install follows Codex, adds its hooks beside a foreign one and makes no Claude folder;
 # a hook call is queued for Codex; uninstall puts hooks.json back exactly as it was.
-if [ -n "$SEEDED" ]; then
+if [[ -n "$SEEDED" ]]; then
   rm -rf "$CLAUDE_DIR"
   rm -f "$HOME/.agent-eye/config.toml"
   CODEX_DIR="$HOME/.codex"
@@ -192,33 +192,33 @@ JSON
   out="$("$BIN" install --no-service 2>&1)" || { echo "$out" >&2; fail "codex install"; }
   contains "$out" "agents  Codex CLI (enabled in" "install follows the agent that is there"
   contains "$out" "Next: start Codex and run /hooks once" "install says Codex must trust the hooks"
-  [ ! -e "$CLAUDE_DIR" ] || fail "a Codex-only machine got a Claude Code folder"
+  [[ ! -e "$CLAUDE_DIR" ]] || fail "a Codex-only machine got a Claude Code folder"
   grep -q 'enabled = \["codex"\]' "$HOME/.agent-eye/config.toml" || fail "config.toml does not enable codex"
-  [ -f "$CODEX_DIR/skills/eye/SKILL.md" ] || fail "the codex skill is missing"
+  [[ -f "$CODEX_DIR/skills/eye/SKILL.md" ]] || fail "the codex skill is missing"
   n="$(grep -c 'agent-eye hook .* --agent codex' "$HOOKS" || true)"
-  [ "$n" -eq 6 ] || fail "expected 6 codex hook entries, found $n"
+  [[ "$n" -eq 6 ]] || fail "expected 6 codex hook entries, found $n"
   contains "$(cat "$HOOKS")" "/opt/notify/bin/notify stop" "the other tool's codex hook is untouched"
   set +e
   out="$("$INSTALLED" doctor 2>&1)"
   code=$?
   set -e
-  [ "$code" -le 1 ] || { echo "$out" >&2; fail "doctor exited with $code"; }
+  [[ "$code" -le 1 ]] || { echo "$out" >&2; fail "doctor exited with $code"; }
   contains "$out" "hooks present for all 6 events" "doctor sees the codex hooks"
   out="$("$INSTALLED" scan 2>&1 </dev/null)" || { echo "$out" >&2; fail "codex scan"; }
   contains "$out" "scanned 1 transcripts" "scan finds the rollout"
   out="$("$INSTALLED" pick --filter codex </dev/null 2>&1)" || { echo "$out" >&2; fail "codex pick"; }
   contains "$out" "Smoke test the codex importer" "pick lists the codex session"
   out="$(echo "{\"session_id\":\"$RID\",\"hook_event_name\":\"Stop\"}" | "$INSTALLED" hook Stop --agent codex 2>&1)" || fail "codex hook"
-  [ -z "$out" ] || fail "a hook must print nothing, got: $out"
+  [[ -z "$out" ]] || fail "a hook must print nothing, got: $out"
   grep -q '"agent":"codex"' "$HOME/.agent-eye/queue/events.jsonl" || fail "the hook was not queued for codex"
   out="$("$INSTALLED" uninstall --no-service 2>&1)" || { echo "$out" >&2; fail "codex uninstall"; }
   CODEX_AFTER="$(cat "$HOOKS")"
-  [ "$CODEX_AFTER" = "$CODEX_BEFORE" ] || { diff <(echo "$CODEX_BEFORE") <(echo "$CODEX_AFTER") >&2 || true; fail "hooks.json was not restored"; }
-  [ ! -e "$CODEX_DIR/skills/eye" ] || fail "the codex skill is still there"
+  [[ "$CODEX_AFTER" = "$CODEX_BEFORE" ]] || { diff <(echo "$CODEX_BEFORE") <(echo "$CODEX_AFTER") >&2 || true; fail "hooks.json was not restored"; }
+  [[ ! -e "$CODEX_DIR/skills/eye" ]] || fail "the codex skill is still there"
   pass "codex-only machine"
   rm -rf "$CODEX_DIR"
 fi
 
 # 8. tidy up what this script made
-if [ -n "$SEEDED" ]; then rm -rf "$CLAUDE_DIR"; fi
+if [[ -n "$SEEDED" ]]; then rm -rf "$CLAUDE_DIR"; fi
 echo "smoke test passed"
