@@ -1,0 +1,294 @@
+{
+  "cards": [
+    {
+      "id": "601bb475-819d-4862-a123-921aea5279bf",
+      "agent": "claude",
+      "agent_name": "Claude",
+      "title": "Prototype the onboarding tour",
+      "folder": "~/code/docs-site",
+      "repo": "~/code/docs-site",
+      "branch": null,
+      "column": "archive",
+      "auto_column": "archive",
+      "manual": false,
+      "last_activity_at": 1792141200000,
+      "started_at": 1791968400000,
+      "state": "Dropped: the team chose a video instead.",
+      "state_source": "summary",
+      "next": null,
+      "ai_status": null,
+      "recap": null,
+      "live_status": null,
+      "kind": "interactive",
+      "streams": [],
+      "outputs": [
+        {
+          "kind": "folder",
+          "value": "~/code/docs-site",
+          "url": null
+        }
+      ],
+      "output_counts": {
+        "folder": 1
+      },
+      "topics": [],
+      "topics_more": 0,
+      "resume_cmd": "cd '/Users/you/code/docs-site' && claude --resume 601bb475-819d-4862-a123-921aea5279bf",
+      "resumable": true,
+      "parent_id": null,
+      "child_count": 0,
+      "child_done": 0,
+      "prompt_count": 6,
+      "tokens": {
+        "input": 1421,
+        "output": 4262,
+        "cache_write": 21312,
+        "cache_read": 328205,
+        "total": 355200,
+        "subagents_total": 0
+      }
+    },
+    {
+      "id": "9e7cd761-3e34-4f17-a187-4aa78276d271",
+      "agent": "claude",
+      "agent_name": "Claude",
+      "title": "Try Bun for the build",
+      "folder": "~/code/storefront",
+      "repo": "~/code/storefront",
+      "branch": null,
+      "column": "archive",
+      "auto_column": "archive",
+      "manual": false,
+      "last_activity_at": 1791622800000,
+      "started_at": 1791450000000,
+      "state": "Build was 20% faster but two plugins broke. Stayed on the current setup.",
+      "state_source": "summary",
+      "next": null,
+      "ai_status": null,
+      "recap": null,
+      "live_status": null,
+      "kind": "interactive",
+      "streams": [],
+      "outputs": [
+        {
+          "kind": "folder",
+          "value": "~/code/storefront",
+          "url": null
+        }
+      ],
+      "output_counts": {
+        "folder": 1
+      },
+      "topics": [],
+      "topics_more": 0,
+      "resume_cmd": "cd '/Users/you/code/storefront' && claude --resume 9e7cd761-3e34-4f17-a187-4aa78276d271",
+      "resumable": true,
+      "parent_id": null,
+      "child_count": 0,
+      "child_done": 0,
+      "prompt_count": 6,
+      "tokens": {
+        "input": 1596,
+        "output": 4788,
+        "cache_write": 23940,
+        "cache_read": 368676,
+        "total": 399000,
+        "subagents_total": 0
+      }
+    },
+    {
+      "id": "1bb7df9b-e31e-4aa2-aa94-6f001c7c5a9f",
+      "agent": "claude",
+      "agent_name": "Claude",
+      "title": "CSV import for products",
+      "folder": "~/code/orders-api",
+      "repo": "~/code/orders-api",
+      "branch": null,
+      "column": "archive",
+      "auto_column": "archive",
+      "manual": false,
+      "last_activity_at": 1791363600000,
+      "started_at": 1791190800000,
+      "state": "Merged and released. Removed the old importer.",
+      "state_source": "summary",
+      "next": null,
+      "ai_status": null,
+      "recap": null,
+      "live_status": null,
+      "kind": "interactive",
+      "streams": [],
+      "outputs": [
+        {
+          "kind": "folder",
+          "value": "~/code/orders-api",
+          "url": null
+        }
+      ],
+      "output_counts": {
+        "folder": 1
+      },
+      "topics": [],
+      "topics_more": 0,
+      "resume_cmd": "cd '/Users/you/code/orders-api' && claude --resume 1bb7df9b-e31e-4aa2-aa94-6f001c7c5a9f",
+      "resumable": true,
+      "parent_id": null,
+      "child_count": 0,
+      "child_done": 0,
+      "prompt_count": 6,
+      "tokens": {
+        "input": 1684,
+        "output": 5051,
+        "cache_write": 25254,
+        "cache_read": 388911,
+        "total": 420900,
+        "subagents_total": 0
+      }
+    },
+    {
+      "id": "d1e568b7-141e-498a-a2b6-9a829049a39d",
+      "agent": "claude",
+      "agent_name": "Claude",
+      "title": "Rewrite the --help text",
+      "folder": "~/code/tasker",
+      "repo": "~/code/tasker",
+      "branch": null,
+      "column": "archive",
+      "auto_column": "archive",
+      "manual": false,
+      "last_activity_at": 1790672400000,
+      "started_at": 1790499600000,
+      "state": "Merged. Every command now has an example.",
+      "state_source": "summary",
+      "next": null,
+      "ai_status": null,
+      "recap": null,
+      "live_status": null,
+      "kind": "interactive",
+      "streams": [],
+      "outputs": [
+        {
+          "kind": "folder",
+          "value": "~/code/tasker",
+          "url": null
+        }
+      ],
+      "output_counts": {
+        "folder": 1
+      },
+      "topics": [],
+      "topics_more": 0,
+      "resume_cmd": "cd '/Users/you/code/tasker' && claude --resume d1e568b7-141e-498a-a2b6-9a829049a39d",
+      "resumable": true,
+      "parent_id": null,
+      "child_count": 0,
+      "child_done": 0,
+      "prompt_count": 6,
+      "tokens": {
+        "input": 1917,
+        "output": 5752,
+        "cache_write": 28758,
+        "cache_read": 442873,
+        "total": 479300,
+        "subagents_total": 0
+      }
+    },
+    {
+      "id": "36adfafe-f4b0-4e95-aa2d-716593179ce3",
+      "agent": "claude",
+      "agent_name": "Claude",
+      "title": "Alert on queue depth",
+      "folder": "~/code/infra",
+      "repo": "~/code/infra",
+      "branch": null,
+      "column": "archive",
+      "auto_column": "archive",
+      "manual": false,
+      "last_activity_at": 1790154000000,
+      "started_at": 1789981200000,
+      "state": "The alert is live and tuned. Two false alarms in the first week.",
+      "state_source": "summary",
+      "next": null,
+      "ai_status": null,
+      "recap": null,
+      "live_status": null,
+      "kind": "interactive",
+      "streams": [],
+      "outputs": [
+        {
+          "kind": "folder",
+          "value": "~/code/infra",
+          "url": null
+        }
+      ],
+      "output_counts": {
+        "folder": 1
+      },
+      "topics": [],
+      "topics_more": 0,
+      "resume_cmd": "cd '/Users/you/code/infra' && claude --resume 36adfafe-f4b0-4e95-aa2d-716593179ce3",
+      "resumable": true,
+      "parent_id": null,
+      "child_count": 0,
+      "child_done": 0,
+      "prompt_count": 6,
+      "tokens": {
+        "input": 2092,
+        "output": 6277,
+        "cache_write": 31386,
+        "cache_read": 483345,
+        "total": 523100,
+        "subagents_total": 0
+      }
+    },
+    {
+      "id": "15fc0fdf-e914-4a1d-a8c2-12506102c15e",
+      "agent": "claude",
+      "agent_name": "Claude",
+      "title": "Generate a sitemap",
+      "folder": "~/code/docs-site",
+      "repo": "~/code/docs-site",
+      "branch": null,
+      "column": "archive",
+      "auto_column": "archive",
+      "manual": false,
+      "last_activity_at": 1789722000000,
+      "started_at": 1789549200000,
+      "state": "Done. Search engines picked it up.",
+      "state_source": "summary",
+      "next": null,
+      "ai_status": null,
+      "recap": null,
+      "live_status": null,
+      "kind": "interactive",
+      "streams": [],
+      "outputs": [
+        {
+          "kind": "folder",
+          "value": "~/code/docs-site",
+          "url": null
+        }
+      ],
+      "output_counts": {
+        "folder": 1
+      },
+      "topics": [],
+      "topics_more": 0,
+      "resume_cmd": "cd '/Users/you/code/docs-site' && claude --resume 15fc0fdf-e914-4a1d-a8c2-12506102c15e",
+      "resumable": true,
+      "parent_id": null,
+      "child_count": 0,
+      "child_done": 0,
+      "prompt_count": 6,
+      "tokens": {
+        "input": 2238,
+        "output": 6715,
+        "cache_write": 33576,
+        "cache_read": 517071,
+        "total": 559600,
+        "subagents_total": 0
+      }
+    }
+  ],
+  "total": 6,
+  "offset": 0
+}

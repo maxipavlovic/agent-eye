@@ -1,0 +1,11 @@
+# Steps dist runs before building each target (see github-build-setup in dist-workspace.toml).
+# build.rs embeds face/dist into the binary, so the board is built first.
+- name: Set up Node
+  uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+  with:
+    node-version: 24
+    package-manager-cache: false
+- name: Build the board
+  run: |
+    npm ci --prefix face
+    npm run build --prefix face

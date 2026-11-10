@@ -1,0 +1,171 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+
+jobs:
+  # Everything on Apple silicon: face, Rust, coverage, the install smoke test, SonarQube Cloud.
+  check:
+    runs-on: macos-latest
+    timeout-minutes: 40
+    env:
+      # Empty on forks and Dependabot runs; the Sonar steps skip then.
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0 # SonarQube Cloud needs the full history for blame and new-code detection
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: face/package-lock.json
+
+      - name: Face install
+        working-directory: face
+        run: npm ci
+      - name: Face typecheck
+        working-directory: face
+        run: npm run typecheck
+      - name: Face tests with coverage
+        working-directory: face
+        run: npm run coverage
+      - name: Face build
+        working-directory: face
+        run: npm run build
+
+      - name: Rust toolchain
+        run: rustup toolchain install stable --profile minimal --component clippy,rustfmt,llvm-tools-preview
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
+        with:
+          tool: cargo-llvm-cov
+
+      - name: Rust format
+        run: cargo fmt --all --check
+      - name: Rust clippy
+        run: cargo clippy --locked --all-targets -- -D warnings
+      - name: Rust tests with coverage
+        run: |
+          cargo llvm-cov --locked --lcov --output-path lcov.info
+          cargo llvm-cov report --summary-only
+
+      - name: Build the binary
+        run: cargo build --locked --release
+      - name: Install smoke test
+        run: scripts/smoke-install.sh target/release/agent-eye
+
+      - name: Clippy report for SonarQube Cloud
+        if: ${{ env.SONAR_TOKEN != '' }}
+        run: cargo clippy --locked --all-targets --message-format json > clippy-report.json
+      - name: Face coverage paths for SonarQube Cloud
+        if: ${{ env.SONAR_TOKEN != '' }}
+        # vitest writes paths relative to face/; Sonar resolves them from the repository root.
+        run: sed -i '' 's#^SF:src/#SF:face/src/#' face/coverage/lcov.info
+      - name: SonarQube Cloud scan
+        if: ${{ env.SONAR_TOKEN != '' }}
+        uses: SonarSource/sonarqube-scan-action@e805d875275f728fac1885b413934be6d7c63f65 # v8.4.1
+
+  # The same tests on an Intel Mac, since both CPUs ship.
+  intel:
+    runs-on: macos-15-intel
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: face/package-lock.json
+      - name: Face build
+        working-directory: face
+        run: |
+          npm ci
+          npm run build
+      - run: rustup toolchain install stable --profile minimal
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - run: cargo test --locked
+
+  # The same checks on Linux. The install smoke test passes --no-service (the runner has no systemd
+  # user session to start a service in).
+  linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: face/package-lock.json
+      - name: Face build
+        working-directory: face
+        run: |
+          npm ci
+          npm run build
+      - name: Rust toolchain
+        run: rustup toolchain install stable --profile minimal --component clippy,rustfmt
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: Rust format
+        run: cargo fmt --all --check
+      - name: Rust clippy
+        run: cargo clippy --locked --all-targets -- -D warnings
+      - name: Rust tests
+        run: cargo test --locked
+      - name: Build the binary
+        run: cargo build --locked --release
+      - name: Install smoke test
+        run: scripts/smoke-install.sh target/release/agent-eye
+
+  # The oldest Rust the crate claims to build with (rust-version in Cargo.toml).
+  msrv:
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install 1.89.0 --profile minimal
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - run: cargo +1.89.0 check --locked --all-targets
+
+  # Policy and hygiene checks that do not need a Mac.
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
+        with:
+          tool: cargo-deny,typos,actionlint,zizmor
+      - name: cargo-deny
+        run: cargo deny check
+      - name: typos
+        run: typos
+      - name: actionlint
+        run: actionlint
+      - name: zizmor
+        env:
+          GH_TOKEN: ${{ github.token }} # lets zizmor run its online audits
+        run: zizmor --no-progress .github

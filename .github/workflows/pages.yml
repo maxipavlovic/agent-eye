@@ -1,0 +1,63 @@
+name: Pages
+
+# Builds the site in site/ and publishes it at https://maxipavlovic.github.io/agent-eye/.
+# One-time setup: repository Settings, Pages, Source: GitHub Actions.
+on:
+  push:
+    branches: [main]
+    paths:
+      - site/**
+      - face/**
+      - assets/**
+      - .github/workflows/pages.yml
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  # Adjust these two if the site build moves.
+  SITE_BUILD: site:build # npm script in face/
+  SITE_DIST: site/dist # what that script produces, relative to the repository root
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Install
+        working-directory: face
+        run: npm ci
+      - name: Build the site
+        working-directory: face
+        run: npm run "$SITE_BUILD"
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: ${{ env.SITE_DIST }}
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
