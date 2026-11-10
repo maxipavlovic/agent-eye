@@ -52,8 +52,9 @@ ${footer()}
 }
 
 function header(): string {
-  const theme = (name: string, label: string) =>
-    `<button type="button" data-theme-set="${name}" aria-pressed="false" title="${label}" aria-label="${label} theme">{{sprite:${name}:2:cc}}</button>`;
+  // `value` is what site.ts stores (light, dark, auto); `sprite` is the icon drawn on the button.
+  const theme = (value: string, sprite: string, label: string) =>
+    `<button type="button" data-theme-set="${value}" aria-pressed="false" title="${label}" aria-label="${label} theme">{{sprite:${sprite}:2:cc}}</button>`;
   return `<header class="site-hd">
   <div class="wrap hd-in">
     <a class="brand" href="{{base}}" aria-label="agent-eye, home">{{eye}}<span class="word">AGENT-EYE</span></a>
@@ -63,7 +64,7 @@ function header(): string {
       <a href="{{base}}docs/">Docs</a>
       <a href="${REPO}">GitHub</a>
     </nav>
-    <div class="theme" role="group" aria-label="Theme">${theme('sun', 'Light')}${theme('moon', 'Dark')}${theme('auto', 'System')}</div>
+    <div class="theme" role="group" aria-label="Theme">${theme('light', 'sun', 'Light')}${theme('dark', 'moon', 'Dark')}${theme('auto', 'auto', 'System')}</div>
   </div>
   <div class="strip" aria-hidden="true"></div>
 </header>`;

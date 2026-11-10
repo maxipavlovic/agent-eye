@@ -196,6 +196,11 @@ a:hover { background: var(--ink); color: var(--paper); text-decoration: none; }
 .rh span { font: 500 20px var(--f-body); color: var(--mute); }
 .rgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(440px, 1fr)); gap: 0 28px; }
 .card.hit .snip { margin: 10px 0 0; font: 400 16px/1.4 var(--f-body); overflow-wrap: anywhere; }
+/* Results side by side line up: same height per row, the footer's dotted rule at the bottom. */
+.rgrid .card.hit { display: flex; flex-direction: column; }
+.rgrid .card.hit .top h3 { min-height: calc(2em * 1.35); }
+.rgrid .card.hit .foot { margin-top: auto; }
+.rgrid .card.hit .snip { margin-bottom: 9px; }
 mark { background: var(--ink); color: var(--paper); padding: 0 3px; }
 .tag { font: 400 16px/1 var(--f-label); border: 2px solid var(--ink); padding: 3px 5px 2px; color: var(--ink); text-transform: uppercase; }
 .tag.hot { background: var(--accent); color: var(--on-accent); }

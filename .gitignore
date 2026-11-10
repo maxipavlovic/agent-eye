@@ -6,3 +6,4 @@ target/
 .claude/
 lcov.info
 clippy-report.json
+.idea/
