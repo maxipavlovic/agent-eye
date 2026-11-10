@@ -432,7 +432,7 @@ async fn claude_and_both_fake_agents_run_together() {
                "message":{"content":"One more thing"}})
     );
     let fake_add = "u|1793527500000|One more stripe\n";
-    std::thread::sleep(std::time::Duration::from_millis(5));
+    tokio::time::sleep(std::time::Duration::from_millis(5)).await;
     append(&w.claude_file(), &claude_add);
     append(&w.fake_file(), fake_add);
     agent_writes::add(

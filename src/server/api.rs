@@ -108,7 +108,7 @@ mod tests {
             }
         });
         let r = blocking(|| {
-            std::thread::sleep(Duration::from_millis(150));
+            std::thread::sleep(Duration::from_millis(150)); // NOSONAR: runs on the blocking pool, which is the point of this test
             Ok(7)
         })
         .await;

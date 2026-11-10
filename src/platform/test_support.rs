@@ -1,6 +1,7 @@
 //! Programs for tests to put on a search path instead of the real ones.
 
 use super::service::Timing;
+use std::fs::{set_permissions, Permissions};
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::time::Duration;
@@ -9,7 +10,7 @@ use std::time::Duration;
 pub(crate) fn script(dir: &Path, name: &str, body: &str) {
     let p = dir.join(name);
     std::fs::write(&p, format!("#!/bin/sh\n{body}\n")).unwrap();
-    std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
+    set_permissions(&p, Permissions::from_mode(0o755)).unwrap(); // NOSONAR: a test stub must run
 }
 
 /// A program in `dir` that appends its arguments to `<dir>/<name>.log` and exits with `code`.
