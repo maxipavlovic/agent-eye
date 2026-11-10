@@ -1,0 +1,36 @@
+/* Colours, fonts and dither tiles of the ink look. The board and the site share this file. */
+/* One art pixel = 2 CSS px. Every border, gap and shadow is a multiple of it. */
+:root {
+  color-scheme: light;
+  --paper: #f2efe6;
+  --ink: #161616;
+  --accent: #ff4a1c;
+  --on-accent: #161616;
+  --mute: #4a473f;
+  --dith: var(--ink);
+  --f-label: 'Silkscreen', monospace;
+  --f-body: 'Inter Variable', 'Inter', system-ui, sans-serif;
+  --f-count: 'Doto', 'Silkscreen', monospace;
+}
+/* Dark: off-black paper, off-white ink (11:1), mute 7.4:1, a calmer orange; dither tints stay below the ink so shadows do not glow. */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --paper: #1e1d1a;
+  --ink: #d6d1c4;
+  --mute: #b0ab9d;
+  --accent: #e8683f;
+  --on-accent: #1e1d1a;
+  --dith: #7d796e;
+}
+/* dither tiles: 4x4 CSS px = 2x2 art pixels */
+:root {
+  --d25: conic-gradient(var(--dith) 0 25%, transparent 0) 0 0 / 4px 4px;
+  --d50: repeating-conic-gradient(var(--dith) 0 25%, transparent 0 50%) 0 0 / 4px 4px;
+  --d75: conic-gradient(transparent 0 25%, var(--dith) 0) 0 0 / 4px 4px;
+  --dA75: conic-gradient(transparent 0 25%, var(--accent) 0) 0 0 / 4px 4px;
+  --dA: repeating-conic-gradient(var(--accent) 0 25%, transparent 0 50%) 0 0 / 4px 4px;
+  --p25: conic-gradient(var(--paper) 0 25%, transparent 0) 0 0 / 4px 4px;
+  --p50: repeating-conic-gradient(var(--paper) 0 25%, transparent 0 50%) 0 0 / 4px 4px;
+  --p75: conic-gradient(transparent 0 25%, var(--paper) 0) 0 0 / 4px 4px;
+  --p100: linear-gradient(var(--paper), var(--paper));
+}

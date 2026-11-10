@@ -1,0 +1,2 @@
+{"type":"user","timestamp":"2026-11-03T12:00:00Z","cwd":"/work/billing","sessionId":"c0000003-0000-4000-8000-000000000003","message":{"role":"user","content":"<command-name>/model</command-name>\n            <command-message>model</command-message>\n            <command-args>opus</command-args>"}}
+{"type":"user","timestamp":"2026-11-03T12:00:01Z","cwd":"/work/billing","sessionId":"c0000003-0000-4000-8000-000000000003","message":{"role":"user","content":"<local-command-stdout>Set model to opus</local-command-stdout>"}}

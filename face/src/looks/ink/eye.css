@@ -1,0 +1,12 @@
+/* The brand eye: sprite layers, the pupil and the alert rays. The board and the site share this file. */
+.eye { position: relative; width: 68px; height: 36px; margin: 10px 0 2px; flex: none; }
+.eye .lay, .eye .pclip, .eye .rays { position: absolute; left: 0; top: 0; }
+.eye .lay { display: none; }
+.eye[data-f='0'] .f0, .eye[data-f='1'] .f1, .eye[data-f='2'] .f2 { display: block; }
+.eye .pclip { width: 68px; height: 36px; }
+.eye .pupil { position: absolute; left: 24px; top: 8px; }
+.eye[data-f='1'] .pclip { clip-path: inset(12px 0 12px 0); }
+.eye[data-f='2'] .pclip { visibility: hidden; }
+.eye .rays { top: -14px; visibility: hidden; }
+.eye.alert .rays { visibility: visible; animation: rays .5s steps(1) infinite; }
+@keyframes rays { 50% { transform: translateY(-3px); } }

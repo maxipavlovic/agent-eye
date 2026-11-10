@@ -1,0 +1,1 @@
+{"type":"assistant","timestamp":"2026-11-02T09:02:00Z","isSidechain":true,"message":{"id":"s1","role":"assistant","content":[{"type":"text","text":"Review done."}],"usage":{"input_tokens":5,"output_tokens":5,"cache_creation_input_tokens":0,"cache_read_input_tokens":90}}}

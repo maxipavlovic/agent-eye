@@ -1,0 +1,37 @@
+[workspace]
+members = ["cargo:."]
+
+# Config for 'dist'. After changing it run `dist generate` (it rewrites .github/workflows/release.yml).
+[dist]
+cargo-dist-version = "0.34.0"
+ci = "github"
+installers = ["shell", "homebrew"]
+# One archive per OS and CPU (dist has no universal macOS binary). Linux is built against glibc;
+# a musl build needs a different C toolchain for the bundled SQLite, so there is none yet.
+targets = [
+    "aarch64-apple-darwin",
+    "x86_64-apple-darwin",
+    "aarch64-unknown-linux-gnu",
+    "x86_64-unknown-linux-gnu",
+]
+# Same folder `eye install` uses, so the two never fight over the binary.
+install-path = "~/.local/bin"
+hosting = "github"
+install-updater = false
+# `eye` is the short name; the installers add it next to `agent-eye`.
+bin-aliases = { agent-eye = ["eye"] }
+# Homebrew formula `agent-eye` in the tap maxipavlovic/homebrew-tap, pushed on release with the
+# secret HOMEBREW_TAP_TOKEN (a token that can write to that repo).
+tap = "maxipavlovic/homebrew-tap"
+publish-jobs = ["homebrew"]
+# A signed build provenance for every archive and installer (`gh attestation verify`).
+github-attestations = true
+# The board is built from face/ and embedded by build.rs, so it must exist before cargo runs.
+github-build-setup = "../build-setup.yml"
+
+# Every action in the generated workflow is pinned to a full commit.
+[dist.github-action-commits]
+"actions/checkout" = "3d3c42e5aac5ba805825da76410c181273ba90b1" # v7.0.1
+"actions/upload-artifact" = "cf430e030ddbb5b0abf93d22962f4752f3646cd9" # v7.0.2
+"actions/download-artifact" = "9000827ccba6bdab643e8b6fd33ac0654aef8333" # v8.0.2
+"actions/attest" = "1e69f48acb82d1966a394da916b4c1698aa569d6" # v4.2.2

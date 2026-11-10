@@ -1,0 +1,224 @@
+{
+  "089be68b-0138-4bbc-a629-1f1259ea3a1e": [
+    {
+      "role": "user",
+      "text": "Add dark mode to the checkout. The colours live in src/theme; start from the tokens, not from the components.",
+      "ts": 1794212580000,
+      "tools": 0,
+      "truncated": false
+    },
+    {
+      "role": "assistant",
+      "text": "The checkout uses 31 hard-coded colours outside `src/theme`. I will add dark values for each token first, then replace the hard-coded ones so the components need no changes.",
+      "ts": 1794212940000,
+      "tools": 6,
+      "truncated": false
+    },
+    {
+      "role": "user",
+      "text": "Do not touch the payment provider iframe.",
+      "ts": 1794213300000,
+      "tools": 0,
+      "truncated": false
+    },
+    {
+      "role": "assistant",
+      "text": "Understood, the iframe keeps its own styling. I added the dark token set and moved 28 of the 31 colours onto tokens. The three left are inside the iframe wrapper, which I left alone.",
+      "ts": 1794213660000,
+      "tools": 9,
+      "truncated": false
+    },
+    {
+      "role": "user",
+      "text": "Check the contrast of every form field and fix what fails AA.",
+      "ts": 1794214020000,
+      "tools": 0,
+      "truncated": false
+    },
+    {
+      "role": "assistant",
+      "text": "The card number and expiry fields pass. The error text on the CVC field is 3.9:1, below the 4.5:1 limit. I will raise it to the `danger-strong` token and run the screenshot tests.",
+      "ts": 1794214380000,
+      "tools": 4,
+      "truncated": false
+    }
+  ],
+  "f3a379f4-1054-4974-ae7f-1b1651fc9aaa": [
+    {
+      "role": "user",
+      "text": "Invoice export runs inside the request and times out for big accounts. Move it to the job queue, keep the same CSV format.",
+      "ts": 1794212520000,
+      "tools": 0,
+      "truncated": false
+    },
+    {
+      "role": "assistant",
+      "text": "The export builds the whole file in memory inside the request. I will split it: the endpoint creates a job, a worker writes the CSV in chunks and stores it.",
+      "ts": 1794212880000,
+      "tools": 7,
+      "truncated": false
+    },
+    {
+      "role": "user",
+      "text": "Keep the endpoint, it should answer 202 with a job id.",
+      "ts": 1794213240000,
+      "tools": 0,
+      "truncated": false
+    },
+    {
+      "role": "assistant",
+      "text": "Done. `POST /exports` now answers `202` with `{job_id}`, and `GET /exports/:id` returns the status and the file link when it is ready.",
+      "ts": 1794213600000,
+      "tools": 8,
+      "truncated": false
+    },
+    {
+      "role": "user",
+      "text": "Add a retry when the database times out, with a cap.",
+      "ts": 1794213960000,
+      "tools": 0,
+      "truncated": false
+    },
+    {
+      "role": "assistant",
+      "text": "The worker now retries a timed-out export up to five times with a growing delay. I am writing the test that makes the database slow on purpose.",
+      "ts": 1794214320000,
+      "tools": 5,
+      "truncated": false
+    }
+  ],
+  "f99547eb-fa3f-49b4-a326-3b55de7c0207": [
+    {
+      "role": "user",
+      "text": "Upgrade date-fns to version 4 and fix whatever breaks.",
+      "ts": 1794213000000,
+      "tools": 0,
+      "truncated": false
+    },
+    {
+      "role": "assistant",
+      "text": "I checked the usage first: `format` and `parseISO` appear in 14 files and keep working. Two files use `zonedTimeToUtc`, which version 4 renames. Those need a small change after the install.",
+      "ts": 1794213360000,
+      "tools": 5,
+      "truncated": false
+    },
+    {
+      "role": "user",
+      "text": "Keep the version pinned, no caret.",
+      "ts": 1794213720000,
+      "tools": 0,
+      "truncated": false
+    },
+    {
+      "role": "assistant",
+      "text": "I am ready to install date-fns 4.1.0, pinned. It needs your OK to run the install command.",
+      "ts": 1794214080000,
+      "tools": 1,
+      "truncated": false
+    }
+  ],
+  "073b2574-302c-44c1-aaa3-92e6901564b5": [
+    {
+      "role": "user",
+      "text": "Webhook deliveries hammer customers that are slow or down. Propose a retry policy with backoff and show me the options.",
+      "ts": 1794210360000,
+      "tools": 0,
+      "truncated": false
+    },
+    {
+      "role": "assistant",
+      "text": "Today a failed delivery is retried three times in a row with no delay. I read the delivery code and last month’s logs: 60% of the retries hit an endpoint that is still down. I will draft two schedules with exponential backoff.",
+      "ts": 1794210720000,
+      "tools": 8,
+      "truncated": false
+    },
+    {
+      "role": "user",
+      "text": "Simulate each option against last month’s failures.",
+      "ts": 1794211080000,
+      "tools": 0,
+      "truncated": false
+    },
+    {
+      "role": "assistant",
+      "text": "Simulated on 41,000 failed deliveries. Option A: 5 attempts over 1 hour. Option B: 8 attempts over 24 hours. Both cut the retry load on a down endpoint by more than 90%.",
+      "ts": 1794211440000,
+      "tools": 11,
+      "truncated": false
+    },
+    {
+      "role": "user",
+      "text": "Add jitter so retries do not line up.",
+      "ts": 1794211800000,
+      "tools": 0,
+      "truncated": false
+    },
+    {
+      "role": "assistant",
+      "text": "Jitter is in: each delay varies by up to 20%. Both options keep the retry load under 2% of normal traffic. Five attempts over one hour gives up sooner; eight over 24 hours rescues 11% more deliveries but keeps failed events around longer. Which one do you want?",
+      "ts": 1794212160000,
+      "tools": 4,
+      "truncated": false
+    }
+  ],
+  "4cb1c619-ef09-4107-a61a-86d0badf0db2": [
+    {
+      "role": "user",
+      "text": "Rename the staging queue to match the new naming rules and show me the plan.",
+      "ts": 1794209160000,
+      "tools": 0,
+      "truncated": false
+    },
+    {
+      "role": "assistant",
+      "text": "The name is changed in the module. `terraform plan` shows 1 to destroy and 1 to add: the queue is replaced, not renamed.",
+      "ts": 1794209520000,
+      "tools": 3,
+      "truncated": false
+    },
+    {
+      "role": "user",
+      "text": "Is anything still in the queue?",
+      "ts": 1794209880000,
+      "tools": 0,
+      "truncated": false
+    },
+    {
+      "role": "assistant",
+      "text": "Terraform cannot rename a queue in place: it will delete it and create a new one. There are 42 messages in it right now. I can keep the old name instead, or you can drain it first.",
+      "ts": 1794210240000,
+      "tools": 2,
+      "truncated": false
+    }
+  ],
+  "0da229d8-6338-4b47-a3dd-919e3657cd51": [
+    {
+      "role": "user",
+      "text": "The login test fails about one run in ten on CI. Find out why and fix it.",
+      "ts": 1794195360000,
+      "tools": 0,
+      "truncated": false
+    },
+    {
+      "role": "assistant",
+      "text": "I ran it 30 times locally with the CPU throttled and it failed 4 times, always on the same line: the test clicks \"Sign in\" while the form is still loading its fields.",
+      "ts": 1794195720000,
+      "tools": 6,
+      "truncated": false
+    },
+    {
+      "role": "user",
+      "text": "Run it 50 times to be sure.",
+      "ts": 1794196080000,
+      "tools": 0,
+      "truncated": false
+    },
+    {
+      "role": "assistant",
+      "text": "The test now waits for the form to be ready before it clicks. Fifty runs in a row passed, throttled and not. PR 217 is ready to merge.",
+      "ts": 1794196440000,
+      "tools": 4,
+      "truncated": false
+    }
+  ]
+}

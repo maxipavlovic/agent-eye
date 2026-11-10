@@ -1,0 +1,7 @@
+# typos: spell check in CI and locally (`typos`). Words below are real names used in the code.
+[default.extend-words]
+ratatui = "ratatui" # the terminal UI crate
+ot = "ot" # CSS class of the output tag in the board
+
+[files]
+extend-exclude = ["Cargo.lock", "face/package-lock.json", "face/fixtures/", "tests/fixtures/**/*.jsonl"]

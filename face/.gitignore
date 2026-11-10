@@ -1,0 +1,6 @@
+node_modules
+dist/
+dist-looks/
+coverage/
+shots/
+fixtures/real/

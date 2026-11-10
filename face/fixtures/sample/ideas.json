@@ -1,0 +1,56 @@
+{
+  "ideas": [
+    {
+      "id": 1,
+      "title": "Shortcut list",
+      "notes": "Collect the shortcuts used in the app and show them on \"?\".",
+      "prompt": "Find every keyboard shortcut in src/, group them by page, and draft a \"?\" overlay that lists them.",
+      "folder": "~/code/storefront",
+      "agent": null,
+      "created_at": 1794042000000,
+      "from_session_id": null,
+      "session_id": null,
+      "sort": 1,
+      "archived": false
+    },
+    {
+      "id": 2,
+      "title": "Retry budget",
+      "notes": "A customer with a broken endpoint should not use up the whole queue. Cap the retries per hour.",
+      "prompt": "Sketch a retry budget per customer: how to count, where to store it, what happens when it runs out.",
+      "folder": "~/code/orders-api",
+      "agent": null,
+      "created_at": 1793955600000,
+      "from_session_id": null,
+      "session_id": null,
+      "sort": 2,
+      "archived": false
+    },
+    {
+      "id": 3,
+      "title": "Auto-complete",
+      "notes": "bash, zsh and fish. Generated from the command tree so they never drift.",
+      "prompt": "Generate shell completions for bash, zsh and fish from the command definitions and add an install command.",
+      "folder": "~/code/tasker",
+      "agent": null,
+      "created_at": 1793782800000,
+      "from_session_id": null,
+      "session_id": null,
+      "sort": 3,
+      "archived": false
+    },
+    {
+      "id": 4,
+      "title": "Migration guide",
+      "notes": "List every renamed option. Link it from the release notes.",
+      "prompt": null,
+      "folder": "~/code/docs-site",
+      "agent": null,
+      "created_at": 1793696400000,
+      "from_session_id": null,
+      "session_id": null,
+      "sort": 4,
+      "archived": false
+    }
+  ]
+}

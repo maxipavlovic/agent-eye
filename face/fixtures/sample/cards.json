@@ -1,0 +1,2439 @@
+{
+  "089be68b-0138-4bbc-a629-1f1259ea3a1e": {
+    "id": "089be68b-0138-4bbc-a629-1f1259ea3a1e",
+    "agent": "claude",
+    "agent_name": "Claude",
+    "title": "Add dark mode to the checkout",
+    "folder": "~/code/storefront",
+    "repo": "~/code/storefront",
+    "branch": "feature/checkout-dark",
+    "column": "running",
+    "auto_column": "running",
+    "manual": false,
+    "last_activity_at": 1794214740000,
+    "started_at": 1794042000000,
+    "state": "Colour tokens are in place. Checking contrast on the payment form: two fields are close to the limit.",
+    "state_source": "summary",
+    "next": "Claude: raise the contrast of the error text",
+    "ai_status": null,
+    "recap": null,
+    "live_status": "busy",
+    "kind": "interactive",
+    "streams": [
+      {
+        "kind": "topic",
+        "key": "t1",
+        "title": "Colour tokens",
+        "status": "done",
+        "detail": "",
+        "link": null
+      },
+      {
+        "kind": "topic",
+        "key": "t2",
+        "title": "Payment form contrast",
+        "status": "active",
+        "detail": "two fields near the limit",
+        "link": null
+      },
+      {
+        "kind": "topic",
+        "key": "t3",
+        "title": "Screenshot tests",
+        "status": "paused",
+        "detail": "",
+        "link": null
+      },
+      {
+        "kind": "child",
+        "key": "agent-1",
+        "title": "Find hard-coded colours",
+        "status": "done",
+        "detail": "",
+        "link": null
+      },
+      {
+        "kind": "child",
+        "key": "agent-2",
+        "title": "Update the icon set",
+        "status": "done",
+        "detail": "",
+        "link": null
+      },
+      {
+        "kind": "child",
+        "key": "agent-3",
+        "title": "Check form contrast",
+        "status": "running",
+        "detail": "",
+        "link": null
+      },
+      {
+        "kind": "output",
+        "key": "storefront#214",
+        "title": "storefront#214",
+        "status": "opened",
+        "detail": "",
+        "link": "https://example.org/acme/storefront/pull/214"
+      },
+      {
+        "kind": "output",
+        "key": "SHOP-1042",
+        "title": "SHOP-1042",
+        "status": "mentioned",
+        "detail": "",
+        "link": "https://example.org/browse/SHOP-1042"
+      },
+      {
+        "kind": "output",
+        "key": "Contrast report",
+        "title": "Contrast report",
+        "status": "published",
+        "detail": "",
+        "link": "https://example.org/artifact/checkout-contrast-report"
+      },
+      {
+        "kind": "output",
+        "key": "Add dark colour tokens for the checkout",
+        "title": "Add dark colour tokens for the checkout",
+        "status": "committed",
+        "detail": "",
+        "link": null
+      }
+    ],
+    "outputs": [
+      {
+        "kind": "pr",
+        "value": "storefront#214",
+        "url": "https://example.org/acme/storefront/pull/214"
+      },
+      {
+        "kind": "jira",
+        "value": "SHOP-1042",
+        "url": "https://example.org/browse/SHOP-1042"
+      },
+      {
+        "kind": "artifact",
+        "value": "Contrast report",
+        "url": "https://example.org/artifact/checkout-contrast-report",
+        "title": "Contrast report"
+      },
+      {
+        "kind": "commit",
+        "value": "Add dark colour tokens for the checkout",
+        "url": null
+      },
+      {
+        "kind": "folder",
+        "value": "~/code/storefront",
+        "url": null
+      }
+    ],
+    "output_counts": {
+      "pr": 1,
+      "jira": 1,
+      "artifact": 1,
+      "commit": 1,
+      "folder": 1
+    },
+    "topics": [
+      {
+        "key": "t1",
+        "title": "Colour tokens",
+        "status": "done",
+        "next": ""
+      },
+      {
+        "key": "t2",
+        "title": "Payment form contrast",
+        "status": "active",
+        "next": "two fields near the limit"
+      },
+      {
+        "key": "t3",
+        "title": "Screenshot tests",
+        "status": "paused",
+        "next": ""
+      }
+    ],
+    "topics_more": 0,
+    "resume_cmd": "cd '/Users/you/code/storefront' && claude --resume 089be68b-0138-4bbc-a629-1f1259ea3a1e",
+    "resumable": true,
+    "parent_id": null,
+    "child_count": 3,
+    "child_done": 2,
+    "prompt_count": 14,
+    "tokens": {
+      "input": 10496,
+      "output": 31488,
+      "cache_write": 157440,
+      "cache_read": 2424576,
+      "total": 3200000,
+      "subagents_total": 576000
+    },
+    "prompts": [
+      "Add dark mode to the checkout. The colours live in src/theme; start from the tokens, not from the components.",
+      "Do not touch the payment provider iframe.",
+      "Check the contrast of every form field and fix what fails AA."
+    ],
+    "first_prompt": "Add dark mode to the checkout. The colours live in src/theme; start from the tokens, not from the components.",
+    "last_assistant_text": "The card number and expiry fields pass. The error text on the CVC field is 3.9:1, below the 4.5:1 limit. I will raise it to the \"danger-strong\" token and run the screenshot tests.",
+    "resume_mode": "iterm",
+    "idea": {
+      "id": 9,
+      "title": "Dark mode for the checkout",
+      "notes": "Use the tokens from the design file. Keep text at AA contrast or better.",
+      "prompt": null
+    }
+  },
+  "f3a379f4-1054-4974-ae7f-1b1651fc9aaa": {
+    "id": "f3a379f4-1054-4974-ae7f-1b1651fc9aaa",
+    "agent": "claude",
+    "agent_name": "Claude",
+    "title": "Move invoice export to a queue",
+    "folder": "~/code/orders-api",
+    "repo": "~/code/orders-api",
+    "branch": "feature/export-queue",
+    "column": "running",
+    "auto_column": "running",
+    "manual": false,
+    "last_activity_at": 1794214680000,
+    "started_at": 1793955600000,
+    "state": "The worker reads jobs from the queue and writes the CSV files. Retry on timeout is next.",
+    "state_source": "summary",
+    "next": "Claude: add the retry with backoff",
+    "ai_status": null,
+    "recap": null,
+    "live_status": "busy",
+    "kind": "interactive",
+    "streams": [
+      {
+        "kind": "topic",
+        "key": "t1",
+        "title": "Queue worker",
+        "status": "done",
+        "detail": "",
+        "link": null
+      },
+      {
+        "kind": "topic",
+        "key": "t2",
+        "title": "Retry logic",
+        "status": "active",
+        "detail": "backoff and a cap",
+        "link": null
+      },
+      {
+        "kind": "topic",
+        "key": "t3",
+        "title": "Load test",
+        "status": "paused",
+        "detail": "",
+        "link": null
+      },
+      {
+        "kind": "child",
+        "key": "agent-1",
+        "title": "Read the old export code",
+        "status": "done",
+        "detail": "",
+        "link": null
+      },
+      {
+        "kind": "child",
+        "key": "agent-2",
+        "title": "Write the worker",
+        "status": "running",
+        "detail": "",
+        "link": null
+      },
+      {
+        "kind": "child",
+        "key": "agent-3",
+        "title": "Write the retry tests",
+        "status": "running",
+        "detail": "",
+        "link": null
+      },
+      {
+        "kind": "output",
+        "key": "ORD-318",
+        "title": "ORD-318",
+        "status": "mentioned",
+        "detail": "",
+        "link": "https://example.org/browse/ORD-318"
+      },
+      {
+        "kind": "output",
+        "key": "Queue invoice exports instead of running them inline",
+        "title": "Queue invoice exports instead of running them inline",
+        "status": "committed",
+        "detail": "",
+        "link": null
+      }
+    ],
+    "outputs": [
+      {
+        "kind": "jira",
+        "value": "ORD-318",
+        "url": "https://example.org/browse/ORD-318"
+      },
+      {
+        "kind": "commit",
+        "value": "Queue invoice exports instead of running them inline",
+        "url": null
+      },
+      {
+        "kind": "folder",
+        "value": "~/code/orders-api",
+        "url": null
+      }
+    ],
+    "output_counts": {
+      "jira": 1,
+      "commit": 1,
+      "folder": 1
+    },
+    "topics": [
+      {
+        "key": "t1",
+        "title": "Queue worker",
+        "status": "done",
+        "next": ""
+      },
+      {
+        "key": "t2",
+        "title": "Retry logic",
+        "status": "active",
+        "next": "backoff and a cap"
+      },
+      {
+        "key": "t3",
+        "title": "Load test",
+        "status": "paused",
+        "next": ""
+      }
+    ],
+    "topics_more": 0,
+    "resume_cmd": "cd '/Users/you/code/orders-api' && claude --resume f3a379f4-1054-4974-ae7f-1b1651fc9aaa",
+    "resumable": true,
+    "parent_id": null,
+    "child_count": 3,
+    "child_done": 1,
+    "prompt_count": 19,
+    "tokens": {
+      "input": 18096,
+      "output": 54288,
+      "cache_write": 271440,
+      "cache_read": 4180176,
+      "total": 5800000,
+      "subagents_total": 1276000
+    },
+    "prompts": [
+      "Invoice export runs inside the request and times out for big accounts. Move it to the job queue, keep the same CSV format.",
+      "Keep the endpoint, it should answer 202 with a job id.",
+      "Add a retry when the database times out, with a cap."
+    ],
+    "first_prompt": "Invoice export runs inside the request and times out for big accounts. Move it to the job queue, keep the same CSV format.",
+    "last_assistant_text": "The worker now retries a timed-out export up to five times with a growing delay. I am writing the test that makes the database slow on purpose.",
+    "resume_mode": "iterm"
+  },
+  "e97cde56-38d0-4193-a707-980322069975": {
+    "id": "e97cde56-38d0-4193-a707-980322069975",
+    "agent": "claude",
+    "agent_name": "Claude",
+    "title": "Port the sync command to async",
+    "folder": "~/code/tasker",
+    "repo": "~/code/tasker",
+    "branch": "async-sync",
+    "column": "running",
+    "auto_column": "running",
+    "manual": false,
+    "last_activity_at": 1794214500000,
+    "started_at": 1794128400000,
+    "state": "The fetch loop runs concurrently now. Writing the test for a slow remote.",
+    "state_source": "summary",
+    "next": "Claude: finish the slow remote test",
+    "ai_status": null,
+    "recap": null,
+    "live_status": "busy",
+    "kind": "interactive",
+    "streams": [
+      {
+        "kind": "topic",
+        "key": "t1",
+        "title": "Fetch loop",
+        "status": "done",
+        "detail": "",
+        "link": null
+      },
+      {
+        "kind": "topic",
+        "key": "t2",
+        "title": "Progress bar",
+        "status": "active",
+        "detail": "one line per remote",
+        "link": null
+      },
+      {
+        "kind": "topic",
+        "key": "t3",
+        "title": "Cancel on Ctrl-C",
+        "status": "paused",
+        "detail": "",
+        "link": null
+      },
+      {
+        "kind": "output",
+        "key": "Fetch remotes concurrently",
+        "title": "Fetch remotes concurrently",
+        "status": "committed",
+        "detail": "",
+        "link": null
+      }
+    ],
+    "outputs": [
+      {
+        "kind": "commit",
+        "value": "Fetch remotes concurrently",
+        "url": null
+      },
+      {
+        "kind": "folder",
+        "value": "~/code/tasker",
+        "url": null
+      }
+    ],
+    "output_counts": {
+      "commit": 1,
+      "folder": 1
+    },
+    "topics": [
+      {
+        "key": "t1",
+        "title": "Fetch loop",
+        "status": "done",
+        "next": ""
+      },
+      {
+        "key": "t2",
+        "title": "Progress bar",
+        "status": "active",
+        "next": "one line per remote"
+      },
+      {
+        "key": "t3",
+        "title": "Cancel on Ctrl-C",
+        "status": "paused",
+        "next": ""
+      }
+    ],
+    "topics_more": 0,
+    "resume_cmd": "cd '/Users/you/code/tasker' && claude --resume e97cde56-38d0-4193-a707-980322069975",
+    "resumable": true,
+    "parent_id": null,
+    "child_count": 0,
+    "child_done": 0,
+    "prompt_count": 8,
+    "tokens": {
+      "input": 2560,
+      "output": 7680,
+      "cache_write": 38400,
+      "cache_read": 591360,
+      "total": 640000,
+      "subagents_total": 0
+    },
+    "prompts": [
+      "The sync command fetches one remote after the other. Make it fetch them at the same time and keep the output readable.",
+      "Limit it to four at once."
+    ],
+    "first_prompt": "The sync command fetches one remote after the other. Make it fetch them at the same time and keep the output readable.",
+    "last_assistant_text": "Four remotes run at once and each gets one progress line. The slow remote test still needs a fake server that waits.",
+    "resume_mode": "iterm"
+  },
+  "f99547eb-fa3f-49b4-a326-3b55de7c0207": {
+    "id": "f99547eb-fa3f-49b4-a326-3b55de7c0207",
+    "agent": "claude",
+    "agent_name": "Claude",
+    "title": "Upgrade the date library",
+    "folder": "~/code/storefront",
+    "repo": "~/code/storefront",
+    "branch": "chore/date-fns-4",
+    "column": "needs_you",
+    "auto_column": "needs_you",
+    "manual": false,
+    "last_activity_at": 1794214440000,
+    "started_at": 1794128400000,
+    "state": "Usage is mapped: 14 files use format and parseISO, two use the old time zone helpers. Ready to install version 4.",
+    "state_source": "summary",
+    "next": "You: allow Bash: npm install date-fns@4.1.0 --save-exact",
+    "blocked": true,
+    "ai_status": "needs_you",
+    "recap": null,
+    "live_status": "idle",
+    "kind": "interactive",
+    "streams": [
+      {
+        "kind": "topic",
+        "key": "t1",
+        "title": "Usage map",
+        "status": "done",
+        "detail": "",
+        "link": null
+      },
+      {
+        "kind": "topic",
+        "key": "t2",
+        "title": "Install",
+        "status": "needs_you",
+        "detail": "waiting for your OK",
+        "link": null
+      },
+      {
+        "kind": "topic",
+        "key": "t3",
+        "title": "Fix the time zone calls",
+        "status": "paused",
+        "detail": "two files",
+        "link": null
+      },
+      {
+        "kind": "output",
+        "key": "SHOP-1051",
+        "title": "SHOP-1051",
+        "status": "mentioned",
+        "detail": "",
+        "link": "https://example.org/browse/SHOP-1051"
+      }
+    ],
+    "outputs": [
+      {
+        "kind": "jira",
+        "value": "SHOP-1051",
+        "url": "https://example.org/browse/SHOP-1051"
+      },
+      {
+        "kind": "folder",
+        "value": "~/code/storefront",
+        "url": null
+      }
+    ],
+    "output_counts": {
+      "jira": 1,
+      "folder": 1
+    },
+    "topics": [
+      {
+        "key": "t1",
+        "title": "Usage map",
+        "status": "done",
+        "next": ""
+      },
+      {
+        "key": "t2",
+        "title": "Install",
+        "status": "needs_you",
+        "next": "waiting for your OK"
+      },
+      {
+        "key": "t3",
+        "title": "Fix the time zone calls",
+        "status": "paused",
+        "next": "two files"
+      }
+    ],
+    "topics_more": 0,
+    "resume_cmd": "cd '/Users/you/code/storefront' && claude --resume f99547eb-fa3f-49b4-a326-3b55de7c0207",
+    "resumable": true,
+    "parent_id": null,
+    "child_count": 0,
+    "child_done": 0,
+    "prompt_count": 6,
+    "tokens": {
+      "input": 1648,
+      "output": 4944,
+      "cache_write": 24720,
+      "cache_read": 380688,
+      "total": 412000,
+      "subagents_total": 0
+    },
+    "prompts": [
+      "Upgrade date-fns to version 4 and fix whatever breaks.",
+      "Keep the version pinned, no caret."
+    ],
+    "first_prompt": "Upgrade date-fns to version 4 and fix whatever breaks.",
+    "last_assistant_text": "I am ready to install date-fns 4.1.0, pinned. It needs your OK to run the install command.",
+    "resume_mode": "iterm"
+  },
+  "073b2574-302c-44c1-aaa3-92e6901564b5": {
+    "id": "073b2574-302c-44c1-aaa3-92e6901564b5",
+    "agent": "claude",
+    "agent_name": "Claude",
+    "title": "Review the retry policy for webhooks",
+    "folder": "~/code/orders-api",
+    "repo": "~/code/orders-api",
+    "branch": "feature/webhook-retry",
+    "column": "needs_you",
+    "auto_column": "needs_you",
+    "manual": false,
+    "last_activity_at": 1794212520000,
+    "started_at": 1793869200000,
+    "state": "Webhooks retry three times with no delay, so a slow customer gets hit again at once. Two policies are drafted.",
+    "state_source": "summary",
+    "next": "You: pick 5 attempts over 1 hour or 8 over 24 hours",
+    "ai_status": "needs_you",
+    "recap": "Goal: stop hammering slow customer endpoints. Next: pick a retry policy.",
+    "live_status": null,
+    "kind": "interactive",
+    "streams": [
+      {
+        "kind": "topic",
+        "key": "t1",
+        "title": "Policy options",
+        "status": "needs_you",
+        "detail": "one hour or one day",
+        "link": null
+      },
+      {
+        "kind": "topic",
+        "key": "t2",
+        "title": "Backoff schedule",
+        "status": "active",
+        "detail": "with jitter",
+        "link": null
+      },
+      {
+        "kind": "topic",
+        "key": "t3",
+        "title": "Dead-letter queue",
+        "status": "paused",
+        "detail": "",
+        "link": null
+      },
+      {
+        "kind": "child",
+        "key": "agent-1",
+        "title": "Read the delivery code",
+        "status": "done",
+        "detail": "",
+        "link": null
+      },
+      {
+        "kind": "child",
+        "key": "agent-2",
+        "title": "Collect failure rates",
+        "status": "done",
+        "detail": "",
+        "link": null
+      },
+      {
+        "kind": "child",
+        "key": "agent-3",
+        "title": "Simulate both policies",
+        "status": "done",
+        "detail": "",
+        "link": null
+      },
+      {
+        "kind": "child",
+        "key": "agent-4",
+        "title": "Draft the options page",
+        "status": "done",
+        "detail": "",
+        "link": null
+      },
+      {
+        "kind": "output",
+        "key": "orders-api#231",
+        "title": "orders-api#231",
+        "status": "opened",
+        "detail": "",
+        "link": "https://example.org/acme/orders-api/pull/231"
+      },
+      {
+        "kind": "output",
+        "key": "Retry policy options",
+        "title": "Retry policy options",
+        "status": "published",
+        "detail": "",
+        "link": "https://example.org/artifact/webhook-retry-options"
+      },
+      {
+        "kind": "output",
+        "key": "ORD-327",
+        "title": "ORD-327",
+        "status": "mentioned",
+        "detail": "",
+        "link": "https://example.org/browse/ORD-327"
+      },
+      {
+        "kind": "output",
+        "key": "Add a retry schedule with jitter",
+        "title": "Add a retry schedule with jitter",
+        "status": "committed",
+        "detail": "",
+        "link": null
+      }
+    ],
+    "outputs": [
+      {
+        "kind": "pr",
+        "value": "orders-api#231",
+        "url": "https://example.org/acme/orders-api/pull/231"
+      },
+      {
+        "kind": "artifact",
+        "value": "Retry policy options",
+        "url": "https://example.org/artifact/webhook-retry-options",
+        "title": "Retry policy options"
+      },
+      {
+        "kind": "jira",
+        "value": "ORD-327",
+        "url": "https://example.org/browse/ORD-327"
+      },
+      {
+        "kind": "commit",
+        "value": "Add a retry schedule with jitter",
+        "url": null
+      },
+      {
+        "kind": "folder",
+        "value": "~/code/orders-api",
+        "url": null
+      }
+    ],
+    "output_counts": {
+      "pr": 1,
+      "artifact": 1,
+      "jira": 1,
+      "commit": 1,
+      "folder": 1
+    },
+    "topics": [
+      {
+        "key": "t1",
+        "title": "Policy options",
+        "status": "needs_you",
+        "next": "one hour or one day"
+      },
+      {
+        "key": "t2",
+        "title": "Backoff schedule",
+        "status": "active",
+        "next": "with jitter"
+      },
+      {
+        "key": "t3",
+        "title": "Dead-letter queue",
+        "status": "paused",
+        "next": ""
+      }
+    ],
+    "topics_more": 0,
+    "resume_cmd": "cd '/Users/you/code/orders-api' && claude --resume 073b2574-302c-44c1-aaa3-92e6901564b5",
+    "resumable": true,
+    "parent_id": null,
+    "child_count": 4,
+    "child_done": 4,
+    "prompt_count": 16,
+    "tokens": {
+      "input": 6300,
+      "output": 18900,
+      "cache_write": 94500,
+      "cache_read": 1455300,
+      "total": 2100000,
+      "subagents_total": 525000
+    },
+    "prompts": [
+      "Webhook deliveries hammer customers that are slow or down. Propose a retry policy with backoff and show me the options.",
+      "Simulate each option against last month’s failures.",
+      "Add jitter so retries do not line up."
+    ],
+    "first_prompt": "Webhook deliveries hammer customers that are slow or down. Propose a retry policy with backoff and show me the options.",
+    "last_assistant_text": "Both options keep the retry load under 2% of normal traffic. Five attempts over one hour gives up sooner; eight over 24 hours rescues 11% more deliveries but keeps failed events around longer. Which one do you want?",
+    "resume_mode": "iterm"
+  },
+  "4cb1c619-ef09-4107-a61a-86d0badf0db2": {
+    "id": "4cb1c619-ef09-4107-a61a-86d0badf0db2",
+    "agent": "claude",
+    "agent_name": "Claude",
+    "title": "Replace the staging queue",
+    "folder": "~/code/infra",
+    "repo": "~/code/infra",
+    "branch": "ops/staging-queue",
+    "column": "needs_you",
+    "auto_column": "needs_you",
+    "manual": false,
+    "last_activity_at": 1794210600000,
+    "started_at": 1794042000000,
+    "state": "The plan destroys and recreates the staging queue because its name changed. Messages still in it would be lost.",
+    "state_source": "summary",
+    "next": "You: approve the replacement or keep the old name",
+    "ai_status": "needs_you",
+    "recap": null,
+    "live_status": null,
+    "kind": "interactive",
+    "streams": [
+      {
+        "kind": "topic",
+        "key": "t1",
+        "title": "Plan review",
+        "status": "needs_you",
+        "detail": "queue is replaced",
+        "link": null
+      },
+      {
+        "kind": "topic",
+        "key": "t2",
+        "title": "Name change",
+        "status": "active",
+        "detail": "old name or new",
+        "link": null
+      },
+      {
+        "kind": "output",
+        "key": "OPS-77",
+        "title": "OPS-77",
+        "status": "mentioned",
+        "detail": "",
+        "link": "https://example.org/browse/OPS-77"
+      },
+      {
+        "kind": "output",
+        "key": "Rename the staging queue",
+        "title": "Rename the staging queue",
+        "status": "committed",
+        "detail": "",
+        "link": null
+      }
+    ],
+    "outputs": [
+      {
+        "kind": "jira",
+        "value": "OPS-77",
+        "url": "https://example.org/browse/OPS-77"
+      },
+      {
+        "kind": "commit",
+        "value": "Rename the staging queue",
+        "url": null
+      },
+      {
+        "kind": "folder",
+        "value": "~/code/infra",
+        "url": null
+      }
+    ],
+    "output_counts": {
+      "jira": 1,
+      "commit": 1,
+      "folder": 1
+    },
+    "topics": [
+      {
+        "key": "t1",
+        "title": "Plan review",
+        "status": "needs_you",
+        "next": "queue is replaced"
+      },
+      {
+        "key": "t2",
+        "title": "Name change",
+        "status": "active",
+        "next": "old name or new"
+      }
+    ],
+    "topics_more": 0,
+    "resume_cmd": "cd '/Users/you/code/infra' && claude --resume 4cb1c619-ef09-4107-a61a-86d0badf0db2",
+    "resumable": true,
+    "parent_id": null,
+    "child_count": 0,
+    "child_done": 0,
+    "prompt_count": 9,
+    "tokens": {
+      "input": 3120,
+      "output": 9360,
+      "cache_write": 46800,
+      "cache_read": 720720,
+      "total": 780000,
+      "subagents_total": 0
+    },
+    "prompts": [
+      "Rename the staging queue to match the new naming rules and show me the plan.",
+      "Is anything still in the queue?"
+    ],
+    "first_prompt": "Rename the staging queue to match the new naming rules and show me the plan.",
+    "last_assistant_text": "Terraform cannot rename a queue in place: it will delete it and create a new one. There are 42 messages in it right now. I can keep the old name instead, or you can drain it first.",
+    "resume_mode": "iterm"
+  },
+  "20c398ef-8a1a-4994-a284-33675a0f021d": {
+    "id": "20c398ef-8a1a-4994-a284-33675a0f021d",
+    "agent": "claude",
+    "agent_name": "Claude",
+    "title": "Rewrite the install guide",
+    "folder": "~/code/docs-site",
+    "repo": "~/code/docs-site",
+    "branch": "docs/install-guide",
+    "column": "needs_you",
+    "auto_column": "needs_you",
+    "manual": false,
+    "last_activity_at": 1794203400000,
+    "started_at": 1793955600000,
+    "state": "New page order is drafted: Install, First run, Configure, Troubleshoot. The old Windows page has no owner.",
+    "state_source": "summary",
+    "next": "You: confirm the page order and who owns the Windows page",
+    "ai_status": "needs_you",
+    "recap": null,
+    "live_status": null,
+    "kind": "interactive",
+    "streams": [
+      {
+        "kind": "topic",
+        "key": "t1",
+        "title": "Page order",
+        "status": "needs_you",
+        "detail": "four pages",
+        "link": null
+      },
+      {
+        "kind": "topic",
+        "key": "t2",
+        "title": "Install steps",
+        "status": "done",
+        "detail": "",
+        "link": null
+      },
+      {
+        "kind": "topic",
+        "key": "t3",
+        "title": "Windows page",
+        "status": "waiting_on_others",
+        "detail": "no owner",
+        "link": null
+      },
+      {
+        "kind": "child",
+        "key": "agent-1",
+        "title": "Check every install command",
+        "status": "done",
+        "detail": "",
+        "link": null
+      },
+      {
+        "kind": "child",
+        "key": "agent-2",
+        "title": "Collect the error messages",
+        "status": "done",
+        "detail": "",
+        "link": null
+      },
+      {
+        "kind": "output",
+        "key": "docs-site#58",
+        "title": "docs-site#58",
+        "status": "opened",
+        "detail": "",
+        "link": "https://example.org/acme/docs-site/pull/58"
+      },
+      {
+        "kind": "output",
+        "key": "Install guide outline",
+        "title": "Install guide outline",
+        "status": "published",
+        "detail": "",
+        "link": "https://example.org/artifact/install-guide-outline"
+      }
+    ],
+    "outputs": [
+      {
+        "kind": "pr",
+        "value": "docs-site#58",
+        "url": "https://example.org/acme/docs-site/pull/58"
+      },
+      {
+        "kind": "artifact",
+        "value": "Install guide outline",
+        "url": "https://example.org/artifact/install-guide-outline",
+        "title": "Install guide outline"
+      },
+      {
+        "kind": "folder",
+        "value": "~/code/docs-site",
+        "url": null
+      }
+    ],
+    "output_counts": {
+      "pr": 1,
+      "artifact": 1,
+      "folder": 1
+    },
+    "topics": [
+      {
+        "key": "t1",
+        "title": "Page order",
+        "status": "needs_you",
+        "next": "four pages"
+      },
+      {
+        "key": "t2",
+        "title": "Install steps",
+        "status": "done",
+        "next": ""
+      },
+      {
+        "key": "t3",
+        "title": "Windows page",
+        "status": "waiting_on_others",
+        "next": "no owner"
+      }
+    ],
+    "topics_more": 0,
+    "resume_cmd": "cd '/Users/you/code/docs-site' && claude --resume 20c398ef-8a1a-4994-a284-33675a0f021d",
+    "resumable": true,
+    "parent_id": null,
+    "child_count": 2,
+    "child_done": 2,
+    "prompt_count": 11,
+    "tokens": {
+      "input": 4928,
+      "output": 14784,
+      "cache_write": 73920,
+      "cache_read": 1138368,
+      "total": 1400000,
+      "subagents_total": 168000
+    },
+    "prompts": [
+      "The install guide is out of date and too long. Rewrite it so a new user is running in five minutes.",
+      "Test every command on a clean machine."
+    ],
+    "first_prompt": "The install guide is out of date and too long. Rewrite it so a new user is running in five minutes.",
+    "last_assistant_text": "Every command now works on a clean machine. The Windows page still describes the old installer and nobody on the team uses Windows. Do you want to drop it or find an owner?",
+    "resume_mode": "iterm"
+  },
+  "0da229d8-6338-4b47-a3dd-919e3657cd51": {
+    "id": "0da229d8-6338-4b47-a3dd-919e3657cd51",
+    "agent": "claude",
+    "agent_name": "Claude",
+    "title": "Fix the flaky login test",
+    "folder": "~/code/storefront",
+    "repo": "~/code/storefront",
+    "branch": "fix/login-test",
+    "column": "needs_you",
+    "auto_column": "needs_you",
+    "manual": false,
+    "last_activity_at": 1794196800000,
+    "started_at": 1794042000000,
+    "state": "The test failed one run in ten because it clicked before the form was ready. It passed 50 runs in a row after the fix.",
+    "state_source": "summary",
+    "next": "You: approve the fix and merge PR 217",
+    "ai_status": "needs_you",
+    "recap": null,
+    "live_status": null,
+    "kind": "interactive",
+    "streams": [
+      {
+        "kind": "topic",
+        "key": "t1",
+        "title": "Root cause",
+        "status": "done",
+        "detail": "click before the form is ready",
+        "link": null
+      },
+      {
+        "kind": "topic",
+        "key": "t2",
+        "title": "Fix",
+        "status": "done",
+        "detail": "wait for the form",
+        "link": null
+      },
+      {
+        "kind": "topic",
+        "key": "t3",
+        "title": "Run it 50 times",
+        "status": "done",
+        "detail": "",
+        "link": null
+      },
+      {
+        "kind": "output",
+        "key": "storefront#217",
+        "title": "storefront#217",
+        "status": "opened",
+        "detail": "",
+        "link": "https://example.org/acme/storefront/pull/217"
+      },
+      {
+        "kind": "output",
+        "key": "Wait for the login form before clicking",
+        "title": "Wait for the login form before clicking",
+        "status": "committed",
+        "detail": "",
+        "link": null
+      }
+    ],
+    "outputs": [
+      {
+        "kind": "pr",
+        "value": "storefront#217",
+        "url": "https://example.org/acme/storefront/pull/217"
+      },
+      {
+        "kind": "commit",
+        "value": "Wait for the login form before clicking",
+        "url": null
+      },
+      {
+        "kind": "folder",
+        "value": "~/code/storefront",
+        "url": null
+      }
+    ],
+    "output_counts": {
+      "pr": 1,
+      "commit": 1,
+      "folder": 1
+    },
+    "topics": [
+      {
+        "key": "t1",
+        "title": "Root cause",
+        "status": "done",
+        "next": "click before the form is ready"
+      },
+      {
+        "key": "t2",
+        "title": "Fix",
+        "status": "done",
+        "next": "wait for the form"
+      },
+      {
+        "key": "t3",
+        "title": "Run it 50 times",
+        "status": "done",
+        "next": ""
+      }
+    ],
+    "topics_more": 0,
+    "resume_cmd": "cd '/Users/you/code/storefront' && claude --resume 0da229d8-6338-4b47-a3dd-919e3657cd51",
+    "resumable": true,
+    "parent_id": null,
+    "child_count": 0,
+    "child_done": 0,
+    "prompt_count": 7,
+    "tokens": {
+      "input": 992,
+      "output": 2976,
+      "cache_write": 14880,
+      "cache_read": 229152,
+      "total": 248000,
+      "subagents_total": 0
+    },
+    "prompts": [
+      "The login test fails about one run in ten on CI. Find out why and fix it.",
+      "Run it 50 times to be sure."
+    ],
+    "first_prompt": "The login test fails about one run in ten on CI. Find out why and fix it.",
+    "last_assistant_text": "The test clicked the button while the form was still loading. It now waits for the form to be ready. Fifty runs in a row passed. PR 217 is ready to merge.",
+    "resume_mode": "iterm"
+  },
+  "f2d447c0-7b2e-40a1-a136-af8c295016c2": {
+    "id": "f2d447c0-7b2e-40a1-a136-af8c295016c2",
+    "agent": "claude",
+    "agent_name": "Claude",
+    "title": "Add rate limits to the public API",
+    "folder": "~/code/orders-api",
+    "repo": "~/code/orders-api",
+    "branch": "feature/rate-limits",
+    "column": "waiting",
+    "auto_column": "waiting",
+    "manual": false,
+    "last_activity_at": 1794117600000,
+    "started_at": 1793696400000,
+    "state": "Limits per key are implemented and tested. The table of limits needs a look from the platform team.",
+    "state_source": "summary",
+    "next": "Priya: review the limits table in the PR",
+    "ai_status": "waiting_on_others",
+    "recap": null,
+    "live_status": null,
+    "kind": "interactive",
+    "streams": [
+      {
+        "kind": "topic",
+        "key": "t1",
+        "title": "Limits per key",
+        "status": "done",
+        "detail": "",
+        "link": null
+      },
+      {
+        "kind": "topic",
+        "key": "t2",
+        "title": "Limits table",
+        "status": "waiting_on_others",
+        "detail": "needs the platform team",
+        "link": null
+      },
+      {
+        "kind": "topic",
+        "key": "t3",
+        "title": "Docs",
+        "status": "paused",
+        "detail": "",
+        "link": null
+      },
+      {
+        "kind": "child",
+        "key": "agent-1",
+        "title": "Read the gateway config",
+        "status": "done",
+        "detail": "",
+        "link": null
+      },
+      {
+        "kind": "child",
+        "key": "agent-2",
+        "title": "Write the limiter",
+        "status": "done",
+        "detail": "",
+        "link": null
+      },
+      {
+        "kind": "child",
+        "key": "agent-3",
+        "title": "Write the tests",
+        "status": "done",
+        "detail": "",
+        "link": null
+      },
+      {
+        "kind": "output",
+        "key": "orders-api#229",
+        "title": "orders-api#229",
+        "status": "opened",
+        "detail": "",
+        "link": "https://example.org/acme/orders-api/pull/229"
+      },
+      {
+        "kind": "output",
+        "key": "ORD-301",
+        "title": "ORD-301",
+        "status": "mentioned",
+        "detail": "",
+        "link": "https://example.org/browse/ORD-301"
+      }
+    ],
+    "outputs": [
+      {
+        "kind": "pr",
+        "value": "orders-api#229",
+        "url": "https://example.org/acme/orders-api/pull/229"
+      },
+      {
+        "kind": "jira",
+        "value": "ORD-301",
+        "url": "https://example.org/browse/ORD-301"
+      },
+      {
+        "kind": "folder",
+        "value": "~/code/orders-api",
+        "url": null
+      }
+    ],
+    "output_counts": {
+      "pr": 1,
+      "jira": 1,
+      "folder": 1
+    },
+    "topics": [
+      {
+        "key": "t1",
+        "title": "Limits per key",
+        "status": "done",
+        "next": ""
+      },
+      {
+        "key": "t2",
+        "title": "Limits table",
+        "status": "waiting_on_others",
+        "next": "needs the platform team"
+      },
+      {
+        "key": "t3",
+        "title": "Docs",
+        "status": "paused",
+        "next": ""
+      }
+    ],
+    "topics_more": 0,
+    "resume_cmd": "cd '/Users/you/code/orders-api' && claude --resume f2d447c0-7b2e-40a1-a136-af8c295016c2",
+    "resumable": true,
+    "parent_id": null,
+    "child_count": 3,
+    "child_done": 3,
+    "prompt_count": 15,
+    "tokens": {
+      "input": 11840,
+      "output": 35520,
+      "cache_write": 177600,
+      "cache_read": 2735040,
+      "total": 3700000,
+      "subagents_total": 740000
+    },
+    "prompts": [
+      "Add rate limits per API key. Start with a table of limits by endpoint.",
+      "Return 429 with a Retry-After header."
+    ],
+    "first_prompt": "Add rate limits per API key. Start with a table of limits by endpoint.",
+    "last_assistant_text": "The limiter and its tests are done. The table of limits per endpoint is in the PR description; Priya from the platform team has to confirm the numbers.",
+    "resume_mode": "iterm"
+  },
+  "b38e7d98-b4c0-4406-a1f1-fa95bb90b612": {
+    "id": "b38e7d98-b4c0-4406-a1f1-fa95bb90b612",
+    "agent": "claude",
+    "agent_name": "Claude",
+    "title": "Cache the product list",
+    "folder": "~/code/storefront",
+    "repo": "~/code/storefront",
+    "branch": "feature/product-cache",
+    "column": "waiting",
+    "auto_column": "waiting",
+    "manual": false,
+    "last_activity_at": 1794040800000,
+    "started_at": 1793782800000,
+    "state": "Cache headers are set. The CDN rule lives in another repo owned by the platform team.",
+    "state_source": "summary",
+    "next": "Dana: add the CDN rule for /api/products",
+    "ai_status": "waiting_on_others",
+    "recap": null,
+    "live_status": null,
+    "kind": "interactive",
+    "streams": [
+      {
+        "kind": "topic",
+        "key": "t1",
+        "title": "Cache headers",
+        "status": "done",
+        "detail": "",
+        "link": null
+      },
+      {
+        "kind": "topic",
+        "key": "t2",
+        "title": "CDN rule",
+        "status": "waiting_on_others",
+        "detail": "other repo",
+        "link": null
+      },
+      {
+        "kind": "output",
+        "key": "storefront#209",
+        "title": "storefront#209",
+        "status": "opened",
+        "detail": "",
+        "link": "https://example.org/acme/storefront/pull/209"
+      },
+      {
+        "kind": "output",
+        "key": "SHOP-1019",
+        "title": "SHOP-1019",
+        "status": "mentioned",
+        "detail": "",
+        "link": "https://example.org/browse/SHOP-1019"
+      }
+    ],
+    "outputs": [
+      {
+        "kind": "pr",
+        "value": "storefront#209",
+        "url": "https://example.org/acme/storefront/pull/209"
+      },
+      {
+        "kind": "jira",
+        "value": "SHOP-1019",
+        "url": "https://example.org/browse/SHOP-1019"
+      },
+      {
+        "kind": "folder",
+        "value": "~/code/storefront",
+        "url": null
+      }
+    ],
+    "output_counts": {
+      "pr": 1,
+      "jira": 1,
+      "folder": 1
+    },
+    "topics": [
+      {
+        "key": "t1",
+        "title": "Cache headers",
+        "status": "done",
+        "next": ""
+      },
+      {
+        "key": "t2",
+        "title": "CDN rule",
+        "status": "waiting_on_others",
+        "next": "other repo"
+      }
+    ],
+    "topics_more": 0,
+    "resume_cmd": "cd '/Users/you/code/storefront' && claude --resume b38e7d98-b4c0-4406-a1f1-fa95bb90b612",
+    "resumable": true,
+    "parent_id": null,
+    "child_count": 0,
+    "child_done": 0,
+    "prompt_count": 10,
+    "tokens": {
+      "input": 6840,
+      "output": 20520,
+      "cache_write": 102600,
+      "cache_read": 1580040,
+      "total": 1900000,
+      "subagents_total": 190000
+    },
+    "prompts": [
+      "The product list is slow to load. Cache it for a minute at the CDN and in the browser."
+    ],
+    "first_prompt": "The product list is slow to load. Cache it for a minute at the CDN and in the browser.",
+    "last_assistant_text": "The headers are in. The CDN needs a matching rule, and that repo is not ours. I wrote the rule in the PR description for Dana.",
+    "resume_mode": "iterm"
+  },
+  "21743447-613a-4223-a4fc-bbed7742d0b7": {
+    "id": "21743447-613a-4223-a4fc-bbed7742d0b7",
+    "agent": "claude",
+    "agent_name": "Claude",
+    "title": "Move the state bucket",
+    "folder": "~/code/infra",
+    "repo": "~/code/infra",
+    "branch": "ops/state-bucket",
+    "column": "waiting",
+    "auto_column": "waiting",
+    "manual": false,
+    "last_activity_at": 1793956800000,
+    "started_at": 1793610000000,
+    "state": "The new bucket and the lock table are in the plan. The IAM change needs a sign-off.",
+    "state_source": "summary",
+    "next": "Sam: approve the IAM change",
+    "ai_status": "waiting_on_others",
+    "recap": null,
+    "live_status": null,
+    "kind": "interactive",
+    "streams": [
+      {
+        "kind": "topic",
+        "key": "t1",
+        "title": "New bucket",
+        "status": "done",
+        "detail": "",
+        "link": null
+      },
+      {
+        "kind": "topic",
+        "key": "t2",
+        "title": "IAM change",
+        "status": "waiting_on_others",
+        "detail": "needs sign-off",
+        "link": null
+      },
+      {
+        "kind": "output",
+        "key": "OPS-71",
+        "title": "OPS-71",
+        "status": "mentioned",
+        "detail": "",
+        "link": "https://example.org/browse/OPS-71"
+      },
+      {
+        "kind": "output",
+        "key": "Add the new state bucket and lock table",
+        "title": "Add the new state bucket and lock table",
+        "status": "committed",
+        "detail": "",
+        "link": null
+      }
+    ],
+    "outputs": [
+      {
+        "kind": "jira",
+        "value": "OPS-71",
+        "url": "https://example.org/browse/OPS-71"
+      },
+      {
+        "kind": "commit",
+        "value": "Add the new state bucket and lock table",
+        "url": null
+      },
+      {
+        "kind": "folder",
+        "value": "~/code/infra",
+        "url": null
+      }
+    ],
+    "output_counts": {
+      "jira": 1,
+      "commit": 1,
+      "folder": 1
+    },
+    "topics": [
+      {
+        "key": "t1",
+        "title": "New bucket",
+        "status": "done",
+        "next": ""
+      },
+      {
+        "key": "t2",
+        "title": "IAM change",
+        "status": "waiting_on_others",
+        "next": "needs sign-off"
+      }
+    ],
+    "topics_more": 0,
+    "resume_cmd": "cd '/Users/you/code/infra' && claude --resume 21743447-613a-4223-a4fc-bbed7742d0b7",
+    "resumable": true,
+    "parent_id": null,
+    "child_count": 0,
+    "child_done": 0,
+    "prompt_count": 8,
+    "tokens": {
+      "input": 3720,
+      "output": 11160,
+      "cache_write": 55800,
+      "cache_read": 859320,
+      "total": 930000,
+      "subagents_total": 0
+    },
+    "prompts": [
+      "Move the Terraform state to a bucket in the new account, with locking."
+    ],
+    "first_prompt": "Move the Terraform state to a bucket in the new account, with locking.",
+    "last_assistant_text": "The bucket and lock table are planned and the old state is copied. Sam has to approve the IAM role before the switch.",
+    "resume_mode": "iterm"
+  },
+  "b3b72ac5-f041-4787-adbb-6b31d9fe1b4b": {
+    "id": "b3b72ac5-f041-4787-adbb-6b31d9fe1b4b",
+    "agent": "claude",
+    "agent_name": "Claude",
+    "title": "Search page for the docs",
+    "folder": "~/code/docs-site",
+    "repo": "~/code/docs-site",
+    "branch": null,
+    "column": "paused",
+    "auto_column": "paused",
+    "manual": false,
+    "last_activity_at": 1794042000000,
+    "started_at": 1793782800000,
+    "state": "Prototype with a static index works. Paused until we know the build time.",
+    "state_source": "summary",
+    "next": null,
+    "ai_status": "paused",
+    "recap": null,
+    "live_status": null,
+    "kind": "interactive",
+    "streams": [],
+    "outputs": [
+      {
+        "kind": "folder",
+        "value": "~/code/docs-site",
+        "url": null
+      }
+    ],
+    "output_counts": {
+      "folder": 1
+    },
+    "topics": [],
+    "topics_more": 0,
+    "resume_cmd": "cd '/Users/you/code/docs-site' && claude --resume b3b72ac5-f041-4787-adbb-6b31d9fe1b4b",
+    "resumable": true,
+    "parent_id": null,
+    "child_count": 0,
+    "child_done": 0,
+    "prompt_count": 4,
+    "tokens": {
+      "input": 1280,
+      "output": 3840,
+      "cache_write": 19200,
+      "cache_read": 295680,
+      "total": 320000,
+      "subagents_total": 0
+    },
+    "prompts": [
+      "Search page for the docs.",
+      "Pause here, I will pick it up later."
+    ],
+    "first_prompt": "Search page for the docs.",
+    "last_assistant_text": "Prototype with a static index works. Paused until we know the build time.",
+    "resume_mode": "iterm"
+  },
+  "d1606a89-0f34-4bc3-ab26-d12d7764d9a8": {
+    "id": "d1606a89-0f34-4bc3-ab26-d12d7764d9a8",
+    "agent": "claude",
+    "agent_name": "Claude",
+    "title": "Changelog generator",
+    "folder": "~/code/docs-site",
+    "repo": "~/code/docs-site",
+    "branch": null,
+    "column": "paused",
+    "auto_column": "paused",
+    "manual": false,
+    "last_activity_at": 1793955600000,
+    "started_at": 1793696400000,
+    "state": "Reads the merged PR titles and groups them. Paused: the release notes format is not decided.",
+    "state_source": "summary",
+    "next": null,
+    "ai_status": "paused",
+    "recap": null,
+    "live_status": null,
+    "kind": "interactive",
+    "streams": [],
+    "outputs": [
+      {
+        "kind": "folder",
+        "value": "~/code/docs-site",
+        "url": null
+      }
+    ],
+    "output_counts": {
+      "folder": 1
+    },
+    "topics": [],
+    "topics_more": 0,
+    "resume_cmd": "cd '/Users/you/code/docs-site' && claude --resume d1606a89-0f34-4bc3-ab26-d12d7764d9a8",
+    "resumable": true,
+    "parent_id": null,
+    "child_count": 0,
+    "child_done": 0,
+    "prompt_count": 5,
+    "tokens": {
+      "input": 6880,
+      "output": 20640,
+      "cache_write": 103200,
+      "cache_read": 1589280,
+      "total": 1720000,
+      "subagents_total": 0
+    },
+    "prompts": [
+      "Changelog generator.",
+      "Pause here, I will pick it up later."
+    ],
+    "first_prompt": "Changelog generator.",
+    "last_assistant_text": "Reads the merged PR titles and groups them. Paused: the release notes format is not decided.",
+    "resume_mode": "iterm"
+  },
+  "baf6bf88-855f-4297-ab11-436ce52d951a": {
+    "id": "baf6bf88-855f-4297-ab11-436ce52d951a",
+    "agent": "claude",
+    "agent_name": "Claude",
+    "title": "Explore a plugin system",
+    "folder": "~/code/tasker",
+    "repo": "~/code/tasker",
+    "branch": null,
+    "column": "paused",
+    "auto_column": "paused",
+    "manual": false,
+    "last_activity_at": 1793782800000,
+    "started_at": 1793523600000,
+    "state": "Compared three designs. Paused until there is a second plugin to test with.",
+    "state_source": "summary",
+    "next": null,
+    "ai_status": "paused",
+    "recap": null,
+    "live_status": null,
+    "kind": "interactive",
+    "streams": [],
+    "outputs": [
+      {
+        "kind": "folder",
+        "value": "~/code/tasker",
+        "url": null
+      }
+    ],
+    "output_counts": {
+      "folder": 1
+    },
+    "topics": [],
+    "topics_more": 0,
+    "resume_cmd": "cd '/Users/you/code/tasker' && claude --resume baf6bf88-855f-4297-ab11-436ce52d951a",
+    "resumable": true,
+    "parent_id": null,
+    "child_count": 0,
+    "child_done": 0,
+    "prompt_count": 6,
+    "tokens": {
+      "input": 6320,
+      "output": 18960,
+      "cache_write": 94800,
+      "cache_read": 1459920,
+      "total": 1580000,
+      "subagents_total": 0
+    },
+    "prompts": [
+      "Explore a plugin system.",
+      "Pause here, I will pick it up later."
+    ],
+    "first_prompt": "Explore a plugin system.",
+    "last_assistant_text": "Compared three designs. Paused until there is a second plugin to test with.",
+    "resume_mode": "iterm"
+  },
+  "88be17d4-1229-4915-a0ad-da4a5756f4ea": {
+    "id": "88be17d4-1229-4915-a0ad-da4a5756f4ea",
+    "agent": "claude",
+    "agent_name": "Claude",
+    "title": "Audit unused feature flags",
+    "folder": "~/code/storefront",
+    "repo": "~/code/storefront",
+    "branch": null,
+    "column": "paused",
+    "auto_column": "paused",
+    "manual": false,
+    "last_activity_at": 1793696400000,
+    "started_at": 1793437200000,
+    "state": "Found 17 flags with no reads in the code. Paused before removing any.",
+    "state_source": "summary",
+    "next": null,
+    "ai_status": "paused",
+    "recap": null,
+    "live_status": null,
+    "kind": "interactive",
+    "streams": [],
+    "outputs": [
+      {
+        "kind": "folder",
+        "value": "~/code/storefront",
+        "url": null
+      }
+    ],
+    "output_counts": {
+      "folder": 1
+    },
+    "topics": [],
+    "topics_more": 0,
+    "resume_cmd": "cd '/Users/you/code/storefront' && claude --resume 88be17d4-1229-4915-a0ad-da4a5756f4ea",
+    "resumable": true,
+    "parent_id": null,
+    "child_count": 0,
+    "child_done": 0,
+    "prompt_count": 7,
+    "tokens": {
+      "input": 5760,
+      "output": 17280,
+      "cache_write": 86400,
+      "cache_read": 1330560,
+      "total": 1440000,
+      "subagents_total": 0
+    },
+    "prompts": [
+      "Audit unused feature flags.",
+      "Pause here, I will pick it up later."
+    ],
+    "first_prompt": "Audit unused feature flags.",
+    "last_assistant_text": "Found 17 flags with no reads in the code. Paused before removing any.",
+    "resume_mode": "iterm"
+  },
+  "27d56c52-befa-4f17-a06c-e6be11fb6d43": {
+    "id": "27d56c52-befa-4f17-a06c-e6be11fb6d43",
+    "agent": "claude",
+    "agent_name": "Claude",
+    "title": "Spike: SQLite for the local cache",
+    "folder": "~/code/tasker",
+    "repo": "~/code/tasker",
+    "branch": null,
+    "column": "paused",
+    "auto_column": "paused",
+    "manual": false,
+    "last_activity_at": 1793610000000,
+    "started_at": 1793350800000,
+    "state": "Works, but doubles the install size. Paused to think about it.",
+    "state_source": "summary",
+    "next": null,
+    "ai_status": "paused",
+    "recap": null,
+    "live_status": null,
+    "kind": "interactive",
+    "streams": [],
+    "outputs": [
+      {
+        "kind": "folder",
+        "value": "~/code/tasker",
+        "url": null
+      }
+    ],
+    "output_counts": {
+      "folder": 1
+    },
+    "topics": [],
+    "topics_more": 0,
+    "resume_cmd": "cd '/Users/you/code/tasker' && claude --resume 27d56c52-befa-4f17-a06c-e6be11fb6d43",
+    "resumable": true,
+    "parent_id": null,
+    "child_count": 0,
+    "child_done": 0,
+    "prompt_count": 8,
+    "tokens": {
+      "input": 5200,
+      "output": 15600,
+      "cache_write": 78000,
+      "cache_read": 1201200,
+      "total": 1300000,
+      "subagents_total": 0
+    },
+    "prompts": [
+      "Spike: SQLite for the local cache.",
+      "Pause here, I will pick it up later."
+    ],
+    "first_prompt": "Spike: SQLite for the local cache.",
+    "last_assistant_text": "Works, but doubles the install size. Paused to think about it.",
+    "resume_mode": "iterm"
+  },
+  "7f270753-d480-4ad0-a72c-9e19b96bd5b9": {
+    "id": "7f270753-d480-4ad0-a72c-9e19b96bd5b9",
+    "agent": "claude",
+    "agent_name": "Claude",
+    "title": "Write the on-call handbook",
+    "folder": "~/code/infra",
+    "repo": "~/code/infra",
+    "branch": null,
+    "column": "paused",
+    "auto_column": "waiting",
+    "manual": true,
+    "last_activity_at": 1793523600000,
+    "started_at": 1793264400000,
+    "state": "Outline and the first two chapters are done. Pinned here on purpose.",
+    "state_source": "summary",
+    "next": null,
+    "ai_status": "paused",
+    "recap": null,
+    "live_status": null,
+    "kind": "interactive",
+    "streams": [],
+    "outputs": [
+      {
+        "kind": "folder",
+        "value": "~/code/infra",
+        "url": null
+      }
+    ],
+    "output_counts": {
+      "folder": 1
+    },
+    "topics": [],
+    "topics_more": 0,
+    "resume_cmd": "cd '/Users/you/code/infra' && claude --resume 7f270753-d480-4ad0-a72c-9e19b96bd5b9",
+    "resumable": true,
+    "parent_id": null,
+    "child_count": 0,
+    "child_done": 0,
+    "prompt_count": 4,
+    "tokens": {
+      "input": 4640,
+      "output": 13920,
+      "cache_write": 69600,
+      "cache_read": 1071840,
+      "total": 1160000,
+      "subagents_total": 0
+    },
+    "prompts": [
+      "Write the on-call handbook.",
+      "Pause here, I will pick it up later."
+    ],
+    "first_prompt": "Write the on-call handbook.",
+    "last_assistant_text": "Outline and the first two chapters are done. Pinned here on purpose.",
+    "resume_mode": "iterm"
+  },
+  "e65d1de0-23d2-477f-a784-a9d74fddc2f0": {
+    "id": "e65d1de0-23d2-477f-a784-a9d74fddc2f0",
+    "agent": "claude",
+    "agent_name": "Claude",
+    "title": "Rename the orders table",
+    "folder": "~/code/orders-api",
+    "repo": "~/code/orders-api",
+    "branch": null,
+    "column": "paused",
+    "auto_column": "paused",
+    "manual": false,
+    "last_activity_at": 1793437200000,
+    "started_at": 1793178000000,
+    "state": "Migration is written but not run. Paused until the reporting team is ready.",
+    "state_source": "summary",
+    "next": null,
+    "ai_status": "paused",
+    "recap": null,
+    "live_status": null,
+    "kind": "interactive",
+    "streams": [],
+    "outputs": [
+      {
+        "kind": "folder",
+        "value": "~/code/orders-api",
+        "url": null
+      }
+    ],
+    "output_counts": {
+      "folder": 1
+    },
+    "topics": [],
+    "topics_more": 0,
+    "resume_cmd": "cd '/Users/you/code/orders-api' && claude --resume e65d1de0-23d2-477f-a784-a9d74fddc2f0",
+    "resumable": true,
+    "parent_id": null,
+    "child_count": 0,
+    "child_done": 0,
+    "prompt_count": 5,
+    "tokens": {
+      "input": 4080,
+      "output": 12240,
+      "cache_write": 61200,
+      "cache_read": 942480,
+      "total": 1020000,
+      "subagents_total": 0
+    },
+    "prompts": [
+      "Rename the orders table.",
+      "Pause here, I will pick it up later."
+    ],
+    "first_prompt": "Rename the orders table.",
+    "last_assistant_text": "Migration is written but not run. Paused until the reporting team is ready.",
+    "resume_mode": "iterm"
+  },
+  "059cf54a-4f6d-4008-a957-384f423e69d4": {
+    "id": "059cf54a-4f6d-4008-a957-384f423e69d4",
+    "agent": "claude",
+    "agent_name": "Claude",
+    "title": "Try a faster JSON parser",
+    "folder": "~/code/orders-api",
+    "repo": "~/code/orders-api",
+    "branch": null,
+    "column": "paused",
+    "auto_column": "paused",
+    "manual": false,
+    "last_activity_at": 1793178000000,
+    "started_at": 1792918800000,
+    "state": "Twice as fast on big payloads, same speed on small ones. Not worth the new dependency yet.",
+    "state_source": "summary",
+    "next": null,
+    "ai_status": "paused",
+    "recap": null,
+    "live_status": null,
+    "kind": "interactive",
+    "streams": [],
+    "outputs": [
+      {
+        "kind": "folder",
+        "value": "~/code/orders-api",
+        "url": null
+      }
+    ],
+    "output_counts": {
+      "folder": 1
+    },
+    "topics": [],
+    "topics_more": 0,
+    "resume_cmd": "cd '/Users/you/code/orders-api' && claude --resume 059cf54a-4f6d-4008-a957-384f423e69d4",
+    "resumable": true,
+    "parent_id": null,
+    "child_count": 0,
+    "child_done": 0,
+    "prompt_count": 6,
+    "tokens": {
+      "input": 3520,
+      "output": 10560,
+      "cache_write": 52800,
+      "cache_read": 813120,
+      "total": 880000,
+      "subagents_total": 0
+    },
+    "prompts": [
+      "Try a faster JSON parser.",
+      "Pause here, I will pick it up later."
+    ],
+    "first_prompt": "Try a faster JSON parser.",
+    "last_assistant_text": "Twice as fast on big payloads, same speed on small ones. Not worth the new dependency yet.",
+    "resume_mode": "iterm"
+  },
+  "977c546b-6f7e-4466-ae34-b4f32928e047": {
+    "id": "977c546b-6f7e-4466-ae34-b4f32928e047",
+    "agent": "claude",
+    "agent_name": "Claude",
+    "title": "Clean up the deploy scripts",
+    "folder": "~/code/infra",
+    "repo": "~/code/infra",
+    "branch": null,
+    "column": "paused",
+    "auto_column": "paused",
+    "manual": false,
+    "last_activity_at": 1792918800000,
+    "started_at": 1792659600000,
+    "state": "Removed four dead scripts. Paused until the release freeze ends.",
+    "state_source": "summary",
+    "next": null,
+    "ai_status": "paused",
+    "recap": null,
+    "live_status": null,
+    "kind": "interactive",
+    "streams": [],
+    "outputs": [
+      {
+        "kind": "folder",
+        "value": "~/code/infra",
+        "url": null
+      }
+    ],
+    "output_counts": {
+      "folder": 1
+    },
+    "topics": [],
+    "topics_more": 0,
+    "resume_cmd": "cd '/Users/you/code/infra' && claude --resume 977c546b-6f7e-4466-ae34-b4f32928e047",
+    "resumable": true,
+    "parent_id": null,
+    "child_count": 0,
+    "child_done": 0,
+    "prompt_count": 7,
+    "tokens": {
+      "input": 2960,
+      "output": 8880,
+      "cache_write": 44400,
+      "cache_read": 683760,
+      "total": 740000,
+      "subagents_total": 0
+    },
+    "prompts": [
+      "Clean up the deploy scripts.",
+      "Pause here, I will pick it up later."
+    ],
+    "first_prompt": "Clean up the deploy scripts.",
+    "last_assistant_text": "Removed four dead scripts. Paused until the release freeze ends.",
+    "resume_mode": "iterm"
+  },
+  "7044e600-82c8-424a-a964-df28ac95c28e": {
+    "id": "7044e600-82c8-424a-a964-df28ac95c28e",
+    "agent": "claude",
+    "agent_name": "Claude",
+    "title": "Accessibility pass on the sign-in form",
+    "folder": "~/code/storefront",
+    "repo": "~/code/storefront",
+    "branch": null,
+    "column": "paused",
+    "auto_column": "paused",
+    "manual": false,
+    "last_activity_at": 1792659600000,
+    "started_at": 1792400400000,
+    "state": "Labels and focus order fixed. Screen reader check still open.",
+    "state_source": "summary",
+    "next": null,
+    "ai_status": "paused",
+    "recap": null,
+    "live_status": null,
+    "kind": "interactive",
+    "streams": [],
+    "outputs": [
+      {
+        "kind": "folder",
+        "value": "~/code/storefront",
+        "url": null
+      }
+    ],
+    "output_counts": {
+      "folder": 1
+    },
+    "topics": [],
+    "topics_more": 0,
+    "resume_cmd": "cd '/Users/you/code/storefront' && claude --resume 7044e600-82c8-424a-a964-df28ac95c28e",
+    "resumable": true,
+    "parent_id": null,
+    "child_count": 0,
+    "child_done": 0,
+    "prompt_count": 8,
+    "tokens": {
+      "input": 2400,
+      "output": 7200,
+      "cache_write": 36000,
+      "cache_read": 554400,
+      "total": 600000,
+      "subagents_total": 0
+    },
+    "prompts": [
+      "Accessibility pass on the sign-in form.",
+      "Pause here, I will pick it up later."
+    ],
+    "first_prompt": "Accessibility pass on the sign-in form.",
+    "last_assistant_text": "Labels and focus order fixed. Screen reader check still open.",
+    "resume_mode": "iterm"
+  },
+  "a73427ab-7178-4147-aba2-ba35d831afa8": {
+    "id": "a73427ab-7178-4147-aba2-ba35d831afa8",
+    "agent": "claude",
+    "agent_name": "Claude",
+    "title": "Fix the broken anchor links",
+    "folder": "~/code/docs-site",
+    "repo": "~/code/docs-site",
+    "branch": null,
+    "column": "done",
+    "auto_column": "done",
+    "manual": false,
+    "last_activity_at": 1794116400000,
+    "started_at": 1793955600000,
+    "state": "All 23 broken links are fixed and a check runs on every build.",
+    "state_source": "summary",
+    "next": null,
+    "ai_status": "done",
+    "recap": null,
+    "live_status": null,
+    "kind": "interactive",
+    "streams": [
+      {
+        "kind": "output",
+        "key": "docs-site#55",
+        "title": "docs-site#55",
+        "status": "merged",
+        "detail": "",
+        "link": "https://example.org/acme/docs-site/pull/55"
+      }
+    ],
+    "outputs": [
+      {
+        "kind": "pr",
+        "value": "docs-site#55",
+        "url": "https://example.org/acme/docs-site/pull/55"
+      },
+      {
+        "kind": "folder",
+        "value": "~/code/docs-site",
+        "url": null
+      }
+    ],
+    "output_counts": {
+      "pr": 1,
+      "folder": 1
+    },
+    "topics": [],
+    "topics_more": 0,
+    "resume_cmd": "cd '/Users/you/code/docs-site' && claude --resume a73427ab-7178-4147-aba2-ba35d831afa8",
+    "resumable": true,
+    "parent_id": null,
+    "child_count": 0,
+    "child_done": 0,
+    "prompt_count": 5,
+    "tokens": {
+      "input": 1640,
+      "output": 4920,
+      "cache_write": 24600,
+      "cache_read": 378840,
+      "total": 410000,
+      "subagents_total": 0
+    },
+    "prompts": [
+      "Fix the broken anchor links."
+    ],
+    "first_prompt": "Fix the broken anchor links.",
+    "last_assistant_text": "All 23 broken links are fixed and a check runs on every build.",
+    "resume_mode": "iterm"
+  },
+  "c8a42a63-b99f-4686-ae83-5d7204cb7d81": {
+    "id": "c8a42a63-b99f-4686-ae83-5d7204cb7d81",
+    "agent": "claude",
+    "agent_name": "Claude",
+    "title": "Bump the base image",
+    "folder": "~/code/infra",
+    "repo": "~/code/infra",
+    "branch": null,
+    "column": "done",
+    "auto_column": "done",
+    "manual": false,
+    "last_activity_at": 1794038400000,
+    "started_at": 1793869200000,
+    "state": "The base image is on the new LTS in all four services. Rolled out without a restart loop.",
+    "state_source": "summary",
+    "next": null,
+    "ai_status": "done",
+    "recap": null,
+    "live_status": null,
+    "kind": "interactive",
+    "streams": [
+      {
+        "kind": "output",
+        "key": "OPS-69",
+        "title": "OPS-69",
+        "status": "mentioned",
+        "detail": "",
+        "link": "https://example.org/browse/OPS-69"
+      },
+      {
+        "kind": "output",
+        "key": "Move the services to the new base image",
+        "title": "Move the services to the new base image",
+        "status": "committed",
+        "detail": "",
+        "link": null
+      }
+    ],
+    "outputs": [
+      {
+        "kind": "jira",
+        "value": "OPS-69",
+        "url": "https://example.org/browse/OPS-69"
+      },
+      {
+        "kind": "commit",
+        "value": "Move the services to the new base image",
+        "url": null
+      },
+      {
+        "kind": "folder",
+        "value": "~/code/infra",
+        "url": null
+      }
+    ],
+    "output_counts": {
+      "jira": 1,
+      "commit": 1,
+      "folder": 1
+    },
+    "topics": [],
+    "topics_more": 0,
+    "resume_cmd": "cd '/Users/you/code/infra' && claude --resume c8a42a63-b99f-4686-ae83-5d7204cb7d81",
+    "resumable": true,
+    "parent_id": null,
+    "child_count": 0,
+    "child_done": 0,
+    "prompt_count": 6,
+    "tokens": {
+      "input": 2400,
+      "output": 7200,
+      "cache_write": 36000,
+      "cache_read": 554400,
+      "total": 600000,
+      "subagents_total": 0
+    },
+    "prompts": [
+      "Bump the base image."
+    ],
+    "first_prompt": "Bump the base image.",
+    "last_assistant_text": "The base image is on the new LTS in all four services. Rolled out without a restart loop.",
+    "resume_mode": "iterm"
+  },
+  "f330c1bc-38d1-45dd-a767-77b1f43536de": {
+    "id": "f330c1bc-38d1-45dd-a767-77b1f43536de",
+    "agent": "claude",
+    "agent_name": "Claude",
+    "title": "Add --json to the list command",
+    "folder": "~/code/tasker",
+    "repo": "~/code/tasker",
+    "branch": null,
+    "column": "done",
+    "auto_column": "done",
+    "manual": false,
+    "last_activity_at": 1793950200000,
+    "started_at": 1793782800000,
+    "state": "The list command prints JSON with --json. Documented and tested.",
+    "state_source": "summary",
+    "next": null,
+    "ai_status": "done",
+    "recap": null,
+    "live_status": null,
+    "kind": "interactive",
+    "streams": [
+      {
+        "kind": "output",
+        "key": "tasker#41",
+        "title": "tasker#41",
+        "status": "merged",
+        "detail": "",
+        "link": "https://example.org/acme/tasker/pull/41"
+      }
+    ],
+    "outputs": [
+      {
+        "kind": "pr",
+        "value": "tasker#41",
+        "url": "https://example.org/acme/tasker/pull/41"
+      },
+      {
+        "kind": "folder",
+        "value": "~/code/tasker",
+        "url": null
+      }
+    ],
+    "output_counts": {
+      "pr": 1,
+      "folder": 1
+    },
+    "topics": [],
+    "topics_more": 0,
+    "resume_cmd": "cd '/Users/you/code/tasker' && claude --resume f330c1bc-38d1-45dd-a767-77b1f43536de",
+    "resumable": true,
+    "parent_id": null,
+    "child_count": 0,
+    "child_done": 0,
+    "prompt_count": 7,
+    "tokens": {
+      "input": 3160,
+      "output": 9480,
+      "cache_write": 47400,
+      "cache_read": 729960,
+      "total": 790000,
+      "subagents_total": 0
+    },
+    "prompts": [
+      "Add --json to the list command."
+    ],
+    "first_prompt": "Add --json to the list command.",
+    "last_assistant_text": "The list command prints JSON with --json. Documented and tested.",
+    "resume_mode": "iterm"
+  },
+  "597f1a9d-6ffc-4ff2-a524-dad220267c36": {
+    "id": "597f1a9d-6ffc-4ff2-a524-dad220267c36",
+    "agent": "claude",
+    "agent_name": "Claude",
+    "title": "Speed up the product grid",
+    "folder": "~/code/storefront",
+    "repo": "~/code/storefront",
+    "branch": null,
+    "column": "done",
+    "auto_column": "done",
+    "manual": false,
+    "last_activity_at": 1793867400000,
+    "started_at": 1793696400000,
+    "state": "Images load lazily and the grid is virtual. Time to first card dropped from 1.8 s to 0.6 s.",
+    "state_source": "summary",
+    "next": null,
+    "ai_status": "done",
+    "recap": null,
+    "live_status": null,
+    "kind": "interactive",
+    "streams": [
+      {
+        "kind": "output",
+        "key": "storefront#203",
+        "title": "storefront#203",
+        "status": "merged",
+        "detail": "",
+        "link": "https://example.org/acme/storefront/pull/203"
+      },
+      {
+        "kind": "output",
+        "key": "SHOP-1008",
+        "title": "SHOP-1008",
+        "status": "mentioned",
+        "detail": "",
+        "link": "https://example.org/browse/SHOP-1008"
+      }
+    ],
+    "outputs": [
+      {
+        "kind": "pr",
+        "value": "storefront#203",
+        "url": "https://example.org/acme/storefront/pull/203"
+      },
+      {
+        "kind": "jira",
+        "value": "SHOP-1008",
+        "url": "https://example.org/browse/SHOP-1008"
+      },
+      {
+        "kind": "folder",
+        "value": "~/code/storefront",
+        "url": null
+      }
+    ],
+    "output_counts": {
+      "pr": 1,
+      "jira": 1,
+      "folder": 1
+    },
+    "topics": [],
+    "topics_more": 0,
+    "resume_cmd": "cd '/Users/you/code/storefront' && claude --resume 597f1a9d-6ffc-4ff2-a524-dad220267c36",
+    "resumable": true,
+    "parent_id": null,
+    "child_count": 0,
+    "child_done": 0,
+    "prompt_count": 8,
+    "tokens": {
+      "input": 3920,
+      "output": 11760,
+      "cache_write": 58800,
+      "cache_read": 905520,
+      "total": 980000,
+      "subagents_total": 0
+    },
+    "prompts": [
+      "Speed up the product grid."
+    ],
+    "first_prompt": "Speed up the product grid.",
+    "last_assistant_text": "Images load lazily and the grid is virtual. Time to first card dropped from 1.8 s to 0.6 s.",
+    "resume_mode": "iterm"
+  },
+  "d8636e0a-ee49-448a-ac7c-623654d0402a": {
+    "id": "d8636e0a-ee49-448a-ac7c-623654d0402a",
+    "agent": "claude",
+    "agent_name": "Claude",
+    "title": "Add cache headers to static assets",
+    "folder": "~/code/storefront",
+    "repo": "~/code/storefront",
+    "branch": null,
+    "column": "done",
+    "auto_column": "done",
+    "manual": false,
+    "last_activity_at": 1793758800000,
+    "started_at": 1793610000000,
+    "state": "Hashed assets are cached for a year. Repeat visits are 40% lighter.",
+    "state_source": "summary",
+    "next": null,
+    "ai_status": "done",
+    "recap": null,
+    "live_status": null,
+    "kind": "interactive",
+    "streams": [
+      {
+        "kind": "output",
+        "key": "storefront#198",
+        "title": "storefront#198",
+        "status": "merged",
+        "detail": "",
+        "link": "https://example.org/acme/storefront/pull/198"
+      }
+    ],
+    "outputs": [
+      {
+        "kind": "pr",
+        "value": "storefront#198",
+        "url": "https://example.org/acme/storefront/pull/198"
+      },
+      {
+        "kind": "folder",
+        "value": "~/code/storefront",
+        "url": null
+      }
+    ],
+    "output_counts": {
+      "pr": 1,
+      "folder": 1
+    },
+    "topics": [],
+    "topics_more": 0,
+    "resume_cmd": "cd '/Users/you/code/storefront' && claude --resume d8636e0a-ee49-448a-ac7c-623654d0402a",
+    "resumable": true,
+    "parent_id": null,
+    "child_count": 0,
+    "child_done": 0,
+    "prompt_count": 5,
+    "tokens": {
+      "input": 4680,
+      "output": 14040,
+      "cache_write": 70200,
+      "cache_read": 1081080,
+      "total": 1170000,
+      "subagents_total": 0
+    },
+    "prompts": [
+      "Add cache headers to static assets."
+    ],
+    "first_prompt": "Add cache headers to static assets.",
+    "last_assistant_text": "Hashed assets are cached for a year. Repeat visits are 40% lighter.",
+    "resume_mode": "iterm"
+  }
+}

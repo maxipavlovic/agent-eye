@@ -1,0 +1,163 @@
+<section class="hero">
+  <div class="wrap hero-in">
+    <div class="hero-eye" data-track aria-hidden="true">{{eye}}</div>
+    <div class="hero-text">
+      <p class="label">A BOARD FOR YOUR CODING AGENTS</p>
+      <h1>Every coding-agent session on your machine: <mark>found, sorted, resumable.</mark></h1>
+      <p class="pitch">agent-eye keeps a local list of every session, shows where each one stands and what needs you, and puts you back in it with one key. Works with Claude Code and Codex CLI, built for more agents.</p>
+      <div class="cta">
+        <a class="btn big" href="#install">INSTALL</a>
+        <a class="btn" href="#demo">TRY THE DEMO</a>
+      </div>
+      <div class="cmd">
+        <code>brew install maxipavlovic/tap/agent-eye</code>
+        <button type="button" class="copy" data-copy="brew install maxipavlovic/tap/agent-eye" aria-label="Copy the install command">COPY</button>
+      </div>
+      <p class="fine">macOS and Linux. Free and open source, MIT licence.</p>
+    </div>
+  </div>
+</section>
+
+<section id="demo" class="demo">
+  <div class="wrap">
+    <h2 class="sec-h"><span>THE BOARD</span></h2>
+    <p class="sec-lead">This is the real board, running on made-up data. Click a card to open it, press <kbd>/</kbd> to search, right-click a card for its menu. On your machine it runs on 127.0.0.1, and Chrome or Edge can install it as an app with its own window.</p>
+    <div class="frame">
+      <div class="frame-bar">
+        <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="url">127.0.0.1:7420 · sample data</span>
+        <a class="btn sm" href="{{base}}demo/" data-fullscreen aria-pressed="false">FULL SCREEN</a>
+      </div>
+      <iframe src="{{base}}demo/" title="The agent-eye board, with sample data" loading="lazy"></iframe>
+    </div>
+  </div>
+</section>
+
+<section class="features">
+  <div class="wrap">
+    <h2 class="sec-h"><span>WHAT IT DOES</span></h2>
+    <ul class="grid">
+      <li class="tile">
+        {{sprite:scan:4}}
+        <h3>Every session, found</h3>
+        <p>It reads the session files your agent already writes. Nothing to wrap, nothing to log by hand. New sessions show up on their own.</p>
+      </li>
+      <li class="tile">
+        {{sprite:needs_you:4}}
+        <h3>What needs you, on top</h3>
+        <p>Running, Needs you, Waiting on others, Paused, Done. A session stopped on a permission prompt or a question is the first card you see.</p>
+      </li>
+      <li class="tile">
+        {{sprite:note:4}}
+        <h3>State and next step</h3>
+        <p>One line on where each session stands and one on who acts next, plus its pull requests, commits and tickets. Read the board, skip the scrollback.</p>
+      </li>
+      <li class="tile">
+        {{sprite:search:4}}
+        <h3>Search all of it</h3>
+        <p>Titles, prompts, replies, PR links and folders. From the board, from the terminal (<code>eye</code> or Ctrl-G), or by asking your agent.</p>
+      </li>
+      <li class="tile">
+        {{sprite:resume:4}}
+        <h3>Back in one move</h3>
+        <p>Enter, or one click, resumes the session where you left it, or forks it. When your agent has already deleted an old transcript, agent-eye puts its own copy back first.</p>
+      </li>
+      <li class="tile">
+        {{sprite:ideas:4}}
+        <h3>Ideas wait as cards</h3>
+        <p>Park an idea with notes and a first prompt. Start it later as a real session, in the right folder, with one click.</p>
+      </li>
+    </ul>
+  </div>
+</section>
+
+<section class="how">
+  <div class="wrap">
+    <h2 class="sec-h"><span>HOW IT WORKS</span></h2>
+    <div class="flow" role="group" aria-label="Your agent writes sessions to disk, agent-eye reads them, you see them on the board, in the terminal and inside your agent">
+      <div class="node">
+        <p class="label">YOUR AGENT</p>
+        <p>writes every session to disk</p>
+        <code>~/.claude · ~/.codex</code>
+      </div>
+      <div class="arrow" aria-hidden="true">{{sprite:arrow:4}}</div>
+      <div class="node core">
+        <p class="label">AGENT-EYE</p>
+        <p>a small background scanner with a local index and archive copies</p>
+        <code>~/.agent-eye</code>
+      </div>
+      <div class="arrow" aria-hidden="true">{{sprite:arrow:4}}</div>
+      <ul class="outs">
+        <li class="node"><p class="label">BOARD</p><p>in your browser</p></li>
+        <li class="node"><p class="label">PICKER</p><p>in your terminal</p></li>
+        <li class="node"><p class="label">/EYE SKILL</p><p>inside your agent</p></li>
+      </ul>
+    </div>
+    <ol class="steps">
+      <li><b>It reads.</b> Your agent keeps a file per session. agent-eye reads them, and a few hook events, to know what is running and what is waiting.</li>
+      <li><b>It sorts.</b> Simple rules place each session in a lane. Your agent writes the one-line state and next step, so the card says something useful.</li>
+      <li><b>You act.</b> Open the board, press <kbd>Ctrl-G</kbd> in the terminal, or ask your agent where you left off. Resume, fork, or mark it done.</li>
+    </ol>
+  </div>
+</section>
+
+<section id="install" class="install">
+  <div class="wrap">
+    <h2 class="sec-h"><span>INSTALL</span></h2>
+    <p class="sec-lead">Pick one. Each puts <code>agent-eye</code> on your PATH. Homebrew works on macOS and Linux. You need macOS 11 or newer, or Linux with glibc 2.35 or newer, and Claude Code or Codex CLI.</p>
+    <div class="blocks">
+      <div class="block">
+        <p class="label">HOMEBREW</p>
+        <pre><code>brew install maxipavlovic/tap/agent-eye</code></pre>
+        <button type="button" class="copy" data-copy="brew install maxipavlovic/tap/agent-eye" aria-label="Copy the Homebrew command">COPY</button>
+      </div>
+      <div class="block">
+        <p class="label">INSTALLER SCRIPT</p>
+        <pre><code>curl -LsSf https://github.com/maxipavlovic/agent-eye/releases/latest/download/agent-eye-installer.sh | sh</code></pre>
+        <button type="button" class="copy" data-copy="curl -LsSf https://github.com/maxipavlovic/agent-eye/releases/latest/download/agent-eye-installer.sh | sh" aria-label="Copy the installer command">COPY</button>
+      </div>
+      <div class="block">
+        <p class="label">CARGO</p>
+        <pre><code>cargo install agent-eye</code></pre>
+        <button type="button" class="copy" data-copy="cargo install agent-eye" aria-label="Copy the Cargo command">COPY</button>
+      </div>
+    </div>
+    <ol class="after">
+      <li>Run <code>agent-eye install</code>. It adds the short name <code>eye</code>, the hooks, the background scanner and the <code>/eye</code> skill, and tells you what it did. <code>agent-eye uninstall</code> removes them.</li>
+      <li>Run <code>eye</code> for the terminal picker. For the board, run <code>eye board on</code>, then <code>eye board</code> prints its address.</li>
+    </ol>
+    <p class="more"><a href="{{base}}docs/">Read the docs</a> for the keys, the settings and the API.</p>
+  </div>
+</section>
+
+<section class="privacy">
+  <div class="wrap two">
+    <div class="side">
+      {{sprite:lock:6}}
+      <h2 class="sec-h"><span>PRIVATE</span></h2>
+    </div>
+    <div class="text">
+      <p class="lede">Everything stays on your machine.</p>
+      <ul class="ticks">
+        <li>No account, no telemetry, no server of ours. The board listens on <code>127.0.0.1</code> only, behind a token.</li>
+        <li>Summaries use your agent&rsquo;s own login and plan. For each one, a short excerpt of the session (with secrets masked) goes to your agent, the way the session already did. You can turn summaries off and keep everything else.</li>
+        <li>Open source under the MIT licence, so you can read every line that touches your sessions.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="agents">
+  <div class="wrap two">
+    <div class="side">
+      {{sprite:terminal:6}}
+      <h2 class="sec-h"><span>AGENTS</span></h2>
+    </div>
+    <div class="text">
+      <p class="lede">Claude Code and Codex CLI. Built for more.</p>
+      <p>agent-eye reads the files each agent already writes, so it works with the Claude Code and Codex CLI you already use. It follows the ones it finds on your machine. Those files are not a public API and can change; if one does, agent-eye may need an update.</p>
+      <p>Codex runs hooks only after you trust them once: open Codex and approve them with <code>/hooks</code>. The code keeps each agent behind one layer, so others such as Gemini CLI can be added, and any of them can be switched off.</p>
+      <p class="fine">agent-eye is an independent project. It is not affiliated with Anthropic or OpenAI.</p>
+    </div>
+  </div>
+</section>
