@@ -2,11 +2,15 @@
 
 All notable changes are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 0.1.1 - 2026-11-10
 
 ### Changed
 
 - `[board] resume` is now `"auto"` by default, on macOS and Linux: Resume and Start open an iTerm2 tab when iTerm2 is installed, else a Terminal window on macOS, and a new terminal window (`xdg-terminal-exec`, `x-terminal-emulator` or `$TERMINAL`) on Linux when there is a display; otherwise they copy the command. `"terminal"` is a new explicit choice; `"iterm"` and `"copy"` work as before. The board and the API say what a click will do (`ITERM`, `TERMINAL` or `COPY`).
+
+### Fixed
+
+- Linux: restarting the systemd service no longer closes a terminal that Resume or Start opened from the board (`KillMode=process`).
 
 ## 0.1.0 - 2026-11-10
 
