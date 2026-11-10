@@ -52,7 +52,7 @@ a:hover { background: var(--ink); color: var(--paper); text-decoration: none; }
 .conn i { width: 10px; height: 10px; background: var(--ink); }
 .conn.live i { animation: blink 1.2s steps(1) infinite; }
 .conn.connecting i { background: none; border: 2px solid var(--ink); animation: blink .5s steps(1) infinite; }
-.conn.offline { color: var(--paper); background: var(--accent); color: var(--on-accent); padding: 4px 6px; }
+.conn.offline { background: var(--accent); color: var(--on-accent); padding: 4px 6px; }
 .conn.offline i { background: var(--on-accent); }
 @keyframes blink { 50% { opacity: .15; } }
 
@@ -334,7 +334,7 @@ mark { background: var(--ink); color: var(--paper); padding: 0 3px; }
 .pbar::-webkit-scrollbar { display: none; }
 .pbar button { flex: none; white-space: nowrap; display: inline-flex; align-items: center; gap: 8px; background: none; border: 2px solid transparent; padding: 5px 9px; font: 600 14px/1.2 var(--f-body); color: var(--ink); }
 .pbar button b { font-weight: 400; color: var(--mute); font-variant-numeric: tabular-nums; }
-.pbar button em { font-style: normal; font: 700 13px/1 var(--f-body); background: var(--accent); color: var(--on-accent); padding: 2px 6px; }
+.pbar button em { font: 700 13px/1 var(--f-body); background: var(--accent); color: var(--on-accent); padding: 2px 6px; }
 .pbar button:hover { border-color: var(--ink); }
 .pbar button.on { background: var(--ink); color: var(--paper); }
 .pbar button.on b { color: var(--paper); }

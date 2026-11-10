@@ -28,12 +28,12 @@ export type Who = 'you' | 'agent' | 'others';
  */
 export function nextParts(next: string | null | undefined, agentName?: string): { who: Who | null; name: string | null; text: string } {
   if (!next) return { who: null, name: null, text: '' };
-  const m = next.match(/^([^:\n]{1,30}):\s*(.*)$/s);
+  const m = /^([^:\n]{1,30}):/.exec(next);
   if (!m) return { who: null, name: null, text: next };
   const name = m[1]!.trim();
   const isAgent = /^(agent|claude)$/i.test(name) || (!!agentName && name.toLowerCase() === agentName.toLowerCase());
   const who: Who = /^you$/i.test(name) ? 'you' : isAgent ? 'agent' : 'others';
-  return { who, name, text: m[2]!.trim() };
+  return { who, name, text: next.slice(m[0].length).trim() };
 }
 
 /** Last `n` path segments: "~/code/projects/agent-eye" → "projects/agent-eye". */
