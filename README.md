@@ -12,8 +12,8 @@
 
 <p align="center">
   <a href="https://github.com/maxipavlovic/agent-eye/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/maxipavlovic/agent-eye/actions/workflows/ci.yml/badge.svg"></a>
-  <a href="https://sonarcloud.io/summary/new_code?id=maxipavlovic_agent-eye"><img alt="Quality gate" src="https://sonarcloud.io/api/project_badges/measure?project=maxipavlovic_agent-eye&metric=alert_status"></a>
-  <a href="https://sonarcloud.io/summary/new_code?id=maxipavlovic_agent-eye"><img alt="Coverage" src="https://sonarcloud.io/api/project_badges/measure?project=maxipavlovic_agent-eye&metric=coverage"></a>
+  <a href="https://sonarcloud.io/summary/overall?id=maxipavlovic_agent-eye"><img alt="Quality gate" src="https://sonarcloud.io/api/project_badges/measure?project=maxipavlovic_agent-eye&metric=alert_status"></a>
+  <a href="https://sonarcloud.io/summary/overall?id=maxipavlovic_agent-eye"><img alt="Coverage" src="https://sonarcloud.io/api/project_badges/measure?project=maxipavlovic_agent-eye&metric=coverage"></a>
   <a href="https://github.com/maxipavlovic/agent-eye/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/maxipavlovic/agent-eye"></a>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue"></a>
   <img alt="Platform: macOS | Linux" src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey">
@@ -41,12 +41,11 @@ Coding agents forget. Claude Code deletes transcripts after 30 days, you lose tr
 ## Install
 
 ```sh
-brew install maxipavlovic/tap/agent-eye
-# or: curl -LsSf https://github.com/maxipavlovic/agent-eye/releases/latest/download/agent-eye-installer.sh | sh
-# or: cargo install agent-eye
-
-agent-eye install    # hooks, background service and the `eye` command; --dry-run shows the changes
+brew install maxipavlovic/tap/agent-eye   # or: cargo install agent-eye
+agent-eye install                         # --dry-run shows what it changes
 ```
+
+No Homebrew or Rust? Take the installer script from the [latest release](https://github.com/maxipavlovic/agent-eye/releases/latest). `agent-eye install` sets up the hooks, the background service and the `eye` command.
 
 Needs macOS 11+ or Linux (glibc 2.35+), and Claude Code or Codex CLI. Codex runs eye's hooks after you approve them once with `/hooks`. Linux notes: [docs/linux.md](docs/linux.md).
 
