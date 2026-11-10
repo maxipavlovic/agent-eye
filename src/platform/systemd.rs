@@ -64,6 +64,8 @@ Type=simple
 ExecStart={bin} daemon
 Restart=on-failure
 RestartSec=10
+# a terminal opened for Resume lives in this unit's group; a restart must not close it
+KillMode=process
 {env}
 [Install]
 WantedBy=default.target
@@ -196,6 +198,8 @@ Type=simple
 ExecStart=/home/u/.local/bin/agent-eye daemon
 Restart=on-failure
 RestartSec=10
+# a terminal opened for Resume lives in this unit's group; a restart must not close it
+KillMode=process
 Environment=\"PATH=/home/u/.local/bin:/usr/local/bin:/usr/bin:/bin\"
 Environment=\"EYE_CLAUDE_DIR=/data/claude\"
 
