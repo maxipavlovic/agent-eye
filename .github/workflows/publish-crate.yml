@@ -4,6 +4,11 @@ name: Publish crate
 # package carries face/dist. Needs the secret CARGO_REGISTRY_TOKEN in the "crates-io" environment.
 on:
   workflow_dispatch:
+    inputs:
+      ref:
+        description: Tag to publish (the released code, not main)
+        required: true
+        default: v0.1.0
 
 permissions:
   contents: read
@@ -16,6 +21,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ inputs.ref }}
           persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -31,4 +37,5 @@ jobs:
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         # The first publish of a crate needs a token; switch to trusted publishing after that.
-        run: cargo publish --locked # zizmor: ignore[use-trusted-publishing]
+        # --allow-dirty: face/dist is built above and shipped in the package, but never committed.
+        run: cargo publish --locked --allow-dirty # zizmor: ignore[use-trusted-publishing]
