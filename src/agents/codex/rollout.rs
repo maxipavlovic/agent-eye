@@ -13,6 +13,7 @@
 //! a line in either dialect; [`Reader`] turns the lines of a file into a [`Delta`].
 
 use super::background::Tracker;
+use super::results;
 use super::script::{self, Call};
 use super::work::work_event;
 use crate::agents::append_only::for_each_line;
@@ -328,9 +329,11 @@ fn tool_item(kind: &str, item: &Value) -> Event {
             done(Tool::Files(files), "", None)
         }
         "McpToolCall" => match (s("server"), s("tool")) {
-            (Some(server), Some(tool)) => {
-                done(Tool::Named(format!("mcp {server}.{tool}")), "", None)
-            }
+            (Some(server), Some(tool)) => done(
+                Tool::Named(format!("mcp {server}.{tool}")),
+                &results::text(item, &["result"]),
+                None,
+            ),
             _ => Event::Other,
         },
         "WebSearch" => done(
@@ -338,9 +341,10 @@ fn tool_item(kind: &str, item: &Value) -> Event {
             "",
             None,
         ),
-        "DynamicToolCall" => {
-            s("tool").map_or(Event::Other, |t| done(Tool::Named(t.into()), "", None))
-        }
+        "DynamicToolCall" => s("tool").map_or(Event::Other, |t| {
+            let said = results::text(item, &["content_items", "contentItems"]);
+            done(Tool::Named(t.into()), &said, None)
+        }),
         _ => Event::Other,
     }
 }
@@ -691,7 +695,8 @@ impl<'a> Reader<'a> {
                 let files: Vec<&str> = files.iter().map(String::as_str).collect();
                 self.touched(file_dirs(&files, self.cwd.as_deref()));
             }
-            Tool::Patch(_) | Tool::Script(_) | Tool::Named(_) | Tool::Other => {}
+            Tool::Named(_) => self.scan_result(output, ts),
+            Tool::Patch(_) | Tool::Script(_) | Tool::Other => {}
         }
     }
 
@@ -1045,6 +1050,48 @@ mod tests {
         assert_eq!(
             decode(&item(json!({"type": "CommandExecution", "command": []}))),
             Event::Other
+        );
+    }
+
+    #[test]
+    fn a_pull_request_an_mcp_server_opened_is_found_in_its_result() {
+        let p = read(&[
+            item(
+                json!({"type": "McpToolCall", "server": "github", "tool": "create_pull_request",
+                "status": "completed", "arguments": {"title": "see https://github.com/org/app/pull/1"},
+                "result": {"content": [{"type": "text", "text": "created https://github.com/org/app/pull/7"}]}}),
+            ),
+            item(
+                json!({"type": "McpToolCall", "server": "jira", "tool": "get_issue", "status": "completed",
+                "result": {"content": [{"type": "text", "text": "https://acme.atlassian.net/browse/APP-9"}]}}),
+            ),
+            item(
+                json!({"type": "DynamicToolCall", "tool": "open_pr", "status": "completed",
+                "content_items": [{"type": "inputText", "text": "https://github.com/org/app/pull/8"}]}),
+            ),
+            item(
+                json!({"type": "McpToolCall", "server": "github", "tool": "list_issues", "status": "failed",
+                "error": {"message": "denied"}}),
+            ),
+        ]);
+        let prs: Vec<&str> = p
+            .delta
+            .outputs
+            .iter()
+            .filter(|o| o.kind == "pr")
+            .map(|o| o.value.as_str())
+            .collect();
+        assert_eq!(
+            prs,
+            [
+                "https://github.com/org/app/pull/7",
+                "https://github.com/org/app/pull/8"
+            ],
+            "the arguments are not read"
+        );
+        assert_eq!(
+            p.delta.jira_hosts.get("APP").map(String::as_str),
+            Some("acme.atlassian.net")
         );
     }
 

@@ -523,6 +523,10 @@ pub fn doctor(o: &Opts, paths: &Paths, cfg: &Config, agents: &Agents) -> Vec<Che
             crate::pick::bin_name()
         )
     }));
+    out.push(Check::ok(crate::remind::notices::describe(
+        crate::remind::notices::is_on(paths, cfg.remind.notify),
+        crate::remind::notices::available(),
+    )));
     let eye_bin = o.eye_bin();
     let ctx = InstallCtx {
         eye_bin: &eye_bin,
@@ -1423,6 +1427,29 @@ mod tests {
                 "{manager:?}"
             );
         }
+    }
+
+    #[test]
+    fn doctor_says_whether_due_reminders_show_a_desktop_notice() {
+        let t = tempfile::tempdir().unwrap();
+        let o = opts(t.path());
+        let paths = Paths {
+            home: o.eye_home.clone(),
+        };
+        let (agents, _) = claude(t.path());
+        let line = |cfg: &Config| {
+            let r = doctor(&o, &paths, cfg, &agents);
+            let l: Vec<_> = r
+                .iter()
+                .filter(|c| c.msg.contains("desktop notices"))
+                .collect();
+            assert_eq!(l.len(), 1);
+            l[0].msg.clone()
+        };
+        assert!(line(&Config::default()).contains("off"));
+        let mut on = Config::default();
+        on.remind.notify = true;
+        assert!(line(&on).contains(": on"));
     }
 
     #[test]

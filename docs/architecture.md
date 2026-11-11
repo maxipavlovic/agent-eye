@@ -74,7 +74,7 @@ macOS and Linux share all the code except `src/platform/`, which has the three t
 |---|---|---|
 | Background service | launch agent `dev.agent-eye.daemon` in `~/Library/LaunchAgents`, run with `launchctl` | systemd user unit `agent-eye.service` in `~/.config/systemd/user`, run with `systemctl --user` |
 | Open a URL | `open` | `xdg-open` |
-| Desktop notice (due reminders) | `osascript`, text as arguments | `notify-send` when installed, else none |
+| Desktop notice (due reminders, opt-in) | `osascript`, text as arguments | `notify-send` when installed, else none |
 | Copy text | `pbcopy` | the first of `wl-copy`, `xclip`, `xsel` that works |
 | Resume and Start (`[board] resume`) | an iTerm2 tab if installed, else a Terminal window (a `.command` file opened with `open`), or the command copied | a window of `xdg-terminal-exec`, `x-terminal-emulator` or `$TERMINAL` when there is a display, else the command copied |
 

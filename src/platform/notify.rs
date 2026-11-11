@@ -17,6 +17,15 @@ pub fn send(title: &str, body: &str) -> bool {
     send_with(&search_path(), MACOS, title, body, LIMIT)
 }
 
+/// Does this machine have a program that can show a notice?
+pub fn available() -> bool {
+    available_with(&search_path(), MACOS)
+}
+
+fn available_with(path: &OsStr, mac: bool) -> bool {
+    find_in(command(mac, "", "").0, path).is_some()
+}
+
 fn send_with(path: &OsStr, mac: bool, title: &str, body: &str, limit: Duration) -> bool {
     let (program, args) = command(mac, title, body);
     find_in(program, path).is_some_and(|exe| {
@@ -123,6 +132,18 @@ mod tests {
             args_of(t.path(), "notify-send"),
             ["--app-name=agent-eye", "--", "-t", "two words"]
         );
+    }
+
+    #[test]
+    fn a_notice_is_available_when_the_machines_program_is_on_the_path() {
+        let t = tempfile::tempdir().unwrap();
+        assert!(!available_with(t.path().as_os_str(), true));
+        assert!(!available_with(t.path().as_os_str(), false));
+        recorder(t.path(), "osascript", 0);
+        assert!(available_with(t.path().as_os_str(), true));
+        assert!(!available_with(t.path().as_os_str(), false));
+        recorder(t.path(), "notify-send", 0);
+        assert!(available_with(t.path().as_os_str(), false));
     }
 
     #[test]

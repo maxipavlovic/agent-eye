@@ -10,6 +10,8 @@ pub mod append_only;
 pub mod claude;
 /// OpenAI's Codex CLI.
 pub mod codex;
+/// A shell command as the name of what it runs, for the card's background line.
+pub mod command_label;
 /// Adding eye's hooks to an agent's JSON hooks file and taking them out again.
 pub mod hooks_file;
 /// Finding Jira keys, pull requests and commits in transcript text, the same for every agent.

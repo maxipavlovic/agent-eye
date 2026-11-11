@@ -32,6 +32,6 @@ To see what a session was about before resuming it, `eye show <id> --conversatio
 
 ## Checking on something later
 
-`eye remind <id> <when> [--note "<text>"]` brings a session (or an idea, as `idea:<n>`) back to Needs you at a time, for a reply that may not come or an idea to look at by a day. `<when>` is `tomorrow`, `mon`..`sun`, `30m`, `4h`, `3d`, `1w`, `2026-11-20` or `"2026-11-20 14:00"` (a day alone means 9:00). `eye remind <id> --clear` removes it and `eye remind ls` lists them. Everything stays on the machine; eye shows a desktop notice when one is due. Use it only when the user asks.
+`eye remind <id> <when> [--note "<text>"]` brings a session (or an idea, as `idea:<n>`) back to Needs you at a time, for a reply that may not come or an idea to look at by a day. `<when>` is `tomorrow`, `mon`..`sun`, `30m`, `4h`, `3d`, `1w`, `2026-11-20` or `"2026-11-20 14:00"` (a day alone means 9:00). `eye remind <id> --clear` removes it and `eye remind ls` lists them. Everything stays on the machine; a desktop notice for a due one is off unless the user turned it on (`eye remind notify on`). Use it only when the user asks.
 
 Confirm in one line what you changed.

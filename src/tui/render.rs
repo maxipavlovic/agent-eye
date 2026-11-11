@@ -365,7 +365,10 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     let w = foot.width as usize;
     let remind_text = app.remind.as_ref().map(|i| {
         let note = i.error.as_deref().unwrap_or(super::remind::HINT);
-        format!("remind › {}▏  {note}", i.text)
+        match i.notice_state() {
+            Some(n) => format!("remind › {}▏  {n}   {note}", i.text),
+            None => format!("remind › {}▏  {note}", i.text),
+        }
     });
     let text = match (&remind_text, &app.msg) {
         (Some(t), _) => t.clone(),

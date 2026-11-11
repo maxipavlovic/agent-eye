@@ -2,11 +2,14 @@
 
 use super::Global;
 use crate::db::Db;
-use crate::remind::{self, Target};
+use crate::remind::{self, notices, Target};
 use crate::util::{now_ms, printable, short_id};
 use anyhow::{ensure, Result};
 
 pub fn run(g: &Global, args: &[String], note: Option<&str>, clear: bool) -> Result<()> {
+    if args.first().is_some_and(|a| a == "notify") {
+        return notify(g, &args[1..]);
+    }
     let env = g.open()?;
     let now = now_ms();
     let Some((id, words)) = args.split_first() else {
@@ -30,6 +33,28 @@ pub fn run(g: &Global, args: &[String], note: Option<&str>, clear: bool) -> Resu
     let at = remind::parse_local(&words.join(" "), now)?;
     remind::set(&env.db, &target, at, note)?;
     println!("will remind you {}: {title}", remind::label(at, now));
+    if !notices::is_on(&env.paths, env.cfg.remind.notify) {
+        println!(
+            "desktop notices are off: {} remind notify on",
+            crate::pick::bin_name()
+        );
+    }
+    Ok(())
+}
+
+/// `remind notify [on|off]`: say whether a due reminder shows a desktop notice, or switch it.
+fn notify(g: &Global, words: &[String]) -> Result<()> {
+    let paths = g.paths()?;
+    let loaded = g.config_read_only(&paths).remind.notify;
+    match words {
+        [] => {}
+        [w] if w == "on" || w == "off" => notices::set(&paths, w == "on")?,
+        _ => anyhow::bail!("say `notify on`, `notify off`, or `notify` alone to see the state"),
+    }
+    println!(
+        "{}",
+        notices::describe(notices::is_on(&paths, loaded), notices::available())
+    );
     Ok(())
 }
 

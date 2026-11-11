@@ -131,3 +131,36 @@ fn mistakes_are_explained() {
     assert!(h.err(&["remind", "idea:9", "1d"]).contains("no idea 9"));
     assert!(h.ok(&["remind", "ls"]).contains("no reminders"));
 }
+
+#[test]
+fn desktop_notices_are_off_until_switched_on_and_a_new_reminder_says_so() {
+    let h = Home::new();
+    let out = h.ok(&["remind", "notify"]);
+    assert!(
+        out.contains(": off") && out.contains("remind notify on"),
+        "{out}"
+    );
+    let out = h.ok(&["remind", "abcdef", "tomorrow"]);
+    assert!(out.contains("desktop notices are off:"), "{out}");
+    assert!(out.contains("remind notify on"), "{out}");
+
+    let out = h.ok(&["remind", "notify", "on"]);
+    assert!(out.contains("notices for due reminders: on"), "{out}");
+    let text = std::fs::read_to_string(h.paths().config_path()).unwrap();
+    assert!(text.contains("notify = true"), "{text}");
+    assert!(text.contains("[board]"), "the rest of the file stays");
+    let out = h.ok(&["remind", "abcdef", "2d"]);
+    assert!(!out.contains("desktop notices are off"), "{out}");
+
+    let out = h.ok(&["remind", "notify", "off"]);
+    assert!(out.contains(": off"), "{out}");
+    assert!(h.err(&["remind", "notify", "maybe"]).contains("notify on"));
+}
+
+#[test]
+fn an_old_config_without_the_key_means_notices_are_off() {
+    let h = Home::new();
+    std::fs::write(h.paths().config_path(), "[board]\nport = 7500\n").unwrap();
+    let out = h.ok(&["remind", "notify"]);
+    assert!(out.contains(": off"), "{out}");
+}

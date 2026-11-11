@@ -27,7 +27,7 @@ resume = "{resume}"   # how Resume/Start open a session: "auto" (iTerm2 or Termi
 done_days = 7      # Done sessions older than this leave the board for the archive view; 0 = keep them
 
 [remind]
-notify = true      # a desktop notice when a "check on" reminder is due (osascript on macOS, notify-send on Linux); it never leaves the machine
+notify = false    # a desktop notice when a "check on" reminder is due (osascript on macOS, notify-send on Linux); off until you ask: eye remind notify on
 
 [user]
 name = ""          # your name as older summaries wrote it, e.g. "Sam": lines starting "Sam:" show as "You:"
@@ -271,16 +271,11 @@ impl Default for BoardCfg {
 }
 
 /// `[remind]`: what happens when a reminder falls due.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Default)]
 #[serde(default)]
 pub struct RemindCfg {
-    /// Show a desktop notice, once per reminder.
+    /// Show a desktop notice, once per reminder. Off until the user turns it on.
     pub notify: bool,
-}
-impl Default for RemindCfg {
-    fn default() -> Self {
-        Self { notify: true }
-    }
 }
 
 /// `[exclude]`: folders that are never indexed.
@@ -400,6 +395,11 @@ pub fn set_board_enabled(text: &str, on: bool) -> String {
     set_key(text, "[board]", "enabled", &on.to_string())
 }
 
+/// Set `notify` in the `[remind]` section of a config.toml text, keeping every other line and comment.
+pub fn set_remind_notify(text: &str, on: bool) -> String {
+    set_key(text, "[remind]", "notify", &on.to_string())
+}
+
 /// Set `enabled` in the `[agents]` section of a config.toml text to these agent ids.
 pub fn set_agents_enabled(text: &str, ids: &[String]) -> String {
     let list: Vec<String> = ids.iter().map(|i| format!("{i:?}")).collect();
@@ -423,6 +423,12 @@ fn text_or_default(path: &Path) -> Result<String> {
 /// Write `[board] enabled` into the config file (created from the defaults when missing).
 pub fn write_board_enabled(path: &Path, on: bool) -> Result<()> {
     let text = set_board_enabled(&text_or_default(path)?, on);
+    crate::files::write_private(path, &text).with_context(|| format!("writing {}", path.display()))
+}
+
+/// Write `[remind] notify` into the config file (created from the defaults when missing).
+pub fn write_remind_notify(path: &Path, on: bool) -> Result<()> {
+    let text = set_remind_notify(&text_or_default(path)?, on);
     crate::files::write_private(path, &text).with_context(|| format!("writing {}", path.display()))
 }
 
@@ -455,6 +461,34 @@ mod tests {
         assert_eq!(t.lines().count(), default_toml().lines().count());
         assert!(Config::parse(&t).unwrap().board.enabled);
         assert_eq!(set_board_enabled(&t, false), default_toml());
+    }
+
+    #[test]
+    fn desktop_notices_are_off_unless_the_config_says_on() {
+        assert!(!Config::default().remind.notify);
+        assert!(!Config::parse(&default_toml()).unwrap().remind.notify);
+        assert!(!Config::parse("[board]\nport = 7500").unwrap().remind.notify);
+        assert!(
+            Config::parse("[remind]\nnotify = true")
+                .unwrap()
+                .remind
+                .notify
+        );
+    }
+
+    #[test]
+    fn the_notify_switch_keeps_comments_and_other_keys() {
+        let on = set_remind_notify(&default_toml(), true);
+        assert!(on.contains("notify = true    # a desktop notice when"));
+        assert_eq!(on.lines().count(), default_toml().lines().count());
+        assert!(Config::parse(&on).unwrap().remind.notify);
+        assert_eq!(set_remind_notify(&on, false), default_toml());
+        let old = "[board]\nport = 7500 # mine\n";
+        let t = set_remind_notify(old, true);
+        assert_eq!(
+            t,
+            "[board]\nport = 7500 # mine\n\n[remind]\nnotify = true\n"
+        );
     }
 
     #[test]

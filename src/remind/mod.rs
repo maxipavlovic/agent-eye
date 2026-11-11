@@ -5,6 +5,7 @@
 //! A reminder is due once its time has come and the session has not had activity since, because
 //! activity means you went back to it. `when.rs` reads the words for a time.
 
+pub mod notices;
 mod when;
 
 pub use when::{parse, parse_local};
