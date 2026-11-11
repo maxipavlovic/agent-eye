@@ -193,13 +193,21 @@ impl Default for BackupCfg {
     }
 }
 impl BackupCfg {
-    /// The mirror folder, with a leading `~` as the home folder; None when it is off.
-    pub fn mirror_dir(&self) -> Option<PathBuf> {
+    /// The mirror folder, with a leading `~` as the home folder; None when it is off. A relative
+    /// path is refused with the reason: the daemon's folder is `/` under launchd, so it would
+    /// name a place nobody meant.
+    pub fn mirror_dir(&self) -> Result<Option<PathBuf>, String> {
         let m = self.mirror.trim();
         if m.is_empty() {
-            return None;
+            return Ok(None);
         }
-        Some(expand_tilde(m))
+        let dir = expand_tilde(m);
+        if !dir.is_absolute() {
+            return Err(format!(
+                "the mirror folder \"{m}\" must be an absolute path or start with ~"
+            ));
+        }
+        Ok(Some(dir))
     }
 }
 

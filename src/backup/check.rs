@@ -56,8 +56,10 @@ pub fn checks(paths: &Paths, cfg: &Config, now_ms: i64) -> Vec<Check> {
 }
 
 fn mirror_check(paths: &Paths, cfg: &Config, now_ms: i64) -> Check {
-    let Some(dir) = cfg.backup.mirror_dir() else {
-        return Check::ok("backup mirror: off");
+    let dir = match cfg.backup.mirror_dir() {
+        Ok(Some(dir)) => dir,
+        Ok(None) => return Check::ok("backup mirror: off"),
+        Err(why) => return Check::warn(format!("backup mirror: {why}; no copies are made")),
     };
     let shown = dir.display();
     let last = mirror::state(paths);

@@ -9,6 +9,35 @@ fn mirror_cfg(m: &Path) -> BackupCfg {
 }
 
 #[test]
+fn a_relative_mirror_is_skipped_with_that_reason_and_doctor_says_so() {
+    let h = home();
+    let db = db_with(&h.paths, 1);
+    let cfg = BackupCfg {
+        mirror: "disk/eye".into(),
+        ..BackupCfg::default()
+    };
+    assert!(cfg.mirror_dir().unwrap_err().contains("absolute"));
+    let s = take(&db.conn, &h.paths, &cfg, &Reason::Manual).unwrap();
+    assert!(s.path.exists(), "the local snapshot is made anyway");
+    let Some(mirror::State::Failed(_, why)) = mirror::state(&h.paths) else {
+        panic!("not noted");
+    };
+    assert!(why.contains("absolute path or start with ~"), "{why}");
+    let all = Config {
+        backup: cfg,
+        ..Config::default()
+    };
+    let l = lines(&h, &all);
+    let m = l.iter().find(|l| l.1.starts_with("backup mirror")).unwrap();
+    assert!(!m.0 && m.1.contains("absolute"), "{m:?}");
+    let home_rel = BackupCfg {
+        mirror: "~/eye-copies".into(),
+        ..BackupCfg::default()
+    };
+    assert!(home_rel.mirror_dir().unwrap().is_some());
+}
+
+#[test]
 fn a_mirror_that_is_not_there_is_skipped_never_created_and_noted() {
     let h = home();
     let db = db_with(&h.paths, 1);

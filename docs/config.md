@@ -81,7 +81,7 @@ Snapshots of the database (see `backups.md`). Every key is optional.
 | `enabled` | `true` | Make a snapshot every day (the daemon does it) and before a schema upgrade. `false` stops both; `eye backup` by hand still works and says that automatic ones are off. |
 | `keep_daily` | `7` | How many daily snapshots to keep. |
 | `keep_weekly` | `4` | How many weeks keep one snapshot, the newest daily of that week. |
-| `mirror` | `""` | A folder that **already exists** (an external disk, a synced folder): each snapshot is copied there too, with the same rotation. A folder that is not there is skipped, never created, and `eye doctor` says so. A leading `~` is your home folder. Empty: off. |
+| `mirror` | `""` | An absolute path (or one that starts with `~`) to a folder that **already exists** (an external disk, a synced folder): each snapshot is copied there too, with the same rotation. A folder that is not there is skipped, never created, and `eye doctor` says so. A leading `~` is your home folder. Empty: off. |
 | `mirror_archive` | `false` | Also copy the transcript archive (`~/.agent-eye/archive/`) into `<mirror>/archive`: only files whose size or time changed, and nothing is ever deleted there. |
 
 ## Environment

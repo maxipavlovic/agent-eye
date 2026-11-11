@@ -242,14 +242,21 @@ pub fn label(at: i64, now: i64) -> String {
 
 /// Tell about each due reminder once: `send` shows a notice (title, text). A reminder counts as
 /// told even when no notice could be shown, so a machine without a desktop is not tried again on
-/// every tick. Returns how many were told.
+/// every tick. A row that cannot be resolved is reported on standard error and skipped, so it does
+/// not hold back the others. Returns how many were told.
 pub fn notify_due(db: &Db, now: i64, send: &mut dyn FnMut(&str, &str)) -> Result<usize> {
     let mut told = 0;
     for e in list(db, now)? {
         if !e.remind.due || e.notified_at.is_some_and(|n| n >= e.remind.at) {
             continue;
         }
-        let target = Target::resolve(db, &e.id)?;
+        let target = match Target::resolve(db, &e.id) {
+            Ok(t) => t,
+            Err(err) => {
+                eprintln!("eye: reminder of {} skipped: {err:#}", e.id);
+                continue;
+            }
+        };
         db.conn.execute(
             &format!(
                 "UPDATE {} SET remind_notified_at=?2 WHERE id=?1",

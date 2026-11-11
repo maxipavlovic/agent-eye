@@ -137,6 +137,24 @@ fn snapshots_are_named_private_and_leave_no_temp_files() {
 }
 
 #[test]
+fn names_carry_utc_and_the_schema_and_a_listing_reads_them_without_opening_anything() {
+    let h = home();
+    let d = dir(&h.paths);
+    touch(&d, "eye-20261101-013000Z-daily-s9.db.zst");
+    touch(&d, "eye-20261101-013000Z-pre-restore-s11.db.zst");
+    touch(&d, "eye-20261101-023000Z-manual.db.zst");
+    let all = list(&d);
+    let of = |n: &str| all.iter().find(|e| e.name.contains(n)).unwrap();
+    assert_eq!(of("daily").schema, Some(9));
+    assert_eq!(of("pre-restore").reason, Reason::PreRestore);
+    assert_eq!(of("pre-restore").schema, Some(11));
+    assert_eq!(of("manual").schema, None);
+    // 01:30 and 02:30 UTC are an hour apart whatever the local clock did
+    assert_eq!(of("manual").stamp_ms() - of("daily").stamp_ms(), 3_600_000);
+    assert_eq!(all[0].name, "eye-20261101-023000Z-manual.db.zst");
+}
+
+#[test]
 fn a_failed_snapshot_leaves_nothing_behind() {
     let h = home();
     let db = db_with(&h.paths, 1);

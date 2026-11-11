@@ -48,8 +48,13 @@ fn record(paths: &Paths, state: &State) {
 /// Copy `newest` (a snapshot just made) to the mirror, rotate there, and copy the archive when
 /// asked to. Without a mirror it does nothing; the outcome is kept for `eye doctor`.
 pub fn sync(paths: &Paths, cfg: &BackupCfg, newest: &Path) {
-    let Some(mirror) = cfg.mirror_dir() else {
-        return;
+    let mirror = match cfg.mirror_dir() {
+        Ok(Some(m)) => m,
+        Ok(None) => return,
+        Err(why) => {
+            record(paths, &State::Failed(crate::util::now_ms(), why));
+            return;
+        }
     };
     let result = copy_snapshot(&mirror, newest, cfg).and_then(|()| {
         if cfg.mirror_archive {

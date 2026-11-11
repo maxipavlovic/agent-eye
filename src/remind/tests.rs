@@ -246,6 +246,26 @@ fn each_due_reminder_is_announced_once_and_again_after_a_new_time() {
 }
 
 #[test]
+fn a_row_that_cannot_be_resolved_does_not_stop_the_others() {
+    let db = Db::open_memory().unwrap();
+    // an id that reads as an idea id but is not a number
+    add(&db, "idea:odd", "Odd one", 1);
+    add(&db, "aaaaaaaa-1", "Fine", 1);
+    for (id, at) in [("idea:odd", 1_000), ("aaaaaaaa-1", 1_500)] {
+        db.conn
+            .execute(
+                "UPDATE session SET remind_at=?2 WHERE id=?1",
+                params![id, at],
+            )
+            .unwrap();
+    }
+    let mut seen = vec![];
+    let mut send = |t: &str, _: &str| seen.push(t.to_string());
+    assert_eq!(notify_due(&db, 5_000, &mut send).unwrap(), 1);
+    assert_eq!(seen, ["Check on: Fine"]);
+}
+
+#[test]
 fn an_idea_is_announced_too() {
     let db = Db::open_memory().unwrap();
     let i = ideas::add(
