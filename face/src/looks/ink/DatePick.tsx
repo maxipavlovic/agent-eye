@@ -53,12 +53,12 @@ export function parseTime(s: string): string | null {
   return h > 23 || min > 59 ? null : `${pad(h)}:${pad(min)}`;
 }
 
-/** The next quarter hour up or down from `t`, round the clock; 09:00 when `t` is not a time. */
+/** The next quarter hour up or down from `t`, stopping at 00:00 and 23:45 so the date never moves; `t` counts as 09:00 when it is not a time. */
 export function stepTime(t: string, dir: 1 | -1): string {
   const [h, m] = (parseTime(t) ?? '09:00').split(':').map(Number);
   const at = h! * 60 + m!;
   const next = dir > 0 ? Math.floor(at / 15) * 15 + 15 : Math.ceil(at / 15) * 15 - 15;
-  const w = (next + 1440) % 1440;
+  const w = Math.min(Math.max(next, 0), 23 * 60 + 45);
   return `${pad(Math.floor(w / 60))}:${pad(w % 60)}`;
 }
 

@@ -5,7 +5,7 @@ import type { Card, ColumnId, MoveTarget } from '../../api/types';
 import { copy } from './copy';
 import { startButton } from './folder';
 import { ideaForm } from './IdeaForm';
-import { REMIND_PRESETS, remindForm } from './Remind';
+import { openRemind, REMIND_PRESETS } from './Remind';
 
 interface Open {
   seq: number;
@@ -83,7 +83,7 @@ function onBoard(store: Store, id: string): ColumnId | null {
 export function remindRows(c: Card, store: Store, go: (fn: () => void) => () => void): Row[] {
   const out: Row[] = [{ head: 'REMIND ME…' }];
   for (const p of REMIND_PRESETS) out.push({ label: p.label, sub: true, run: go(() => { void store.remind(c.id, { when: p.when }); }) });
-  out.push({ label: 'PICK A DATE…', sub: true, run: go(() => { remindForm.value = c.id; }) });
+  out.push({ label: 'PICK A DATE…', sub: true, run: go(() => { openRemind(c.id); }) });
   if (c.remind_at) out.push({ label: 'CLEAR REMINDER', sub: true, run: go(() => { void store.remind(c.id, { clear: true }); }) });
   return out;
 }

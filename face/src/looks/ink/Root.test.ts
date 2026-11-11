@@ -309,6 +309,19 @@ describe('the panel', () => {
     expect($('.page .acts.end .btn.big')!.textContent).toBe('RESUME');
   });
 
+  it('does not resume or move the session behind the idea form', async () => {
+    const resume = vi.fn(fixtureSource().resume);
+    const { root, $, store } = await mount({ ...fixtureSource(), resume });
+    card(root, 'needs_you', 'flaky login').click();
+    await vi.waitFor(() => expect($('.qmove .resume')).not.toBeNull());
+    const before = store.detail.value!.column;
+    ideaForm.value = {};
+    for (const k of ['r', 'n', 'w', 'p', 'd']) key(k);
+    await new Promise((r) => setTimeout(r, 30));
+    expect(resume).not.toHaveBeenCalled();
+    expect(store.detail.value!.column).toBe(before);
+  });
+
   it('loads the conversation when its section is opened', async () => {
     const { root, $, $$ } = await mount();
     card(root, 'needs_you', 'date library').click();
@@ -448,6 +461,21 @@ describe('reminders', () => {
     expect(remind).not.toHaveBeenCalled();
     key('Escape');
     await vi.waitFor(() => expect($('form.modal')).toBeNull());
+  });
+
+  it('gives focus back to the PICK A DATE button when the form closes, by Esc, CANCEL or the scrim', async () => {
+    const { root, $, $$ } = await mount();
+    card(root, 'paused', 'Changelog generator').click();
+    await vi.waitFor(() => expect($$('.page .acts .btn').some((b) => b.textContent === 'PICK A DATE…')).toBe(true));
+    const opener = $$('.page .acts .btn').find((b) => b.textContent === 'PICK A DATE…')!;
+    for (const close of [() => key('Escape'), () => $$('form.modal .btn').find((b) => b.textContent === 'CANCEL')!.click(), () => ($('form.modal')!.previousElementSibling as HTMLElement).click()]) {
+      opener.focus();
+      opener.click();
+      await vi.waitFor(() => expect($('form.modal .dpgrid')).not.toBeNull());
+      close();
+      await vi.waitFor(() => expect($('form.modal')).toBeNull());
+      expect(document.activeElement).toBe(opener);
+    }
   });
 
   it('switches the desktop notice for every reminder, and hides the switch where there is none', async () => {
