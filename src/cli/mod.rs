@@ -7,6 +7,7 @@ mod board;
 mod data;
 mod ideas;
 mod pick;
+mod remind;
 mod setup;
 mod show;
 
@@ -190,6 +191,7 @@ pub fn run() -> Result<()> {
             current,
             next,
         } => data::mark(&g, &args, current, next.as_deref()),
+        Cmd::Remind { args, note, clear } => remind::run(&g, &args, note.as_deref(), clear),
         Cmd::Daemon { port, no_board } => setup::daemon(&g, port, no_board),
         Cmd::Install { a, board } => setup::install(&g, &a, board),
         Cmd::Uninstall { a, purge } => setup::uninstall(&g, &a, purge),

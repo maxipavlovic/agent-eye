@@ -324,7 +324,19 @@ pub fn quiet_round(db: &mut Db, paths: &Paths, cfg: &Config) -> Result<(usize, u
     Ok((summarized, archived))
 }
 
-/// One pass of the main loop: events, then the incremental scan.
+/// Tell about the reminders that came due, once each, unless `[remind] notify` is off.
+fn notify_reminders(db: &Db, paths: &Paths, cfg: &Config, send: &mut dyn FnMut(&str, &str)) {
+    if !cfg.remind.notify {
+        return;
+    }
+    match crate::remind::notify_due(db, now_ms(), send) {
+        Ok(0) => {}
+        Ok(n) => log(paths, &format!("tick: {n} reminders due")),
+        Err(e) => log(paths, &format!("reminders: {e:#}")),
+    }
+}
+
+/// One pass of the main loop: events, then the incremental scan, then due reminders.
 pub fn tick(db: &mut Db, paths: &Paths, cfg: &Config) -> Result<()> {
     let n = drain_queue(db, paths, &agents::enabled(cfg))?;
     let st = scan::scan(db, cfg, false)?;
@@ -337,6 +349,9 @@ pub fn tick(db: &mut Db, paths: &Paths, cfg: &Config) -> Result<()> {
             ),
         );
     }
+    notify_reminders(db, paths, cfg, &mut |title, body| {
+        crate::platform::notify::send(title, body);
+    });
     let cutoff = now_ms() - EVENT_KEEP_MS;
     if n == 0
         && db.meta_get("event_pruned_day")?.as_deref() != Some(&(cutoff / 86_400_000).to_string())
@@ -472,6 +487,25 @@ mod tests {
                 params![id, last],
             )
             .unwrap();
+    }
+
+    #[test]
+    fn a_due_reminder_is_announced_once_and_not_when_notices_are_off() {
+        let (_t, p, db) = env();
+        add_session(&db, "s1", 100);
+        db.conn
+            .execute("UPDATE session SET remind_at=200, title='Ana'", [])
+            .unwrap();
+        let seen = std::cell::RefCell::new(vec![]);
+        let mut send = |t: &str, _: &str| seen.borrow_mut().push(t.to_string());
+        let mut off = Config::default();
+        off.remind.notify = false;
+        notify_reminders(&db, &p, &off, &mut send);
+        assert!(seen.borrow().is_empty());
+        let on = Config::default();
+        notify_reminders(&db, &p, &on, &mut send);
+        notify_reminders(&db, &p, &on, &mut send);
+        assert_eq!(*seen.borrow(), ["Check on: Ana"]);
     }
 
     #[test]

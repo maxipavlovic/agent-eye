@@ -282,6 +282,20 @@ pub enum Cmd {
         #[arg(long)]
         next: Option<String>,
     },
+    /// Check on a session or an idea later: remind <id> <when>, remind <id> --clear, remind ls
+    Remind {
+        /// `<id> <when>`, or `<id> --clear`, or `ls`. The id is a session id (or its first 6
+        /// characters) or `idea:<n>`; `<when>` is tomorrow, mon..sun, 30m, 4h, 3d, 1w, 2026-11-20
+        /// or "2026-11-20 14:00" (a day alone means 9:00)
+        #[arg(required = true, num_args = 1..)]
+        args: Vec<String>,
+        /// What to check on, shown with the reminder
+        #[arg(long)]
+        note: Option<String>,
+        /// Remove the reminder
+        #[arg(long)]
+        clear: bool,
+    },
     /// Hook entry point (called by the agent, reads the event on stdin)
     Hook {
         event: String,

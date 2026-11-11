@@ -97,6 +97,24 @@ impl Target {
         }
     }
 
+    /// The id as people type it: the session id, or `idea:<n>`.
+    pub fn id(&self) -> String {
+        match self {
+            Target::Session(id) => id.clone(),
+            Target::Idea(n) => format!("idea:{n}"),
+        }
+    }
+
+    /// What it is called.
+    pub fn title(&self, db: &Db) -> Result<String> {
+        match self {
+            Target::Session(id) => Ok(session_title(
+                &db.session_by_id(id)?.context("no such session")?,
+            )),
+            Target::Idea(n) => Ok(ideas::get(db, *n)?.context("no such idea")?.title),
+        }
+    }
+
     fn table(&self) -> &'static str {
         match self {
             Target::Session(_) => "session",
