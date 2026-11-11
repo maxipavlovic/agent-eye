@@ -1,7 +1,7 @@
 # Backups
 
-eye keeps compressed snapshots of its database, `~/.agent-eye/backups/eye-<date>-<time>-<reason>.db.zst`
-(about a third of the database's size). The database holds what a rescan cannot bring back: your
+eye keeps compressed snapshots of its database, `~/.agent-eye/backups/eye-<date>-<time>Z-<reason>-s<schema>.db.zst`
+(about a third of the database's size). The time in the name is UTC (the `Z`), and `s<schema>` is the schema version of the database inside, so `eye backup ls` never has to open a snapshot. The database holds what a rescan cannot bring back: your
 ideas, manual column moves, hidden flags and the summaries. The transcript archive
 (`~/.agent-eye/archive/`) is a separate copy of transcripts; see the mirror below.
 
@@ -34,7 +34,7 @@ eye backup restore latest --yes  # for scripts (without it a non-terminal refuse
 `eye backup restore` checks the snapshot first (`PRAGMA quick_check` must say `ok`, and its schema must not
 be newer than your eye), keeps the current database as a `pre-restore` snapshot, stops the daemon
 when it runs from the service, replaces `eye.db` (and removes its old `-wal` and `-shm` files),
-and starts the daemon again. A daemon you started by hand has to be stopped first. Transcripts only
+and starts the daemon again. A daemon you started by hand has to be stopped first, and so do other eye windows (the picker, `eye pick`): one that stays open keeps writing to the old database. Transcripts only
 grow, so the next scan reads forward from the restored position and brings back the sessions that
 are newer than the snapshot. What you changed by hand after the snapshot (ideas, column moves)
 is not in it. (`eye restore <session id>` is a different command: it puts an archived transcript back.)
@@ -43,7 +43,7 @@ is not in it. (`eye restore <session id>` is a different command: it puts an arc
 
 ```toml
 [backup]
-mirror = "/Volumes/Backup/eye"   # must exist already
+mirror = "/Volumes/Backup/eye"   # absolute or ~/..., and must exist already
 mirror_archive = true            # also copy the transcript archive
 ```
 
