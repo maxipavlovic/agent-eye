@@ -127,3 +127,36 @@ export function msgTime(ms: number | null | undefined, now = Date.now()): string
 export function codeParts(s: string): Array<{ text: string; code: boolean }> {
   return s.split(/(`[^`\n]+`)/).filter(Boolean).map((p) => (p.length > 2 && p.startsWith('`') && p.endsWith('`') ? { text: p.slice(1, -1), code: true } : { text: p, code: false }));
 }
+
+const DAY = 86400000;
+
+/** A reminder this many days ahead or nearer shows on its card; a further one only in the panel. */
+export const SOON_DAYS = 3;
+
+const clock = (ms: number) => new Date(ms).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+
+function daysFrom(ms: number, now: number): number {
+  const day = (t: number) => { const d = new Date(t); d.setHours(0, 0, 0, 0); return d.getTime(); };
+  return Math.round((day(ms) - day(now)) / DAY);
+}
+
+/** When a reminder is: "today 14:00", "tomorrow 09:00", "Fri 14:00" within the week, else "20 Nov 14:00". */
+export function remindWhen(at: number, now = Date.now()): string {
+  const days = daysFrom(at, now);
+  if (days <= 0) return `today ${clock(at)}`;
+  if (days === 1) return `tomorrow ${clock(at)}`;
+  if (days < 7) return `${new Date(at).toLocaleDateString('en-GB', { weekday: 'short' })} ${clock(at)}`;
+  return `${new Date(at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} ${clock(at)}`;
+}
+
+/** The chip on a card: the time of a reminder within a few days ("Fri 14:00", "tomorrow"); null for none, a due one or a far one. */
+export function remindChip(c: Card, now = Date.now()): string | null {
+  if (!c.remind_at || c.remind_due || c.remind_at - now > SOON_DAYS * DAY) return null;
+  return daysFrom(c.remind_at, now) === 1 ? 'tomorrow' : remindWhen(c.remind_at, now);
+}
+
+/** The line a due card carries: why it is in Needs you. */
+export function remindReason(c: Card): string | null {
+  if (!c.remind_due) return null;
+  return c.remind_note ? `⏰ check on: ${c.remind_note}` : '⏰ you asked to check on this';
+}

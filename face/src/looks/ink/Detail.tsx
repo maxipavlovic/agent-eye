@@ -10,6 +10,7 @@ import { Hl, HlWords, hlPattern } from './highlight';
 import { ideaForm } from './IdeaForm';
 import { MoveMenu, QuickMove } from './Move';
 import { Next } from './Card';
+import { RemindPanel } from './Remind';
 import { Sigil } from './pieces';
 import { Kids, Outputs, Sec, TokenSec, Topics, Where } from './Sections';
 import type { Walk } from './walk';
@@ -133,6 +134,7 @@ export function Detail({ store, walk }: { store: Store; walk: Walk }) {
         {session && <Conversation store={store} id={d.id} agent={d.agent_name} fallback={prompts} />}
         {d.tokens && <TokenSec key={d.id} t={d.tokens} />}
         <Where d={d} />
+        <RemindPanel c={d} store={store} />
         <Receipt d={d} />
         <Actions d={d} store={store} />
       </div>

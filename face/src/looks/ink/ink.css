@@ -137,6 +137,12 @@ a:hover { background: var(--ink); color: var(--paper); text-decoration: none; }
 
 .state { margin: 8px 0 0; font: 400 16px/1.4 var(--f-body); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
 .next { margin: 8px 0 0; font: 400 16px/1.4 var(--f-body); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+/* A reminder: why a card is back in Needs you, or when it will be. */
+.remind { margin: 8px 0 0; font: 500 16px/1.4 var(--f-body); overflow-wrap: anywhere; }
+.remind.due { display: block; padding: 4px 8px; background: var(--accent); color: var(--on-accent); box-shadow: inset 0 0 0 2px var(--ink); font-weight: 600; }
+.page .remind { font-size: 17px; line-height: 1.55; max-width: 66ch; margin: 0 0 12px; }
+.rchip { display: inline-block; font: 600 15px/1 var(--f-body); padding: 3px 7px; background: var(--paper); color: var(--ink); box-shadow: inset 0 0 0 2px var(--ink); white-space: nowrap; }
+.card.row .rchip { flex: none; }
 .chip { display: inline-flex; align-items: center; gap: 5px; background: var(--ink); color: var(--paper); font: 400 16px/1 var(--f-label); padding: 3px 7px 2px 5px; margin-right: 7px; vertical-align: 1px; text-transform: uppercase; }
 .chip .lbl { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chip.agent { background: var(--paper); color: var(--ink); box-shadow: inset 0 0 0 2px var(--ink); padding: 3px 7px 2px 5px; }

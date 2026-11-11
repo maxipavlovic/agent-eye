@@ -100,6 +100,11 @@ export interface Card {
   idea_id?: number;
   /** Idea cards only: a start sends a first message (else the agent opens and waits). */
   has_prompt?: boolean;
+  /** When you asked to check on this (a reminder that is set for later or due); null or missing: none. */
+  remind_at?: number | null;
+  remind_note?: string | null;
+  /** The reminder's time has come: the card is in Needs you (an idea stays an idea card). */
+  remind_due?: boolean;
   /** Idea cards with a folder: what the folder is now. Older engines leave all three out. */
   folder_state?: FolderState;
   /** Idea cards: a missing folder that Start may create. */
@@ -208,6 +213,13 @@ export interface IdeaInput {
   agent?: string;
 }
 
+/** Body of POST /api/cards/:id/remind. `when` is read by the engine: tomorrow, mon..sun, 30m, 4h, 3d, 1w, 2026-11-20, 2026-11-20 14:00. */
+export interface RemindInput {
+  when?: string;
+  note?: string;
+  clear?: boolean;
+}
+
 export interface ResumePlan {
   dry_run: boolean;
   /** What happened or would: 'iterm', 'terminal' or 'copy'. */
@@ -250,6 +262,8 @@ export interface Source {
   startIdea(ideaId: number, background: boolean, dryRun: boolean, createFolder?: boolean): Promise<StartPlan>;
   /** What a typed folder is (read-only). */
   folderCheck(path: string): Promise<FolderCheck>;
+  /** Sets or clears a "check on this" reminder on a session or an idea card (POST /api/cards/:id/remind). */
+  remind(id: string, input: RemindInput): Promise<Card>;
   /** Calls onChange when the data changed; reports connection state. Returns unsubscribe. */
   subscribe(onChange: () => void, onState: (s: Connection) => void): () => void;
 }

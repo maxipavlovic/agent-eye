@@ -71,6 +71,23 @@ function shiftTimes(v: unknown, by: number): void {
   }
 }
 
+/** The few time words the board sends, read like `eye remind` reads them (the real reading is the engine's). */
+function whenOf(text: string, now = Date.now()): number {
+  const t = text.trim().toLowerCase();
+  const day = (n: number, h = 9, m = 0) => { const d = new Date(now); d.setDate(d.getDate() + n); d.setHours(h, m, 0, 0); return d.getTime(); };
+  const names = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+  const rel = /^(\d+)([mhdw])$/.exec(t);
+  const abs = /^(\d{4})-(\d\d)-(\d\d)(?:[ t](\d\d):(\d\d))?$/.exec(t);
+  let at = NaN;
+  if (t === 'tomorrow') at = day(1);
+  else if (names.includes(t.slice(0, 3)) && t.length >= 3) at = day(((names.indexOf(t.slice(0, 3)) - new Date(now).getDay() + 6) % 7) + 1);
+  else if (rel) at = rel[2] === 'm' ? now + +rel[1]! * 60000 : rel[2] === 'h' ? now + +rel[1]! * 3600000 : day(+rel[1]! * (rel[2] === 'w' ? 7 : 1), new Date(now).getHours(), new Date(now).getMinutes());
+  else if (abs) at = new Date(+abs[1]!, +abs[2]! - 1, +abs[3]!, +(abs[4] ?? 9), +(abs[5] ?? 0)).getTime();
+  if (Number.isNaN(at)) throw new Error(`cannot read '${text.trim()}': say when as tomorrow, mon..sun, 30m, 4h, 3d, 1w, 2026-11-20 or 2026-11-20 14:00`);
+  if (at <= now) throw new Error(`${text.trim()} has already passed`);
+  return at;
+}
+
 /** A believable conversation from the stored prompts, long enough to page through. */
 function conversationOf(d: CardDetail): Message[] {
   const base = d.last_assistant_text ? 1 : 0;
@@ -267,6 +284,31 @@ export function fixtureSource(): Source {
       return delay(plan);
     },
     folderCheck: (path) => delay(folderCheck(path)),
+    remind: (id, input) => {
+      const c = find(id);
+      if (!c) return Promise.reject(new Error(`No card ${id}`));
+      try {
+        const at = input.clear ? null : whenOf(input.when ?? '');
+        const note = input.clear ? null : input.note?.trim() || null;
+        const detail = details[c.id];
+        const wasDue = c.remind_due && c.column === 'needs_you';
+        for (const x of detail ? [c, detail] : [c]) Object.assign(x, { remind_at: at, remind_note: note, remind_due: false });
+        // a card that was in Needs you for its reminder goes back to where the rules put it
+        if (wasDue && c.auto_column !== 'needs_you' && c.auto_column !== 'archive') {
+          for (const col of board.columns) col.cards = col.cards.filter((x) => x.id !== c.id);
+          Object.assign(c, { column: c.auto_column });
+          board.columns.find((x) => x.id === c.auto_column)?.cards.unshift(c);
+        }
+        if (c.id.startsWith('idea:')) {
+          const i = ideaOf(c);
+          if (i) Object.assign(i, { remind_at: at, remind_note: note });
+        }
+        changed();
+        return delay(structuredClone(c));
+      } catch (e) {
+        return Promise.reject(e);
+      }
+    },
     subscribe: (onChange, onState) => {
       listeners.push(onChange);
       onState('fixture');

@@ -1,9 +1,10 @@
 import { ACCENTS, parseAccent, type AccentId } from './accents';
+import { remindWhen } from './format';
 import { pushPref } from './prefs';
 import { signal, computed, effect, batch, type Signal, type ReadonlySignal } from '@preact/signals';
 import type {
   Agent, ArchivePage, Board, Card, CardDetail, ColumnId, Connection, ConversationPage, IdeaInput, MoveTarget,
-  FolderCheck, ResumePlan, SearchHit, Source, StartPlan,
+  FolderCheck, RemindInput, ResumePlan, SearchHit, Source, StartPlan,
 } from './api/types';
 
 export type ThemePref = 'auto' | 'light' | 'dark';
@@ -57,6 +58,8 @@ export interface Store {
   startIdea(card: Card, background: boolean): Promise<StartPlan | null>;
   /** What a typed folder is (the idea form's hint); rejects when the engine cannot say. */
   folderCheck(path: string): Promise<FolderCheck>;
+  /** Sets (`when`, in the words of `eye remind`) or clears a reminder; true when saved, else a toast says why. */
+  remind(id: string, input: RemindInput): Promise<boolean>;
   archive(offset: number, limit?: number): Promise<ArchivePage>;
   setTheme(pref: ThemePref): void;
   setAccent(id: AccentId): void;
@@ -305,6 +308,18 @@ export function createStore(src: Source, { defaultTheme = 'auto' }: { defaultThe
     pushPref(ACCENT_KEY, id);
   }
 
+  async function remind(id: string, input: RemindInput) {
+    try {
+      const c = await src.remind(id, input);
+      toast(input.clear ? 'Reminder cleared' : `Reminder set: ${remindWhen(c.remind_at ?? Date.now())}`);
+      await refresh();
+      return true;
+    } catch (e) {
+      fail(e);
+      return false;
+    }
+  }
+
   function setTheme(pref: ThemePref) {
     themePref.value = pref;
     pushPref(THEME_KEY, pref);
@@ -317,7 +332,7 @@ export function createStore(src: Source, { defaultTheme = 'auto' }: { defaultThe
   return {
     source: src.name,
     board, selected, detail, query, results, searching, connection, themePref, accent, theme, toasts, agents, needsYou, error,
-    open, close, search, move, setHidden, resume, conversation, addIdea, editIdea, startIdea, folderCheck: (path) => src.folderCheck(path),
+    open, close, search, move, setHidden, resume, conversation, addIdea, editIdea, startIdea, folderCheck: (path) => src.folderCheck(path), remind,
     archive: (offset, limit = 50) => src.archive(offset, limit),
     setTheme, setAccent, toast, dismissToast, refresh,
   };

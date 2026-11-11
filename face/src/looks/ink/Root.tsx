@@ -11,6 +11,7 @@ import { Detail } from './Detail';
 import { Grid } from './Grid';
 import { Header, ProjectBar } from './Header';
 import { IdeaFormHost } from './IdeaForm';
+import { RemindFormHost } from './Remind';
 import { useKeys } from './keys';
 import { Lanes } from './Lanes';
 import { useLayout } from './layout';
@@ -94,6 +95,7 @@ export function Root({ store }: { store: Store }) {
         </>
       )}
       <IdeaFormHost store={store} />
+      <RemindFormHost store={store} />
       <CardMenu store={store} />
       <Toasts store={store} />
     </div>

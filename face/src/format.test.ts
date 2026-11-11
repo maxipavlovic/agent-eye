@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { artifactName, codeParts, folderGroup, homePath, nextParts, outputLabel, resumeLabel, tok } from './format';
+import { artifactName, codeParts, folderGroup, homePath, nextParts, outputLabel, remindChip, remindReason, remindWhen, resumeLabel, tok } from './format';
 import type { Output } from './api/types';
 
 describe('nextParts', () => {
@@ -68,5 +68,35 @@ describe('codeParts', () => {
     expect(codeParts('run `npm test` now, `a\nb` stays')).toEqual([
       { text: 'run ', code: false }, { text: 'npm test', code: true }, { text: ' now, `a\nb` stays', code: false }]);
     expect(codeParts('``')).toEqual([{ text: '``', code: false }]);
+  });
+});
+
+describe('reminders', () => {
+  const at = (d: number, h: number, m = 0) => new Date(2026, 5, 10 + d, h, m).getTime();
+  const now = at(0, 8);
+  const c = (o: object) => o as Parameters<typeof remindChip>[0];
+
+  it('says when in words', () => {
+    expect(remindWhen(at(0, 14), now)).toBe('today 14:00');
+    expect(remindWhen(at(1, 9), now)).toBe('tomorrow 09:00');
+    expect(remindWhen(at(3, 14, 30), now)).toBe('Sat 14:30');
+    expect(remindWhen(at(10, 9), now)).toBe('20 Jun 09:00');
+  });
+
+  it('puts a chip on a reminder within three days and none on a far or due one', () => {
+    expect(remindChip(c({ remind_at: at(1, 9) }), now)).toBe('tomorrow');
+    expect(remindChip(c({ remind_at: at(0, 14) }), now)).toBe('today 14:00');
+    expect(remindChip(c({ remind_at: at(3, 8) }), now)).toBe('Sat 08:00');
+    expect(remindChip(c({ remind_at: at(4, 9) }), now)).toBeNull();
+    expect(remindChip(c({ remind_at: at(0, 9), remind_due: true }), now)).toBeNull();
+    expect(remindChip(c({}), now)).toBeNull();
+    expect(remindChip(c({ remind_at: null }), now)).toBeNull();
+  });
+
+  it('gives a due card the reason line, with or without a note', () => {
+    expect(remindReason(c({ remind_due: true, remind_note: "Ana's reply" }))).toBe("⏰ check on: Ana's reply");
+    expect(remindReason(c({ remind_due: true, remind_note: null }))).toBe('⏰ you asked to check on this');
+    expect(remindReason(c({ remind_due: false, remind_note: 'x' }))).toBeNull();
+    expect(remindReason(c({}))).toBeNull();
   });
 });

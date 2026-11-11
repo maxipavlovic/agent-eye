@@ -5,6 +5,7 @@ import type { Card, ColumnId, MoveTarget } from '../../api/types';
 import { copy } from './copy';
 import { startButton } from './folder';
 import { ideaForm } from './IdeaForm';
+import { REMIND_PRESETS, remindForm } from './Remind';
 
 interface Open {
   seq: number;
@@ -64,7 +65,7 @@ export function cardProps(c: Card, store: Store) {
   } as Record<string, unknown>;
 }
 
-type Row = { hr: true } | { head: string } | { label: string; run: () => void; sub?: boolean };
+export type Row = { hr: true } | { head: string } | { label: string; run: () => void; sub?: boolean };
 
 const MOVE_TO: Array<{ to: ColumnId; label: string }> = [
   { to: 'needs_you', label: 'NEEDS YOU' },
@@ -78,13 +79,22 @@ function onBoard(store: Store, id: string): ColumnId | null {
   return null;
 }
 
+/** REMIND ME…: the quick choices, a date to pick, and clearing one that is set. */
+export function remindRows(c: Card, store: Store, go: (fn: () => void) => () => void): Row[] {
+  const out: Row[] = [{ head: 'REMIND ME…' }];
+  for (const p of REMIND_PRESETS) out.push({ label: p.label, sub: true, run: go(() => { void store.remind(c.id, { when: p.when }); }) });
+  out.push({ label: 'PICK A DATE…', sub: true, run: go(() => { remindForm.value = c.id; }) });
+  if (c.remind_at) out.push({ label: 'CLEAR REMINDER', sub: true, run: go(() => { void store.remind(c.id, { clear: true }); }) });
+  return out;
+}
+
 function rows(c: Card, store: Store): Row[] {
   const go = (fn: () => void) => () => { close(); fn(); };
   const open: Row = { label: 'OPEN DETAILS', run: go(() => store.open(c.id)) };
   if (c.kind === 'idea') {
     const edit: Row = { label: 'EDIT', run: go(() => { store.open(c.id); ideaForm.value = { edit: c.id }; }) };
     const start = startButton(c);
-    return [...(start.blocked ? [] : [{ label: start.label, run: go(() => { void store.startIdea(c, false); }) }]), edit, open];
+    return [...(start.blocked ? [] : [{ label: start.label, run: go(() => { void store.startIdea(c, false); }) }]), edit, { hr: true }, ...remindRows(c, store, go), { hr: true }, open];
   }
   const out: Row[] = [];
   if (c.column !== 'done') {
@@ -105,6 +115,8 @@ function rows(c: Card, store: Store): Row[] {
     out.push({ head: 'MOVE TO' });
     for (const m of moves) out.push({ label: m.label, sub: true, run: go(() => { void store.move(c.id, m.to as MoveTarget); }) });
   }
+  out.push({ hr: true });
+  out.push(...remindRows(c, store, go));
   out.push({ hr: true });
   out.push({
     label: 'HIDE (USELESS)',

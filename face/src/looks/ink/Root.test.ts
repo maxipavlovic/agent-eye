@@ -61,14 +61,14 @@ afterEach(() => {
 describe('the board', () => {
   it('draws every lane, counts what needs you, and blinks the stopped session', async () => {
     const { $, $$ } = await mount();
-    expect($('.c-needs_you .count')!.textContent).toBe('5');
+    expect($('.c-needs_you .count')!.textContent).toBe('6');
     for (const lane of ['ideas', 'running', 'waiting', 'paused']) expect($(`.c-${lane}`), lane).not.toBeNull();
     expect($('.rail.folded.c-done')).not.toBeNull();
     const blinking = $('.chip.now')!;
     expect(blinking.textContent).toBe('YOU');
     expect(blinking.getAttribute('title')).toBe('Claude is stopped until you answer in the session');
-    expect($$('.c-waiting .chip.others .lbl').map((e) => e.textContent)).toEqual(expect.arrayContaining(['PRIYA', 'DANA']));
-    await vi.waitFor(() => expect(document.title).toBe('agent-eye - 5 need you'));
+    expect($$('.c-waiting .chip.others .lbl').map((e) => e.textContent)).toEqual(expect.arrayContaining(['PRIYA', 'SAM']));
+    await vi.waitFor(() => expect(document.title).toBe('agent-eye - 6 need you'));
   });
 
   it('switches to the grid and remembers it', async () => {
@@ -307,6 +307,60 @@ describe('the card menu', () => {
     $$('.ctx button').find((b) => b.textContent === 'MARK DONE')!.click();
     await vi.waitFor(() => expect(store.board.value!.columns.find((c) => c.id === 'done')!.cards.some((c) => c.title.includes('flaky login'))).toBe(true));
     expect($('.ctx')).toBeNull();
+  });
+});
+
+describe('reminders', () => {
+  it('puts a due card first in Needs you with its reason, and a chip on one that is coming', async () => {
+    const { $, $$ } = await mount();
+    const first = $$('.c-needs_you .card')[0]!;
+    expect(first.querySelector('.remind.due')!.textContent).toBe("⏰ check on: Dana's CDN rule");
+    expect(first.textContent).toContain('Cache the product list');
+    expect($$('.c-waiting .rchip').map((e) => e.textContent)).toEqual([expect.stringMatching(/^⏰ (tomorrow|today \d\d:\d\d)$/)]);
+    expect($$('.c-needs_you .rchip')).toHaveLength(0);
+  });
+
+  it('sets a reminder from the menu, and clearing is offered once one is set', async () => {
+    const { root, $, $$, store } = await mount();
+    const open = (title: string) => {
+      card(root, 'paused', title).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 200, clientY: 200 }));
+      return vi.waitFor(() => expect($('.ctx')).not.toBeNull());
+    };
+    await open('Changelog generator');
+    expect($$('.ctx button').map((b) => b.textContent)).not.toContain('CLEAR REMINDER');
+    $$('.ctx button').find((b) => b.textContent === 'TOMORROW 9:00')!.click();
+    await vi.waitFor(() => expect(store.toasts.value.some((t) => t.text.startsWith('Reminder set: tomorrow 09:00'))).toBe(true));
+    await vi.waitFor(() => expect(card(root, 'paused', 'Changelog generator').querySelector('.rchip')!.textContent).toBe('⏰ tomorrow'));
+    await open('Changelog generator');
+    $$('.ctx button').find((b) => b.textContent === 'CLEAR REMINDER')!.click();
+    await vi.waitFor(() => expect(card(root, 'paused', 'Changelog generator').querySelector('.rchip')).toBeNull());
+  });
+
+  it('opens the form for a date and sends it as words', async () => {
+    const remind = vi.fn(fixtureSource().remind);
+    const { root, $, $$ } = await mount({ ...fixtureSource(), remind });
+    card(root, 'paused', 'Changelog generator').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 200, clientY: 200 }));
+    await vi.waitFor(() => expect($('.ctx')).not.toBeNull());
+    $$('.ctx button').find((b) => b.textContent === 'PICK A DATE…')!.click();
+    await vi.waitFor(() => expect($('form.modal')).not.toBeNull());
+    const f = $<HTMLFormElement>('form.modal')!;
+    const field = (n: string) => f.elements.namedItem(n) as HTMLInputElement;
+    field('date').value = '2099-03-04';
+    field('time').value = '';
+    field('note').value = 'before the freeze';
+    f.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => expect(remind).toHaveBeenCalled());
+    expect(remind.mock.calls[0]![1]).toEqual({ when: '2099-03-04 09:00', note: 'before the freeze' });
+    await vi.waitFor(() => expect($('form.modal')).toBeNull());
+  });
+
+  it('shows the reminder in the panel with a way to change or clear it', async () => {
+    const { root, $, $$ } = await mount();
+    card(root, 'needs_you', 'Cache the product list').click();
+    await vi.waitFor(() => expect($('.page')).not.toBeNull());
+    await vi.waitFor(() => expect($$('.page .sec h4').some((h) => h.textContent === 'REMINDER')).toBe(true));
+    expect($('.page .remind')!.textContent).toBe("⏰ check on: Dana's CDN rule");
+    expect($$('.page .acts .btn').map((b) => b.textContent)).toEqual(expect.arrayContaining(['TOMORROW 9:00', 'PICK A DATE…', 'CLEAR']));
   });
 });
 

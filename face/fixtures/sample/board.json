@@ -154,7 +154,10 @@
           "tokens": null,
           "folder_state": "missing",
           "folder_creatable": true,
-          "folder_note": "Folder does not exist yet; Start will create it"
+          "folder_note": "Folder does not exist yet; Start will create it",
+          "remind_at": 1794646800000,
+          "remind_note": "before the docs freeze",
+          "remind_due": false
         }
       ]
     },
@@ -472,6 +475,99 @@
       "id": "needs_you",
       "title": "Needs you",
       "cards": [
+        {
+          "id": "b38e7d98-b4c0-4406-a1f1-fa95bb90b612",
+          "agent": "claude",
+          "agent_name": "Claude",
+          "title": "Cache the product list",
+          "folder": "~/code/storefront",
+          "repo": "~/code/storefront",
+          "branch": "feature/product-cache",
+          "column": "needs_you",
+          "auto_column": "waiting",
+          "manual": false,
+          "last_activity_at": 1794040800000,
+          "started_at": 1793782800000,
+          "state": "Cache headers are set. The CDN rule lives in another repo owned by the platform team.",
+          "state_source": "summary",
+          "next": "Dana: add the CDN rule for /api/products",
+          "ai_status": "waiting_on_others",
+          "recap": null,
+          "live_status": null,
+          "kind": "interactive",
+          "streams": [
+            {
+              "kind": "topic",
+              "key": "t1",
+              "title": "Cache headers",
+              "status": "done",
+              "detail": "",
+              "link": null
+            },
+            {
+              "kind": "topic",
+              "key": "t2",
+              "title": "CDN rule",
+              "status": "waiting_on_others",
+              "detail": "other repo",
+              "link": null
+            }
+          ],
+          "outputs": [
+            {
+              "kind": "pr",
+              "value": "storefront#209",
+              "url": "https://example.org/acme/storefront/pull/209"
+            },
+            {
+              "kind": "jira",
+              "value": "SHOP-1019",
+              "url": "https://example.org/browse/SHOP-1019"
+            },
+            {
+              "kind": "folder",
+              "value": "~/code/storefront",
+              "url": null
+            }
+          ],
+          "output_counts": {
+            "pr": 1,
+            "jira": 1,
+            "folder": 1
+          },
+          "topics": [
+            {
+              "key": "t1",
+              "title": "Cache headers",
+              "status": "done",
+              "next": ""
+            },
+            {
+              "key": "t2",
+              "title": "CDN rule",
+              "status": "waiting_on_others",
+              "next": "other repo"
+            }
+          ],
+          "topics_more": 0,
+          "resume_cmd": "cd '/Users/you/code/storefront' && claude --resume b38e7d98-b4c0-4406-a1f1-fa95bb90b612",
+          "resumable": true,
+          "parent_id": null,
+          "child_count": 0,
+          "child_done": 0,
+          "prompt_count": 10,
+          "tokens": {
+            "input": 6840,
+            "output": 20520,
+            "cache_write": 102600,
+            "cache_read": 1580040,
+            "total": 1900000,
+            "subagents_total": 190000
+          },
+          "remind_at": 1794127200000,
+          "remind_note": "Dana's CDN rule",
+          "remind_due": true
+        },
         {
           "id": "f99547eb-fa3f-49b4-a326-3b55de7c0207",
           "agent": "claude",
@@ -1083,96 +1179,6 @@
           }
         },
         {
-          "id": "b38e7d98-b4c0-4406-a1f1-fa95bb90b612",
-          "agent": "claude",
-          "agent_name": "Claude",
-          "title": "Cache the product list",
-          "folder": "~/code/storefront",
-          "repo": "~/code/storefront",
-          "branch": "feature/product-cache",
-          "column": "waiting",
-          "auto_column": "waiting",
-          "manual": false,
-          "last_activity_at": 1794040800000,
-          "started_at": 1793782800000,
-          "state": "Cache headers are set. The CDN rule lives in another repo owned by the platform team.",
-          "state_source": "summary",
-          "next": "Dana: add the CDN rule for /api/products",
-          "ai_status": "waiting_on_others",
-          "recap": null,
-          "live_status": null,
-          "kind": "interactive",
-          "streams": [
-            {
-              "kind": "topic",
-              "key": "t1",
-              "title": "Cache headers",
-              "status": "done",
-              "detail": "",
-              "link": null
-            },
-            {
-              "kind": "topic",
-              "key": "t2",
-              "title": "CDN rule",
-              "status": "waiting_on_others",
-              "detail": "other repo",
-              "link": null
-            }
-          ],
-          "outputs": [
-            {
-              "kind": "pr",
-              "value": "storefront#209",
-              "url": "https://example.org/acme/storefront/pull/209"
-            },
-            {
-              "kind": "jira",
-              "value": "SHOP-1019",
-              "url": "https://example.org/browse/SHOP-1019"
-            },
-            {
-              "kind": "folder",
-              "value": "~/code/storefront",
-              "url": null
-            }
-          ],
-          "output_counts": {
-            "pr": 1,
-            "jira": 1,
-            "folder": 1
-          },
-          "topics": [
-            {
-              "key": "t1",
-              "title": "Cache headers",
-              "status": "done",
-              "next": ""
-            },
-            {
-              "key": "t2",
-              "title": "CDN rule",
-              "status": "waiting_on_others",
-              "next": "other repo"
-            }
-          ],
-          "topics_more": 0,
-          "resume_cmd": "cd '/Users/you/code/storefront' && claude --resume b38e7d98-b4c0-4406-a1f1-fa95bb90b612",
-          "resumable": true,
-          "parent_id": null,
-          "child_count": 0,
-          "child_done": 0,
-          "prompt_count": 10,
-          "tokens": {
-            "input": 6840,
-            "output": 20520,
-            "cache_write": 102600,
-            "cache_read": 1580040,
-            "total": 1900000,
-            "subagents_total": 190000
-          }
-        },
-        {
           "id": "21743447-613a-4223-a4fc-bbed7742d0b7",
           "agent": "claude",
           "agent_name": "Claude",
@@ -1255,7 +1261,10 @@
             "cache_read": 859320,
             "total": 930000,
             "subagents_total": 0
-          }
+          },
+          "remind_at": 1794286800000,
+          "remind_note": "Sam's approval",
+          "remind_due": false
         }
       ]
     },

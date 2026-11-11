@@ -62,4 +62,30 @@ describe('fixtureSource with the sample data', () => {
     expect(results.length).toBeGreaterThan(2);
     expect(results.some((r) => /\[retry\]/i.test(r.snippet))).toBe(true);
   });
+
+  it('has one reminder that is due, in Needs you, and one coming', async () => {
+    const b = await fixtureSource().board();
+    const cards = b.columns.flatMap((c) => c.cards);
+    const due = cards.filter((c) => c.remind_due);
+    expect(due.map((c) => c.column)).toEqual(['needs_you']);
+    expect(due[0]!.remind_note).toBeTruthy();
+    expect(b.columns.find((c) => c.id === 'needs_you')!.cards[0]!.id).toBe(due[0]!.id);
+    const soon = cards.find((c) => c.remind_at && !c.remind_due && c.kind !== 'idea')!;
+    expect(soon.remind_at!).toBeGreaterThan(Date.now());
+  });
+
+  it('sets, clears and refuses reminders, and sends a due card back where the rules put it', async () => {
+    const src = fixtureSource();
+    const due = (await src.board()).columns.flatMap((c) => c.cards).find((c) => c.remind_due)!;
+    const set = await src.remind(due.id, { when: 'tomorrow', note: 'again' });
+    expect(set).toMatchObject({ remind_note: 'again', remind_due: false, column: due.auto_column });
+    expect(set.remind_at!).toBeGreaterThan(Date.now());
+    const b = await src.board();
+    expect(b.columns.find((c) => c.id === 'needs_you')!.cards.some((c) => c.id === due.id)).toBe(false);
+    expect((await src.card(due.id)).remind_note).toBe('again');
+    expect(await src.remind(due.id, { clear: true })).toMatchObject({ remind_at: null, remind_note: null });
+    await expect(src.remind(due.id, { when: 'soon' })).rejects.toThrow(/cannot read/);
+    await expect(src.remind(due.id, { when: '2020-01-01' })).rejects.toThrow(/passed/);
+    await expect(src.remind('nope', { when: '1d' })).rejects.toThrow(/No card/);
+  });
 });

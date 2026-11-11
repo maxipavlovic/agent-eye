@@ -1297,7 +1297,7 @@
     "folder": "~/code/storefront",
     "repo": "~/code/storefront",
     "branch": "feature/product-cache",
-    "column": "waiting",
+    "column": "needs_you",
     "auto_column": "waiting",
     "manual": false,
     "last_activity_at": 1794040800000,
@@ -1399,7 +1399,10 @@
     ],
     "first_prompt": "The product list is slow to load. Cache it for a minute at the CDN and in the browser.",
     "last_assistant_text": "The headers are in. The CDN needs a matching rule, and that repo is not ours. I wrote the rule in the PR description for Dana.",
-    "resume_mode": "iterm"
+    "resume_mode": "iterm",
+    "remind_at": 1794127200000,
+    "remind_note": "Dana's CDN rule",
+    "remind_due": true
   },
   "21743447-613a-4223-a4fc-bbed7742d0b7": {
     "id": "21743447-613a-4223-a4fc-bbed7742d0b7",
@@ -1511,7 +1514,10 @@
     ],
     "first_prompt": "Move the Terraform state to a bucket in the new account, with locking.",
     "last_assistant_text": "The bucket and lock table are planned and the old state is copied. Sam has to approve the IAM role before the switch.",
-    "resume_mode": "iterm"
+    "resume_mode": "iterm",
+    "remind_at": 1794286800000,
+    "remind_note": "Sam's approval",
+    "remind_due": false
   },
   "b3b72ac5-f041-4787-adbb-6b31d9fe1b4b": {
     "id": "b3b72ac5-f041-4787-adbb-6b31d9fe1b4b",

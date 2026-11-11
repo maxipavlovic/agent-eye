@@ -95,6 +95,18 @@ describe('liveSource requests', () => {
     expect(JSON.parse(f.mock.calls[1]![1].body)).toEqual({ agent: 'claude' });
   });
 
+  it('posts a reminder to the card, an idea card included', async () => {
+    const f = vi.fn().mockResolvedValue(json(200, { id: 'idea:1' }));
+    vi.stubGlobal('fetch', f);
+    const s = liveSource();
+    await s.remind('idea:1', { when: 'mon', note: 'by Friday' });
+    expect(f.mock.calls[0]![0]).toBe('/api/cards/idea%3A1/remind');
+    expect(JSON.parse(f.mock.calls[0]![1].body)).toEqual({ when: 'mon', note: 'by Friday' });
+    await s.remind('abc', { clear: true });
+    expect(f.mock.calls[1]![0]).toBe('/api/cards/abc/remind');
+    expect(JSON.parse(f.mock.calls[1]![1].body)).toEqual({ clear: true });
+  });
+
   it('turns {error} into the message', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json(400, { error: 'Workspace not trusted' })));
     await expect(liveSource().resume('a', false)).rejects.toThrow('Workspace not trusted');

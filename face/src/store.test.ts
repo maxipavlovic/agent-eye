@@ -36,6 +36,7 @@ function source(over: Partial<Source> = {}): Source {
     editIdea: async () => card('idea:1', 'ideas'),
     startIdea: async () => ({ dry_run: false, mode: 'iterm', command: 'x', session_id: null, job: null }),
     folderCheck: async () => ({ state: 'ok', creatable: false, note: null }),
+    remind: async (id) => card(id, 'paused'),
     subscribe: () => () => {},
     ...over,
   };
@@ -356,5 +357,27 @@ describe('fork and conversation', () => {
     const bad = createStore(source({ conversation: async () => { throw new Error('404'); } }));
     expect(await bad.conversation('a')).toBeNull();
     expect(bad.toasts.value).toHaveLength(0);
+  });
+});
+
+describe('remind', () => {
+  it('sends the words and the note, says when, and reloads the board', async () => {
+    let boards = 0;
+    const remind = vi.fn(async (id: string) => ({ ...card(id, 'waiting'), remind_at: Date.now() + 86400000 }));
+    const store = createStore(source({ board: async () => { boards++; return boardOf({ waiting: ['a'] }); }, remind }));
+    await tick();
+    await expect(store.remind('a', { when: 'tomorrow', note: "Ana's reply" })).resolves.toBe(true);
+    expect(remind).toHaveBeenCalledWith('a', { when: 'tomorrow', note: "Ana's reply" });
+    expect(boards).toBe(2);
+    expect(store.toasts.value.at(-1)!.text).toMatch(/^Reminder set: tomorrow \d\d:\d\d$/);
+    await store.remind('a', { clear: true });
+    expect(store.toasts.value.at(-1)!.text).toBe('Reminder cleared');
+  });
+
+  it('keeps the form open and says why when the engine cannot read the time', async () => {
+    const store = createStore(source({ remind: async () => { throw new Error("cannot read 'soon'"); } }));
+    await tick();
+    await expect(store.remind('a', { when: 'soon' })).resolves.toBe(false);
+    expect(store.toasts.value.at(-1)).toMatchObject({ tone: 'error', text: "cannot read 'soon'" });
   });
 });

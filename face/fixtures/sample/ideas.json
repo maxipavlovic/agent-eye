@@ -50,7 +50,9 @@
       "from_session_id": null,
       "session_id": null,
       "sort": 4,
-      "archived": false
+      "archived": false,
+      "remind_at": 1794646800000,
+      "remind_note": "before the docs freeze"
     }
   ]
 }

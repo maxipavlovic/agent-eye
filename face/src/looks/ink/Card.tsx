@@ -1,7 +1,7 @@
 import { Pix } from '../../pixel/Pix';
 import type { Store } from '../../store';
 import type { Card, Column } from '../../api/types';
-import { ago, isBusy, nextParts } from '../../format';
+import { ago, isBusy, nextParts, remindChip, remindReason } from '../../format';
 import { projectLabel, tagOf } from './model';
 import { cardProps } from './CardMenu';
 import { ARROW, BANG, INK_CC } from './art';
@@ -29,6 +29,14 @@ export function Next({ c, hot }: { c: Card; hot?: boolean }) {
   );
 }
 
+/** Why a card is back in Needs you (a due reminder), or when it will be (a reminder within a few days). */
+export function RemindLine({ c }: { c: Card }) {
+  const why = remindReason(c);
+  if (why) return <p class="remind due">{why}</p>;
+  const chip = remindChip(c);
+  return chip ? <p class="remind"><span class="rchip">⏰ {chip}</span></p> : null;
+}
+
 /** tag: the project key to show as a tag, or null when a project filter is active. */
 export function CardView({ c, store, i, kind, tag }: { c: Card; store: Store; i: number; kind: Kind; tag: string | null }) {
   const busy = isBusy(c);
@@ -45,16 +53,20 @@ export function CardView({ c, store, i, kind, tag }: { c: Card; store: Store; i:
       <article {...base} title={c.title}>
         <Sigil id={c.id} />
         <span class="t">{c.title}</span>
+        {remindChip(c) && <span class="rchip">⏰ {remindChip(c)}</span>}
         <span class="age">{age}</span>
       </article>
     );
   }
-  if (kind === 'idea') {
+  // an idea stays an idea card in Needs you when its reminder is due
+  if (c.kind === 'idea') {
     const start = startButton(c);
     return (
       <article {...base}>
+        {kind === 'need' && <span class="tab"><Pix rows={BANG} pal={{ '#': 'var(--on-accent)' }} scale={2} /></span>}
         <div class="top"><Sigil id={c.id} /><h3>{c.title}</h3></div>
         {folderMissing(c) && <p class="fmark" title={c.folder_note ?? undefined}>The folder is new</p>}
+        <RemindLine c={c} />
         <div class="acts">
           <button class="btn sm" disabled={!!start.blocked} title={start.blocked ?? undefined} onClick={(e) => { e.stopPropagation(); void store.startIdea(c, false); }}>{start.label}</button>
         </div>
@@ -76,6 +88,7 @@ export function CardView({ c, store, i, kind, tag }: { c: Card; store: Store; i:
       <div class="top"><Sigil id={c.id} /><h3>{c.title}</h3></div>
       {kind === 'run' && c.state && <p class="state">{c.state}</p>}
       {kind !== 'run' && <Next c={c} hot={kind === 'need'} />}
+      <RemindLine c={c} />
     </article>
   );
 }
