@@ -40,14 +40,14 @@ fn ls(g: &Global) -> Result<()> {
     }
     let now = now_ms();
     println!(
-        "{:<32} {:<12} {:<9} {:>8}  schema",
+        "{:<38} {:<12} {:<9} {:>8}  schema",
         "name", "reason", "age", "size"
     );
     for e in &all {
-        let age = e.stamp_ms().map_or("?".to_string(), |t| ago(now, t));
-        let schema = backup::schema_version(&paths, e).map_or("?".to_string(), |v| v.to_string());
+        let age = ago(now, e.stamp_ms());
+        let schema = e.schema.map_or("?".to_string(), |v| v.to_string());
         println!(
-            "{:<32} {:<12} {:<9} {:>6.1} MB  {schema}",
+            "{:<38} {:<12} {:<9} {:>6.1} MB  {schema}",
             e.name.trim_end_matches(".db.zst"),
             e.reason.label(),
             age,
@@ -67,12 +67,13 @@ fn restore(g: &Global, name: &str, yes: bool) -> Result<()> {
     println!(
         "restore {} (made {}, schema {}, {:.1} MB)",
         e.name,
-        e.stamp.format("%Y-%m-%d %H:%M"),
+        e.local_stamp().format("%Y-%m-%d %H:%M"),
         prepared.schema,
         e.bytes as f64 / 1e6
     );
     println!("  - the current database is kept first as a pre-restore snapshot");
     println!("  - the daemon is stopped while the database is replaced, and started again");
+    println!("  - close other eye windows (the picker, `eye pick`) first: one that stays open keeps writing to the old database");
     println!("  - ideas, column moves and summaries made after this snapshot are not in it");
     if !yes && !confirm()? {
         println!("nothing was changed");

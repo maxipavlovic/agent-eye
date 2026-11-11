@@ -120,12 +120,6 @@ pub fn prepare(paths: &Paths, entry: Entry) -> Result<Prepared> {
     Ok(prepared)
 }
 
-/// The schema version inside a snapshot, for the listing; None when it cannot be read.
-pub fn schema_version(paths: &Paths, entry: &Entry) -> Option<i64> {
-    let p = unpack(paths, entry.clone()).ok()?;
-    schema_of(&open_unpacked(&p).ok()?).ok()
-}
-
 /// Take the daemon's lock, waiting for a daemon that is stopping to let go of it.
 fn lock(paths: &Paths) -> Result<Lock> {
     let until = Instant::now() + LOCK_WAIT;

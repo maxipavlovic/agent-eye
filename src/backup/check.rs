@@ -20,12 +20,12 @@ pub fn checks(paths: &Paths, cfg: &Config, now_ms: i64) -> Vec<Check> {
     let on = cfg.backup.enabled;
     out.push(match all.first() {
         Some(newest) => {
-            let age = newest.stamp_ms().map(|t| (now_ms - t, ago(now_ms, t)));
+            let age = (now_ms - newest.stamp_ms(), ago(now_ms, newest.stamp_ms()));
             let line = format!(
                 "backups: {} snapshots, {:.1} MB, newest {} ({}){}",
                 all.len(),
                 total as f64 / 1e6,
-                age.as_ref().map_or("?".to_string(), |a| a.1.clone()),
+                age.1,
                 newest.reason.label(),
                 if on {
                     ""
@@ -33,7 +33,7 @@ pub fn checks(paths: &Paths, cfg: &Config, now_ms: i64) -> Vec<Check> {
                     "; automatic snapshots are off"
                 }
             );
-            let stale = on && age.is_some_and(|a| a.0 > STALE_MS);
+            let stale = on && age.0 > STALE_MS;
             if stale {
                 Check::warn(format!(
                     "{line}; automatic ones should be daily (is the daemon running?)"

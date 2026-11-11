@@ -68,7 +68,7 @@ impl Db {
             .with_context(|| format!("creating {}", path.display()))?;
         crate::files::make_private(path);
         let conn = Connection::open(path).with_context(|| format!("opening {}", path.display()))?;
-        crate::backup::before_upgrade(&conn, path, SCHEMA_VERSION);
+        let _upgrading = crate::backup::before_upgrade(&conn, path, SCHEMA_VERSION);
         Self::init(conn)
     }
 
@@ -98,8 +98,7 @@ impl Db {
             .prepare("SELECT 1 FROM pragma_table_info('session') WHERE name='hidden'")?
             .exists([])?;
         if !has_hidden {
-            self.conn
-                .execute("ALTER TABLE session ADD COLUMN hidden INTEGER", [])?;
+            self.add_column("session", "hidden INTEGER")?;
         }
         // v4: token counts per session (tok_sub = sub-agent total, tok_last_id = last message id counted).
         for col in [
@@ -120,8 +119,7 @@ impl Db {
                 } else {
                     "INTEGER"
                 };
-                self.conn
-                    .execute(&format!("ALTER TABLE session ADD COLUMN {col} {ty}"), [])?;
+                self.add_column("session", &format!("{col} {ty}"))?;
             }
         }
         // v5: an idea's first message to the agent, apart from its notes (which are never sent).
@@ -130,8 +128,7 @@ impl Db {
             .prepare("SELECT 1 FROM pragma_table_info('idea') WHERE name='prompt'")?
             .exists([])?;
         if !has_prompt {
-            self.conn
-                .execute("ALTER TABLE idea ADD COLUMN prompt TEXT", [])?;
+            self.add_column("idea", "prompt TEXT")?;
         }
         // v6: what a waiting session asks of you, from the hooks; v7: whether a prompt stops
         // the agent mid-task until you answer it.
@@ -141,8 +138,7 @@ impl Db {
                 .prepare("SELECT 1 FROM pragma_table_info('session') WHERE name=?1")?
                 .exists([col])?;
             if !has {
-                self.conn
-                    .execute(&format!("ALTER TABLE session ADD COLUMN {col} {ty}"), [])?;
+                self.add_column("session", &format!("{col} {ty}"))?;
             }
         }
         // v8: which agent a session belongs to (every earlier row is Claude Code's), and which
@@ -152,18 +148,14 @@ impl Db {
             .prepare("SELECT 1 FROM pragma_table_info('session') WHERE name='agent'")?
             .exists([])?;
         if !has_agent {
-            self.conn.execute(
-                "ALTER TABLE session ADD COLUMN agent TEXT NOT NULL DEFAULT 'claude'",
-                [],
-            )?;
+            self.add_column("session", "agent TEXT NOT NULL DEFAULT 'claude'")?;
         }
         let has_idea_agent = self
             .conn
             .prepare("SELECT 1 FROM pragma_table_info('idea') WHERE name='agent'")?
             .exists([])?;
         if !has_idea_agent {
-            self.conn
-                .execute("ALTER TABLE idea ADD COLUMN agent TEXT", [])?;
+            self.add_column("idea", "agent TEXT")?;
         }
         // v9: a cursor keeps the marker an adapter hands back at its next read, where it kept a
         // byte offset. Every earlier row gets its offset as text, which is what Claude Code's
@@ -173,8 +165,7 @@ impl Db {
             .prepare("SELECT 1 FROM pragma_table_info('cursor') WHERE name='marker'")?
             .exists([])?;
         if !has_marker {
-            self.conn
-                .execute("ALTER TABLE cursor ADD COLUMN marker TEXT", [])?;
+            self.add_column("cursor", "marker TEXT")?;
         }
         // v10: why a live session waits, its remote control link, and the background tasks and
         // loops it runs (JSON lists, NULL when there are none).
@@ -184,8 +175,7 @@ impl Db {
                 .prepare("SELECT 1 FROM pragma_table_info('session') WHERE name=?1")?
                 .exists([col])?;
             if !has {
-                self.conn
-                    .execute(&format!("ALTER TABLE session ADD COLUMN {col} TEXT"), [])?;
+                self.add_column("session", &format!("{col} TEXT"))?;
             }
         }
         if cur < 9 {
@@ -208,8 +198,7 @@ impl Db {
                     ))?
                     .exists([col])?;
                 if !has {
-                    self.conn
-                        .execute(&format!("ALTER TABLE {table} ADD COLUMN {col} {ty}"), [])?;
+                    self.add_column(table, &format!("{col} {ty}"))?;
                 }
             }
         }
@@ -222,6 +211,20 @@ impl Db {
             self.meta_set("schema_version", &SCHEMA_VERSION.to_string())?;
         }
         Ok(())
+    }
+
+    /// Add a column. Another process that opened the same old file a moment earlier may have
+    /// added it already; that is the state wanted, so it is not an error.
+    fn add_column(&self, table: &str, decl: &str) -> Result<()> {
+        match self
+            .conn
+            .execute(&format!("ALTER TABLE {table} ADD COLUMN {decl}"), [])
+        {
+            Err(e) if e.to_string().contains("duplicate column name") => Ok(()),
+            r => r
+                .map(|_| ())
+                .with_context(|| format!("adding {table}.{decl}")),
+        }
     }
 
     /// A value from the `meta` table.
@@ -887,6 +890,13 @@ mod tests {
         cursor_set(&db.conn, "/s", stamp, "row:60").unwrap();
         assert_eq!(db.cursor_get("/s").unwrap().unwrap().marker, "row:60");
         assert!(db.cursor_get("/none").unwrap().is_none());
+    }
+
+    #[test]
+    fn a_column_another_process_added_first_is_not_an_error() {
+        let db = Db::open_memory().unwrap();
+        db.add_column("session", "remind_at INTEGER").unwrap();
+        assert!(db.add_column("nope", "x INTEGER").is_err());
     }
 
     #[test]

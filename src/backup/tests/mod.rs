@@ -123,7 +123,7 @@ fn snapshots_are_named_private_and_leave_no_temp_files() {
     let s = snapshot(&db.conn, &dir(&h.paths), &Reason::PreUpgrade(10)).unwrap();
     let name = s.path.file_name().unwrap().to_str().unwrap();
     assert!(
-        name.starts_with("eye-") && name.ends_with("-pre-v10.db.zst"),
+        name.starts_with("eye-") && name.ends_with(&format!("Z-pre-v10-s{SCHEMA_VERSION}.db.zst")),
         "{name}"
     );
     let mode = |p: &Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
@@ -151,16 +151,16 @@ fn only_files_named_as_eye_names_them_are_snapshots() {
     let h = home();
     let d = dir(&h.paths);
     for n in [
-        "eye-20261101-100000-daily.db.zst",
-        "eye-20261101-100000-other.db.zst",
+        "eye-20261101-100000Z-daily.db.zst",
+        "eye-20261101-100000Z-other.db.zst",
         "eye-2026-daily.db.zst",
         "notes.txt",
-        "eye-20261101-100000-daily.db",
+        "eye-20261101-100000Z-daily.db",
         "mirror.state",
     ] {
         touch(&d, n);
     }
-    assert_eq!(names(&d), ["eye-20261101-100000-daily"]);
+    assert_eq!(names(&d), ["eye-20261101-100000Z-daily"]);
 }
 
 fn cfg(daily: usize, weekly: usize) -> BackupCfg {
@@ -177,14 +177,14 @@ fn rotation_keeps_the_newest_dailies_one_per_week_and_the_last_of_each_other_kin
     let d = dir(&h.paths);
     // 21 dailies, 1 Nov to 21 Nov 2026 (a Sunday starts the ISO week of 2 Nov)
     for day in 1..=21 {
-        touch(&d, &format!("eye-202611{day:02}-030000-daily.db.zst"));
+        touch(&d, &format!("eye-202611{day:02}-030000Z-daily.db.zst"));
     }
     for v in 5..=10 {
-        touch(&d, &format!("eye-202610{v:02}-030000-pre-v{v}.db.zst"));
-        touch(&d, &format!("eye-202610{v:02}-040000-pre-restore.db.zst"));
+        touch(&d, &format!("eye-202610{v:02}-030000Z-pre-v{v}.db.zst"));
+        touch(&d, &format!("eye-202610{v:02}-040000Z-pre-restore.db.zst"));
     }
     for m in 1..=8 {
-        touch(&d, &format!("eye-202609{m:02}-030000-manual.db.zst"));
+        touch(&d, &format!("eye-202609{m:02}-030000Z-manual.db.zst"));
     }
     touch(&d, "mirror.state");
     touch(&d, "my-notes.txt");
@@ -193,8 +193,8 @@ fn rotation_keeps_the_newest_dailies_one_per_week_and_the_last_of_each_other_kin
     let of = |w: &str| left.iter().filter(|n| n.ends_with(w)).count();
     assert_eq!(of("-manual"), 5);
     assert_eq!(of("-restore"), 3);
-    assert!(left.contains(&"eye-20261008-030000-pre-v8".to_string()));
-    assert!(!left.contains(&"eye-20261007-030000-pre-v7".to_string()));
+    assert!(left.contains(&"eye-20261008-030000Z-pre-v8".to_string()));
+    assert!(!left.contains(&"eye-20261007-030000Z-pre-v7".to_string()));
     assert_eq!(left.iter().filter(|n| n.contains("-pre-v")).count(), 3);
     let dailies: Vec<&String> = left.iter().filter(|n| n.ends_with("-daily")).collect();
     // newest 3: 19, 20, 21 Nov; weeks: 16-22 Nov (newest is the 21st) and 9-15 Nov (the 15th)
@@ -210,7 +210,7 @@ fn rotation_with_nothing_to_keep_or_no_folder_does_nothing_wrong() {
     let h = home();
     rotate(&dir(&h.paths), &BackupCfg::default());
     let d = dir(&h.paths);
-    touch(&d, "eye-20261101-030000-daily.db.zst");
+    touch(&d, "eye-20261101-030000Z-daily.db.zst");
     rotate(&d, &cfg(0, 0));
     assert!(names(&d).is_empty());
 }
@@ -256,7 +256,7 @@ fn an_older_database_is_snapshotted_once_before_it_is_migrated() {
     );
     let snaps = pre_upgrade_names(&h);
     assert_eq!(snaps.len(), 1, "{snaps:?}");
-    assert!(snaps[0].ends_with(&format!("-pre-v{SCHEMA_VERSION}")));
+    assert!(snaps[0].ends_with(&format!("-pre-v{SCHEMA_VERSION}-s8")));
     // the copy is the database as it was
     let out = h.paths.home.join("was.db");
     unpack_to(&list(&dir(&h.paths))[0].path, &out);
@@ -270,6 +270,85 @@ fn an_older_database_is_snapshotted_once_before_it_is_migrated() {
         1,
         "an up to date database needs none"
     );
+}
+
+/// A database as v0.1 left it: schema 9, without the v10 and v11 columns, holding 4 rows.
+fn v9_database(h: &Home) {
+    let db = db_with(&h.paths, 4);
+    for c in ["live_wait", "remote_url", "signals", "live_loops"] {
+        db.conn
+            .execute(&format!("ALTER TABLE session DROP COLUMN {c}"), [])
+            .unwrap();
+    }
+    for table in ["session", "idea"] {
+        for c in ["remind_at", "remind_note", "remind_notified_at"] {
+            db.conn
+                .execute(&format!("ALTER TABLE {table} DROP COLUMN {c}"), [])
+                .unwrap();
+        }
+    }
+    db.meta_set("schema_version", "9").unwrap();
+}
+
+fn columns(db: &Db, table: &str) -> Vec<String> {
+    let mut st = db
+        .conn
+        .prepare("SELECT name FROM pragma_table_info(?1)")
+        .unwrap();
+    let rows = st.query_map([table], |r| r.get(0)).unwrap();
+    rows.map(Result::unwrap).collect()
+}
+
+#[test]
+fn a_schema_9_file_gets_every_newer_column_and_one_snapshot() {
+    let h = home();
+    v9_database(&h);
+    let db = Db::open(&h.paths.db_path()).unwrap();
+    assert_eq!(
+        db.meta_get("schema_version").unwrap(),
+        Some(SCHEMA_VERSION.to_string())
+    );
+    let session = columns(&db, "session");
+    for c in [
+        "live_wait",
+        "remote_url",
+        "signals",
+        "live_loops",
+        "remind_at",
+        "remind_note",
+        "remind_notified_at",
+    ] {
+        assert!(session.contains(&c.to_string()), "session.{c}");
+    }
+    assert!(columns(&db, "idea").contains(&"remind_at".to_string()));
+    let snaps = pre_upgrade_names(&h);
+    assert_eq!(snaps.len(), 1, "{snaps:?}");
+    assert!(snaps[0].contains(&format!("-pre-v{SCHEMA_VERSION}-s9")));
+    assert_eq!(list(&dir(&h.paths))[0].schema, Some(9));
+}
+
+#[test]
+fn two_processes_opening_a_schema_9_file_at_once_make_one_snapshot_and_both_open() {
+    let h = home();
+    v9_database(&h);
+    let path = h.paths.db_path();
+    let opens: Vec<_> = (0..2)
+        .map(|_| {
+            let path = path.clone();
+            std::thread::spawn(move || Db::open(&path).map(|_| ()))
+        })
+        .collect();
+    for o in opens {
+        o.join().unwrap().unwrap();
+    }
+    let db = Db::open(&path).unwrap();
+    assert_eq!(
+        db.meta_get("schema_version").unwrap(),
+        Some(SCHEMA_VERSION.to_string())
+    );
+    assert!(columns(&db, "session").contains(&"remind_at".to_string()));
+    let snaps = pre_upgrade_names(&h);
+    assert_eq!(snaps.len(), 1, "{snaps:?}");
 }
 
 #[test]

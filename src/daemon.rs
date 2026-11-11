@@ -350,7 +350,9 @@ pub fn tick(db: &mut Db, paths: &Paths, cfg: &Config) -> Result<()> {
         );
     }
     notify_reminders(db, paths, cfg, &mut |title, body| {
-        crate::platform::notify::send(title, body);
+        if !crate::platform::notify::send(title, body) {
+            log(paths, "reminder notice not shown");
+        }
     });
     let cutoff = now_ms() - EVENT_KEEP_MS;
     if n == 0
@@ -395,13 +397,22 @@ pub fn run(paths: Paths, cfg: Config, port: u16, board: bool) -> Result<()> {
                 if let Err(e) = tick(&mut db, &paths, &cfg) {
                     log(&paths, &format!("tick failed: {e:#}"));
                 }
-                if last_backup.is_none_or(|t| t.elapsed() >= BACKUP_EVERY) {
+                // A snapshot of a big database or to a slow mirror takes a while: it runs in its own
+                // thread, one slow job at a time, so hooks and scans keep going meanwhile.
+                let backup_due = last_backup.is_none_or(|t| t.elapsed() >= BACKUP_EVERY);
+                if backup_due && !busy.swap(true, Ordering::SeqCst) {
                     last_backup = Some(Instant::now());
-                    match backup::daily_if_due(&db.conn, &paths, &cfg, now_ms()) {
-                        Ok(Some(s)) => log(&paths, &format!("snapshot {}", s.path.display())),
-                        Ok(None) => {}
-                        Err(e) => log(&paths, &format!("snapshot failed: {e:#}")),
-                    }
+                    let (paths, cfg, busy) = (paths.clone(), cfg.clone(), busy.clone());
+                    std::thread::spawn(move || {
+                        let r = Db::open(&paths.db_path())
+                            .and_then(|d| backup::daily_if_due(&d.conn, &paths, &cfg, now_ms()));
+                        match r {
+                            Ok(Some(s)) => log(&paths, &format!("snapshot {}", s.path.display())),
+                            Ok(None) => {}
+                            Err(e) => log(&paths, &format!("snapshot failed: {e:#}")),
+                        }
+                        busy.store(false, Ordering::SeqCst);
+                    });
                 }
                 let due = last_worker.is_none_or(|t| t.elapsed() >= WORKER_EVERY);
                 if due && !busy.swap(true, Ordering::SeqCst) {

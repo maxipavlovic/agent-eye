@@ -31,7 +31,7 @@ fn a_mirror_gets_each_snapshot_and_the_same_rotation_for_eye_files_only() {
     std::fs::create_dir_all(&m).unwrap();
     touch(&m, "photos.txt");
     for day in 1..=5 {
-        touch(&m, &format!("eye-202611{day:02}-030000-manual.db.zst"));
+        touch(&m, &format!("eye-202611{day:02}-030000Z-manual.db.zst"));
     }
     for _ in 0..2 {
         take(&db.conn, &h.paths, &mirror_cfg(&m), &Reason::Manual).unwrap();
@@ -145,7 +145,7 @@ fn doctor_says_what_the_snapshots_and_the_mirror_are_doing() {
     for e in list(&d) {
         std::fs::remove_file(e.path).unwrap();
     }
-    touch(&d, "eye-20200101-030000-daily.db.zst");
+    touch(&d, "eye-20200101-030000Z-daily.db.zst");
     let l = lines(&h, &cfg);
     assert!(!l[0].0 && l[0].1.contains("is the daemon running"), "{l:?}");
     let mut off = cfg.clone();

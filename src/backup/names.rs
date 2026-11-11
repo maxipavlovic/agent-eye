@@ -1,14 +1,17 @@
 //! What a snapshot's file name says, and which snapshots the keep rules leave.
 
 use crate::config::BackupCfg;
-use chrono::{Datelike, Local, NaiveDateTime, TimeZone};
+use chrono::{DateTime, Datelike, Local, NaiveDateTime, TimeZone, Utc};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
 const PREFIX: &str = "eye-";
 const SUFFIX: &str = ".db.zst";
-const STAMP: &str = "%Y%m%d-%H%M%S";
+/// Snapshot times are UTC, marked with the `Z`, so a clock change never reorders them.
+const STAMP: &str = "%Y%m%d-%H%M%SZ";
+/// The length of a formatted `STAMP`.
+const STAMP_LEN: usize = 16;
 /// A temp file of a snapshot or a restore older than this was left by a crash.
 const TEMP_STALE: Duration = Duration::from_secs(3600);
 
@@ -50,9 +53,15 @@ impl Reason {
     }
 }
 
-/// The file name of a snapshot made at `at`.
-pub fn file_name(at: NaiveDateTime, reason: &Reason) -> String {
-    format!("{PREFIX}{}-{}{SUFFIX}", at.format(STAMP), reason.word())
+/// The file name of a snapshot made at `at` (UTC) of a database at schema `schema`, which is
+/// left out of the name when it is not known.
+pub fn file_name(at: NaiveDateTime, reason: &Reason, schema: Option<i64>) -> String {
+    let schema = schema.map_or(String::new(), |v| format!("-s{v}"));
+    format!(
+        "{PREFIX}{}-{}{schema}{SUFFIX}",
+        at.format(STAMP),
+        reason.word()
+    )
 }
 
 /// A snapshot in a folder, read from its file name.
@@ -60,9 +69,11 @@ pub fn file_name(at: NaiveDateTime, reason: &Reason) -> String {
 pub struct Entry {
     pub name: String,
     pub path: PathBuf,
-    /// When it was made, in local time.
+    /// When it was made, in UTC.
     pub stamp: NaiveDateTime,
     pub reason: Reason,
+    /// The schema version of the database it holds, from the name; None when the name has none.
+    pub schema: Option<i64>,
     /// Bytes on disk.
     pub bytes: u64,
 }
@@ -72,25 +83,35 @@ impl Entry {
     pub fn from_path(path: &Path) -> Option<Entry> {
         let name = path.file_name()?.to_str()?.to_string();
         let body = name.strip_prefix(PREFIX)?.strip_suffix(SUFFIX)?;
-        let (stamp, reason) = body.split_at_checked(15)?;
+        let (stamp, reason) = body.split_at_checked(STAMP_LEN)?;
         let stamp = NaiveDateTime::parse_from_str(stamp, STAMP).ok()?;
-        let reason = Reason::parse(reason.strip_prefix('-')?)?;
+        let reason = reason.strip_prefix('-')?;
+        let (reason, schema) = match reason.rsplit_once('-') {
+            Some((r, s)) if s.starts_with('s') && s[1..].parse::<i64>().is_ok() => {
+                (r, s[1..].parse().ok())
+            }
+            _ => (reason, None),
+        };
+        let reason = Reason::parse(reason)?;
         let md = std::fs::metadata(path).ok().filter(|m| m.is_file())?;
         Some(Entry {
             name,
             path: path.to_path_buf(),
             stamp,
             reason,
+            schema,
             bytes: md.len(),
         })
     }
 
     /// When it was made, in Unix ms.
-    pub fn stamp_ms(&self) -> Option<i64> {
-        Local
-            .from_local_datetime(&self.stamp)
-            .earliest()
-            .map(|d| d.timestamp_millis())
+    pub fn stamp_ms(&self) -> i64 {
+        Utc.from_utc_datetime(&self.stamp).timestamp_millis()
+    }
+
+    /// When it was made, on the wall clock of this machine.
+    pub fn local_stamp(&self) -> DateTime<Local> {
+        Utc.from_utc_datetime(&self.stamp).with_timezone(&Local)
     }
 }
 

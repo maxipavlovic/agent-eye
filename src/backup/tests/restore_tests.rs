@@ -11,7 +11,7 @@ fn snapshot_of(h: &Home, rows_in: i64, reason: &Reason) -> Entry {
 fn a_restore_refuses_a_damaged_snapshot_and_a_newer_one() {
     let h = home();
     let d = dir(&h.paths);
-    touch(&d, "eye-20261101-030000-manual.db.zst");
+    touch(&d, "eye-20261101-030000Z-manual.db.zst");
     let e = find(&d, "latest").unwrap();
     assert!(prepare(&h.paths, e).is_err(), "not zstd at all");
     // a sound database that says it is from the future
@@ -28,7 +28,7 @@ fn a_restore_refuses_a_damaged_snapshot_and_a_newer_one() {
     std::fs::write(h.paths.home.join("junk"), vec![7u8; 4096]).unwrap();
     crate::archive::compress_file(
         &h.paths.home.join("junk"),
-        &d.join("eye-20261101-030000-manual.db.zst"),
+        &d.join("eye-20261101-030000Z-manual.db.zst"),
     )
     .unwrap();
     assert!(prepare(&h.paths, find(&d, "latest").unwrap()).is_err());
@@ -40,14 +40,14 @@ fn a_restore_refuses_a_damaged_snapshot_and_a_newer_one() {
 fn a_snapshot_is_found_by_name_with_or_without_its_suffix_and_by_latest() {
     let h = home();
     let d = dir(&h.paths);
-    touch(&d, "eye-20261101-030000-daily.db.zst");
-    touch(&d, "eye-20261102-030000-manual.db.zst");
+    touch(&d, "eye-20261101-030000Z-daily.db.zst");
+    touch(&d, "eye-20261102-030000Z-manual.db.zst");
     assert_eq!(
         find(&d, "latest").unwrap().name,
-        "eye-20261102-030000-manual.db.zst"
+        "eye-20261102-030000Z-manual.db.zst"
     );
-    assert!(find(&d, "eye-20261101-030000-daily").is_ok());
-    assert!(find(&d, "eye-20261101-030000-daily.db.zst").is_ok());
+    assert!(find(&d, "eye-20261101-030000Z-daily").is_ok());
+    assert!(find(&d, "eye-20261101-030000Z-daily.db.zst").is_ok());
     assert!(find(&d, "nothing").is_err());
     assert!(find(&d, "0123456789abcdef").is_err());
     assert!(
@@ -76,7 +76,7 @@ fn a_restore_replaces_the_database_drops_the_old_wal_and_keeps_a_pre_restore_cop
     assert!(!h.paths.home.join("eye.db-shm").exists());
     assert_eq!(rows(&h.paths.db_path()), 3);
     let kept = done.pre_restore.unwrap();
-    assert!(kept.to_string_lossy().ends_with("-pre-restore.db.zst"));
+    assert!(kept.to_string_lossy().contains("-pre-restore-s"));
     let out = h.paths.home.join("kept.db");
     unpack_to(&kept, &out);
     assert_eq!(

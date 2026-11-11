@@ -10,15 +10,18 @@ mod restore;
 
 pub use check::checks;
 pub use names::{Entry, Reason};
-pub use restore::{apply, find, prepare, schema_version, Applied, Prepared};
+pub use restore::{apply, find, prepare, Applied, Prepared};
 
 use crate::archive::compress_file;
 use crate::config::{BackupCfg, Config};
 use crate::paths::Paths;
 use anyhow::{Context, Result};
 use rusqlite::Connection;
-use std::os::unix::fs::DirBuilderExt;
+use std::fs::{File, OpenOptions};
+use std::os::fd::AsRawFd;
+use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
 /// A daily snapshot is made when the newest one is older than this.
 const DAILY_EVERY_MS: i64 = 24 * 3600 * 1000;
@@ -86,7 +89,8 @@ pub fn snapshot(conn: &Connection, dir: &Path, reason: &Reason) -> Result<Snapsh
     conn.execute("VACUUM INTO ?1", [raw.to_string_lossy()])
         .context("copying the database")?;
     compress_file(&raw, &packed).context("compressing the snapshot")?;
-    let name = names::file_name(chrono::Local::now().naive_local(), reason);
+    let schema = restore::schema_of(conn).ok();
+    let name = names::file_name(chrono::Utc::now().naive_utc(), reason, schema);
     let path = dir.join(name);
     std::fs::rename(&packed, &path).with_context(|| format!("writing {}", path.display()))?;
     let bytes = std::fs::metadata(&path)?.len();
@@ -122,31 +126,73 @@ pub fn daily_if_due(
     let newest = list(&dir(paths))
         .into_iter()
         .find(|e| e.reason == Reason::Daily)
-        .and_then(|e| e.stamp_ms());
+        .map(|e| e.stamp_ms());
     if newest.is_some_and(|t| now_ms - t < DAILY_EVERY_MS) {
         return Ok(None);
     }
     take(conn, paths, &cfg.backup, &Reason::Daily).map(Some)
 }
 
+/// How long an upgrade waits for another process that is upgrading the same database.
+const UPGRADE_WAIT: Duration = Duration::from_secs(30);
+
+/// Held (`upgrade.lock`, flock) while one process snapshots and migrates an older database, so
+/// a second one that opens it at that moment waits, finds it current and makes no second copy.
+pub struct UpgradeLock {
+    _file: File,
+}
+
+impl UpgradeLock {
+    /// Wait for the lock; None when it cannot be had in time (the upgrade then goes on without
+    /// a snapshot, which `migrate` survives).
+    fn acquire(home: &Path) -> Option<UpgradeLock> {
+        let f = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .mode(0o600)
+            .open(home.join("upgrade.lock"))
+            .ok()?;
+        let until = Instant::now() + UPGRADE_WAIT;
+        loop {
+            // SAFETY: flock on a file descriptor we own.
+            if unsafe { libc::flock(f.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } == 0 {
+                return Some(UpgradeLock { _file: f });
+            }
+            if Instant::now() >= until {
+                return None;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+    }
+}
+
 /// Before `migrate` changes an older database: snapshot it as `pre-v<target>`. Never blocks the
 /// tool: when the snapshot cannot be made it says why on standard error and the database opens.
-/// A new or empty database, one already at `target`, and `enabled = false` make none.
-pub fn before_upgrade(conn: &Connection, db_path: &Path, target: i64) {
-    let Some(home) = db_path.parent() else { return };
+/// A new or empty database, one already at `target`, and `enabled = false` make none. The lock
+/// it returns is held by the caller until the migration is done.
+pub fn before_upgrade(conn: &Connection, db_path: &Path, target: i64) -> Option<UpgradeLock> {
+    let home = db_path.parent()?;
     if !needs_upgrade(conn, target) {
-        return;
+        return None;
     }
     let paths = Paths {
         home: home.to_path_buf(),
     };
     let cfg = crate::install::read_config(&paths);
     if !cfg.backup.enabled {
-        return;
+        return None;
+    }
+    let lock = UpgradeLock::acquire(home);
+    // the process that held the lock may have finished the upgrade
+    if lock.is_some() && !needs_upgrade(conn, target) {
+        return lock;
     }
     if let Err(e) = take(conn, &paths, &cfg.backup, &Reason::PreUpgrade(target)) {
         eprintln!("eye: no backup before the upgrade to schema {target}: {e:#}");
     }
+    lock
 }
 
 /// Does the database hold data of a schema older than `target`? An empty one is not worth a copy.
