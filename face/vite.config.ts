@@ -8,6 +8,8 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['src/**/*.test.ts'],
+    // the accent test reads tokens.css as text
+    css: { include: [/tokens\.css/] },
     // npm run coverage: coverage/lcov.info for SonarQube, a short summary on the terminal.
     coverage: {
       provider: 'v8',

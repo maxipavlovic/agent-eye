@@ -1,9 +1,9 @@
 /**
- * Board settings (theme, layout, folded lanes) live in the browser's storage for speed, and are
+ * Board settings (theme, accent, layout, folded lanes) live in the browser's storage for speed, and are
  * mirrored to the engine (~/.agent-eye/ui.json) so the tab and the installed app share them and
  * they survive cleared site data.
  */
-export const PREF_KEYS = ['eye.theme', 'eye.ink.layout', 'eye.ink.fold'] as const;
+export const PREF_KEYS = ['eye.theme', 'eye.ink.layout', 'eye.ink.fold', 'eye.accent'] as const;
 
 let engine = true;
 

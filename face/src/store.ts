@@ -1,3 +1,4 @@
+import { ACCENTS, parseAccent, type AccentId } from './accents';
 import { pushPref } from './prefs';
 import { signal, computed, effect, batch, type Signal, type ReadonlySignal } from '@preact/signals';
 import type {
@@ -29,6 +30,8 @@ export interface Store {
   searching: ReadonlySignal<boolean>;
   connection: ReadonlySignal<Connection>;
   themePref: ReadonlySignal<ThemePref>;
+  /** The accent colour; also set as <html data-accent="..."> (not for the default, vermilion). */
+  accent: ReadonlySignal<AccentId>;
   /** Resolved theme; also set as <html data-theme="light|dark">. */
   theme: ReadonlySignal<Theme>;
   toasts: ReadonlySignal<Toast[]>;
@@ -56,12 +59,14 @@ export interface Store {
   folderCheck(path: string): Promise<FolderCheck>;
   archive(offset: number, limit?: number): Promise<ArchivePage>;
   setTheme(pref: ThemePref): void;
+  setAccent(id: AccentId): void;
   toast(text: string, tone?: Toast['tone'], action?: Toast['action']): number;
   dismissToast(id: number): void;
   refresh(): Promise<void>;
 }
 
 const THEME_KEY = 'eye.theme';
+const ACCENT_KEY = 'eye.accent';
 
 /** Puts text on the clipboard from the page; false when the page may not (an insecure context, no permission). */
 async function copyText(text: string): Promise<boolean> {
@@ -90,6 +95,11 @@ function readPref(fallback: ThemePref): ThemePref {
   return fallback;
 }
 
+function readAccent(): AccentId {
+  try { return parseAccent(localStorage.getItem(ACCENT_KEY)); } catch { /* storage blocked */ }
+  return parseAccent(null);
+}
+
 /** `defaultTheme`: the theme until one is chosen (the offline board opens in daylight). */
 export function createStore(src: Source, { defaultTheme = 'auto' }: { defaultTheme?: ThemePref } = {}): Store {
   const board = signal<Board | null>(null);
@@ -110,6 +120,12 @@ export function createStore(src: Source, { defaultTheme = 'auto' }: { defaultThe
   const theme = computed<Theme>(() =>
     themePref.value === 'auto' ? (systemDark.value ? 'dark' : 'light') : themePref.value);
   effect(() => { document.documentElement.dataset.theme = theme.value; });
+  const accent = signal<AccentId>(readAccent());
+  effect(() => {
+    // vermilion is what the style sheet says without an attribute
+    if (accent.value === ACCENTS[0].id) delete document.documentElement.dataset.accent;
+    else document.documentElement.dataset.accent = accent.value;
+  });
 
   const needsYou = computed(() =>
     board.value?.columns.find((c) => c.id === 'needs_you')?.cards.length ?? 0);
@@ -284,6 +300,11 @@ export function createStore(src: Source, { defaultTheme = 'auto' }: { defaultThe
     }
   }
 
+  function setAccent(id: AccentId) {
+    accent.value = id;
+    pushPref(ACCENT_KEY, id);
+  }
+
   function setTheme(pref: ThemePref) {
     themePref.value = pref;
     pushPref(THEME_KEY, pref);
@@ -295,10 +316,10 @@ export function createStore(src: Source, { defaultTheme = 'auto' }: { defaultThe
 
   return {
     source: src.name,
-    board, selected, detail, query, results, searching, connection, themePref, theme, toasts, agents, needsYou, error,
+    board, selected, detail, query, results, searching, connection, themePref, accent, theme, toasts, agents, needsYou, error,
     open, close, search, move, setHidden, resume, conversation, addIdea, editIdea, startIdea, folderCheck: (path) => src.folderCheck(path),
     archive: (offset, limit = 50) => src.archive(offset, limit),
-    setTheme, toast, dismissToast, refresh,
+    setTheme, setAccent, toast, dismissToast, refresh,
   };
 }
 

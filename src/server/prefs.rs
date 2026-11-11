@@ -7,7 +7,8 @@ use axum::Json;
 use serde_json::{json, Value};
 
 /// Board settings the face mirrors here, so every browser and the installed app share them.
-pub(super) const PREF_KEYS: &[&str] = &["eye.theme", "eye.ink.layout", "eye.ink.fold"];
+pub(super) const PREF_KEYS: &[&str] =
+    &["eye.theme", "eye.ink.layout", "eye.ink.fold", "eye.accent"];
 
 pub(super) fn prefs_path(st: &AppState) -> std::path::PathBuf {
     st.paths.home.join("ui.json")
@@ -84,5 +85,30 @@ mod tests {
             let (st, _, _) = raw(&e, req("POST", "/api/prefs", Some(bad))).await;
             assert_eq!(st, StatusCode::BAD_REQUEST);
         }
+    }
+
+    #[tokio::test]
+    async fn the_accent_is_kept_and_an_old_file_without_it_still_reads() {
+        let e = env();
+        std::fs::write(
+            e._tmp.path().join("home/ui.json"),
+            r#"{"eye.theme": "dark", "eye.ink.layout": "lanes"}"#,
+        )
+        .unwrap();
+        let (_, _, body) = raw(&e, req("GET", "/api/prefs", None)).await;
+        let v: Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(v, json!({"eye.theme": "dark", "eye.ink.layout": "lanes"}));
+        let (st, _, _) = raw(
+            &e,
+            req("POST", "/api/prefs", Some(json!({"eye.accent": "cobalt"}))),
+        )
+        .await;
+        assert_eq!(st, StatusCode::OK);
+        let (_, _, body) = raw(&e, req("GET", "/api/prefs", None)).await;
+        let v: Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(
+            v,
+            json!({"eye.theme": "dark", "eye.ink.layout": "lanes", "eye.accent": "cobalt"})
+        );
     }
 }

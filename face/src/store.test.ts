@@ -202,6 +202,42 @@ describe('theme', () => {
   });
 });
 
+describe('accent', () => {
+  beforeEach(() => { delete document.documentElement.dataset.accent; });
+
+  it('is vermilion, with no attribute, until one is chosen', () => {
+    const s = createStore(source());
+    expect(s.accent.value).toBe('vermilion');
+    expect(document.documentElement.dataset.accent).toBeUndefined();
+  });
+
+  it('a choice sets data-accent, is remembered, and vermilion takes the attribute away again', () => {
+    const s = createStore(source());
+    s.setAccent('cobalt');
+    expect(document.documentElement.dataset.accent).toBe('cobalt');
+    expect(localStorage.getItem('eye.accent')).toBe('cobalt');
+    expect(createStore(source()).accent.value).toBe('cobalt');
+    s.setAccent('vermilion');
+    expect(document.documentElement.dataset.accent).toBeUndefined();
+    expect(createStore(source()).accent.value).toBe('vermilion');
+  });
+
+  it('reads an unknown saved value as vermilion', () => {
+    localStorage.setItem('eye.accent', 'chartreuse');
+    const s = createStore(source());
+    expect(s.accent.value).toBe('vermilion');
+    expect(document.documentElement.dataset.accent).toBeUndefined();
+  });
+
+  it('is sent to the engine with the other board settings', async () => {
+    const f = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
+    vi.stubGlobal('fetch', f);
+    createStore(source()).setAccent('teal');
+    const call = f.mock.calls.find((c) => c[0] === '/api/prefs' && c[1]?.method === 'POST')!;
+    expect(JSON.parse(call[1].body)).toEqual({ 'eye.accent': 'teal' });
+  });
+});
+
 describe('agents', () => {
   it('lists the enabled agents', async () => {
     const s = createStore(source());

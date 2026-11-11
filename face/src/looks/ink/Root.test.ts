@@ -412,3 +412,24 @@ describe('an idea whose folder does not exist', () => {
     expect($('.modal .fhint')).toBeNull();
   });
 });
+
+describe('the accent picker', () => {
+  afterEach(() => { delete document.documentElement.dataset.accent; });
+
+  it('shows eight named swatches next to the theme switch, with the chosen one marked', async () => {
+    const { $, $$ } = await mount();
+    const sw = $$<HTMLButtonElement>('.hd .accents .acc');
+    expect(sw.map((b) => b.getAttribute('aria-label'))).toEqual(['Vermilion', 'Cobalt', 'Teal', 'Moss', 'Amber', 'Magenta', 'Violet', 'Graphite']);
+    expect(sw.map((b) => b.getAttribute('aria-pressed'))).toEqual(['true', ...Array(7).fill('false')]);
+    expect($('.hd .accents')!.getAttribute('aria-label')).toBe('Accent colour');
+    expect(sw.every((b) => b.tagName === 'BUTTON' && b.tabIndex >= 0)).toBe(true);
+    expect($('.hd [aria-label="Theme"]')!.nextElementSibling).toBe($('.hd .accents'));
+  });
+
+  it('picking a swatch sets the accent and marks it', async () => {
+    const { $$ } = await mount();
+    $$<HTMLButtonElement>('.hd .accents .acc').find((b) => b.getAttribute('aria-label') === 'Moss')!.click();
+    await vi.waitFor(() => expect(document.documentElement.dataset.accent).toBe('moss'));
+    expect($$('.hd .accents .acc').filter((b) => b.getAttribute('aria-pressed') === 'true').map((b) => b.dataset.accent)).toEqual(['moss']);
+  });
+});

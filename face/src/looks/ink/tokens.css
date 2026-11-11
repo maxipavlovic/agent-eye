@@ -23,6 +23,24 @@
   --dith: #7d796e;
 }
 /* dither tiles: 4x4 CSS px = 2x2 art pixels */
+/* Accent presets. Vermilion is the default and needs no attribute; the others are chosen with
+   <html data-accent="...">. Each sets only the two tokens the signal colour is made of, once for
+   the light paper and once for the dark. A `.acc` swatch carries its own data-accent, so it shows
+   its own colour. */
+:root[data-accent='cobalt'], .acc[data-accent='cobalt'] { --accent: #1f4fd8; --on-accent: #ffffff; }
+:root[data-theme='dark'][data-accent='cobalt'], :root[data-theme='dark'] .acc[data-accent='cobalt'] { --accent: #6f9bff; --on-accent: #1e1d1a; }
+:root[data-accent='teal'], .acc[data-accent='teal'] { --accent: #0b7f78; --on-accent: #ffffff; }
+:root[data-theme='dark'][data-accent='teal'], :root[data-theme='dark'] .acc[data-accent='teal'] { --accent: #3cc2b6; --on-accent: #1e1d1a; }
+:root[data-accent='moss'], .acc[data-accent='moss'] { --accent: #4d7a1f; --on-accent: #ffffff; }
+:root[data-theme='dark'][data-accent='moss'], :root[data-theme='dark'] .acc[data-accent='moss'] { --accent: #98c25a; --on-accent: #1e1d1a; }
+:root[data-accent='amber'], .acc[data-accent='amber'] { --accent: #ad6200; --on-accent: #ffffff; }
+:root[data-theme='dark'][data-accent='amber'], :root[data-theme='dark'] .acc[data-accent='amber'] { --accent: #f0a62b; --on-accent: #1e1d1a; }
+:root[data-accent='magenta'], .acc[data-accent='magenta'] { --accent: #c4177c; --on-accent: #ffffff; }
+:root[data-theme='dark'][data-accent='magenta'], :root[data-theme='dark'] .acc[data-accent='magenta'] { --accent: #f06bb4; --on-accent: #1e1d1a; }
+:root[data-accent='violet'], .acc[data-accent='violet'] { --accent: #6a3fd1; --on-accent: #ffffff; }
+:root[data-theme='dark'][data-accent='violet'], :root[data-theme='dark'] .acc[data-accent='violet'] { --accent: #a98bff; --on-accent: #1e1d1a; }
+:root[data-accent='graphite'], .acc[data-accent='graphite'] { --accent: #3a3a3a; --on-accent: #f2efe6; }
+:root[data-theme='dark'][data-accent='graphite'], :root[data-theme='dark'] .acc[data-accent='graphite'] { --accent: #c9c5b8; --on-accent: #1e1d1a; }
 :root {
   --d25: conic-gradient(var(--dith) 0 25%, transparent 0) 0 0 / 4px 4px;
   --d50: repeating-conic-gradient(var(--dith) 0 25%, transparent 0 50%) 0 0 / 4px 4px;

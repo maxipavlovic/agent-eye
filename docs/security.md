@@ -58,7 +58,7 @@ folder is tightened on the next run):
   including anything sensitive you pasted. It is not masked. Delete `~/.agent-eye/archive` (or run
   `eye uninstall --purge`) to remove it.
 - `backups/`: compressed snapshots of `eye.db` (see [backups.md](backups.md)), the same data as the database, kept as long as the rotation says. Delete the folder to remove them; `[backup] enabled = false` stops new ones.
-- `queue/` (the same hook lines, rotated at 1 MB; one older file is kept), `logs/`, `config.toml`, `board.token`, `ui.json` (board theme and layout), `daemon.lock`, `work/`, an empty folder the summary runs in, and `tmp/`, where a copy of an archived session is made while its conversation is read and removed right after.
+- `queue/` (the same hook lines, rotated at 1 MB; one older file is kept), `logs/`, `config.toml`, `board.token`, `ui.json` (board theme, accent colour and layout), `daemon.lock`, `work/`, an empty folder the summary runs in, and `tmp/`, where a copy of an archived session is made while its conversation is read and removed right after.
 
 **A mirror folder** (`[backup] mirror`) is a copy outside `~/.agent-eye`. eye itself makes no network
 call, but if that folder is synced (Dropbox, iCloud Drive, a network share) your sync tool carries

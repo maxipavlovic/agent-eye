@@ -61,6 +61,11 @@ a:hover { background: var(--ink); color: var(--paper); text-decoration: none; }
 .theme button + button { border-left: 2px solid var(--ink); }
 .theme button.on { background: var(--ink); color: var(--paper); }
 .theme button.on svg [fill='var(--paper)'] { fill: var(--ink); }
+/* accent swatches: each button wears its own accent, the chosen one is ringed in ink */
+.accents { display: flex; flex-wrap: wrap; gap: 6px; }
+.acc { width: 22px; height: 22px; padding: 0; border: 2px solid var(--ink); background: var(--accent); cursor: pointer; }
+.acc[aria-pressed='true'] { box-shadow: 0 0 0 2px var(--paper), 0 0 0 4px var(--ink); }
+.acc:hover { transform: translate(-1px, -1px); }
 
 .btn { font: 400 16px/1 var(--f-label); background: var(--paper); color: var(--ink); border: 2px solid var(--ink); padding: 11px 14px 10px; position: relative; box-shadow: 4px 4px 0 var(--ink); white-space: nowrap; }
 .btn:hover { background: var(--ink); color: var(--paper); }
@@ -422,6 +427,7 @@ mark { background: var(--ink); color: var(--paper); padding: 0 3px; }
 /* ───────── tablets and touch ───────── */
 @media (max-width: 1200px), (pointer: coarse) {
   .theme button { width: 40px; height: 40px; }
+  .acc { width: 32px; height: 32px; }
   .pbar button { min-height: 40px; }
   .btn.sm { min-height: 40px; }
   .page .x { min-height: 40px; }

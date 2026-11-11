@@ -35,7 +35,7 @@ Coding agents forget. Claude Code deletes transcripts after 30 days, you lose tr
 <tr><td><img src="assets/icon-key.svg" width="32" alt=""></td><td><b>Resume from your prompt:</b> Ctrl-G, a few words, Enter. Ctrl-F forks.</td></tr>
 <tr><td><img src="assets/icon-keep.svg" width="32" alt=""></td><td><b>Nothing lost:</b> a compressed copy of every transcript, restored on resume.</td></tr>
 <tr><td><img src="assets/icon-status.svg" width="32" alt=""></td><td><b>Know what needs you:</b> each session's state, next step and owner.</td></tr>
-<tr><td><img src="assets/icon-board.svg" width="32" alt=""></td><td><b>A board if you want one:</b> pixel-art, local, installable as an app.</td></tr>
+<tr><td><img src="assets/icon-board.svg" width="32" alt=""></td><td><b>A board if you want one:</b> pixel-art, local, installable as an app, in one of eight accent colours.</td></tr>
 <tr><td><img src="assets/icon-local.svg" width="32" alt=""></td><td><b>Local only:</b> no account, no telemetry.</td></tr>
 </table>
 

@@ -47,6 +47,7 @@ leaves the machine except the excerpts sent to your agent for summaries (see `se
 | `search.rs`, `pick.rs` | Full-text search and ranking; the picker's index, ranking and launching. |
 | `summarize.rs`, `summarize_prompt.txt` | Builds the masked excerpt of a session, asks the summary agent, stores the answer. |
 | `ideas.rs`, `mark.rs` | Parked ideas and starting them; putting a session in a column by hand. |
+| `folder.rs` | Whether an idea's folder exists, and the one rule for making it: only inside the home folder. |
 | `archive.rs`, `conversation.rs` | Where and when sessions are copied to the archive and put back (how is the adapter's call); reading a conversation from the session or from a temporary copy of the archive. |
 | `hook.rs`, `daemon.rs`, `install/`, `report.rs` | The hook entry point; the background process; install, uninstall and doctor (`install/` also holds the choice of agents and what is said about the daemon's service); the one-line-per-area summary that install, uninstall and `board on\|off` print. |
 | `platform/` | Everything that differs between macOS and Linux, and nothing else does: the service manager (`service.rs` builds the launchd plist or the systemd unit, knows their commands and runs them, `launchd.rs`, `systemd.rs`), opening a URL, the clipboard tools, and the terminal a resume opens (`terminal.rs`: what `[board] resume` comes to on this machine, and the `.command` file or terminal program that runs the command). See "Platforms" below. |
