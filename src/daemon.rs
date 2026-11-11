@@ -844,7 +844,15 @@ mod tests {
         assert!(Lock::acquire(&p).is_err());
         assert_eq!(running_pid(&p), Some(std::process::id() as i64));
         drop(l);
-        assert!(Lock::acquire(&p).is_ok());
+        // a program another test starts at this moment holds a copy of the descriptor until it
+        // execs, and the lock with it: wait that out
+        let again = (0..200).find_map(|_| {
+            Lock::acquire(&p).ok().or_else(|| {
+                std::thread::sleep(std::time::Duration::from_millis(10));
+                None
+            })
+        });
+        assert!(again.is_some());
     }
 
     #[test]
