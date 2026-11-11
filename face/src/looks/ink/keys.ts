@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'preact/hooks';
 import type { Store } from '../../store';
 import { ideaForm } from './IdeaForm';
 import { QUICK, quickMove } from './Move';
+import { remindForm } from './Remind';
 import type { Walk } from './walk';
 
 /** Board keys: / or ⌘K / Ctrl-K searches, N W P D move the open session, ← → walk the cards, Esc backs out one level. */
@@ -22,6 +23,11 @@ export function useKeys(store: Store, step: Walk['step']) {
       const plain = !e.metaKey && !e.ctrlKey && !e.altKey;
       const d = store.detail.value;
       const quick = QUICK.find((m) => m.key === e.key.toLowerCase());
+      // the reminder form takes the keys while it is open; Esc closes it
+      if (remindForm.value) {
+        if (e.key === 'Escape') remindForm.value = null;
+        return;
+      }
       const findKey = (e.key === '/' && !typing && !e.metaKey && !e.ctrlKey)
         || (e.key.toLowerCase() === 'k' && (e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && !ideaForm.value);
       if (findKey) { e.preventDefault(); focusSearch(); }

@@ -81,6 +81,9 @@ describe('reminders', () => {
     expect(remindWhen(at(1, 9), now)).toBe('tomorrow 9:00');
     expect(remindWhen(at(3, 14, 30), now)).toBe('Sat 14:30');
     expect(remindWhen(at(10, 9), now)).toBe('20 Jun 9:00');
+    // a due one can be from before today
+    expect(remindWhen(at(-1, 23, 55), now)).toBe('yesterday 23:55');
+    expect(remindWhen(at(-3, 9), now)).toBe('7 Jun 9:00');
   });
 
   it('says when and the note of a set reminder, and nothing without one', () => {

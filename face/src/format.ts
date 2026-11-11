@@ -137,12 +137,13 @@ function daysFrom(ms: number, now: number): number {
   return Math.round((day(ms) - day(now)) / DAY);
 }
 
-/** When a reminder is: "today 14:00", "tomorrow 9:00", "Fri 14:00" within the week, else "20 Nov 14:00". */
+/** When a reminder is: "today 14:00", "tomorrow 9:00", "yesterday 9:00", "Fri 14:00" within the week ahead, else "20 Nov 14:00". */
 export function remindWhen(at: number, now = Date.now()): string {
   const days = daysFrom(at, now);
-  if (days <= 0) return `today ${clock(at)}`;
+  if (days === 0) return `today ${clock(at)}`;
   if (days === 1) return `tomorrow ${clock(at)}`;
-  if (days < 7) return `${new Date(at).toLocaleDateString('en-GB', { weekday: 'short' })} ${clock(at)}`;
+  if (days === -1) return `yesterday ${clock(at)}`;
+  if (days > 0 && days < 7) return `${new Date(at).toLocaleDateString('en-GB', { weekday: 'short' })} ${clock(at)}`;
   return `${new Date(at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} ${clock(at)}`;
 }
 

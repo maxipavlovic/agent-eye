@@ -6,7 +6,9 @@ import { fixtureSource } from '../../data/fixture';
 import { keepPrefsLocal } from '../../prefs';
 import { createStore } from '../../store';
 import { ideaForm } from './IdeaForm';
+import { remindForm } from './Remind';
 import { Root } from './Root';
+import { dateValue } from './DatePick';
 
 const CLAUDE: Agent = { id: 'claude', name: 'Claude Code', short: 'Claude', default: true };
 const CODEX: Agent = { id: 'codex', name: 'Codex CLI', short: 'Codex', default: false };
@@ -55,6 +57,7 @@ beforeEach(() => { localStorage.clear(); });
 afterEach(() => {
   if (mounted) { render(null, mounted); mounted.remove(); mounted = null; }
   ideaForm.value = null;
+  remindForm.value = null;
   document.body.innerHTML = '';
 });
 
@@ -372,22 +375,73 @@ describe('reminders', () => {
     await vi.waitFor(() => expect(card(root, 'paused', 'Changelog generator').querySelector('.rclock')).toBeNull());
   });
 
-  it('opens the form for a date and sends it as words', async () => {
-    const remind = vi.fn(fixtureSource().remind);
-    const { root, $, $$ } = await mount({ ...fixtureSource(), remind });
+  const openForm = async (root: HTMLElement, $: (s: string) => HTMLElement | null, $$: (s: string) => HTMLElement[]) => {
     card(root, 'paused', 'Changelog generator').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 200, clientY: 200 }));
     await vi.waitFor(() => expect($('.ctx')).not.toBeNull());
     $$('.ctx button').find((b) => b.textContent === 'PICK A DATE…')!.click();
-    await vi.waitFor(() => expect($('form.modal')).not.toBeNull());
-    const f = $<HTMLFormElement>('form.modal')!;
-    const field = (n: string) => f.elements.namedItem(n) as HTMLInputElement;
-    field('date').value = '2099-03-04';
-    field('time').value = '';
-    field('note').value = 'before the freeze';
+    await vi.waitFor(() => expect($('form.modal .dpgrid')).not.toBeNull());
+    return $('form.modal') as HTMLFormElement;
+  };
+
+  it('picks a day in the ink month and a typed time, and sends them as words', async () => {
+    const remind = vi.fn(fixtureSource().remind);
+    const { root, $, $$ } = await mount({ ...fixtureSource(), remind });
+    const f = await openForm(root, $, $$);
+    expect(f.querySelector('input[type="date"], input[type="time"]')).toBeNull();
+    f.querySelector<HTMLButtonElement>('[aria-label="Next month"]')!.click();
+    await vi.waitFor(() => expect([...f.querySelectorAll('.dpgrid button')].some((b) => b.textContent === '4' && !(b as HTMLButtonElement).disabled)).toBe(true));
+    [...f.querySelectorAll<HTMLButtonElement>('.dpgrid button')].find((b) => b.textContent === '4')!.click();
+    const time = f.querySelector<HTMLInputElement>('#remind-time')!;
+    time.value = '1430';
+    time.dispatchEvent(new Event('input', { bubbles: true }));
+    (f.elements.namedItem('note') as HTMLInputElement).value = 'before the freeze';
     f.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     await vi.waitFor(() => expect(remind).toHaveBeenCalled());
-    expect(remind.mock.calls[0]![1]).toEqual({ when: '2099-03-04 09:00', note: 'before the freeze' });
+    const d = new Date();
+    d.setDate(1);
+    d.setMonth(d.getMonth() + 1);
+    d.setDate(4);
+    expect(remind.mock.calls[0]![1]).toEqual({ when: `${dateValue(d)} 14:30`, note: 'before the freeze' });
     await vi.waitFor(() => expect($('form.modal')).toBeNull());
+  });
+
+  it('keeps the form open and says why when the time does not read', async () => {
+    const remind = vi.fn(fixtureSource().remind);
+    const { root, $, $$ } = await mount({ ...fixtureSource(), remind });
+    const f = await openForm(root, $, $$);
+    const time = f.querySelector<HTMLInputElement>('#remind-time')!;
+    time.value = '25:00';
+    time.dispatchEvent(new Event('input', { bubbles: true }));
+    f.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => expect(f.querySelector('[role="alert"]')!.textContent).toBe('Write the time as HH:MM, 24 h, e.g. 14:30.'));
+    expect(time.getAttribute('aria-invalid')).toBe('true');
+    expect(remind).not.toHaveBeenCalled();
+    key('Escape');
+    await vi.waitFor(() => expect($('form.modal')).toBeNull());
+  });
+
+  it('switches the desktop notice for every reminder, and hides the switch where there is none', async () => {
+    const set = vi.fn(fixtureSource().setRemindSettings);
+    const { root, $, $$, store } = await mount({ ...fixtureSource(), setRemindSettings: set });
+    const f = await openForm(root, $, $$);
+    await vi.waitFor(() => expect(f.querySelector('.notice')).not.toBeNull());
+    const on = () => [...f.querySelectorAll<HTMLButtonElement>('.notice button')].find((b) => b.getAttribute('aria-pressed') === 'true')!.textContent;
+    expect(on()).toBe('OFF');
+    [...f.querySelectorAll<HTMLButtonElement>('.notice button')].find((b) => b.textContent === 'ON')!.click();
+    await vi.waitFor(() => expect(on()).toBe('ON'));
+    expect(set).toHaveBeenCalledWith({ notify: true });
+    expect(store.notice.value).toEqual({ notify: true, available: true });
+    expect(f.querySelector('.nhint')!.textContent).toBe('Applies to every reminder on this computer.');
+
+    for (const settings of [async () => ({ notify: false, available: false }), async () => { throw new Error('HTTP 404'); }]) {
+      render(null, root);
+      root.remove();
+      const m = await mount({ ...fixtureSource(), remindSettings: settings });
+      const g = await openForm(m.root, m.$, m.$$);
+      await new Promise((r) => setTimeout(r, 80));
+      expect(g.querySelector('.notice')).toBeNull();
+      expect(m.store.toasts.value).toHaveLength(0);
+    }
   });
 
   it('shows the reminder in the panel with a way to change or clear it', async () => {
@@ -405,7 +459,7 @@ describe('reminders', () => {
     card(root, 'needs_you', 'Upgrade the date library').click();
     await vi.waitFor(() => expect($$('.page .sec h4').some((h) => h.textContent === 'REMINDER')).toBe(true));
     const sec = $$('.page .sec').find((x) => x.querySelector('h4')!.textContent === 'REMINDER')!;
-    expect([...sec.querySelectorAll('p')].map((p) => p.textContent)).toEqual(['No reminder.', 'eye moves this card to Needs you at the time you pick.']);
+    expect([...sec.querySelectorAll(':scope > p')].map((p) => p.textContent)).toEqual(['No reminder.', 'eye moves this card to Needs you at the time you pick.']);
     expect([...sec.querySelectorAll('.btn')].map((b) => b.textContent)).not.toContain('CLEAR');
   });
 });

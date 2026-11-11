@@ -3,7 +3,8 @@ import { describe, expect, it, vi } from 'vitest';
 import type { Card } from '../../api/types';
 import type { Store } from '../../store';
 import { remindRows } from './CardMenu';
-import { dateValue, remindSummary, whenText } from './Remind';
+import { dateValue } from './DatePick';
+import { remindSummary, whenProblem, whenText } from './Remind';
 
 const store = () => ({ remind: vi.fn(async () => true) }) as unknown as Store & { remind: ReturnType<typeof vi.fn> };
 const card = (o: Partial<Card> = {}) => ({ id: 'a', kind: 'interactive', ...o }) as Card;
@@ -39,8 +40,17 @@ describe('the reminder form and panel', () => {
     expect(whenText('2026-11-20', '')).toBe('2026-11-20 09:00');
   });
 
-  it('writes a date for a date input', () => {
+  it('writes a date as the engine reads it', () => {
     expect(dateValue(new Date(2026, 0, 5))).toBe('2026-01-05');
+  });
+
+  it('refuses a time that does not read or has passed, and takes an empty one as 9:00', () => {
+    const now = new Date(2026, 10, 12, 10).getTime();
+    expect(whenProblem('2026-11-13', '14:30', now)).toBeNull();
+    expect(whenProblem('2026-11-13', '', now)).toBeNull();
+    expect(whenProblem('2026-11-12', '930', now)).toBe('That time has passed. Pick a later one.');
+    expect(whenProblem('2026-11-12', '10:15', now)).toBeNull();
+    expect(whenProblem('2026-11-13', '25:00', now)).toBe('Write the time as HH:MM, 24 h, e.g. 14:30.');
   });
 
   it('summarises a reminder in plain words: when and the note, and Due once it is due', () => {
