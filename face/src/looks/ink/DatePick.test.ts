@@ -42,13 +42,16 @@ describe('times for the field', () => {
     expect(['', '24:00', '9:60', '9.30', 'noon', '12:3', '123456'].map(parseTime)).toEqual([null, null, null, null, null, null, null]);
   });
 
-  it('steps to the next quarter hour, round the clock', () => {
+  it('steps to the next quarter hour and stops at the ends of the day', () => {
     expect(stepTime('09:00', 1)).toBe('09:15');
     expect(stepTime('09:07', 1)).toBe('09:15');
     expect(stepTime('09:07', -1)).toBe('09:00');
     expect(stepTime('09:15', -1)).toBe('09:00');
-    expect(stepTime('23:50', 1)).toBe('00:00');
-    expect(stepTime('00:00', -1)).toBe('23:45');
+    expect(stepTime('23:30', 1)).toBe('23:45');
+    expect(stepTime('23:45', 1)).toBe('23:45');
+    expect(stepTime('23:50', 1)).toBe('23:45');
+    expect(stepTime('00:00', -1)).toBe('00:00');
+    expect(stepTime('00:10', -1)).toBe('00:00');
     expect(stepTime('soon', 1)).toBe('09:15');
   });
 });

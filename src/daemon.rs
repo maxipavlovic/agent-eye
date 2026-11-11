@@ -325,12 +325,13 @@ pub fn quiet_round(db: &mut Db, paths: &Paths, cfg: &Config) -> Result<(usize, u
     Ok((summarized, archived))
 }
 
-/// Tell about the reminders that came due, once each, unless `[remind] notify` is off. The file
-/// is read again each time, so a switch made while the daemon runs counts at once.
+/// Tell about the reminders that came due, once each. While `[remind] notify` is off they are still
+/// marked as told, with no notice, so switching it on covers only what falls due afterwards. The
+/// file is read again each time, so a switch made while the daemon runs counts at once.
 fn notify_reminders(db: &Db, paths: &Paths, cfg: &Config, send: &mut dyn FnMut(&str, &str)) {
-    if !crate::remind::notices::is_on(paths, cfg.remind.notify) {
-        return;
-    }
+    let on = crate::remind::notices::is_on(paths, cfg.remind.notify);
+    let mut silent = |_: &str, _: &str| {};
+    let send: &mut dyn FnMut(&str, &str) = if on { send } else { &mut silent };
     match crate::remind::notify_due(db, now_ms(), send) {
         Ok(0) => {}
         Ok(n) => log(paths, &format!("tick: {n} reminders due")),

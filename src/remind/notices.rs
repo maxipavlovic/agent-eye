@@ -77,6 +77,15 @@ mod tests {
     }
 
     #[test]
+    fn switching_with_a_config_that_does_not_parse_is_an_error() {
+        let (_t, p) = home();
+        p.ensure_home().unwrap();
+        std::fs::write(p.config_path(), "[remind\nnotify = true").unwrap();
+        let e = set(&p, false).unwrap_err();
+        assert!(format!("{e:#}").contains("does not parse"), "{e:#}");
+    }
+
+    #[test]
     fn a_config_that_does_not_parse_leaves_the_loaded_value() {
         let (_t, p) = home();
         p.ensure_home().unwrap();

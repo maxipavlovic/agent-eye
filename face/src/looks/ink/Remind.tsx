@@ -11,6 +11,22 @@ import { Sec } from './Sections';
 /** The card whose reminder form is open (a date, a time and a note), or null. */
 export const remindForm = signal<string | null>(null);
 
+let opener: HTMLElement | null = null;
+
+/** Open the reminder form for a card, remembering what had focus so closing can give it back. */
+export function openRemind(id: string) {
+  opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  remindForm.value = id;
+}
+
+/** Close the reminder form and return focus to what opened it, when that is still in the page. */
+export function closeRemind() {
+  remindForm.value = null;
+  const back = opener;
+  opener = null;
+  if (back?.isConnected) back.focus();
+}
+
 /** The quick choices, in the words `eye remind` reads. */
 export const REMIND_PRESETS: ReadonlyArray<{ label: string; when: string }> = [
   { label: 'TOMORROW 9:00', when: 'tomorrow' },
@@ -114,7 +130,7 @@ function RemindForm({ store, id, onClose }: { store: Store; id: string; onClose:
 export function RemindFormHost({ store }: { store: Store }) {
   const id = remindForm.value;
   if (!id) return null;
-  return <RemindForm key={id} store={store} id={id} onClose={() => { remindForm.value = null; }} />;
+  return <RemindForm key={id} store={store} id={id} onClose={closeRemind} />;
 }
 
 /** The reminder of a card in its panel: what is set, the quick choices and a way to clear it. */
@@ -123,10 +139,10 @@ export function RemindPanel({ c, store }: { c: Card; store: Store }) {
   return (
     <Sec t="REMINDER">
       <p class="notes">{summary ?? 'No reminder.'}</p>
-      {!summary && <p class="dim">eye moves this card to Needs you at the time you pick.</p>}
+      {!summary && <p class="rhint">eye moves this card to Needs you at the time you pick.</p>}
       <div class="acts">
         {REMIND_PRESETS.map((p) => <button key={p.when} class="btn sm" onClick={() => void store.remind(c.id, { when: p.when })}>{p.label}</button>)}
-        <button class="btn sm" onClick={() => { remindForm.value = c.id; }}>PICK A DATE…</button>
+        <button class="btn sm" onClick={() => openRemind(c.id)}>PICK A DATE…</button>
         {c.remind_at && <button class="btn sm ghost" onClick={() => void store.remind(c.id, { clear: true })}>CLEAR</button>}
       </div>
       <NoticeSwitch store={store} />

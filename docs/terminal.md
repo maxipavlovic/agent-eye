@@ -50,7 +50,7 @@ Ctrl-G then opens the picker with the current command line as the start query. T
 - `eye pick --filter "words" --first --fork [--print]` forks the first hit instead.
 - `eye show <id> --conversation [-n 10]` prints the last messages of a session (`--json` for the API shape); `eye resume <id> --fork` prints the fork command (and opens it like `eye resume`; add `--dry-run` to only print).
 - `eye idea start <id>` on an idea whose folder does not exist asks `Folder <path> does not exist. Create it? [y/N]` in a terminal; `--create-folder` makes it without asking (for scripts), and without a terminal and without the flag it stops with a message that names the flag. `--dry-run` creates nothing.
-- `eye remind <id> <when> [--note TEXT]` sets a reminder on a session (an id or its first 6 characters) or an idea (`idea:<n>`), `eye remind <id> --clear` removes it and `eye remind ls` lists them, `eye remind notify [on|off]` shows or switches the desktop notice for due reminders (off by default), due ones first. `<when>` is as for Ctrl-R above. `eye show` and `eye ls --json` carry it.
+- `eye remind <id> <when> [--note TEXT]` sets a reminder on a session (an id or its first 6 characters) or an idea (`idea:<n>`), `eye remind <id> --clear` removes it and `eye remind ls` lists them, due ones first, `eye remind notify [on|off]` shows or switches the desktop notice for due reminders (off by default). `<when>` is as for Ctrl-R above. `eye show` and `eye ls --json` carry it.
 - `eye idea add` and `eye idea edit` take `--agent <id>` to start an idea in a particular agent (default: the first enabled one).
 - Without a terminal, `eye` prints the list like `eye ls`.
 
