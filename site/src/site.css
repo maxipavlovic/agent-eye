@@ -61,7 +61,8 @@ mark { background: var(--ink); color: var(--paper); padding: 0 .14em; -webkit-bo
 .theme button + button { border-left: 2px solid var(--ink); }
 .theme button[aria-pressed='true'] { background: var(--ink); color: var(--paper); }
 .theme button[aria-pressed='true'] svg [fill='var(--paper)'] { fill: var(--ink); }
-@media (max-width: 560px) { .nav { order: 3; width: 100%; margin: 0; } .accpick, .theme { order: 2; } .accpick { position: static; margin-left: auto; } .hd-in { position: relative; }
+/* A phone: the name on its own row, the accent and theme buttons together under it, then the links. */
+@media (max-width: 560px) { .brand { flex: 1 0 100%; } .nav { order: 3; width: 100%; margin: 0; } .accpick, .theme { order: 2; } .accpick { position: static; } .hd-in { position: relative; }
   .accpop { left: 0; right: 0; top: calc(100% - 4px); justify-content: space-between; } .acc { width: 32px; height: 32px; } .word { font-size: 18px; } }
 
 .site-ft { margin-top: 24px; }
