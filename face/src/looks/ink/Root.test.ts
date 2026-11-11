@@ -436,7 +436,7 @@ describe('an idea whose folder does not exist', () => {
     card(root, 'ideas', 'Migration guide').click();
     await vi.waitFor(() => expect($$('.page .acts .btn').length).toBeGreaterThan(0));
     const start = buttons(root)[0]!;
-    expect(start.textContent).toBe('CREATE FOLDER & START');
+    expect(start.textContent).toBe('CREATE FOLDER + START');
     expect($('.page .fnote')!.textContent).toContain('Start will create it');
     start.click();
     await vi.waitFor(() => expect(startIdea).toHaveBeenCalled());

@@ -8,7 +8,7 @@ describe('startButton', () => {
   });
 
   it('says it creates the folder when the folder is missing and may be made', () => {
-    expect(startButton({ folder_state: 'missing', folder_creatable: true })).toEqual({ label: 'CREATE FOLDER & START', blocked: null });
+    expect(startButton({ folder_state: 'missing', folder_creatable: true })).toEqual({ label: 'CREATE FOLDER + START', blocked: null });
   });
 
   it('is blocked, with the reason, when the folder cannot be made or used', () => {

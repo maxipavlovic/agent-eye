@@ -199,7 +199,7 @@ a:hover { background: var(--ink); color: var(--paper); text-decoration: none; }
 .card.mini .sigil svg { width: 18px; height: 18px; }
 .card.mini .foot { margin-top: 7px; }
 .card.idea .acts { display: flex; flex-wrap: wrap; gap: 8px 10px; margin-top: 10px; }
-/* a long start label (CREATE FOLDER & START) wraps inside the card instead of running past it */
+/* a long start label (CREATE FOLDER + START) wraps inside the card instead of running past it */
 .card.idea .acts .btn { white-space: normal; max-width: 100%; text-align: left; line-height: 1.25; }
 
 .ageh { position: relative; height: 18px; margin: 0 0 12px; }
