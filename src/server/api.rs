@@ -12,33 +12,45 @@ use serde_json::{json, Value};
 
 // ---------- errors ----------
 
-/// An error answer: a status and `{"error": message}`.
-pub struct ApiError(StatusCode, String);
+/// An error answer: a status and `{"error": message}`, plus `"code"` when a client can act on it.
+pub struct ApiError(StatusCode, String, Option<&'static str>);
 
 impl ApiError {
     pub(super) fn bad(m: impl Into<String>) -> Self {
-        ApiError(StatusCode::BAD_REQUEST, m.into())
+        ApiError(StatusCode::BAD_REQUEST, m.into(), None)
     }
     pub(super) fn not_found(m: impl Into<String>) -> Self {
-        ApiError(StatusCode::NOT_FOUND, m.into())
+        ApiError(StatusCode::NOT_FOUND, m.into(), None)
+    }
+    /// A request that is fine in itself but cannot be done now; `code` is stable for clients.
+    pub(super) fn conflict(code: &'static str, m: impl Into<String>) -> Self {
+        ApiError(StatusCode::CONFLICT, m.into(), Some(code))
     }
 }
 
 impl From<anyhow::Error> for ApiError {
     fn from(e: anyhow::Error) -> Self {
-        ApiError(StatusCode::INTERNAL_SERVER_ERROR, format!("{e:#}"))
+        ApiError(StatusCode::INTERNAL_SERVER_ERROR, format!("{e:#}"), None)
     }
 }
 
 impl From<rusqlite::Error> for ApiError {
     fn from(e: rusqlite::Error) -> Self {
-        ApiError(StatusCode::INTERNAL_SERVER_ERROR, format!("database: {e}"))
+        ApiError(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("database: {e}"),
+            None,
+        )
     }
 }
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
-        (self.0, Json(json!({"error": self.1}))).into_response()
+        let body = match self.2 {
+            Some(code) => json!({"error": self.1, "code": code}),
+            None => json!({"error": self.1}),
+        };
+        (self.0, Json(body)).into_response()
     }
 }
 

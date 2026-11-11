@@ -1,6 +1,7 @@
 //! Drawing: the list, the preview and the conversation pane.
 
 use super::state::App;
+use crate::folder::FolderState;
 use crate::model::Column;
 use crate::pick::{self, Row};
 use crate::util::{home_rel, tokens_line};
@@ -104,6 +105,7 @@ pub(super) fn row_line<'a>(
     pal: &Pal,
     words: &[String],
     agent: AgentLabel,
+    new_folder: bool,
 ) -> Line<'a> {
     let age = pick::short_age(now, r.last);
     let age_w = 4;
@@ -115,7 +117,13 @@ pub(super) fn row_line<'a>(
         0
     };
     let proj = if proj_w > 0 {
-        clip(&r.project, proj_w)
+        // a plus marks an idea whose folder does not exist yet
+        let name = if new_folder {
+            format!("+{}", r.project)
+        } else {
+            r.project.clone()
+        };
+        clip(&name, proj_w)
     } else {
         String::new()
     };
@@ -394,6 +402,9 @@ pub(super) fn preview_lines<'a>(app: &App, r: &Row, pal: &Pal) -> Vec<Line<'a>> 
                 .agents
                 .resolve(i.agent.as_deref())
                 .map_or("the agent", |a| a.short_name());
+            if let Some(note) = app.idea_folder(r).and_then(|st| st.note()) {
+                v.push(Line::styled(note, pal.dim()));
+            }
             v.push(Line::styled(
                 if i.prompt.is_some() {
                     format!("Enter starts it here: {who} in its folder with the prompt as the first message")
@@ -604,7 +615,8 @@ pub fn draw(f: &mut Frame, app: &mut App) {
         .map(|&i| {
             let r = &app.idx.rows[i];
             let label = (label_w > 0).then(|| (agent_name(app, r), label_w));
-            ListItem::new(row_line(r, lw, app.now, &pal, &words, label))
+            let new_folder = matches!(app.idea_folder(r), Some(st) if st != FolderState::Exists);
+            ListItem::new(row_line(r, lw, app.now, &pal, &words, label, new_folder))
         })
         .collect();
     app.page = (list_area.height as usize).saturating_sub(1).max(1);

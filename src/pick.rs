@@ -319,9 +319,29 @@ pub struct Launch {
     pub idea: Option<i64>,
 }
 
+/// How a row is launched.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct LaunchOpts {
+    /// Resume a session as a new session that branches from it.
+    pub fork: bool,
+    /// Make the folder of an idea first when it does not exist.
+    pub create_folder: bool,
+}
+
 /// Restore the transcript from the archive when it is gone, and record an idea start.
-/// With `fork` a session resumes as a new session that branches from it.
-pub fn prepare(db: &Db, paths: &Paths, agents: &Agents, row: &Row, fork: bool) -> Result<Launch> {
+/// An idea whose folder does not exist is started only with `create_folder`.
+pub fn prepare(
+    db: &Db,
+    paths: &Paths,
+    agents: &Agents,
+    cfg: &Config,
+    row: &Row,
+    how: LaunchOpts,
+) -> Result<Launch> {
+    let LaunchOpts {
+        fork,
+        create_folder,
+    } = how;
     anyhow::ensure!(
         !fork || row.kind == Kind::Session,
         "only a session can be forked"
@@ -361,11 +381,9 @@ pub fn prepare(db: &Db, paths: &Paths, agents: &Agents, row: &Row, fork: bool) -
                 anyhow::bail!("this idea was already started (session {s})");
             }
             let plan = ideas::plan_start(agents, &cur, false)?;
-            anyhow::ensure!(
-                std::path::Path::new(&plan.dir).is_dir(),
-                "the folder {} no longer exists",
-                plan.dir
-            );
+            if ideas::check_folder(cfg, &plan.dir, create_folder)? {
+                crate::folder::create(cfg.folder_root().as_deref(), &plan.dir)?;
+            }
             ideas::record_start(db, cur.id, plan.session_id.as_deref())?;
             Ok(Launch {
                 command: plan.command(),
@@ -562,7 +580,15 @@ mod tests {
             cwd: Some(tmp.path().join("a\nb").to_string_lossy().into_owned()),
             ..Default::default()
         });
-        let err = prepare(&db, &paths, &agents, &r, false).unwrap_err();
+        let err = prepare(
+            &db,
+            &paths,
+            &agents,
+            &Config::default(),
+            &r,
+            LaunchOpts::default(),
+        )
+        .unwrap_err();
         assert!(format!("{err}").contains("control characters"), "{err}");
     }
 

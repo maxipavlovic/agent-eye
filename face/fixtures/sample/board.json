@@ -37,7 +37,10 @@
           "child_count": 0,
           "child_done": 0,
           "prompt_count": 0,
-          "tokens": null
+          "tokens": null,
+          "folder_state": "ok",
+          "folder_creatable": false,
+          "folder_note": null
         },
         {
           "id": "idea:2",
@@ -72,7 +75,10 @@
           "child_count": 0,
           "child_done": 0,
           "prompt_count": 0,
-          "tokens": null
+          "tokens": null,
+          "folder_state": "ok",
+          "folder_creatable": false,
+          "folder_note": null
         },
         {
           "id": "idea:3",
@@ -107,7 +113,10 @@
           "child_count": 0,
           "child_done": 0,
           "prompt_count": 0,
-          "tokens": null
+          "tokens": null,
+          "folder_state": "ok",
+          "folder_creatable": false,
+          "folder_note": null
         },
         {
           "id": "idea:4",
@@ -142,7 +151,10 @@
           "child_count": 0,
           "child_done": 0,
           "prompt_count": 0,
-          "tokens": null
+          "tokens": null,
+          "folder_state": "missing",
+          "folder_creatable": true,
+          "folder_note": "Folder does not exist yet; Start will create it"
         }
       ]
     },

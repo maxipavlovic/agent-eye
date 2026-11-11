@@ -35,6 +35,7 @@ function source(over: Partial<Source> = {}): Source {
     addIdea: async () => card('idea:1', 'ideas'),
     editIdea: async () => card('idea:1', 'ideas'),
     startIdea: async () => ({ dry_run: false, mode: 'iterm', command: 'x', session_id: null, job: null }),
+    folderCheck: async () => ({ state: 'ok', creatable: false, note: null }),
     subscribe: () => () => {},
     ...over,
   };
@@ -276,6 +277,20 @@ describe('copy mode', () => {
     await s.startIdea(idea, true);
     expect(writeText).not.toHaveBeenCalled();
     expect(s.toasts.value.at(-1)!.text).toBe('Started in the background (ab12)');
+  });
+
+  it('asks for the folder to be made only when it is missing and may be made', async () => {
+    const startIdea = vi.fn(async () => ({ dry_run: false, mode: 'iterm', command: 'x', session_id: null, job: null }));
+    const s = createStore(source({ startIdea }));
+    const idea = { ...card('idea:1', 'ideas'), idea_id: 1 };
+    await s.startIdea(idea, false);
+    expect(startIdea).toHaveBeenLastCalledWith(1, false, false, false);
+    await s.startIdea({ ...idea, folder_state: 'ok' }, false);
+    expect(startIdea).toHaveBeenLastCalledWith(1, false, false, false);
+    await s.startIdea({ ...idea, folder_state: 'missing', folder_creatable: true }, false);
+    expect(startIdea).toHaveBeenLastCalledWith(1, false, false, true);
+    await s.startIdea({ ...idea, folder_state: 'missing', folder_creatable: false }, true);
+    expect(startIdea).toHaveBeenLastCalledWith(1, true, false, false);
   });
 
   it('opens a tab without naming the terminal when the daemon said nothing', async () => {

@@ -2,7 +2,7 @@ import { pushPref } from './prefs';
 import { signal, computed, effect, batch, type Signal, type ReadonlySignal } from '@preact/signals';
 import type {
   Agent, ArchivePage, Board, Card, CardDetail, ColumnId, Connection, ConversationPage, IdeaInput, MoveTarget,
-  ResumePlan, SearchHit, Source, StartPlan,
+  FolderCheck, ResumePlan, SearchHit, Source, StartPlan,
 } from './api/types';
 
 export type ThemePref = 'auto' | 'light' | 'dark';
@@ -52,6 +52,8 @@ export interface Store {
   addIdea(input: IdeaInput): Promise<boolean>;
   editIdea(ideaId: number, input: Partial<IdeaInput>): Promise<boolean>;
   startIdea(card: Card, background: boolean): Promise<StartPlan | null>;
+  /** What a typed folder is (the idea form's hint); rejects when the engine cannot say. */
+  folderCheck(path: string): Promise<FolderCheck>;
   archive(offset: number, limit?: number): Promise<ArchivePage>;
   setTheme(pref: ThemePref): void;
   toast(text: string, tone?: Toast['tone'], action?: Toast['action']): number;
@@ -271,7 +273,8 @@ export function createStore(src: Source, { defaultTheme = 'auto' }: { defaultThe
   async function startIdea(card: Card, background: boolean) {
     if (card.idea_id == null) return fail(new Error('Not an idea'));
     try {
-      const plan = await src.startIdea(card.idea_id, background, false);
+      // a folder that is missing and may be made is made by the start (the button says so)
+      const plan = await src.startIdea(card.idea_id, background, false, card.folder_state === 'missing' && card.folder_creatable === true);
       // a background start ran its command: there is nothing to copy
       toast(background ? plan.note || `Started in the background (${plan.job ?? 'job'})` : await planNote(plan, 'Starting'));
       await refresh();
@@ -293,7 +296,7 @@ export function createStore(src: Source, { defaultTheme = 'auto' }: { defaultThe
   return {
     source: src.name,
     board, selected, detail, query, results, searching, connection, themePref, theme, toasts, agents, needsYou, error,
-    open, close, search, move, setHidden, resume, conversation, addIdea, editIdea, startIdea,
+    open, close, search, move, setHidden, resume, conversation, addIdea, editIdea, startIdea, folderCheck: (path) => src.folderCheck(path),
     archive: (offset, limit = 50) => src.archive(offset, limit),
     setTheme, toast, dismissToast, refresh,
   };

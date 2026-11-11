@@ -4,6 +4,7 @@ import type { CardDetail, ColumnId } from '../../api/types';
 import { ago, isBusy, resumeLabel, snippetParts } from '../../format';
 import { LANE_LABEL } from './columns';
 import { copy } from './copy';
+import { folderMissing, startButton } from './folder';
 import { Conversation } from './Conversation';
 import { Hl, HlWords, hlPattern } from './highlight';
 import { ideaForm } from './IdeaForm';
@@ -25,13 +26,15 @@ const ZIG = (() => {
 /** An idea's panel: start it, change it, and what it keeps (the notes stay here; only the prompt is sent). */
 function IdeaBody({ d, store }: { d: CardDetail; store: Store }) {
   const edit = (focus?: 'prompt') => { ideaForm.value = { edit: d.id, focus }; };
+  const start = startButton(d);
   return (
     <>
       <div class="acts">
-        <button class="btn big" onClick={() => void store.startIdea(d, false)}>START</button>
-        <button class="btn" title={d.prompt ? `${d.agent_name} works on it without you` : 'Needs a prompt first'} onClick={() => (d.prompt ? void store.startIdea(d, true) : edit('prompt'))}>IN BACKGROUND</button>
+        <button class="btn big" disabled={!!start.blocked} title={start.blocked ?? undefined} onClick={() => void store.startIdea(d, false)}>{start.label}</button>
+        <button class="btn" disabled={!!start.blocked} title={d.prompt ? `${d.agent_name} works on it without you` : 'Needs a prompt first'} onClick={() => (d.prompt ? void store.startIdea(d, true) : edit('prompt'))}>IN BACKGROUND</button>
         <button class="btn" onClick={() => edit()}>EDIT</button>
       </div>
+      {(start.blocked || folderMissing(d)) && <p class="fnote" role="status">{start.blocked ?? d.folder_note}</p>}
       <Sec t="NOTES">{d.notes ? <p class="notes"><Hl s={d.notes} /></p> : <p class="dim">None.</p>}</Sec>
       <Sec t={`PROMPT FOR ${d.agent_name.toUpperCase()}`}>
         {d.prompt ? <blockquote class="prompt first"><Hl s={d.prompt} /></blockquote> : <p class="dim">None: START opens {d.agent_name} in the folder and waits for you.</p>}

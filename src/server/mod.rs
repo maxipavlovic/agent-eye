@@ -99,6 +99,7 @@ pub fn router(state: Shared) -> Router {
         )
         .route("/api/ideas/:id", post(idea_routes::api_idea_edit))
         .route("/api/ideas/:id/start", post(idea_routes::api_idea_start))
+        .route("/api/folder", get(idea_routes::api_folder))
         .route("/api/events", get(run::api_events))
         .fallback(get(face::face_asset))
         .layer(axum::extract::DefaultBodyLimit::max(64 * 1024))

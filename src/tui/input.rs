@@ -2,9 +2,11 @@
 
 use super::state::App;
 use super::Outcome;
+use crate::folder::FolderState;
 use crate::pick::{self, Kind};
 use crate::platform::clipboard;
 use crate::resume;
+use crate::util::home_rel;
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
 /// Lines one Shift-Up / Shift-Down scrolls.
@@ -29,6 +31,24 @@ impl App {
             KeyCode::Enter => {
                 if let Some(r) = self.current() {
                     if pick::actionable(r) {
+                        match self.idea_folder(r) {
+                            Some(FolderState::Missing { creatable: true }) => {
+                                if self.confirm.as_deref() != Some(r.id.as_str()) {
+                                    let msg = format!(
+                                        "Folder {} does not exist — Enter again to create it and start, Esc to cancel",
+                                        r.folder.as_deref().map(home_rel).unwrap_or_default()
+                                    );
+                                    self.confirm = Some(r.id.clone());
+                                    self.msg = Some(msg);
+                                    return None;
+                                }
+                            }
+                            Some(FolderState::Exists) | None => {}
+                            Some(other) => {
+                                self.msg = other.note();
+                                return None;
+                            }
+                        }
                         let live = r.session.as_ref().is_some_and(|s| s.live_status.is_some());
                         if live && self.confirm.as_deref() != Some(r.id.as_str()) {
                             self.confirm = Some(r.id.clone());
@@ -210,6 +230,71 @@ mod tests {
         assert_eq!(a.current().unwrap().id, id);
         assert!(a.msg.is_none());
         assert!(a.key(key(KeyCode::Enter)).is_none());
+    }
+
+    /// The picker on its idea, whose folder is `sub` inside a root eye may create folders in.
+    fn idea_app(sub: &str) -> (tempfile::TempDir, App) {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut a = app("zephyr");
+        let dir = tmp.path().join(sub).to_string_lossy().into_owned();
+        a.folder_root = Some(tmp.path().to_path_buf());
+        let row = &mut a.idx.rows[a.results[0]];
+        row.folder = Some(dir.clone());
+        row.idea.as_mut().unwrap().folder = Some(dir);
+        (tmp, a)
+    }
+
+    #[test]
+    fn an_idea_with_a_missing_folder_asks_before_it_starts() {
+        let (tmp, mut a) = idea_app("new");
+        let id = a.current().unwrap().id.clone();
+        assert!(a.key(key(KeyCode::Enter)).is_none());
+        let m = a.msg.clone().unwrap();
+        assert!(
+            m.contains("does not exist") && m.contains("create it"),
+            "{m}"
+        );
+        // Esc cancels, and the next Enter asks again
+        assert!(a.key(key(KeyCode::Esc)).is_none());
+        assert!(a.key(key(KeyCode::Enter)).is_none());
+        assert_eq!(a.key(key(KeyCode::Enter)), Some(Outcome::Pick(id)));
+        // the picker itself creates nothing: the launch does, once it is told to
+        assert!(!tmp.path().join("new").exists());
+    }
+
+    #[test]
+    fn an_idea_in_a_folder_that_exists_starts_at_once() {
+        let (_tmp, mut a) = idea_app("");
+        let id = a.current().unwrap().id.clone();
+        assert_eq!(a.key(key(KeyCode::Enter)), Some(Outcome::Pick(id)));
+    }
+
+    #[test]
+    fn an_idea_whose_folder_cannot_be_made_says_why_and_does_not_start() {
+        let (tmp, mut a) = idea_app("new");
+        a.folder_root = Some(tmp.path().join("elsewhere"));
+        assert!(a.key(key(KeyCode::Enter)).is_none());
+        assert!(a.key(key(KeyCode::Enter)).is_none());
+        assert!(a
+            .msg
+            .as_deref()
+            .unwrap()
+            .contains("inside your home folder"));
+        let (tmp, mut a) = idea_app("file");
+        std::fs::write(tmp.path().join("file"), "x").unwrap();
+        assert!(a.key(key(KeyCode::Enter)).is_none());
+        assert_eq!(a.msg.as_deref(), Some("Not a folder"));
+    }
+
+    #[test]
+    fn the_list_and_the_preview_mark_an_idea_with_a_missing_folder() {
+        let (_tmp, mut a) = idea_app("new");
+        let t = render_text(&mut a, 120, 24).unwrap();
+        assert!(t.contains("+auth"), "{t}");
+        assert!(t.contains("Start will create it"), "{t}");
+        let (_tmp, mut a) = idea_app("");
+        let t = render_text(&mut a, 120, 24).unwrap();
+        assert!(!t.contains("+auth") && !t.contains("does not exist"), "{t}");
     }
 
     #[test]

@@ -247,7 +247,7 @@ async fn two_agents_work_side_by_side() {
         &app,
         "POST",
         "/api/ideas",
-        Some(json!({"title": "Try the bot", "folder": "/work/fake", "prompt": "go", "agent": "fake"})),
+        Some(json!({"title": "Try the bot", "folder": w.fake, "prompt": "go", "agent": "fake"})),
     )
     .await;
     assert_eq!(
@@ -263,7 +263,7 @@ async fn two_agents_work_side_by_side() {
     .await;
     assert_eq!(
         start["command"],
-        "cd '/work/fake' && fakebot new 'Try the bot'"
+        format!("cd '{}' && fakebot new 'Try the bot'", w.fake.display())
     );
     assert!(
         start["session_id"].is_null(),
@@ -532,7 +532,7 @@ async fn claude_can_be_switched_off() {
         &app,
         "POST",
         "/api/ideas",
-        Some(json!({"title": "Whichever", "folder": "/work/x", "prompt": "go"})),
+        Some(json!({"title": "Whichever", "folder": w.fake, "prompt": "go"})),
     )
     .await;
     let (_, start) = call(

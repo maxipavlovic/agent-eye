@@ -80,7 +80,7 @@ pub fn board_json(db: &Db, cfg: &Config, agents: &Agents, now: i64, all: bool) -
             ideas::list_open(db)?
                 .iter()
                 .filter(|i| !hide::idea_off(&enabled, i))
-                .map(|i| idea_card(i, agents))
+                .map(|i| idea_card(i, agents, cfg))
                 .collect()
         } else {
             let mut v = buckets.remove(c.as_str()).unwrap_or_default();

@@ -18,6 +18,8 @@ pub mod daemon;
 pub mod db;
 /// Safe edits of files other programs own, and private files of eye's own.
 pub mod files;
+/// Whether an idea's folder exists and may be created.
+pub mod folder;
 /// Sessions that are left out of lists.
 pub mod hide;
 /// The hook entry point.

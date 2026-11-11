@@ -1,5 +1,5 @@
 import type {
-  Agent, ArchivePage, Board, Card, CardDetail, ColumnId, ConversationPage, Idea, Message, SearchHit, Source, StartPlan, Tokens,
+  Agent, ArchivePage, Board, Card, CardDetail, ColumnId, ConversationPage, FolderCheck, Idea, Message, SearchHit, Source, StartPlan, Tokens,
 } from '../api/types';
 
 // fixtures/sample/ is synthetic: every build, test, screenshot and the site use it. fixtures/real/
@@ -116,6 +116,22 @@ export function fixtureSource(): Source {
     const by = Date.now() - board.generated_at;
     for (const part of [board, details, archive, ideas, written]) shiftTimes(part, by);
   }
+  /** What the real engine would say about a folder: the ones on the board exist, a new one under `~` can be made. */
+  const exists = (p: string) => p === '~' || allCards().some((c) => c.folder === p && c.folder_state !== 'missing');
+  const folderCheck = (path: string): FolderCheck => {
+    const p = path.trim().replace(/\/+$/, '');
+    if (!p) return { state: 'unusable', creatable: false, note: 'No folder given' };
+    if (exists(p)) return { state: 'ok', creatable: false, note: null };
+    if (p.startsWith('~/')) return { state: 'missing', creatable: true, note: 'Folder does not exist yet; Start will create it' };
+    if (!p.startsWith('/')) return { state: 'unusable', creatable: false, note: 'Give the full path, or start with ~' };
+    return { state: 'missing', creatable: false, note: 'Folder does not exist, and eye only creates folders inside your home folder' };
+  };
+  /** The folder fields of an idea card. */
+  const folderFields = (path: string | null): Pick<Card, 'folder_state' | 'folder_creatable' | 'folder_note'> => {
+    if (!path) return {};
+    const f = folderCheck(path);
+    return { folder_state: f.state, folder_creatable: f.creatable, folder_note: f.note };
+  };
   const agents: Agent[] = [AGENT];
   const nameOf = (id: string | null | undefined) => (agents.find((a) => a.id === id) ?? agents.find((a) => a.default)!).short;
   let listeners: Array<() => void> = [];
@@ -212,6 +228,7 @@ export function fixtureSource(): Source {
         state: input.notes ?? null, state_source: 'idea', next: null, ai_status: null, recap: null, live_status: null, has_prompt: !!input.prompt,
         kind: 'idea', streams: [], outputs: [], output_counts: {}, topics: [], topics_more: 0, resume_cmd: null,
         resumable: false, parent_id: null, child_count: 0, child_done: 0, prompt_count: 0, tokens: null,
+        ...folderFields(input.folder ?? null),
       };
       ideas.ideas.push({ id: n, title: input.title, notes: input.notes ?? '', prompt: input.prompt ?? null, folder: input.folder ?? null, agent: input.agent ?? null, created_at: Date.now(), from_session_id: null, session_id: null, sort: n, archived: false });
       board.columns.find((c) => c.id === 'ideas')?.cards.push(card);
@@ -227,18 +244,29 @@ export function fixtureSource(): Source {
       if (input.title !== undefined) i.title = c.title = input.title.trim();
       if (input.notes !== undefined) { i.notes = input.notes.trim(); c.state = v(input.notes); }
       if (input.prompt !== undefined) { i.prompt = v(input.prompt); c.has_prompt = !!i.prompt; }
-      if (input.folder !== undefined) i.folder = c.folder = v(input.folder);
+      if (input.folder !== undefined) {
+        const fields = folderFields(v(input.folder)); // asked before the card holds the new folder
+        i.folder = c.folder = v(input.folder);
+        delete c.folder_state; delete c.folder_creatable; delete c.folder_note;
+        Object.assign(c, fields);
+      }
       if (input.agent !== undefined) { i.agent = input.agent; c.agent = input.agent; c.agent_name = nameOf(input.agent); }
       changed();
       return delay(structuredClone(c));
     },
-    startIdea: (ideaId, background) => {
+    startIdea: (ideaId, background, _dry, createFolder = false) => {
+      const c = allCards().find((x) => x.id === `idea:${ideaId}`);
+      const missing = c?.folder_state === 'missing';
+      if (missing && !createFolder) return Promise.reject(new Error(`the folder ${c?.folder} does not exist yet`));
+      if (c && c.folder_state && c.folder_state !== 'ok' && !(missing && c.folder_creatable)) return Promise.reject(new Error(c.folder_note ?? 'the folder cannot be used'));
+      if (missing && c) Object.assign(c, { folder_state: 'ok', folder_creatable: false, folder_note: null });
       const plan: StartPlan = {
         dry_run: true, mode: background ? 'bg' : 'iterm', command: `claude  # idea ${ideaId}`,
-        note: `Fixture: would start idea ${ideaId}${background ? ' in the background' : ''}`, session_id: null, job: null,
+        note: `Fixture: would start idea ${ideaId}${background ? ' in the background' : ''}`, session_id: null, job: null, creates_folder: missing,
       };
       return delay(plan);
     },
+    folderCheck: (path) => delay(folderCheck(path)),
     subscribe: (onChange, onState) => {
       listeners.push(onChange);
       onState('fixture');

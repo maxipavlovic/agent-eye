@@ -1000,24 +1000,45 @@ fn an_idea_started_in_codex_is_linked_to_the_session_that_begins_in_its_folder()
         (Value::Null, json!("Codex"))
     );
     let id = idea["idea_id"].as_i64().unwrap();
-    let plan = rt.block_on(call(
+    let start = |body: Value| {
+        rt.block_on(call(
+            &app,
+            "POST",
+            &format!("/api/ideas/{id}/start"),
+            Some(body),
+        ))
+    };
+    // the folder is not there on this machine: a start says so instead of opening a broken terminal
+    let refused = start(json!({"dry_run": true}));
+    assert!(
+        refused["error"]
+            .as_str()
+            .unwrap()
+            .contains("does not exist"),
+        "{refused}"
+    );
+    // in a folder that exists, the same idea plans its command
+    let here = w._tmp.path().to_string_lossy().into_owned();
+    rt.block_on(call(
         &app,
         "POST",
-        &format!("/api/ideas/{id}/start"),
-        Some(json!({"dry_run": true})),
+        &format!("/api/ideas/{id}"),
+        Some(json!({"folder": here})),
     ));
+    let plan = start(json!({"dry_run": true}));
     assert_eq!(
         plan["command"],
-        "cd '/Users/you/code/app' && codex 'Try a jittered backoff instead'"
+        format!("cd '{here}' && codex 'Try a jittered backoff instead'")
     );
     assert!(plan["session_id"].is_null(), "Codex picks the id itself");
-    let bg = rt.block_on(call(
+    let bg = start(json!({"dry_run": true, "background": true}));
+    assert!(bg["error"].as_str().unwrap().contains("no --bg"), "{bg}");
+    rt.block_on(call(
         &app,
         "POST",
-        &format!("/api/ideas/{id}/start"),
-        Some(json!({"dry_run": true, "background": true})),
+        &format!("/api/ideas/{id}"),
+        Some(json!({"folder": "/Users/you/code/app"})),
     ));
-    assert!(bg["error"].as_str().unwrap().contains("no --bg"), "{bg}");
 
     // what a start does before the terminal opens, a minute before E began in that folder
     agent_eye::ideas::record_start(&w.db, id, None).unwrap();

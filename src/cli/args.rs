@@ -97,6 +97,9 @@ pub enum IdeaCmd {
         /// Run in the background
         #[arg(long)]
         bg: bool,
+        /// Make the idea's folder first when it does not exist (without it, a terminal asks)
+        #[arg(long)]
+        create_folder: bool,
         /// Show what would run, start nothing
         #[arg(long)]
         dry_run: bool,

@@ -2,12 +2,16 @@ import { useEffect, useRef } from 'preact/hooks';
 import { signal, useSignal } from '@preact/signals';
 import { Pix } from '../../pixel/Pix';
 import type { Store } from '../../store';
-import type { Card, CardDetail } from '../../api/types';
+import type { Card, CardDetail, FolderCheck } from '../../api/types';
 import { homePath } from '../../format';
 import { ICONS, INK } from './art';
+import { folderHint } from './folder';
 
 /** The idea form: a new idea, or the idea card `edit` (its detail is loaded first); `focus` picks the first field. */
 export const ideaForm = signal<{ edit?: string; focus?: 'prompt' } | null>(null);
+
+/** How long the folder field rests before the typed path is checked. */
+export const FOLDER_CHECK_MS = 300;
 
 /** Folders of the sessions on the board, most recently active first, each once. */
 export function recentFolders(cards: Card[]): string[] {
@@ -42,7 +46,19 @@ function IdeaForm({ store, idea, focus, onClose }: { store: Store; idea?: CardDe
   const folders = recentFolders(store.board.value?.columns.flatMap((c) => c.cards) ?? []);
   const shown = folderChoices(folders, folder.value);
   const picked = homePath(folder.value.trim());
+  const check = useSignal<FolderCheck | null>(null);
+  const hint = folderHint(check.value);
   useEffect(() => { (focus === 'prompt' ? prompt : title).current?.focus(); }, []);
+  // what the typed folder is, once typing pauses; an engine without the check says nothing
+  useEffect(() => {
+    const typed = folder.value.trim();
+    if (!typed) { check.value = null; return; }
+    let live = true;
+    const t = setTimeout(() => {
+      store.folderCheck(typed).then((c) => { if (live) check.value = c; }, () => { if (live) check.value = null; });
+    }, FOLDER_CHECK_MS);
+    return () => { live = false; clearTimeout(t); };
+  }, [folder.value]);
   const submit = async (e: Event) => {
     e.preventDefault();
     if (busy.value) return;
@@ -81,6 +97,7 @@ function IdeaForm({ store, idea, focus, onClose }: { store: Store; idea?: CardDe
           <textarea ref={prompt} name="prompt" rows={3} defaultValue={idea?.prompt ?? ''} placeholder={`What should ${who} do first?`} />
         </label>
         <label>FOLDER<input name="folder" value={folder.value} onInput={(e) => { folder.value = e.currentTarget.value; }} placeholder="~/code/…" autocomplete="off" spellcheck={false} /></label>
+        {hint && <p class="fhint" role="status">{hint}</p>}
         {shown.length > 0 && (
           <div class="fchips" role="group" aria-label="Recent folders">
             {shown.map((f) => (

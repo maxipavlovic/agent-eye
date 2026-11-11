@@ -100,6 +100,21 @@ export interface Card {
   idea_id?: number;
   /** Idea cards only: a start sends a first message (else the agent opens and waits). */
   has_prompt?: boolean;
+  /** Idea cards with a folder: what the folder is now. Older engines leave all three out. */
+  folder_state?: FolderState;
+  /** Idea cards: a missing folder that Start may create. */
+  folder_creatable?: boolean;
+  /** Idea cards: one plain line about the folder, null when it is fine. */
+  folder_note?: string | null;
+}
+
+export type FolderState = 'ok' | 'missing' | 'not_a_folder' | 'unusable';
+
+/** GET /api/folder: what a typed folder is. */
+export interface FolderCheck {
+  state: FolderState;
+  creatable: boolean;
+  note: string | null;
 }
 
 export interface CardDetail extends Card {
@@ -207,6 +222,8 @@ export interface ResumePlan {
 export interface StartPlan extends ResumePlan {
   session_id: string | null;
   job: string | null;
+  /** The folder was missing and the start made it (a dry run: would make it). */
+  creates_folder?: boolean;
 }
 
 /** Where the store gets its data: the live API or a local fixture. */
@@ -229,7 +246,10 @@ export interface Source {
   addIdea(input: IdeaInput): Promise<Card>;
   /** Changes the given fields; an empty string clears notes, prompt or folder. */
   editIdea(ideaId: number, input: Partial<IdeaInput>): Promise<Card>;
-  startIdea(ideaId: number, background: boolean, dryRun: boolean): Promise<StartPlan>;
+  /** `createFolder`: make the idea's folder first when it does not exist. */
+  startIdea(ideaId: number, background: boolean, dryRun: boolean, createFolder?: boolean): Promise<StartPlan>;
+  /** What a typed folder is (read-only). */
+  folderCheck(path: string): Promise<FolderCheck>;
   /** Calls onChange when the data changed; reports connection state. Returns unsubscribe. */
   subscribe(onChange: () => void, onState: (s: Connection) => void): () => void;
 }

@@ -21,13 +21,27 @@ pub(super) struct Env {
 }
 
 pub(super) fn env() -> Env {
+    env_with(|_, _| {})
+}
+
+/// An app that may create idea folders inside `<tmp>/root` (made here).
+pub(super) fn env_rooted() -> Env {
+    env_with(|cfg, tmp| {
+        let root = tmp.join("root");
+        std::fs::create_dir(&root).unwrap();
+        cfg.folder_root = Some(root);
+    })
+}
+
+fn env_with(tune: impl FnOnce(&mut Config, &std::path::Path)) -> Env {
     let tmp = tempfile::tempdir().unwrap();
     let paths = Paths {
         home: tmp.path().join("home"),
     };
     paths.ensure_home().unwrap();
     let db = Db::open(&paths.db_path()).unwrap();
-    let cfg = Config::with_claude_dir(&tmp.path().join("claude"));
+    let mut cfg = Config::with_claude_dir(&tmp.path().join("claude"));
+    tune(&mut cfg, tmp.path());
     let st = new_state(paths, cfg, TOKEN.into(), 7420);
     Env {
         _tmp: tmp,

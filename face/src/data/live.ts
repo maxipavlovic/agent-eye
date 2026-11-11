@@ -1,6 +1,6 @@
 import type {
   Agent, ArchivePage, Board, Card, CardDetail, Connection, ConversationPage, Idea, IdeaInput, MoveTarget, ResumePlan,
-  SearchHit, Source, StartPlan,
+  FolderCheck, SearchHit, Source, StartPlan,
 } from '../api/types';
 
 const UNAUTHORIZED = 'Not signed in: open the link that `eye board` prints.';
@@ -53,8 +53,9 @@ export function liveSource(): Source {
       call<ResumePlan>(`/api/cards/${enc(id)}/resume`, { method: 'POST', body: fork ? { dry_run: dryRun, fork: true } : { dry_run: dryRun } }),
     addIdea: (input: IdeaInput) => call<Card>('/api/ideas', { method: 'POST', body: input }),
     editIdea: (ideaId, input) => call<Card>(`/api/ideas/${ideaId}`, { method: 'POST', body: input }),
-    startIdea: (ideaId, background, dryRun) =>
-      call<StartPlan>(`/api/ideas/${ideaId}/start`, { method: 'POST', body: { background, dry_run: dryRun } }),
+    startIdea: (ideaId, background, dryRun, createFolder = false) =>
+      call<StartPlan>(`/api/ideas/${ideaId}/start`, { method: 'POST', body: createFolder ? { background, dry_run: dryRun, create_folder: true } : { background, dry_run: dryRun } }),
+    folderCheck: (path) => call<FolderCheck>(`/api/folder?path=${enc(path)}`),
     subscribe(onChange, onState) {
       let errors = 0;
       const set = (s: Connection) => onState(s);

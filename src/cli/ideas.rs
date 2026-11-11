@@ -2,9 +2,11 @@
 
 use super::args::IdeaCmd;
 use super::Global;
-use crate::ideas::{self, Edit, NewIdea};
+use crate::folder::FolderMissing;
+use crate::ideas::{self, Edit, NewIdea, StartOpts};
 use crate::util::home_rel;
 use anyhow::{Context, Result};
+use std::io::{BufRead, IsTerminal, Write};
 use std::path::PathBuf;
 
 fn canonical(d: &std::path::Path) -> String {
@@ -12,6 +14,15 @@ fn canonical(d: &std::path::Path) -> String {
         .unwrap_or_else(|_| d.to_path_buf())
         .to_string_lossy()
         .into_owned()
+}
+
+/// Ask a yes/no question on the terminal; anything but y or yes is no.
+fn confirm(question: &str) -> Result<bool> {
+    eprint!("{question}");
+    std::io::stderr().flush()?;
+    let mut line = String::new();
+    std::io::stdin().lock().read_line(&mut line)?;
+    Ok(matches!(line.trim().to_lowercase().as_str(), "y" | "yes"))
 }
 
 pub fn run(g: &Global, c: IdeaCmd) -> Result<()> {
@@ -105,9 +116,42 @@ pub fn run(g: &Global, c: IdeaCmd) -> Result<()> {
                 );
             }
         }
-        IdeaCmd::Start { id, bg, dry_run } => {
-            let r = ideas::start(&env.db, &env.cfg, &env.paths, id, bg, dry_run, true)?;
+        IdeaCmd::Start {
+            id,
+            bg,
+            create_folder,
+            dry_run,
+        } => {
+            let mut opts = StartOpts {
+                background: bg,
+                dry_run,
+                wait_for_job: true,
+                create_folder,
+            };
+            let first = ideas::start(&env.db, &env.cfg, &env.paths, id, &opts);
+            let r = match first {
+                Err(e) => match e.downcast_ref::<FolderMissing>() {
+                    Some(FolderMissing(dir)) if !dry_run && std::io::stdin().is_terminal() => {
+                        if !confirm(&format!("Folder {dir} does not exist. Create it? [y/N] "))? {
+                            anyhow::bail!("not started: the folder {dir} does not exist");
+                        }
+                        opts.create_folder = true;
+                        ideas::start(&env.db, &env.cfg, &env.paths, id, &opts)?
+                    }
+                    Some(FolderMissing(dir)) => anyhow::bail!(
+                        "the folder {dir} does not exist yet; add --create-folder to make it"
+                    ),
+                    None => return Err(e),
+                },
+                Ok(r) => r,
+            };
+            if r.creates_folder && !r.dry_run {
+                println!("created the folder");
+            }
             if r.dry_run {
+                if r.creates_folder {
+                    println!("would create the folder first");
+                }
                 println!("{}", r.command);
                 if let Some(a) = &r.applescript {
                     println!("--- osascript ---\n{a}");

@@ -6,6 +6,7 @@ import { projectLabel, tagOf } from './model';
 import { cardProps } from './CardMenu';
 import { ARROW, BANG, INK_CC } from './art';
 import { KIND, type BoardCtx, type Kind } from './columns';
+import { folderMissing, startButton } from './folder';
 import { Hl } from './highlight';
 import { Sigil, Tok } from './pieces';
 
@@ -49,11 +50,13 @@ export function CardView({ c, store, i, kind, tag }: { c: Card; store: Store; i:
     );
   }
   if (kind === 'idea') {
+    const start = startButton(c);
     return (
       <article {...base}>
         <div class="top"><Sigil id={c.id} /><h3>{c.title}</h3></div>
+        {folderMissing(c) && <p class="fmark" title={c.folder_note ?? undefined}>The folder is new</p>}
         <div class="acts">
-          <button class="btn sm" onClick={(e) => { e.stopPropagation(); void store.startIdea(c, false); }}>START</button>
+          <button class="btn sm" disabled={!!start.blocked} title={start.blocked ?? undefined} onClick={(e) => { e.stopPropagation(); void store.startIdea(c, false); }}>{start.label}</button>
         </div>
       </article>
     );

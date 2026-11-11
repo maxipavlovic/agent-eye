@@ -23,7 +23,7 @@ pub(super) async fn api_card(State(st): State<Shared>, Path(id): Path<String>) -
             .ok()
             .and_then(|n| ideas::get(&db, n).ok().flatten())
             .ok_or_else(|| ApiError::not_found("no such idea"))?;
-        let mut v = idea_card(&i, &st.agents);
+        let mut v = idea_card(&i, &st.agents, &st.cfg);
         v["notes"] = json!(i.notes);
         v["prompt"] = json!(i.prompt);
         v["prompts"] = json!([]);

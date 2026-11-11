@@ -290,3 +290,77 @@ fn resume_fork_and_show_conversation() {
     assert!(text.contains("you") && text.contains("claude"));
     assert!(text.starts_with("(1 earlier message)"), "{text}");
 }
+
+#[test]
+fn an_idea_in_a_folder_that_cannot_exist_is_refused_with_a_reason() {
+    let e = Env::new();
+    let gone = e
+        .tmp
+        .path()
+        .join("nowhere/yet")
+        .to_string_lossy()
+        .to_string();
+    assert!(e
+        .eye(&["idea", "add", "Lost", "--dir", &gone])
+        .output()
+        .unwrap()
+        .status
+        .success());
+    // the folder is outside the home folder, so a flag cannot make it either
+    for args in [
+        &["idea", "start", "1", "--dry-run"][..],
+        &["idea", "start", "1", "--dry-run", "--create-folder"][..],
+    ] {
+        let out = e.eye(args).output().unwrap();
+        assert!(!out.status.success());
+        let err = String::from_utf8_lossy(&out.stderr);
+        assert!(err.contains("does not exist"), "{err}");
+    }
+    assert!(!e.tmp.path().join("nowhere").exists());
+}
+
+#[test]
+fn picking_an_idea_makes_its_folder_only_when_told_to() {
+    use agent_eye::config::Config;
+    use agent_eye::db::Db;
+    use agent_eye::folder::FolderMissing;
+    use agent_eye::ideas::{self, NewIdea};
+    use agent_eye::paths::Paths;
+    use agent_eye::pick::{self, LaunchOpts};
+    let e = Env::new();
+    let root = e.tmp.path().join("root");
+    std::fs::create_dir(&root).unwrap();
+    let mut cfg = Config::with_claude_dir(&e.tmp.path().join("claude"));
+    cfg.folder_root = Some(root.clone());
+    let paths = Paths {
+        home: e.tmp.path().join("home"),
+    };
+    let db = Db::open_memory().unwrap();
+    let dir = root.join("fresh/start");
+    let folder = dir.to_string_lossy().to_string();
+    ideas::add(
+        &db,
+        &NewIdea {
+            title: "Fresh start",
+            folder: Some(&folder),
+            ..NewIdea::default()
+        },
+    )
+    .unwrap();
+    let agents = agent_eye::agents::enabled(&cfg);
+    let idx = pick::Index::load(&db, &cfg, 1_800_000_000_000).unwrap();
+    let row = idx.rows.iter().find(|r| r.id == "idea:1").unwrap();
+    let err = pick::prepare(&db, &paths, &agents, &cfg, row, LaunchOpts::default()).unwrap_err();
+    assert!(err.downcast_ref::<FolderMissing>().is_some(), "{err:#}");
+    assert!(!dir.exists());
+    assert!(ideas::started_session(&db, row.idea.as_ref().unwrap())
+        .unwrap()
+        .is_none());
+    let how = LaunchOpts {
+        create_folder: true,
+        ..LaunchOpts::default()
+    };
+    let l = pick::prepare(&db, &paths, &agents, &cfg, row, how).unwrap();
+    assert!(dir.is_dir());
+    assert_eq!(l.cwd, dir);
+}

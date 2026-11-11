@@ -345,3 +345,70 @@ describe('the idea form', () => {
     expect($('.modal h2')!.textContent).toContain('EDIT IDEA');
   });
 });
+
+describe('an idea whose folder does not exist', () => {
+  const buttons = (root: HTMLElement) => [...root.querySelectorAll<HTMLButtonElement>('.page .acts .btn')];
+
+  it('is marked on its card and offers to create the folder and start', async () => {
+    const startIdea = vi.fn(fixtureSource().startIdea);
+    const { root, $, $$ } = await mount({ ...fixtureSource(), startIdea });
+    expect(card(root, 'ideas', 'Migration guide').querySelector('.fmark')).not.toBeNull();
+    expect(card(root, 'ideas', 'Retry budget').querySelector('.fmark')).toBeNull();
+    expect(card(root, 'ideas', 'Retry budget').querySelector('.btn')!.textContent).toBe('START');
+    card(root, 'ideas', 'Migration guide').click();
+    await vi.waitFor(() => expect($$('.page .acts .btn').length).toBeGreaterThan(0));
+    const start = buttons(root)[0]!;
+    expect(start.textContent).toBe('CREATE FOLDER & START');
+    expect($('.page .fnote')!.textContent).toContain('Start will create it');
+    start.click();
+    await vi.waitFor(() => expect(startIdea).toHaveBeenCalled());
+    expect(startIdea.mock.calls[0]).toEqual([4, false, false, true]);
+  });
+
+  it('cannot be started when the folder cannot be made, and says why', async () => {
+    const { root, store, $$ } = await mount();
+    await store.editIdea(2, { folder: '/nowhere/at/all' });
+    card(root, 'ideas', 'Retry budget').click();
+    await vi.waitFor(() => expect($$('.page .acts .btn').length).toBeGreaterThan(0));
+    await vi.waitFor(() => expect(buttons(root)[0]!.disabled).toBe(true));
+    expect(buttons(root)[0]!.title).toContain('inside your home folder');
+    expect(root.querySelector('.page .fnote')!.textContent).toContain('inside your home folder');
+  });
+
+  it('is told about under the folder field while typing, and can still be saved', async () => {
+    const addIdea = vi.fn(fixtureSource().addIdea);
+    const { $ } = await mount({ ...fixtureSource(), addIdea });
+    $('.btn.plus')!.click();
+    await vi.waitFor(() => expect($('form.modal')).not.toBeNull());
+    const type = (v: string) => {
+      const f = $<HTMLInputElement>('.modal input[name="folder"]')!;
+      f.value = v;
+      f.dispatchEvent(new Event('input', { bubbles: true }));
+    };
+    expect($('.modal .fhint')).toBeNull();
+    type('~/brand/new');
+    await vi.waitFor(() => expect($('.modal .fhint')!.textContent).toBe('Folder does not exist yet; Start will create it'));
+    type('/etc/none');
+    await vi.waitFor(() => expect($('.modal .fhint')!.textContent).toContain('inside your home folder'));
+    type('~/code/storefront');
+    await vi.waitFor(() => expect($('.modal .fhint')).toBeNull());
+    type('~/brand/new');
+    $<HTMLInputElement>('.modal input[name="title"]')!.value = 'Saved anyway';
+    $('form.modal')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => expect(addIdea).toHaveBeenCalled());
+    expect(addIdea.mock.calls[0]![0]).toMatchObject({ title: 'Saved anyway', folder: '~/brand/new' });
+    await vi.waitFor(() => expect($('form.modal')).toBeNull());
+  });
+
+  it('shows no hint when the engine cannot check folders', async () => {
+    const folderCheck = vi.fn(async () => { throw new Error('HTTP 404'); });
+    const { $ } = await mount({ ...fixtureSource(), folderCheck });
+    $('.btn.plus')!.click();
+    await vi.waitFor(() => expect($('form.modal')).not.toBeNull());
+    const f = $<HTMLInputElement>('.modal input[name="folder"]')!;
+    f.value = '~/anything';
+    f.dispatchEvent(new Event('input', { bubbles: true }));
+    await vi.waitFor(() => expect(folderCheck).toHaveBeenCalled());
+    expect($('.modal .fhint')).toBeNull();
+  });
+});

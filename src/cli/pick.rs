@@ -2,13 +2,14 @@
 
 use super::args::PickArgs;
 use super::Global;
-use crate::pick::{self, Row};
+use crate::folder::FolderMissing;
+use crate::pick::{self, LaunchOpts, Row};
 use crate::scan;
 use crate::tui;
 use crate::util::now_ms;
 use anyhow::{Context, Result};
 
-fn launch(env: &super::Env, row: &Row, print: bool, fork: bool) -> Result<()> {
+fn launch(env: &super::Env, row: &Row, print: bool, how: LaunchOpts) -> Result<()> {
     if row
         .session
         .as_ref()
@@ -16,7 +17,15 @@ fn launch(env: &super::Env, row: &Row, print: bool, fork: bool) -> Result<()> {
     {
         eprintln!("eye: warning: this session is open in another terminal");
     }
-    let l = pick::prepare(&env.db, &env.paths, &env.agents, row, fork)?;
+    let l = pick::prepare(&env.db, &env.paths, &env.agents, &env.cfg, row, how).map_err(
+        |e| match (e.downcast_ref::<FolderMissing>(), &row.idea) {
+            (Some(m), Some(i)) => anyhow::anyhow!(
+                "{m}; start it with `eye idea start {} --create-folder` to make it",
+                i.id
+            ),
+            _ => e,
+        },
+    )?;
     if print {
         println!("{}", l.command);
         Ok(())
@@ -39,7 +48,15 @@ pub fn run(g: &Global, a: &PickArgs) -> Result<()> {
             let Some(&i) = res.first() else {
                 anyhow::bail!("no session matches");
             };
-            return launch(&env, &idx.rows[i], a.print, a.fork);
+            return launch(
+                &env,
+                &idx.rows[i],
+                a.print,
+                LaunchOpts {
+                    fork: a.fork,
+                    create_folder: false,
+                },
+            );
         }
         if res.is_empty() {
             println!("no sessions match");
@@ -60,6 +77,7 @@ pub fn run(g: &Global, a: &PickArgs) -> Result<()> {
     app.paths = Some(paths.clone());
     app.user = cfg.user.clone();
     app.agents = agents.clone();
+    app.folder_root = cfg.folder_root();
     app.all = a.all;
     if a.all {
         app.research();
@@ -82,7 +100,16 @@ pub fn run(g: &Global, a: &PickArgs) -> Result<()> {
                 db: app.db,
                 agents,
             };
-            launch(&env, &row, a.print, fork)
+            // the picker asked before it let an idea through whose folder is missing
+            launch(
+                &env,
+                &row,
+                a.print,
+                LaunchOpts {
+                    fork,
+                    create_folder: true,
+                },
+            )
         }
     }
 }

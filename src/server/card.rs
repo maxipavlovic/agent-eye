@@ -2,8 +2,9 @@
 
 use crate::agents::{self, Agents};
 use crate::columns;
-use crate::config::UserCfg;
+use crate::config::{Config, UserCfg};
 use crate::db::Db;
+use crate::folder::{self, FolderState};
 use crate::model::{Column, Idea, Output, Session, Stream};
 use crate::util::{head_chars, home_rel};
 use anyhow::Result;
@@ -169,8 +170,12 @@ pub fn card_json(
     })
 }
 
-pub(super) fn idea_card(i: &Idea, agents: &Agents) -> Value {
-    json!({
+pub(super) fn idea_card(i: &Idea, agents: &Agents, cfg: &Config) -> Value {
+    let folder = i
+        .folder
+        .as_deref()
+        .map(|f| folder::classify(cfg.folder_root().as_deref(), f));
+    let mut card = json!({
         "id": format!("idea:{}", i.id),
         "idea_id": i.id,
         "agent": i.agent,
@@ -185,7 +190,13 @@ pub(super) fn idea_card(i: &Idea, agents: &Agents) -> Value {
         "topics_more": 0, "child_count": 0, "child_done": 0, "prompt_count": 0,
         "resumable": false, "resume_cmd": null, "branch": null, "repo": null,
         "live_status": null, "parent_id": null, "from_session_id": i.from_session_id, "tokens": null,
-    })
+    });
+    if let Some(f) = folder {
+        card["folder_state"] = json!(f.code());
+        card["folder_creatable"] = json!(f == FolderState::Missing { creatable: true });
+        card["folder_note"] = json!(f.note());
+    }
+    card
 }
 
 pub(super) fn load_card(db: &Db, s: &Session, now: i64, cx: CardCtx) -> Result<Value> {

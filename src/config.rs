@@ -67,6 +67,9 @@ pub struct Config {
     pub outputs: OutputsCfg,
     pub hide: HideCfg,
     pub backup: BackupCfg,
+    /// The folder eye may create idea folders inside; not set: the account's home folder.
+    #[serde(skip)]
+    pub folder_root: Option<PathBuf>,
 }
 
 /// Which coding agents eye follows, and where each keeps its files.
@@ -286,6 +289,13 @@ impl Config {
             .enabled
             .clone()
             .unwrap_or_else(|| vec![crate::agents::LEGACY_ID.to_string()])
+    }
+
+    /// The folder eye may create idea folders inside.
+    pub fn folder_root(&self) -> Option<PathBuf> {
+        self.folder_root
+            .clone()
+            .or_else(crate::platform::account_home)
     }
 
     /// The settings of one agent (the defaults when it has no table).

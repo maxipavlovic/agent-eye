@@ -1,6 +1,7 @@
 use crate::agents::{self, AgentRef, Agents, Invocation, StartRequest};
 use crate::config::Config;
 use crate::db::{meta_set, Db};
+use crate::folder::{self, FolderMissing, FolderState};
 use crate::model::Idea;
 use crate::paths::Paths;
 use crate::resume;
@@ -259,26 +260,50 @@ pub struct Started {
     /// What the user should be told: what the agent printed for a background start, what became
     /// of the command (a tab opened, copied) for a foreground one.
     pub output: String,
+    /// The folder was missing and the start made it (a dry run: would make it).
+    pub creates_folder: bool,
+}
+
+/// How to start an idea.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct StartOpts {
+    pub background: bool,
+    /// Report what would run; start nothing and create nothing.
+    pub dry_run: bool,
+    /// Background start: wait a few seconds for the session to show up.
+    pub wait_for_job: bool,
+    /// Make the idea's folder when it does not exist.
+    pub create_folder: bool,
+}
+
+/// Check that the idea's folder is there, or may be made (and `create` says to). Returns whether
+/// it needs making.
+pub fn check_folder(cfg: &Config, dir: &str, create: bool) -> Result<bool> {
+    match folder::classify(cfg.folder_root().as_deref(), dir) {
+        FolderState::Exists => Ok(false),
+        FolderState::Missing { creatable: true } if create => Ok(true),
+        FolderState::Missing { creatable: true } => Err(FolderMissing(dir.to_string()).into()),
+        other => anyhow::bail!("{}", other.note().unwrap_or_default()),
+    }
 }
 
 /// Start an idea. Foreground: pick the session id, store it on the idea, open an iTerm tab or a
 /// terminal window (or copy the command). Background: run the agent's background command and link
-/// the idea through its job.
-pub fn start(
-    db: &Db,
-    cfg: &Config,
-    paths: &Paths,
-    id: i64,
-    background: bool,
-    dry_run: bool,
-    wait_for_job: bool,
-) -> Result<Started> {
+/// the idea through its job. A folder that does not exist is made only when `create_folder` is set.
+pub fn start(db: &Db, cfg: &Config, paths: &Paths, id: i64, opts: &StartOpts) -> Result<Started> {
+    let StartOpts {
+        background,
+        dry_run,
+        wait_for_job,
+        create_folder,
+    } = *opts;
     let idea = get(db, id)?.context("no such idea")?;
     if let Some(s) = started_session(db, &idea)?.filter(|_| !dry_run) {
         anyhow::bail!("this idea was already started (session {s})");
     }
     let agents = agents::enabled(cfg);
     let plan = plan_start(&agents, &idea, background)?;
+    let creates_folder = check_folder(cfg, &plan.dir, create_folder)?;
     let command = plan.command();
     let target = if background {
         resume::Target::copy()
@@ -296,9 +321,13 @@ pub fn start(
         session_id: plan.session_id.clone(),
         job: None,
         output: String::new(),
+        creates_folder,
     };
     if dry_run {
         return Ok(out);
+    }
+    if creates_folder {
+        folder::create(cfg.folder_root().as_deref(), &plan.dir)?;
     }
     if background {
         // A foreground start that never got a session gives way, so the job can link.
@@ -502,6 +531,9 @@ fn link_foreground_starts(tx: &Connection, agents: &Agents) -> Result<()> {
 }
 
 #[cfg(test)]
+mod folder_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::agents::claude::Claude;
@@ -602,21 +634,27 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let cfg = Config::with_claude_dir(&tmp.path().join("c"));
         let db = Db::open_memory().unwrap();
+        let folder = tmp.path().to_string_lossy().into_owned();
         let i = add(
             &db,
             &NewIdea {
                 prompt: Some("go"),
-                ..new("Try it", Some("/tmp/x"))
+                ..new("Try it", Some(&folder))
             },
         )
         .unwrap();
         let paths = Paths {
             home: tmp.path().join("eye"),
         };
-        let st = start(&db, &cfg, &paths, i.id, false, true, false).unwrap();
+        let dry = |background| StartOpts {
+            background,
+            dry_run: true,
+            ..StartOpts::default()
+        };
+        let st = start(&db, &cfg, &paths, i.id, &dry(false)).unwrap();
         assert!(st.dry_run && st.command.contains("--session-id"));
         assert!(get(&db, i.id).unwrap().unwrap().session_id.is_none());
-        let bg = start(&db, &cfg, &paths, i.id, true, true, false).unwrap();
+        let bg = start(&db, &cfg, &paths, i.id, &dry(true)).unwrap();
         assert!(bg.command.contains("claude --bg") && bg.session_id.is_none());
     }
 

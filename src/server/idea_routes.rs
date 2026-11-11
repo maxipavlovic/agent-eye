@@ -4,10 +4,11 @@ use super::agent_routes::checked_agent;
 use super::api::{blocking, open_db, ApiError, ApiResult};
 use super::card::idea_card;
 use super::Shared;
+use crate::folder::{self, FolderMissing, FolderState};
 use crate::hide;
 use crate::ideas;
 use crate::model::Idea;
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::Json;
 use serde::Deserialize;
 use serde_json::json;
@@ -47,7 +48,7 @@ pub(super) async fn api_idea_add(State(st): State<Shared>, Json(b): Json<IdeaBod
         },
     )
     .map_err(|e| ApiError::bad(format!("{e:#}")))?;
-    Ok(Json(idea_card(&idea, &st.agents)))
+    Ok(Json(idea_card(&idea, &st.agents, &st.cfg)))
 }
 
 #[derive(Deserialize)]
@@ -75,7 +76,7 @@ pub(super) async fn api_idea_edit(
         agent: b.agent,
     };
     let idea = ideas::edit(&db, id, &e).map_err(|e| ApiError::bad(format!("{e:#}")))?;
-    Ok(Json(idea_card(&idea, &st.agents)))
+    Ok(Json(idea_card(&idea, &st.agents, &st.cfg)))
 }
 
 pub(super) fn expand_tilde(p: &str) -> String {
@@ -89,6 +90,8 @@ pub(super) fn expand_tilde(p: &str) -> String {
 pub(super) struct StartBody {
     background: bool,
     dry_run: Option<bool>,
+    /// Make the idea's folder when it does not exist.
+    create_folder: bool,
 }
 
 pub(super) async fn api_idea_start(
@@ -101,18 +104,54 @@ pub(super) async fn api_idea_start(
     let idea = ideas::get(&db, id)?.ok_or_else(|| ApiError::not_found("no such idea"))?;
     let dry = b.dry_run.unwrap_or(true);
     // a start runs the agent (or osascript, or a clipboard tool) and can take a while
-    let (idea_id, background) = (idea.id, b.background);
+    let idea_id = idea.id;
+    let opts = ideas::StartOpts {
+        background: b.background,
+        dry_run: dry,
+        wait_for_job: false,
+        create_folder: b.create_folder,
+    };
     let r = blocking(move || {
-        ideas::start(&db, &st.cfg, &st.paths, idea_id, background, dry, false)
-            .map_err(|e| ApiError::bad(format!("{e:#}")))
+        ideas::start(&db, &st.cfg, &st.paths, idea_id, &opts).map_err(|e| {
+            if e.downcast_ref::<FolderMissing>().is_some() {
+                ApiError::conflict("folder_missing", format!("{e:#}"))
+            } else {
+                ApiError::bad(format!("{e:#}"))
+            }
+        })
     })
     .await?;
     Ok(Json(json!({
         "dry_run": r.dry_run, "mode": r.mode.as_str(), "terminal": r.terminal, "command": r.command,
         "applescript": r.applescript, "session_id": r.session_id,
-        "job": r.job, "note": r.output,
+        "job": r.job, "note": r.output, "creates_folder": r.creates_folder,
     })))
 }
+
+#[derive(Deserialize)]
+pub(super) struct FolderQ {
+    path: String,
+}
+
+/// What a typed folder is, for the idea form: `state` (`ok`, `missing`, `not_a_folder`,
+/// `unusable`), `creatable` and a one-line `note`.
+pub(super) async fn api_folder(State(st): State<Shared>, Query(q): Query<FolderQ>) -> ApiResult {
+    let root = st.cfg.folder_root();
+    let state = blocking(move || Ok(folder::classify(root.as_deref(), &q.path))).await?;
+    Ok(Json(folder_json(&state)))
+}
+
+/// The folder fields of an answer.
+pub(super) fn folder_json(state: &FolderState) -> serde_json::Value {
+    json!({
+        "state": state.code(),
+        "creatable": matches!(state, FolderState::Missing { creatable: true }),
+        "note": state.note(),
+    })
+}
+
+#[cfg(test)]
+mod folder_tests;
 
 #[cfg(test)]
 mod tests {
@@ -188,6 +227,11 @@ mod tests {
                 .0,
             StatusCode::NOT_FOUND
         );
+        call(
+            &e,
+            req("POST", "/api/ideas/1", Some(json!({"folder": "/tmp"}))),
+        )
+        .await;
         let (st, p) = call(
             &e,
             req(

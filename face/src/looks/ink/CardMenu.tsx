@@ -3,6 +3,7 @@ import { signal } from '@preact/signals';
 import type { Store } from '../../store';
 import type { Card, ColumnId, MoveTarget } from '../../api/types';
 import { copy } from './copy';
+import { startButton } from './folder';
 import { ideaForm } from './IdeaForm';
 
 interface Open {
@@ -82,7 +83,8 @@ function rows(c: Card, store: Store): Row[] {
   const open: Row = { label: 'OPEN DETAILS', run: go(() => store.open(c.id)) };
   if (c.kind === 'idea') {
     const edit: Row = { label: 'EDIT', run: go(() => { store.open(c.id); ideaForm.value = { edit: c.id }; }) };
-    return [{ label: 'START', run: go(() => { void store.startIdea(c, false); }) }, edit, open];
+    const start = startButton(c);
+    return [...(start.blocked ? [] : [{ label: start.label, run: go(() => { void store.startIdea(c, false); }) }]), edit, open];
   }
   const out: Row[] = [];
   if (c.column !== 'done') {

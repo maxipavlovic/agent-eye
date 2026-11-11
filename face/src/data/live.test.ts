@@ -51,6 +51,15 @@ describe('liveSource requests', () => {
     expect(JSON.parse(hinit.body)).toEqual({ hidden: true });
     await liveSource().startIdea(4, true, false);
     expect(JSON.parse(f.mock.calls[2]![1].body)).toEqual({ background: true, dry_run: false });
+    await liveSource().startIdea(4, false, false, true);
+    expect(JSON.parse(f.mock.calls[3]![1].body)).toEqual({ background: false, dry_run: false, create_folder: true });
+  });
+
+  it('asks the engine what a typed folder is', async () => {
+    const f = vi.fn().mockResolvedValue(json(200, { state: 'missing', creatable: true, note: 'x' }));
+    vi.stubGlobal('fetch', f);
+    expect(await liveSource().folderCheck('~/a b&c')).toEqual({ state: 'missing', creatable: true, note: 'x' });
+    expect(f.mock.calls[0]![0]).toBe('/api/folder?path=~%2Fa%20b%26c');
   });
 
   it('asks for conversation pages and forks through the resume body', async () => {

@@ -26,7 +26,7 @@ The package and binary are `agent-eye`; `eye` is its alias, and the examples use
 | Ctrl-U / Ctrl-W | clear the query / delete a word |
 | Esc, Ctrl-C | quit, prints nothing |
 
-Enter on a session leaves the screen and runs the session's agent in the session's folder (for Claude Code `claude --resume <id>`), replacing eye in this terminal. With `--print` it writes the shell line (`cd '<dir>' && claude --resume <id>`) to stdout instead. The folder and every argument are quoted, and an id that is not plain letters, digits, `-`, `_` or `.` (or starts with `-` or `.`) is refused, and so is a folder with a control character in its name. Starting an idea records the start, as `eye idea start` does, and sends the idea's prompt (never its notes); an idea without a prompt opens the agent waiting for you. Ctrl-F leaves the same way with the agent's fork command (or prints that line with `--print`). A session that is open in another terminal asks first: Enter again resumes anyway, Esc cancels.
+Enter on a session leaves the screen and runs the session's agent in the session's folder (for Claude Code `claude --resume <id>`), replacing eye in this terminal. With `--print` it writes the shell line (`cd '<dir>' && claude --resume <id>`) to stdout instead. The folder and every argument are quoted, and an id that is not plain letters, digits, `-`, `_` or `.` (or starts with `-` or `.`) is refused, and so is a folder with a control character in its name. Starting an idea records the start, as `eye idea start` does, and sends the idea's prompt (never its notes); an idea without a prompt opens the agent waiting for you. An idea whose folder does not exist shows `+` before its project in the list and a line in the preview; Enter asks first (Enter again creates the folder and starts, Esc cancels). Eye creates folders only inside your home folder; for any other missing folder, or a file in the way, Enter says why and starts nothing. Ctrl-F leaves the same way with the agent's fork command (or prints that line with `--print`). A session that is open in another terminal asks first: Enter again resumes anyway, Esc cancels.
 
 ## Shell key
 
@@ -46,6 +46,7 @@ Ctrl-G then opens the picker with the current command line as the start query. T
 - `eye pick --filter "words" --first --print` prints the first hit's command; without `--print` it runs it.
 - `eye pick --filter "words" --first --fork [--print]` forks the first hit instead.
 - `eye show <id> --conversation [-n 10]` prints the last messages of a session (`--json` for the API shape); `eye resume <id> --fork` prints the fork command (and opens it like `eye resume`; add `--dry-run` to only print).
+- `eye idea start <id>` on an idea whose folder does not exist asks `Folder <path> does not exist. Create it? [y/N]` in a terminal; `--create-folder` makes it without asking (for scripts), and without a terminal and without the flag it stops with a message that names the flag. `--dry-run` creates nothing.
 - `eye idea add` and `eye idea edit` take `--agent <id>` to start an idea in a particular agent (default: the first enabled one).
 - Without a terminal, `eye` prints the list like `eye ls`.
 
