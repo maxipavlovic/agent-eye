@@ -15,6 +15,7 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 - `eye ls` text rows end with the activity markers (such as `bg` and `↻`) after the `[column]` part, as the picker shows them; a script that matches the end of the line should match the `[column]` instead. `--json` is unchanged apart from the new fields.
 - A small `RC` mark on sessions with Claude Code's Remote Control on, and a link to open them in the browser in the panel.
 - API: cards have `activity`, `background`, `loops` and `remote_url` (see `docs/api.md`). Database schema 10 adds four columns; older versions of eye ignore them.
+- Days worked: the panel's WHERE section shows `WORKED ON  6 days over 12 · 7 h 40 m active · last today 14:20` under STARTED, with a strip of the days (the last 60 when the span is longer). The picker preview and `eye show` print `worked 6 days · 7 h 40 m · last today 14:20`. Active time is the gaps between messages of up to 15 minutes; hours are kept in UTC and turned into local days when shown. Sessions eye read before this are counted in the background, a few per daemon tick, newest first, from their timestamps only (the transcript, or eye's archive copy when it is gone); nothing is read again and `eye scan` counts them all at once. The detail card has `worked` (see `docs/api.md`). Database schema 12 adds two tables; older versions of eye ignore them.
 
 ## 0.1.1 - 2026-11-10
 

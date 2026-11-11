@@ -58,3 +58,5 @@ pub mod summarize;
 pub mod tui;
 /// Small helpers.
 pub mod util;
+/// The days a session was worked on.
+pub mod worked;

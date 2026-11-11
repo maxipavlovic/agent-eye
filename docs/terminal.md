@@ -8,6 +8,7 @@ The package and binary are `agent-eye`; `eye` is its alias, and the examples use
 - Empty query: Needs you, Running, Waiting on others, Ideas, Paused, Done. Hidden sessions and the archive are left out.
 - Each row: status mark (red ● needs you, green ▶ running, blue ◷ waiting, ✦ idea, dim ‖ paused, dim ✓ done), title, project (last folder), age.
 - A session that runs something on its own has a short mark after its title: `bg` (`bg 2` for several background tasks), `↻` for a loop, `RC` when remote control is on. The preview names them (`Running background: npm run dev · 4 min`, `Running ↻ every 10 min · next 14:20`, `Remote control on <link>`), and `eye ls` and `eye show` print the same.
+- The preview and `eye show` have one line for the days a session was worked on: `worked 6 days · 7 h 40 m · last today 14:20` (active time counts gaps between messages of up to 15 minutes). It is missing until the daemon, or `eye scan`, has counted a session that eye read before it kept this.
 - The preview (right when wide, below when narrow) shows state, next step and who acts (the label says who, so the line does not repeat its owner: `Next (you) review the PR`), topics, outputs, sub-agents, tokens used ("Tokens 2.3M (sub-agents 410k)") and the resume command. The preview and the conversation view name the session's agent ("Claude") where they refer to it.
 - A rescan (about 20-40 ms) runs before the screen opens, so results are fresh without the daemon.
 

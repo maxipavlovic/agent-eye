@@ -8,6 +8,7 @@ use super::super::outputs::{
 };
 use super::super::{Delta, ParseOpts, PROMPTS_CAP, REPLIES_CAP};
 use super::signals::Tracker;
+use super::work::work_event;
 use crate::model::Tokens;
 use crate::util::{head_chars, iso_to_ms, tail_chars, trim_front_bytes};
 use anyhow::{Context, Result};
@@ -163,7 +164,7 @@ fn split_carry(carry: Option<&Value>) -> (Vec<(String, Pending)>, Option<&Value>
 /// The type of lines that start with `{"type":"..."` (attachments, titles, api-request, ...).
 /// user/assistant/system lines start with other keys (the type sits after the message), so
 /// they return `None` and are parsed.
-fn line_type(line: &[u8]) -> Option<&str> {
+pub(super) fn line_type(line: &[u8]) -> Option<&str> {
     let rest = line.strip_prefix(b"{\"type\":\"")?;
     let end = rest.iter().take(64).position(|&b| b == b'"')?;
     std::str::from_utf8(&rest[..end]).ok()
@@ -213,6 +214,9 @@ fn process(
     if let Some(t) = ts {
         d.first_ts = Some(d.first_ts.map_or(t, |x| x.min(t)));
         d.last_ts = Some(d.last_ts.map_or(t, |x| x.max(t)));
+    }
+    if let Some(e) = ts.and_then(|t| work_event(v, ty, t)) {
+        d.events.push(e);
     }
     let ts = ts.unwrap_or(0);
     if d.session_id.is_none() {

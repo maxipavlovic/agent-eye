@@ -59,6 +59,13 @@ pub trait Agent: Send + Sync + std::fmt::Debug {
     /// It may go on from the marker of the last read or, when it cannot (the session was
     /// rewritten, the marker means nothing any more), read everything and set `Delta::replaces`.
     fn parse_transcript(&self, transcript: &Transcript, opts: &ParseOpts) -> Result<Delta>;
+    /// The time of every message of the transcript at `path`, prompts marked: the same events
+    /// `parse_transcript` reports in `Delta::events`, read from the whole file and nothing else
+    /// (the work timeline of a session read before eye kept one). `path` exists: the transcript
+    /// itself or a copy made from the archive. The default knows no times.
+    fn work_events(&self, _path: &Path) -> Result<Vec<WorkEvent>> {
+        Ok(vec![])
+    }
     /// True for a path that is one of the agent's transcripts (restoring an archived copy only
     /// writes there).
     fn owns_transcript(&self, path: &Path) -> bool;

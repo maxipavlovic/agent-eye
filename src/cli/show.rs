@@ -8,12 +8,16 @@ use crate::resume;
 use crate::scan;
 use crate::search;
 use crate::util::{ago, fmt_ts, head_chars, now_ms, printable, short_id, tokens_line};
+use crate::worked;
 use anyhow::{Context, Result};
 use serde_json::{json, Value};
 
 pub fn scan(g: &Global, full: bool, json: bool) -> Result<()> {
     let mut env = g.open()?;
     let st = scan::scan(&mut env.db, &env.cfg, full)?;
+    let t0 = std::time::Instant::now();
+    let worked = worked::backfill::run_all(&mut env.db, &env.paths, &env.agents)?;
+    let worked_ms = t0.elapsed().as_millis();
     let kinds = env
         .db
         .count_group("SELECT kind, count(*) FROM session GROUP BY kind ORDER BY 2 DESC")?;
@@ -26,7 +30,8 @@ pub fn scan(g: &Global, full: bool, json: bool) -> Result<()> {
         };
         println!(
             "{}",
-            json!({"stats": st, "sessions_by_kind": m(&kinds), "outputs_by_kind": m(&outs)})
+            json!({"stats": st, "sessions_by_kind": m(&kinds), "outputs_by_kind": m(&outs),
+                   "worked": {"counted": worked.counted, "unreadable": worked.unreadable, "ms": worked_ms}})
         );
     } else {
         let fmt = |v: &[(String, i64)]| {
@@ -43,6 +48,12 @@ pub fn scan(g: &Global, full: bool, json: bool) -> Result<()> {
             st.history_prompts,
             st.elapsed_ms
         );
+        if worked.counted + worked.unreadable > 0 {
+            println!(
+                "work timeline: {} sessions counted, {} unreadable, in {} ms",
+                worked.counted, worked.unreadable, worked_ms
+            );
+        }
         println!("sessions: {}", fmt(&kinds));
         println!("outputs:  {}", fmt(&outs));
         if env.agents.is_empty() {
@@ -275,6 +286,9 @@ pub fn show(g: &Global, id: &str, json: bool, conversation: bool, n: usize) -> R
     let now = now_ms();
     if let Some(r) = crate::remind::of_session(&s, now) {
         println!("remind:   {}", printable(&r.summary(now)));
+    }
+    if let Some(line) = worked::summary::session_line(&env.db.conn, &s.id, now) {
+        println!("worked:   {}", printable(&line));
     }
     for t in activity::tasks(&s, now) {
         println!(

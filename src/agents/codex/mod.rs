@@ -15,6 +15,7 @@ mod install;
 mod live;
 mod rollout;
 mod script;
+mod work;
 
 use super::*;
 use crate::config::AgentCfg;
@@ -187,6 +188,10 @@ impl Agent for Codex {
         d.replaces = true;
         d.custom_title = title;
         Ok(d)
+    }
+
+    fn work_events(&self, path: &Path) -> Result<Vec<crate::worked::WorkEvent>> {
+        work::read_events(path)
     }
 
     fn owns_transcript(&self, path: &Path) -> bool {

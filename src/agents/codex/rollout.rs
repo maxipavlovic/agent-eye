@@ -14,6 +14,7 @@
 
 use super::background::Tracker;
 use super::script::{self, Call};
+use super::work::work_event;
 use crate::agents::append_only::for_each_line;
 use crate::agents::outputs::{
     commit_message, commit_sha, dir_ignored, is_git_commit, push_output, scan_jira,
@@ -579,6 +580,9 @@ impl<'a> Reader<'a> {
         if let Some(t) = ts {
             self.d.first_ts = Some(self.d.first_ts.map_or(t, |x| x.min(t)));
             self.d.last_ts = Some(self.d.last_ts.map_or(t, |x| x.max(t)));
+        }
+        if let Some(e) = ts.and_then(|t| work_event(&event, t)) {
+            self.d.events.push(e);
         }
         let ts = ts.unwrap_or(0);
         self.background.line(&v);

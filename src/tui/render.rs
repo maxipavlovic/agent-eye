@@ -281,6 +281,9 @@ pub(super) fn preview_lines<'a>(app: &App, r: &Row, pal: &Pal) -> Vec<Line<'a>> 
                     pal.fg(Color::Green),
                 ));
             }
+            if let Some(line) = crate::worked::summary::session_line(&app.db.conn, &s.id, app.now) {
+                v.push(Line::styled(format!("worked {line}"), pal.dim()));
+            }
             for t in activity::tasks(s, app.now) {
                 v.push(Line::from(vec![
                     label("Running"),

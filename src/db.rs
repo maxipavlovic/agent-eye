@@ -5,7 +5,7 @@ use rusqlite::{params, Connection, OptionalExtension, Row};
 use std::path::Path;
 
 /// The schema version this build writes; older databases are migrated on open.
-pub const SCHEMA_VERSION: i64 = 11;
+pub const SCHEMA_VERSION: i64 = 12;
 
 const SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS session(id TEXT PRIMARY KEY, agent TEXT NOT NULL DEFAULT 'claude', project_dir TEXT, cwd TEXT, repo_root TEXT, title TEXT, title_source TEXT,
@@ -32,6 +32,9 @@ CREATE TABLE IF NOT EXISTS cursor(path TEXT PRIMARY KEY, size INTEGER, mtime INT
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT);
 CREATE TABLE IF NOT EXISTS jira_cand(session_id TEXT, key TEXT, ts INTEGER, PRIMARY KEY(session_id, key));
 CREATE TABLE IF NOT EXISTS jira_evidence(prefix TEXT, kind TEXT, session_id TEXT, PRIMARY KEY(prefix, kind, session_id));
+CREATE TABLE IF NOT EXISTS worked_hour(session_id TEXT, hour INTEGER, prompts INTEGER, events INTEGER, active_ms INTEGER,
+  PRIMARY KEY(session_id, hour)) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS worked_state(session_id TEXT PRIMARY KEY, last_ts INTEGER, unreadable INTEGER NOT NULL DEFAULT 0);
 CREATE INDEX IF NOT EXISTS idx_stream_session ON stream(session_id);
 CREATE INDEX IF NOT EXISTS idx_output_session ON output(session_id);
 CREATE INDEX IF NOT EXISTS idx_event_session ON event(session_id);
@@ -202,6 +205,9 @@ impl Db {
                 }
             }
         }
+        // v12: `worked_hour` and `worked_state` (the work timeline) are created with the schema
+        // above. Nothing is read again for them: sessions without a timeline are counted by
+        // `worked::backfill`, from their timestamps only.
         if cur == 1 || (cur > 0 && cur < 4) {
             // v2 keeps pending tool_use ids and Jira candidates, v4 token counts: re-read every
             // transcript once.
@@ -770,6 +776,42 @@ mod tests {
             .cursor_get("/u.jsonl")
             .unwrap()
             .is_some());
+    }
+
+    #[test]
+    fn migration_to_v12_adds_the_worked_tables_and_keeps_the_cursors_as_they_are() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("eye.db");
+        {
+            // a v11 database: no tables for the work timeline, sessions read to the end
+            let db = Db::open(&path).unwrap();
+            db.conn.execute("DROP TABLE worked_hour", []).unwrap();
+            db.conn.execute("DROP TABLE worked_state", []).unwrap();
+            db.conn
+                .execute(
+                    "INSERT INTO session(id, transcript_state) VALUES('s1','present')",
+                    [],
+                )
+                .unwrap();
+            cursor_set(&db.conn, "/t.jsonl", Stamp { size: 9, mtime: 4 }, "9").unwrap();
+            db.meta_set("schema_version", "11").unwrap();
+        }
+        let db = Db::open(&path).unwrap();
+        assert_eq!(
+            db.meta_get("schema_version").unwrap(),
+            Some(SCHEMA_VERSION.to_string())
+        );
+        let c = db.cursor_get("/t.jsonl").unwrap().unwrap();
+        assert_eq!((c.stamp.size, c.marker.as_str()), (9, "9"));
+        let waiting: i64 = db
+            .conn
+            .query_row(
+                "SELECT count(*) FROM session s WHERE NOT EXISTS (SELECT 1 FROM worked_state w WHERE w.session_id=s.id)",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(waiting, 1);
     }
 
     #[test]

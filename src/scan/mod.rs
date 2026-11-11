@@ -198,6 +198,7 @@ fn scan_agent(
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
         transcript::apply(&tx, agent, f, &d, reset, cfg, repo_cache)
             .with_context(|| format!("indexing {}", f.path.display()))?;
+        crate::worked::store::record(&tx, &f.session_id, &d.events, reset)?;
         match &d.carry {
             Some(c) => meta_set(&tx, &carry_key, &c.to_string())?,
             None => {

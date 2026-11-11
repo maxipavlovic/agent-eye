@@ -5,6 +5,7 @@
 pub use crate::activity::{BgTask, LoopInfo, Signals};
 pub use crate::model::Stamp;
 use crate::model::Tokens;
+pub use crate::worked::WorkEvent;
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::PathBuf;
@@ -122,6 +123,9 @@ pub struct Delta {
     /// new (the adapter keeps its own state in `carry`). None when the adapter reports none, which
     /// leaves what is stored as it is.
     pub signals: Option<Signals>,
+    /// The time of every message read (prompt, reply, tool result), prompts marked, for the work
+    /// timeline. All of them, in any order; the core adds them up (`crate::worked`).
+    pub events: Vec<WorkEvent>,
     /// Token use of the lines read (`subagents_total` stays 0).
     pub usage: Tokens,
     /// Id of the last message counted in `usage`; carried to the next read so a message that

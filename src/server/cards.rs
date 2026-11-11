@@ -50,6 +50,11 @@ pub(super) async fn api_card(State(st): State<Shared>, Path(id): Path<String>) -
         )
         .collect::<Vec<_>>());
     v["topics_more"] = json!(0);
+    v["worked"] = json!(crate::worked::summary::of_session(
+        &db.conn,
+        &id,
+        &crate::worked::summary::local_offset_ms
+    )?);
     // Stored prompt lines include commands and paste tags; the agent says what is worth showing.
     let readable = |l: &str| st.agents.display_prompt(&s, l);
     let lines = db.prompt_lines(&id)?;

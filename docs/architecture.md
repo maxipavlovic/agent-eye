@@ -47,6 +47,7 @@ leaves the machine except the excerpts sent to your agent for summaries (see `se
 | `search.rs`, `pick.rs` | Full-text search and ranking; the picker's index, ranking and launching. |
 | `summarize.rs`, `summarize_prompt.txt` | Builds the masked excerpt of a session, asks the summary agent, stores the answer. |
 | `remind/` | "Check on this" reminders: the reading of a time (`when.rs`: `tomorrow`, `mon`, `4h`, `2026-11-20 14:00`, in local time), when one is due, setting, clearing, listing, and telling about due ones once. The column rule is in `columns.rs`; the notice itself is in `platform/notify.rs`. |
+| `worked/` | The days a session was worked on: adapters report the time of every message (`Delta::events`), `store.rs` adds them into UTC hours (`worked_hour`) with the 15-minute away rule, `summary.rs` turns hours into local days for the card and the terminal, and `backfill.rs` counts sessions read before eye kept hours, from their timestamps only. |
 | `ideas.rs`, `mark.rs` | Parked ideas and starting them; putting a session in a column by hand. |
 | `folder.rs` | Whether an idea's folder exists, and the one rule for making it: only inside the home folder. |
 | `archive.rs`, `conversation.rs` | Where and when sessions are copied to the archive and put back (how is the adapter's call); reading a conversation from the session or from a temporary copy of the archive. |
@@ -63,7 +64,7 @@ Everything is under `~/.agent-eye` (mode 0700): `eye.db` (SQLite, WAL), `archive
 summaries run in), `tmp/` (a copy of an archived session, only while its conversation is read; the `.command` files Resume opens in Terminal on macOS, removed after a day). The
 database holds one row per session (with the agent that owns it), streams (sub-agents, background
 sessions, topics, outputs), outputs, ideas, hook events, read cursors (change stamp and the
-adapter's opaque marker) and a full-text index.
+adapter's opaque marker), the hours each session was worked in (`worked_hour`, with `worked_state` saying which sessions are counted) and a full-text index.
 
 ## Platforms
 

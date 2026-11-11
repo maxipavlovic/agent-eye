@@ -13,6 +13,7 @@ mod live;
 mod prompt;
 mod signals;
 mod transcript;
+mod work;
 
 use super::*;
 use crate::config::AgentCfg;
@@ -194,6 +195,10 @@ impl Agent for Claude {
                 Ok(d)
             }
         }
+    }
+
+    fn work_events(&self, path: &Path) -> Result<Vec<crate::worked::WorkEvent>> {
+        work::read_events(path)
     }
 
     fn owns_transcript(&self, path: &Path) -> bool {

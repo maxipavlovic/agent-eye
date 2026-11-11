@@ -309,8 +309,8 @@ fn an_old_database_gets_the_columns_and_keeps_its_rows() {
     }
     let db = Db::open(&path).unwrap();
     assert_eq!(
-        db.meta_get("schema_version").unwrap().as_deref(),
-        Some("11")
+        db.meta_get("schema_version").unwrap(),
+        Some(crate::db::SCHEMA_VERSION.to_string())
     );
     assert_eq!(session(&db, "old-1").remind_at, None);
     set(&db, &sid("old-1"), 5, None).unwrap();

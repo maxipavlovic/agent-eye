@@ -12,6 +12,7 @@ use crate::scan;
 use crate::server;
 use crate::summarize;
 use crate::util::{now_ms, short_id};
+use crate::worked;
 use anyhow::{Context, Result};
 use rusqlite::{params, TransactionBehavior};
 use serde_json::Value;
@@ -336,7 +337,8 @@ fn notify_reminders(db: &Db, paths: &Paths, cfg: &Config, send: &mut dyn FnMut(&
     }
 }
 
-/// One pass of the main loop: events, then the incremental scan, then due reminders.
+/// One pass of the main loop: events, then the incremental scan, a few sessions of the work timeline
+/// backfill, then due reminders.
 pub fn tick(db: &mut Db, paths: &Paths, cfg: &Config) -> Result<()> {
     let n = drain_queue(db, paths, &agents::enabled(cfg))?;
     let st = scan::scan(db, cfg, false)?;
@@ -348,6 +350,17 @@ pub fn tick(db: &mut Db, paths: &Paths, cfg: &Config) -> Result<()> {
                 st.files_parsed, st.elapsed_ms
             ),
         );
+    }
+    match worked::backfill::run_batch(db, paths, &agents::enabled(cfg), worked::backfill::BATCH) {
+        Ok(p) if p.counted + p.unreadable > 0 => log(
+            paths,
+            &format!(
+                "work timeline: {} sessions counted, {} unreadable, {} to go",
+                p.counted, p.unreadable, p.left
+            ),
+        ),
+        Ok(_) => {}
+        Err(e) => log(paths, &format!("work timeline: {e:#}")),
     }
     notify_reminders(db, paths, cfg, &mut |title, body| {
         if !crate::platform::notify::send(title, body) {
