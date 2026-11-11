@@ -5,7 +5,7 @@ import { QUICK, quickMove } from './Move';
 import { remindForm } from './Remind';
 import type { Walk } from './walk';
 
-/** Board keys: / or ⌘K / Ctrl-K searches, N W P D move the open session, ← → walk the cards, Esc backs out one level. */
+/** Board keys: / or ⌘K / Ctrl-K searches, N W P D move the open session, R resumes it, ← → walk the cards, Esc backs out one level. */
 /** Back to the search box, with what is in it selected, so typing starts a new search. */
 export function focusSearch() {
   const q = document.getElementById('q') as HTMLInputElement | null;
@@ -34,6 +34,10 @@ export function useKeys(store: Store, step: Walk['step']) {
       else if (!typing && store.selected.value && d && d.kind !== 'idea' && plain && quick) {
         e.preventDefault();
         quickMove(store, d, quick.to);
+      }
+      else if (!typing && store.selected.value && d?.resumable && plain && !e.shiftKey && e.key.toLowerCase() === 'r') {
+        e.preventDefault();
+        void store.resume(d.id);
       }
       else if ((e.key === 'ArrowRight' || e.key === 'ArrowLeft') && !typing && !ideaForm.value && store.selected.value && plain && !e.shiftKey) {
         e.preventDefault();

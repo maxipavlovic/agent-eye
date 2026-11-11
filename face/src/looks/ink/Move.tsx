@@ -30,7 +30,7 @@ export function quickMove(store: Store, d: CardDetail, to: MoveTarget) {
   });
 }
 
-/** One click moves the open session; the current column is pressed. */
+/** One click moves the open session; the current column is pressed. RESUME sits apart at the right end (R). */
 export function QuickMove({ d, store }: { d: CardDetail; store: Store }) {
   const go = (to: MoveTarget) => quickMove(store, d, to);
   return (
@@ -41,6 +41,7 @@ export function QuickMove({ d, store }: { d: CardDetail; store: Store }) {
         </button>
       ))}
       {d.manual && <button class="auto" onClick={() => go('auto')} title="Let the rules place it again">AUTO</button>}
+      {d.resumable && <button class="resume" aria-keyshortcuts="R" title="Resume (R)" onClick={() => void store.resume(d.id)}><u>R</u>ESUME</button>}
     </div>
   );
 }

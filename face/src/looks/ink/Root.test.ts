@@ -286,6 +286,29 @@ describe('the panel', () => {
     await vi.waitFor(() => expect(store.board.value!.columns.find((c) => c.id === 'needs_you')!.cards.some((c) => c.title.includes('flaky login'))).toBe(true));
   });
 
+  it('resumes the open session from the status row and with R, but not while typing', async () => {
+    const resume = vi.fn(fixtureSource().resume);
+    const { root, $, $$, store } = await mount({ ...fixtureSource(), resume });
+    card(root, 'needs_you', 'flaky login').click();
+    await vi.waitFor(() => expect($('.qmove .resume')).not.toBeNull());
+    const btn = $('.qmove .resume')!;
+    expect(btn.textContent).toBe('RESUME');
+    expect(btn.getAttribute('aria-keyshortcuts')).toBe('R');
+    expect($$('.qmove button').map((b) => b.textContent)).toEqual(['NEEDS YOU', 'WAITING', 'PAUSED', 'DONE', 'RESUME']);
+    btn.click();
+    await vi.waitFor(() => expect(resume).toHaveBeenCalledTimes(1));
+    key('r');
+    await vi.waitFor(() => expect(resume).toHaveBeenCalledTimes(2));
+    expect(resume.mock.calls.map((c) => c[0])).toEqual([store.selected.value, store.selected.value]);
+    const q = $<HTMLInputElement>('#q')!;
+    q.dispatchEvent(new KeyboardEvent('keydown', { key: 'r', bubbles: true }));
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'r', metaKey: true, bubbles: true }));
+    await new Promise((r) => setTimeout(r, 30));
+    expect(resume).toHaveBeenCalledTimes(2);
+    // the receipt and the bottom actions stay
+    expect($('.page .acts.end .btn.big')!.textContent).toBe('RESUME');
+  });
+
   it('loads the conversation when its section is opened', async () => {
     const { root, $, $$ } = await mount();
     card(root, 'needs_you', 'date library').click();

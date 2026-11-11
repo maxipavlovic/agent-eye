@@ -584,6 +584,10 @@ mark { background: var(--ink); color: var(--paper); padding: 0 3px; }
 .qmove button[aria-pressed='true'] { background: var(--ink); color: var(--paper); cursor: default; }
 .qmove button.c-needs_you[aria-pressed='true'] { background: var(--accent); color: var(--on-accent); border-color: var(--ink); }
 .qmove button.auto { margin-left: 10px; }
+/* Resume is not a move: it stands apart at the right end, filled. */
+.qmove { row-gap: 8px; }
+.qmove button.resume { margin-left: auto; background: var(--ink); color: var(--paper); box-shadow: 4px 4px 0 var(--accent); }
+.qmove button.resume:hover { background: var(--paper); color: var(--ink); }
 .qmove u { text-decoration: underline 2px; text-underline-offset: 3px; }
 @media (max-width: 1200px), (pointer: coarse) { .qmove button { min-height: 40px; } }
 
