@@ -131,7 +131,7 @@ export function Detail({ store, walk }: { store: Store; walk: Walk }) {
             <Kids key={d.id} kids={kids} total={d.child_count} />
           </Sec>
         )}
-        <Outputs outputs={d.outputs} />
+        <Outputs key={d.id} outputs={d.outputs} />
         {d.first_prompt && <Sec t="FIRST PROMPT"><blockquote class="prompt first"><Hl s={d.first_prompt} /></blockquote></Sec>}
         {session && <Conversation store={store} id={d.id} agent={d.agent_name} fallback={prompts} />}
         {d.tokens && <TokenSec key={d.id} t={d.tokens} />}

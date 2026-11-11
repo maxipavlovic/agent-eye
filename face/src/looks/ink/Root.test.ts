@@ -464,6 +464,31 @@ describe('reminders', () => {
   });
 });
 
+describe('long lists in the panel', () => {
+  it('shows the first items with a +N MORE button that opens the rest in place and folds them again', async () => {
+    const { root, $, $$ } = await mount();
+    card(root, 'needs_you', 'Review the retry policy').click();
+    const group = (name: string) => $$('.og').find((g) => g.querySelector('h5')!.textContent!.startsWith(name))!;
+    await vi.waitFor(() => expect(group('Commits')).toBeDefined());
+    const commits = group('Commits');
+    expect(commits.querySelectorAll('li:not(.more)')).toHaveLength(8);
+    const more = commits.querySelector<HTMLButtonElement>('li.more button')!;
+    expect(more.textContent).toBe('+4 MORE');
+    expect(more.getAttribute('aria-expanded')).toBe('false');
+    more.click();
+    await vi.waitFor(() => expect(group('Commits').querySelectorAll('li:not(.more)')).toHaveLength(12));
+    expect(group('Commits').querySelector('li.more button')!.textContent).toBe('SHOW LESS');
+    expect(group('Jira').querySelector('li.more button')!.textContent).toBe('+3 MORE');
+    group('Commits').querySelector<HTMLButtonElement>('li.more button')!.click();
+    await vi.waitFor(() => expect(group('Commits').querySelectorAll('li:not(.more)')).toHaveLength(8));
+
+    $$('.kidsum button')[0]!.click();
+    await vi.waitFor(() => expect($$('.kids li:not(.more)')).toHaveLength(8));
+    $<HTMLButtonElement>('.kids li.more button')!.click();
+    await vi.waitFor(() => expect($$('.kids li:not(.more)')).toHaveLength(12));
+  });
+});
+
 describe('the idea form', () => {
   it('names the agent in its labels and shows no picker for one agent', async () => {
     const { $ } = await mount();

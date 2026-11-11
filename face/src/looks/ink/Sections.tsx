@@ -55,6 +55,21 @@ export function FoldSec({ t, sum, open, toggle, children }: { t: string; sum?: s
   );
 }
 
+/** The first `n` items, and a `+N MORE` button that shows the rest in place; SHOW LESS folds them again. */
+export function MoreList<T>({ items, n, row, cls }: { items: T[]; n: number; row: (item: T, i: number) => ComponentChildren; cls?: string }) {
+  const open = useSignal(false);
+  return (
+    <ul class={cls}>
+      {(open.value ? items : items.slice(0, n)).map(row)}
+      {items.length > n && (
+        <li class="more">
+          <button class="lnk" aria-expanded={open.value} onClick={() => { open.value = !open.value; }}>{open.value ? 'SHOW LESS' : `+${items.length - n} MORE`}</button>
+        </li>
+      )}
+    </ul>
+  );
+}
+
 export function Topics({ topics }: { topics: Topic[] }) {
   return (
     <Sec t="TOPICS" n={topics.length}>
@@ -70,12 +85,16 @@ export function Topics({ topics }: { topics: Topic[] }) {
   );
 }
 
-/** Sub-agents: all done = one line with a toggle; otherwise running ones first, done ones behind "+N done". */
+const KIDS_SHOWN = 8;
+
+/** Sub-agents: all done = one line with a toggle; otherwise running ones first, done ones behind "+N done". Long lists show 8 and +N MORE. */
 export function Kids({ kids, total }: { kids: Stream[]; total: number }) {
   const open = useSignal(false);
   const running = kids.filter((k) => k.status !== 'done');
   const done = kids.filter((k) => k.status === 'done');
+  // children the session counts but has no line for
   const hidden = Math.max(0, total - kids.length);
+  const unlisted = hidden > 0 && <p class="dim">and {hidden} more, not listed</p>;
   const row = (k: Stream) => (
     <li key={k.key}><Pix rows={MARKS[k.status === 'done' ? 'done' : 'active']} pal={INK} scale={2} /><span>{k.title}</span></li>
   );
@@ -87,14 +106,15 @@ export function Kids({ kids, total }: { kids: Stream[]; total: number }) {
           <span>{total} sub-agent{total === 1 ? '' : 's'}, all done</span>
           <button class="lnk" aria-expanded={open.value} onClick={() => (open.value = !open.value)}>{open.value ? 'HIDE' : 'SHOW'}</button>
         </p>
-        {open.value && <ul class="kids">{done.map(row)}{hidden > 0 && <li class="dim">+{hidden} more</li>}</ul>}
+        {open.value && <><MoreList items={done} n={KIDS_SHOWN} row={row} cls="kids" />{unlisted}</>}
       </>
     );
   }
   const doneN = done.length + hidden;
   return (
     <>
-      <ul class="kids">{running.map(row)}{open.value && done.map(row)}</ul>
+      <MoreList items={running} n={KIDS_SHOWN} row={row} cls="kids" />
+      {open.value && <><MoreList items={done} n={KIDS_SHOWN} row={row} cls="kids" />{unlisted}</>}
       {doneN > 0 && (
         <p class="dim"><button class="lnk" aria-expanded={open.value} onClick={() => (open.value = !open.value)}>{open.value ? 'HIDE DONE' : `+${doneN} DONE`}</button></p>
       )}
@@ -108,12 +128,7 @@ function Folders({ items }: { items: Output[] }) {
   return (
     <>
       {g.base && <p class="fbase">{g.base}</p>}
-      <ul class={g.base ? 'ind' : ''}>
-        {g.rels.slice(0, 12).map((r, j) => (
-          <li key={j}><span class="fpath">{r}</span></li>
-        ))}
-        {g.rels.length > 12 && <li class="dim">+{g.rels.length - 12} more</li>}
-      </ul>
+      <MoreList items={g.rels} n={12} cls={g.base ? 'ind' : ''} row={(r, j) => <li key={j}><span class="fpath">{r}</span></li>} />
     </>
   );
 }
@@ -134,15 +149,12 @@ export function Outputs({ outputs }: { outputs: Output[] }) {
         <div class="og" key={k}>
           <h5>{OUTPUT_NAMES[k]} <b>{items.length}</b></h5>
           {k === 'folder' ? <Folders items={items} /> : (
-            <ul>
-              {items.slice(0, 8).map((o, j) => (
-                <li key={j}>
-                  <span class="ot">{OUT_TAG[k]}</span>
-                  {o.url ? <a href={o.url} target="_blank" rel="noopener noreferrer">{outputLabel(o)}</a> : <span title={o.value}>{outputLabel(o)}</span>}
-                </li>
-              ))}
-              {items.length > 8 && <li class="dim">+{items.length - 8} more</li>}
-            </ul>
+            <MoreList items={items} n={8} row={(o, j) => (
+              <li key={j}>
+                <span class="ot">{OUT_TAG[k]}</span>
+                {o.url ? <a href={o.url} target="_blank" rel="noopener noreferrer">{outputLabel(o)}</a> : <span title={o.value}>{outputLabel(o)}</span>}
+              </li>
+            )} />
           )}
         </div>
       ))}

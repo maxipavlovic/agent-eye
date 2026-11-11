@@ -266,6 +266,9 @@ mark { background: var(--ink); color: var(--paper); padding: 0 3px; }
 .kids li { display: flex; gap: 8px; align-items: center; font: 400 16px/1.7 var(--f-body); }
 .kidsum { display: flex; gap: 10px; align-items: center; margin: 0; font: 400 16px/1.5 var(--f-body); }
 .kidsum + .kids { margin-top: 8px; }
+/* +N MORE under a long list opens the rest in place */
+.dtopics li.more, .kids li.more, .og li.more { margin-top: 4px; }
+.kids + .kids { margin-top: 0; }
 .lnk { background: none; border: 0; border-bottom: 2px solid var(--ink); padding: 2px 0 1px; font: 400 16px/1.2 var(--f-label); letter-spacing: 1px; cursor: pointer; }
 .lnk:hover, .lnk:focus-visible { background: var(--ink); color: var(--paper); }
 .fbase { margin: 0 0 4px; font: 400 16px/1.5 var(--f-body); color: var(--mute); overflow-wrap: anywhere; }
