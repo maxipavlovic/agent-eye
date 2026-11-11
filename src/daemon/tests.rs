@@ -44,9 +44,27 @@ fn a_due_reminder_is_announced_once_and_not_when_notices_are_off() {
     off.remind.notify = false;
     notify_reminders(&db, &p, &off, &mut send);
     assert!(seen.borrow().is_empty());
-    let on = Config::default();
+    let mut on = Config::default();
+    on.remind.notify = true;
     notify_reminders(&db, &p, &on, &mut send);
     notify_reminders(&db, &p, &on, &mut send);
+    assert_eq!(*seen.borrow(), ["Check on: Ana"]);
+}
+
+#[test]
+fn a_switch_made_while_the_daemon_runs_counts_at_once() {
+    let (_t, p, db) = env();
+    add_session(&db, "s1", 100);
+    db.conn
+        .execute("UPDATE session SET remind_at=200, title='Ana'", [])
+        .unwrap();
+    let seen = std::cell::RefCell::new(vec![]);
+    let mut send = |t: &str, _: &str| seen.borrow_mut().push(t.to_string());
+    let started_with = Config::default();
+    notify_reminders(&db, &p, &started_with, &mut send);
+    assert!(seen.borrow().is_empty(), "off unless asked");
+    crate::remind::notices::set(&p, true).unwrap();
+    notify_reminders(&db, &p, &started_with, &mut send);
     assert_eq!(*seen.borrow(), ["Check on: Ana"]);
 }
 

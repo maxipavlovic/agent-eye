@@ -6,7 +6,7 @@ use crate::columns;
 use crate::ideas;
 use crate::model::Column;
 use crate::pick::{Kind, Row};
-use crate::remind::{self, Target};
+use crate::remind::{self, notices, Target};
 use anyhow::{Context, Result};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
@@ -18,6 +18,23 @@ pub(super) const HINT: &str = "tomorrow  mon..sun  30m  4h  3d  1w  2026-11-20 1
 pub(super) struct Input {
     pub text: String,
     pub error: Option<String>,
+    /// Whether a due reminder shows a desktop notice; None when the picker has no eye home to ask.
+    pub notify: Option<bool>,
+    /// Can this machine show a notice at all?
+    pub can_notify: bool,
+}
+
+impl Input {
+    /// The footer's words for the notice setting, and the key that flips it.
+    pub(super) fn notice_state(&self) -> Option<String> {
+        let on = self.notify?;
+        Some(match (on, self.can_notify) {
+            (true, true) => "notices on (Tab: turn off)".into(),
+            (true, false) => "notices on, but no program shows them here (Tab: turn off)".into(),
+            (false, true) => "notices off (Tab: turn on)".into(),
+            (false, false) => "notices off, and no program shows them here".into(),
+        })
+    }
 }
 
 /// `tomorrow -- Ana's reply` as the time words and the note.
@@ -45,7 +62,29 @@ impl App {
             self.msg = Some("nothing selected".into());
             return;
         }
-        self.remind = Some(Input::default());
+        let notify = self
+            .paths
+            .as_ref()
+            .map(|p| notices::is_on(p, crate::config::RemindCfg::default().notify));
+        self.remind = Some(Input {
+            notify,
+            can_notify: notify.is_some() && notices::available(),
+            ..Input::default()
+        });
+    }
+
+    /// Tab in the input: switch the desktop notice for due reminders on or off.
+    fn toggle_notices(&mut self) {
+        let (Some(paths), Some(input)) = (self.paths.as_ref(), self.remind.as_mut()) else {
+            return;
+        };
+        let Some(on) = input.notify else {
+            return;
+        };
+        match notices::set(paths, !on) {
+            Ok(()) => input.notify = Some(!on),
+            Err(e) => input.error = Some(format!("could not save: {e:#}")),
+        }
     }
 
     pub(super) fn remind_key(&mut self, k: KeyEvent) -> Option<Outcome> {
@@ -56,6 +95,7 @@ impl App {
             KeyCode::Char('c') if ctrl => return Some(Outcome::Quit),
             KeyCode::Esc => self.remind = None,
             KeyCode::Enter => self.apply_remind(),
+            KeyCode::Tab => self.toggle_notices(),
             KeyCode::Char('u') if ctrl => input.text.clear(),
             KeyCode::Backspace => {
                 input.text.pop();
@@ -354,6 +394,49 @@ mod tests {
         );
         assert_eq!(r.column, Column::Ideas, "not due yet");
         assert_eq!(a.current().unwrap().id, "idea:1");
+    }
+
+    fn app_at_home() -> (tempfile::TempDir, App) {
+        let t = tempfile::tempdir().unwrap();
+        let mut a = saved_app();
+        a.paths = Some(crate::paths::Paths {
+            home: t.path().join("home"),
+        });
+        select(&mut a, FIRST);
+        (t, a)
+    }
+
+    #[test]
+    fn tab_in_the_input_switches_desktop_notices_and_the_footer_says_which() {
+        let (_t, mut a) = app_at_home();
+        a.key(ctrl('r'));
+        let foot = render_text(&mut a, 200, 24).unwrap();
+        assert!(foot.contains("notices off (Tab: turn on)"), "{foot}");
+        a.key(key(KeyCode::Tab));
+        let foot = render_text(&mut a, 200, 24).unwrap();
+        assert!(foot.contains("notices on"), "{foot}");
+        assert!(
+            a.remind.as_ref().unwrap().text.is_empty(),
+            "Tab types nothing"
+        );
+        let paths = a.paths.clone().unwrap();
+        assert!(notices::is_on(&paths, false), "written to config.toml");
+        a.key(key(KeyCode::Esc));
+        a.key(ctrl('r'));
+        assert_eq!(a.remind.as_ref().unwrap().notify, Some(true), "it stays");
+        a.key(key(KeyCode::Tab));
+        assert!(!notices::is_on(&paths, true));
+    }
+
+    #[test]
+    fn without_an_eye_home_the_input_has_no_notice_line_and_tab_does_nothing() {
+        let mut a = saved_app();
+        select(&mut a, FIRST);
+        a.paths = None;
+        a.key(ctrl('r'));
+        a.key(key(KeyCode::Tab));
+        let foot = render_text(&mut a, 200, 24).unwrap();
+        assert!(!foot.contains("notices"), "{foot}");
     }
 
     #[test]
