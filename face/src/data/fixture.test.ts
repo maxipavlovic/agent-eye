@@ -88,4 +88,15 @@ describe('fixtureSource with the sample data', () => {
     await expect(src.remind(due.id, { when: '2020-01-01' })).rejects.toThrow(/passed/);
     await expect(src.remind('nope', { when: '1d' })).rejects.toThrow(/No card/);
   });
+
+  it('reads the times the board sends and no look-alikes', async () => {
+    const src = fixtureSource();
+    const id = (await src.board()).columns.flatMap((c) => c.cards)[0]!.id;
+    for (const when of ['tomorrow', 'mon', 'Monday', '1w', '3d']) {
+      expect((await src.remind(id, { when })).remind_at!, when).toBeGreaterThan(Date.now());
+    }
+    for (const when of ['monkey', 'tuesdayfoo', 'mo', '0d', '0w']) {
+      await expect(src.remind(id, { when }), when).rejects.toThrow(/cannot read/);
+    }
+  });
 });
