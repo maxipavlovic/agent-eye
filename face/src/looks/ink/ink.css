@@ -258,7 +258,8 @@ mark { background: var(--ink); color: var(--paper); padding: 0 3px; }
 .recap { margin: 0; max-width: 66ch; border-left: 4px solid var(--ink); padding: 2px 0 2px 14px; font: 500 17px/1.55 var(--f-body); white-space: pre-wrap; overflow-wrap: anywhere; }
 .dtopics, .kids, .og ul { list-style: none; margin: 0; padding: 0; }
 .dtopics li { display: flex; gap: 12px; margin-bottom: 12px; align-items: flex-start; }
-.dtopics li svg { margin-top: 2px; }
+/* the 14 px mark centred on the first 17 px / 1.4 line of the title */
+.dtopics li svg { margin-top: 5px; }
 .dtopics b { font: 600 17px/1.4 var(--f-body); display: block; }
 .dtopics div { max-width: 66ch; }
 .dtopics span { display: block; font: 400 16px/1.5 var(--f-body); margin-top: 3px; }
@@ -368,6 +369,7 @@ mark { background: var(--ink); color: var(--paper); padding: 0 3px; }
   .dpick { width: auto; }
   .dpgrid { width: 100%; }
   .dpgrid button { width: 100%; height: 36px; }
+  .fchips.tchips { grid-template-columns: repeat(4, 1fr); }
 }
 
 /* ───────── toasts ───────── */
