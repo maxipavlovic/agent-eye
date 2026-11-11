@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { h, render } from 'preact';
 import type { CardDetail, Worked } from '../../api/types';
 import { fixtureSource } from '../../data/fixture';
@@ -65,7 +65,9 @@ describe('the strip of days', () => {
 
 describe('the WHERE section', () => {
   let box: HTMLElement | null = null;
-  afterEach(() => { if (box) render(null, box); box?.remove(); box = null; });
+  // The sample data is dated from the clock; a run just after midnight would move "today".
+  beforeEach(() => { vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date(2026, 10, 12, 12, 0)); });
+  afterEach(() => { if (box) render(null, box); box?.remove(); box = null; vi.useRealTimers(); });
 
   const show = (d: Partial<CardDetail>): HTMLElement => {
     box = document.createElement('div');
