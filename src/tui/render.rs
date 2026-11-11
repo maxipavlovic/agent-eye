@@ -1,8 +1,8 @@
 //! Drawing: the list, the preview and the conversation pane.
 
 use super::state::App;
-use crate::folder::FolderState;
 use crate::activity;
+use crate::folder::FolderState;
 use crate::model::Column;
 use crate::pick::{self, Row};
 use crate::util::{home_rel, tokens_line};
