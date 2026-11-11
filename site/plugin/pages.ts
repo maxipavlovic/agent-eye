@@ -1,10 +1,14 @@
 import type { DocPage } from './docs.ts';
+import { ACCENTS, DEFAULT_ACCENT } from '../../face/src/accents.ts';
 import { REPO, SITE_URL } from './links.ts';
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 /** Sets the theme before the first paint: the saved choice (shared with the demo board), else daylight. */
 const THEME_SCRIPT = `try{var t=localStorage.getItem('eye.theme');if(t==='auto')t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';else if(t!=='dark')t='light';document.documentElement.dataset.theme=t}catch(e){document.documentElement.dataset.theme='light'}`;
+
+/** Sets the accent before the first paint, from the same key and the same list as the board; the default needs no attribute. */
+const ACCENT_SCRIPT = `try{var a=localStorage.getItem('eye.accent');if(a!=='${DEFAULT_ACCENT}'&&${JSON.stringify(ACCENTS.map((x) => x.id))}.indexOf(a)>=0)document.documentElement.dataset.accent=a}catch(e){}`;
 
 export interface PageOptions {
   title: string;
@@ -36,7 +40,7 @@ export function page({ title, description, path, body, kind = 'plain' }: PageOpt
 <meta property="og:url" content="${url}">
 <meta property="og:image" content="${SITE_URL}og.png">
 <meta name="twitter:card" content="summary_large_image">
-<script>${THEME_SCRIPT}</script>
+<script>${THEME_SCRIPT}${ACCENT_SCRIPT}</script>
 <script type="module" src="/src/site.ts"></script>
 </head>
 <body class="is-${kind}">
@@ -64,6 +68,7 @@ function header(): string {
       <a href="{{base}}docs/">Docs</a>
       <a href="${REPO}">GitHub</a>
     </nav>
+    <div class="accpick"><button type="button" class="accbtn" aria-label="Accent colour" title="Accent colour" aria-haspopup="true" aria-expanded="false"><i></i></button></div>
     <div class="theme" role="group" aria-label="Theme">${theme('light', 'sun', 'Light')}${theme('dark', 'moon', 'Dark')}${theme('auto', 'auto', 'System')}</div>
   </div>
   <div class="strip" aria-hidden="true"></div>

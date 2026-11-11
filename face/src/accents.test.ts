@@ -56,6 +56,15 @@ describe('accent presets', () => {
     }
   }
 
+  for (const { id } of ACCENTS) {
+    it(`${id} has a swatch of its own colour in both themes, whatever accent is active`, () => {
+      for (const theme of ['light', 'dark'] as const) {
+        const swatch = tokens(theme === 'light' ? `.acc[data-accent='${id}']` : `:root[data-theme='dark'] .acc[data-accent='${id}']`);
+        expect(swatch).toEqual(pair(id, theme));
+      }
+    });
+  }
+
   it('has a style sheet block for each preset of the picker and for no other', () => {
     const inCss = [...css.matchAll(/^:root\[data-accent='([a-z]+)'\]/gm)].map((m) => m[1]);
     expect(inCss).toEqual(ACCENTS.slice(1).map((a) => a.id));

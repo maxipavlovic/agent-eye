@@ -1,7 +1,7 @@
 /** The accent colours of the board: the ink look's signal colour, chosen in the header. The colours
  *  themselves are in `looks/ink/tokens.css`, one `data-accent` block per id. */
 export const ACCENTS = [
-  { id: 'vermilion', name: 'Vermilion' },
+  { id: 'vermilion', name: 'Vermilion (original)' },
   { id: 'cobalt', name: 'Cobalt' },
   { id: 'teal', name: 'Teal' },
   { id: 'moss', name: 'Moss' },
