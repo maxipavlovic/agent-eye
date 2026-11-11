@@ -4,7 +4,7 @@ import { pushPref } from './prefs';
 import { signal, computed, effect, batch, type Signal, type ReadonlySignal } from '@preact/signals';
 import type {
   Agent, ArchivePage, Board, Card, CardDetail, ColumnId, Connection, ConversationPage, IdeaInput, MoveTarget,
-  FolderCheck, RemindInput, ResumePlan, SearchHit, Source, StartPlan,
+  FolderCheck, RemindInput, RemindSettings, ResumePlan, SearchHit, Source, StartPlan,
 } from './api/types';
 
 export type ThemePref = 'auto' | 'light' | 'dark';
@@ -38,6 +38,8 @@ export interface Store {
   toasts: ReadonlySignal<Toast[]>;
   /** The enabled agents; empty until known (or when the engine has no agent list). */
   agents: ReadonlySignal<Agent[]>;
+  /** The desktop notice for due reminders; null until loaded, and when the engine has no such setting (the switch is hidden). */
+  notice: ReadonlySignal<RemindSettings | null>;
   /** Number of cards in Needs you. */
   needsYou: ReadonlySignal<number>;
   error: ReadonlySignal<string | null>;
@@ -60,6 +62,10 @@ export interface Store {
   folderCheck(path: string): Promise<FolderCheck>;
   /** Sets (`when`, in the words of `eye remind`) or clears a reminder; true when saved, else a toast says why. */
   remind(id: string, input: RemindInput): Promise<boolean>;
+  /** Reads the desktop notice setting into `notice`; an engine without it leaves `notice` null, quietly. */
+  loadNotice(): void;
+  /** Turns the desktop notice for every reminder on or off; a toast says why when it cannot. */
+  setNotice(on: boolean): Promise<void>;
   archive(offset: number, limit?: number): Promise<ArchivePage>;
   setTheme(pref: ThemePref): void;
   setAccent(id: AccentId): void;
@@ -116,6 +122,7 @@ export function createStore(src: Source, { defaultTheme = 'auto' }: { defaultThe
   const error = signal<string | null>(null);
   const themePref = signal<ThemePref>(readPref(defaultTheme));
   const agents = signal<Agent[]>([]);
+  const notice = signal<RemindSettings | null>(null);
 
   const mq = typeof matchMedia === 'function' ? matchMedia('(prefers-color-scheme: dark)') : null;
   const systemDark = signal(mq?.matches ?? false);
@@ -320,6 +327,18 @@ export function createStore(src: Source, { defaultTheme = 'auto' }: { defaultThe
     }
   }
 
+  function loadNotice() {
+    src.remindSettings().then((s) => { notice.value = s; }, () => { notice.value = null; });
+  }
+
+  async function setNotice(on: boolean) {
+    try {
+      notice.value = await src.setRemindSettings({ notify: on });
+    } catch (e) {
+      fail(e);
+    }
+  }
+
   function setTheme(pref: ThemePref) {
     themePref.value = pref;
     pushPref(THEME_KEY, pref);
@@ -331,8 +350,8 @@ export function createStore(src: Source, { defaultTheme = 'auto' }: { defaultThe
 
   return {
     source: src.name,
-    board, selected, detail, query, results, searching, connection, themePref, accent, theme, toasts, agents, needsYou, error,
-    open, close, search, move, setHidden, resume, conversation, addIdea, editIdea, startIdea, folderCheck: (path) => src.folderCheck(path), remind,
+    board, selected, detail, query, results, searching, connection, themePref, accent, theme, toasts, agents, notice, needsYou, error,
+    open, close, search, move, setHidden, resume, conversation, addIdea, editIdea, startIdea, folderCheck: (path) => src.folderCheck(path), remind, loadNotice, setNotice,
     archive: (offset, limit = 50) => src.archive(offset, limit),
     setTheme, setAccent, toast, dismissToast, refresh,
   };

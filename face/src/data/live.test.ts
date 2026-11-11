@@ -107,6 +107,19 @@ describe('liveSource requests', () => {
     expect(JSON.parse(f.mock.calls[1]![1].body)).toEqual({ clear: true });
   });
 
+  it('reads and writes the desktop notice setting, and an older engine answers 404', async () => {
+    const f = vi.fn().mockResolvedValue(json(200, { notify: true, available: true }));
+    vi.stubGlobal('fetch', f);
+    const s = liveSource();
+    expect(await s.remindSettings()).toEqual({ notify: true, available: true });
+    expect(f).toHaveBeenCalledWith('/api/remind/settings', { credentials: 'same-origin' });
+    await s.setRemindSettings({ notify: false });
+    expect(f.mock.calls[1]![0]).toBe('/api/remind/settings');
+    expect(f.mock.calls[1]![1]).toMatchObject({ method: 'POST', body: '{"notify":false}' });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json(404, { error: 'not found' })));
+    await expect(s.remindSettings()).rejects.toMatchObject({ status: 404 });
+  });
+
   it('turns {error} into the message', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json(400, { error: 'Workspace not trusted' })));
     await expect(liveSource().resume('a', false)).rejects.toThrow('Workspace not trusted');

@@ -274,6 +274,13 @@ export interface RemindInput {
   clear?: boolean;
 }
 
+/** GET and POST /api/remind/settings: the desktop notice when a reminder falls due, for every reminder on this machine. */
+export interface RemindSettings {
+  notify: boolean;
+  /** This machine can show a desktop notice at all; when false the board offers no switch. */
+  available: boolean;
+}
+
 export interface ResumePlan {
   dry_run: boolean;
   /** What happened or would: 'iterm', 'terminal' or 'copy'. */
@@ -318,6 +325,10 @@ export interface Source {
   folderCheck(path: string): Promise<FolderCheck>;
   /** Sets or clears a "check on this" reminder on a session or an idea card (POST /api/cards/:id/remind). */
   remind(id: string, input: RemindInput): Promise<Card>;
+  /** Whether a due reminder shows a desktop notice (GET /api/remind/settings); an older engine answers 404. */
+  remindSettings(): Promise<RemindSettings>;
+  /** Turns the desktop notice on or off; it takes effect at once (POST /api/remind/settings). */
+  setRemindSettings(input: { notify: boolean }): Promise<RemindSettings>;
   /** Calls onChange when the data changed; reports connection state. Returns unsubscribe. */
   subscribe(onChange: () => void, onState: (s: Connection) => void): () => void;
 }

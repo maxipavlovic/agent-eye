@@ -1,6 +1,6 @@
 import type {
   Agent, ArchivePage, Board, Card, CardDetail, Connection, ConversationPage, Idea, IdeaInput, MoveTarget, RemindInput, ResumePlan,
-  FolderCheck, SearchHit, Source, StartPlan,
+  FolderCheck, RemindSettings, SearchHit, Source, StartPlan,
 } from '../api/types';
 
 const UNAUTHORIZED = 'Not signed in: open the link that `eye board` prints.';
@@ -57,6 +57,8 @@ export function liveSource(): Source {
       call<StartPlan>(`/api/ideas/${ideaId}/start`, { method: 'POST', body: createFolder ? { background, dry_run: dryRun, create_folder: true } : { background, dry_run: dryRun } }),
     folderCheck: (path) => call<FolderCheck>(`/api/folder?path=${enc(path)}`),
     remind: (id, input: RemindInput) => call<Card>(`/api/cards/${enc(id)}/remind`, { method: 'POST', body: input }),
+    remindSettings: () => call<RemindSettings>('/api/remind/settings'),
+    setRemindSettings: (input) => call<RemindSettings>('/api/remind/settings', { method: 'POST', body: input }),
     subscribe(onChange, onState) {
       let errors = 0;
       const set = (s: Connection) => onState(s);
