@@ -1,7 +1,7 @@
-import { ACCENTS } from '../../accents';
 import { Pix } from '../../pixel/Pix';
 import type { Store } from '../../store';
 import type { Project } from './model';
+import { AccentPicker } from './AccentPicker';
 import { AUTO, INK_CC, LAYOUT_ICON, MOON, SUN } from './art';
 import { Eye } from './Eye';
 import { ideaForm } from './IdeaForm';
@@ -14,7 +14,6 @@ export function Header({ store, layout, setLayout }: { store: Store; layout: Lay
   const need = store.needsYou.value;
   const conn = store.connection.value;
   const pref = store.themePref.value;
-  const accent = store.accent.value;
   return (
     <header class="hd">
       <div class="brand"><Eye alert={need > 0} /><span class="word">EYE</span></div>
@@ -44,11 +43,7 @@ export function Header({ store, layout, setLayout }: { store: Store; layout: Lay
           </button>
         ))}
       </div>
-      <div class="accents" role="group" aria-label="Accent colour">
-        {ACCENTS.map((a) => (
-          <button key={a.id} type="button" class="acc" data-accent={a.id} aria-label={a.name} aria-pressed={accent === a.id} title={a.name} onClick={() => store.setAccent(a.id)} />
-        ))}
-      </div>
+      <AccentPicker store={store} />
       <button class="btn plus" onClick={() => { ideaForm.value = {}; }}>+ IDEA</button>
     </header>
   );

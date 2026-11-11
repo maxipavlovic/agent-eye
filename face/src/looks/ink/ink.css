@@ -61,9 +61,13 @@ a:hover { background: var(--ink); color: var(--paper); text-decoration: none; }
 .theme button + button { border-left: 2px solid var(--ink); }
 .theme button.on { background: var(--ink); color: var(--paper); }
 .theme button.on svg [fill='var(--paper)'] { fill: var(--ink); }
-/* accent swatches: each button wears its own accent, the chosen one is ringed in ink */
-.accents { display: flex; flex-wrap: wrap; gap: 6px; }
-.acc { width: 22px; height: 22px; padding: 0; border: 2px solid var(--ink); background: var(--accent); cursor: pointer; }
+/* accent picker: one square button wearing the accent; its popover holds the eight swatches, the chosen one ringed in ink */
+.accpick { position: relative; }
+.accbtn { width: 36px; height: 36px; display: grid; place-items: center; padding: 0; background: var(--paper); border: 2px solid var(--ink); }
+.accbtn i { width: 18px; height: 18px; background: var(--accent); border: 2px solid var(--ink); }
+.accbtn[aria-expanded='true'] { background: var(--ink); }
+.accpop { position: absolute; top: calc(100% + 8px); right: 0; display: flex; gap: 8px; padding: 10px; background: var(--paper); border: 2px solid var(--ink); box-shadow: 4px 4px 0 var(--ink); z-index: 10; }
+.acc { width: 24px; height: 24px; padding: 0; border: 2px solid var(--ink); background: var(--accent); cursor: pointer; flex: none; }
 .acc[aria-pressed='true'] { box-shadow: 0 0 0 2px var(--paper), 0 0 0 4px var(--ink); }
 .acc:hover { transform: translate(-1px, -1px); }
 
@@ -448,7 +452,7 @@ mark { background: var(--ink); color: var(--paper); padding: 0 3px; }
 
 /* ───────── tablets and touch ───────── */
 @media (max-width: 1200px), (pointer: coarse) {
-  .theme button { width: 40px; height: 40px; }
+  .theme button, .accbtn { width: 40px; height: 40px; }
   .acc { width: 32px; height: 32px; }
   .pbar button { min-height: 40px; }
   .btn.sm { min-height: 40px; }
