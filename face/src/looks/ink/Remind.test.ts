@@ -43,9 +43,11 @@ describe('the reminder form and panel', () => {
     expect(dateValue(new Date(2026, 0, 5))).toBe('2026-01-05');
   });
 
-  it('summarises a reminder: the reason when due, else when and the note', () => {
-    expect(remindSummary(card())).toBeNull();
-    expect(remindSummary(card({ remind_at: 5, remind_due: true, remind_note: 'Ana' }))).toBe('⏰ check on: Ana');
-    expect(remindSummary(card({ remind_at: Date.now() + 20 * 864e5, remind_note: 'Ana' }))).toMatch(/^\d+ \w+ \d\d:\d\d · Ana$/);
+  it('summarises a reminder in plain words: when and the note, and Due once it is due', () => {
+    const now = new Date(2026, 10, 12, 8).getTime();
+    expect(remindSummary(card(), now)).toBeNull();
+    expect(remindSummary(card({ remind_at: new Date(2026, 10, 13, 9).getTime(), remind_note: "Ana's reply" }), now)).toBe("Tomorrow 9:00 · Ana's reply");
+    expect(remindSummary(card({ remind_at: new Date(2026, 11, 2, 14, 30).getTime() }), now)).toBe('2 Dec 14:30');
+    expect(remindSummary(card({ remind_at: new Date(2026, 10, 12, 7).getTime(), remind_due: true, remind_note: 'Ana' }), now)).toBe('Due today 7:00 · Ana');
   });
 });

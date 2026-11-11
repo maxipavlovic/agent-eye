@@ -3,7 +3,7 @@ import { signal, useSignal } from '@preact/signals';
 import { Pix } from '../../pixel/Pix';
 import type { Store } from '../../store';
 import type { Card } from '../../api/types';
-import { remindReason, remindWhen } from '../../format';
+import { remindText } from '../../format';
 import { ICONS, INK } from './art';
 import { Sec } from './Sections';
 
@@ -29,12 +29,11 @@ export function whenText(date: string, time: string): string {
   return `${date} ${time || '09:00'}`;
 }
 
-/** What a card says about its reminder in the panel: when, and the note. */
-export function remindSummary(c: Card): string | null {
-  if (!c.remind_at) return null;
-  const why = remindReason(c);
-  if (why) return why;
-  return c.remind_note ? `${remindWhen(c.remind_at)} · ${c.remind_note}` : remindWhen(c.remind_at);
+/** What the panel says about a card's reminder: "Tomorrow 9:00 · Ana's reply", "Due today 9:00 · …" once due. */
+export function remindSummary(c: Card, now = Date.now()): string | null {
+  const text = remindText(c, now);
+  if (!text) return null;
+  return c.remind_due ? `Due ${text}` : text[0]!.toUpperCase() + text.slice(1);
 }
 
 /** Pick a date, a time and a note for a reminder. */
@@ -85,7 +84,8 @@ export function RemindPanel({ c, store }: { c: Card; store: Store }) {
   const summary = remindSummary(c);
   return (
     <Sec t="REMINDER">
-      <p class={summary ? 'remind' : 'dim'}>{summary ?? 'None. Bring this back to Needs you on a date.'}</p>
+      <p class="notes">{summary ?? 'No reminder.'}</p>
+      {!summary && <p class="dim">eye moves this card to Needs you at the time you pick.</p>}
       <div class="acts">
         {REMIND_PRESETS.map((p) => <button key={p.when} class="btn sm" onClick={() => void store.remind(c.id, { when: p.when })}>{p.label}</button>)}
         <button class="btn sm" onClick={() => { remindForm.value = c.id; }}>PICK A DATE…</button>

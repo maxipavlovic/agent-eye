@@ -395,8 +395,18 @@ describe('reminders', () => {
     card(root, 'needs_you', 'Cache the product list').click();
     await vi.waitFor(() => expect($('.page')).not.toBeNull());
     await vi.waitFor(() => expect($$('.page .sec h4').some((h) => h.textContent === 'REMINDER')).toBe(true));
-    expect($('.page .remind')!.textContent).toBe("⏰ check on: Dana's CDN rule");
+    const sec = $$('.page .sec').find((x) => x.querySelector('h4')!.textContent === 'REMINDER')!;
+    expect(sec.querySelector('.notes')!.textContent).toMatch(/^Due .+ · Dana's CDN rule$/);
     expect($$('.page .acts .btn').map((b) => b.textContent)).toEqual(expect.arrayContaining(['TOMORROW 9:00', 'PICK A DATE…', 'CLEAR']));
+  });
+
+  it('says in plain words that a card has no reminder and what setting one does', async () => {
+    const { root, $, $$ } = await mount();
+    card(root, 'needs_you', 'Upgrade the date library').click();
+    await vi.waitFor(() => expect($$('.page .sec h4').some((h) => h.textContent === 'REMINDER')).toBe(true));
+    const sec = $$('.page .sec').find((x) => x.querySelector('h4')!.textContent === 'REMINDER')!;
+    expect([...sec.querySelectorAll('p')].map((p) => p.textContent)).toEqual(['No reminder.', 'eye moves this card to Needs you at the time you pick.']);
+    expect([...sec.querySelectorAll('.btn')].map((b) => b.textContent)).not.toContain('CLEAR');
   });
 });
 
