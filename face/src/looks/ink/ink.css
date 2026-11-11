@@ -199,6 +199,8 @@ a:hover { background: var(--ink); color: var(--paper); text-decoration: none; }
 .card.mini .sigil svg { width: 18px; height: 18px; }
 .card.mini .foot { margin-top: 7px; }
 .card.idea .acts { display: flex; flex-wrap: wrap; gap: 8px 10px; margin-top: 10px; }
+/* a long start label (CREATE FOLDER & START) wraps inside the card instead of running past it */
+.card.idea .acts .btn { white-space: normal; max-width: 100%; text-align: left; line-height: 1.25; }
 
 .ageh { position: relative; height: 18px; margin: 0 0 12px; }
 .ageh::before { content: ''; position: absolute; left: 0; right: 0; top: 4px; height: 8px; background: var(--d50); }
@@ -476,6 +478,10 @@ mark { background: var(--ink); color: var(--paper); padding: 0 3px; }
   .gridview { grid-template-columns: minmax(0, 2fr) minmax(240px, 1fr); }
 }
 @media (max-width: 900px) {
+  /* on a phone the popover spans the header, so eight swatches never run off the screen */
+  .hd { position: relative; }
+  .accpick { position: static; }
+  .accpop { left: 12px; right: 12px; top: 100%; justify-content: space-between; }
   .hd { gap: 10px; }
   .conn.live, .conn.fixture { display: none; }
   .gridview { grid-template-columns: minmax(0, 1fr); }
