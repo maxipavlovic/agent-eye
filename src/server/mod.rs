@@ -9,6 +9,7 @@ mod face;
 mod guard;
 mod idea_routes;
 mod prefs;
+mod remind_routes;
 mod run;
 #[cfg(test)]
 mod test_support;
@@ -89,6 +90,7 @@ pub fn router(state: Shared) -> Router {
         .route("/api/cards/:id", get(cards::api_card))
         .route("/api/cards/:id/column", post(cards::api_move))
         .route("/api/cards/:id/hidden", post(cards::api_hidden))
+        .route("/api/cards/:id/remind", post(remind_routes::api_remind))
         .route("/api/cards/:id/resume", post(cards::api_resume))
         .route("/api/cards/:id/conversation", get(cards::api_conversation))
         .route("/api/search", get(cards::api_search))

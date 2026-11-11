@@ -5,7 +5,7 @@ use rusqlite::{params, Connection, OptionalExtension, Row};
 use std::path::Path;
 
 /// The schema version this build writes; older databases are migrated on open.
-pub const SCHEMA_VERSION: i64 = 9;
+pub const SCHEMA_VERSION: i64 = 11;
 
 const SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS session(id TEXT PRIMARY KEY, agent TEXT NOT NULL DEFAULT 'claude', project_dir TEXT, cwd TEXT, repo_root TEXT, title TEXT, title_source TEXT,
@@ -180,6 +180,25 @@ impl Db {
                 "UPDATE cursor SET marker=CAST(offset AS TEXT) WHERE marker IS NULL",
                 [],
             )?;
+        }
+        // v11: a date to check on a session or an idea, with a note and the time you were told.
+        for table in ["session", "idea"] {
+            for (col, ty) in [
+                ("remind_at", "INTEGER"),
+                ("remind_note", "TEXT"),
+                ("remind_notified_at", "INTEGER"),
+            ] {
+                let has = self
+                    .conn
+                    .prepare(&format!(
+                        "SELECT 1 FROM pragma_table_info('{table}') WHERE name=?1"
+                    ))?
+                    .exists([col])?;
+                if !has {
+                    self.conn
+                        .execute(&format!("ALTER TABLE {table} ADD COLUMN {col} {ty}"), [])?;
+                }
+            }
         }
         if cur == 1 || (cur > 0 && cur < 4) {
             // v2 keeps pending tool_use ids and Jira candidates, v4 token counts: re-read every
@@ -516,6 +535,9 @@ pub fn session_from_row(r: &Row) -> rusqlite::Result<Session> {
         summary_input_hash: r.get("summary_input_hash")?,
         archived: r.get::<_, i64>("archived")? != 0,
         hidden: r.get::<_, Option<i64>>("hidden")?.map(|v| v != 0),
+        remind_at: r.get("remind_at")?,
+        remind_note: r.get("remind_note")?,
+        remind_notified_at: r.get("remind_notified_at")?,
         tokens: match r.get::<_, Option<i64>>("tok_in")? {
             Some(input) => Some(crate::model::Tokens {
                 input,
@@ -695,7 +717,10 @@ mod tests {
         }
         let db = Db::open(&path).unwrap();
         assert!(db.cursor_get("/t.jsonl").unwrap().is_none());
-        assert_eq!(db.meta_get("schema_version").unwrap().as_deref(), Some("9"));
+        assert_eq!(
+            db.meta_get("schema_version").unwrap(),
+            Some(SCHEMA_VERSION.to_string())
+        );
         assert_eq!(db.session_by_id("old").unwrap().unwrap().tokens, None);
         // rows from before eye knew several agents are Claude Code's; an idea has no agent set
         assert_eq!(db.session_by_id("old").unwrap().unwrap().agent, "claude");
@@ -746,7 +771,10 @@ mod tests {
             db.meta_set("schema_version", "8").unwrap();
         }
         let db = Db::open(&path).unwrap();
-        assert_eq!(db.meta_get("schema_version").unwrap().as_deref(), Some("9"));
+        assert_eq!(
+            db.meta_get("schema_version").unwrap(),
+            Some(SCHEMA_VERSION.to_string())
+        );
         let at = |p: &str| {
             let c = db.cursor_get(p).unwrap().unwrap();
             (c.stamp, c.marker)
@@ -803,7 +831,10 @@ mod tests {
     #[test]
     fn schema_and_meta() {
         let db = Db::open_memory().unwrap();
-        assert_eq!(db.meta_get("schema_version").unwrap().as_deref(), Some("9"));
+        assert_eq!(
+            db.meta_get("schema_version").unwrap(),
+            Some(SCHEMA_VERSION.to_string())
+        );
         assert!(db.conn.prepare("SELECT hidden FROM session").is_ok());
         db.conn
             .execute("INSERT INTO session(id) VALUES('abcdef12-0000')", [])

@@ -6,6 +6,7 @@ use crate::config::{Config, UserCfg};
 use crate::db::Db;
 use crate::folder::{self, FolderState};
 use crate::model::{Column, Idea, Output, Session, Stream};
+use crate::remind;
 use crate::util::{head_chars, home_rel};
 use anyhow::Result;
 use serde_json::{json, Value};
@@ -127,6 +128,7 @@ pub fn card_json(
         .clone()
         .or_else(|| s.first_prompt.as_deref().map(|p| head_chars(p, 80)))
         .unwrap_or_else(|| "(untitled)".into());
+    let remind = remind::of_session(s, now);
     let resume_cmd = cx.agents.resume_line(s);
     let resumable = s.kind.as_deref() != Some("history_only") && resume_cmd.is_some();
     let agent_id = if s.agent.is_empty() {
@@ -167,10 +169,17 @@ pub fn card_json(
         "child_done": child_done,
         "prompt_count": s.prompt_count,
         "tokens": s.tokens.as_ref().map(|t| t.to_json()),
+        "remind_at": remind.as_ref().map(|r| r.at),
+        "remind_note": remind.as_ref().and_then(|r| r.note.as_deref()),
+        "remind_due": remind.as_ref().is_some_and(|r| r.due),
     })
 }
 
-pub(super) fn idea_card(i: &Idea, agents: &Agents, cfg: &Config) -> Value {
+/// The card of an idea. One whose reminder is due is in Needs you, still an idea card.
+pub(super) fn idea_card(i: &Idea, agents: &Agents, cfg: &Config, now: i64) -> Value {
+    let remind = remind::of_idea(i, now);
+    let due = remind.as_ref().is_some_and(|r| r.due);
+    let column = if due { Column::NeedsYou } else { Column::Ideas };
     let folder = i
         .folder
         .as_deref()
@@ -182,7 +191,7 @@ pub(super) fn idea_card(i: &Idea, agents: &Agents, cfg: &Config) -> Value {
         "agent_name": agents.resolve(i.agent.as_deref()).map(|a| a.short_name()),
         "title": i.title,
         "folder": i.folder.as_deref().map(home_rel),
-        "column": "ideas", "auto_column": "ideas", "manual": false,
+        "column": column.as_str(), "auto_column": column.as_str(), "manual": false,
         "last_activity_at": i.created_at, "started_at": i.created_at,
         "state": i.notes, "state_source": "idea", "next": null, "ai_status": null, "recap": null,
         "has_prompt": i.prompt.is_some(),
@@ -190,6 +199,9 @@ pub(super) fn idea_card(i: &Idea, agents: &Agents, cfg: &Config) -> Value {
         "topics_more": 0, "child_count": 0, "child_done": 0, "prompt_count": 0,
         "resumable": false, "resume_cmd": null, "branch": null, "repo": null,
         "live_status": null, "parent_id": null, "from_session_id": i.from_session_id, "tokens": null,
+        "remind_at": remind.as_ref().map(|r| r.at),
+        "remind_note": remind.as_ref().and_then(|r| r.note.as_deref()),
+        "remind_due": due,
     });
     if let Some(f) = folder {
         card["folder_state"] = json!(f.code());

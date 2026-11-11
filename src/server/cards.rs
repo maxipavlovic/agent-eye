@@ -6,6 +6,7 @@ use super::Shared;
 use crate::conversation;
 use crate::ideas;
 use crate::model::Column;
+use crate::remind;
 use crate::resume;
 use crate::search;
 use crate::util::{head_chars, now_ms};
@@ -23,7 +24,7 @@ pub(super) async fn api_card(State(st): State<Shared>, Path(id): Path<String>) -
             .ok()
             .and_then(|n| ideas::get(&db, n).ok().flatten())
             .ok_or_else(|| ApiError::not_found("no such idea"))?;
-        let mut v = idea_card(&i, &st.agents, &st.cfg);
+        let mut v = idea_card(&i, &st.agents, &st.cfg, now);
         v["notes"] = json!(i.notes);
         v["prompt"] = json!(i.prompt);
         v["prompts"] = json!([]);
@@ -128,6 +129,9 @@ pub(super) async fn api_move(
             }
         }
     }
+    // putting it somewhere by hand is acting on a reminder that came due
+    let finished = matches!(Column::parse(&want), Some(Column::Done | Column::Archive));
+    remind::answered(&db, &id, now, finished)?;
     let s = db
         .session_by_id(&id)?
         .ok_or_else(|| ApiError::not_found("no such session"))?;

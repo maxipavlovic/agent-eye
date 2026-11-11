@@ -33,7 +33,21 @@ pub(super) fn aged_out(column: &str, last_ms: i64, now: i64, cfg: &Config) -> bo
         && now - last_ms > i64::from(cfg.board.done_days) * 24 * 3600 * 1000
 }
 
-/// The board: the columns with their cards, newest first, and the archive count.
+/// A card's place in its lane: cards with a due reminder first, each group newest first (a due
+/// card by the time it came due).
+type Place = (bool, i64, Value);
+
+fn place(card: Value, last_ms: i64) -> Place {
+    let due = card["remind_due"].as_bool().unwrap_or(false);
+    let at = if due {
+        card["remind_at"].as_i64()
+    } else {
+        None
+    };
+    (due, at.unwrap_or(last_ms), card)
+}
+
+/// The board: the columns with their cards, newest first (due reminders on top), and the archive count.
 pub fn board_json(db: &Db, cfg: &Config, agents: &Agents, now: i64, all: bool) -> Result<Value> {
     let cx = CardCtx {
         user: &cfg.user,
@@ -43,7 +57,7 @@ pub fn board_json(db: &Db, cfg: &Config, agents: &Agents, now: i64, all: bool) -
     let outputs = db.all_outputs()?;
     let empty_s: Vec<Stream> = vec![];
     let empty_o: Vec<Output> = vec![];
-    let mut buckets: HashMap<&'static str, Vec<(i64, Value)>> = HashMap::new();
+    let mut buckets: HashMap<&'static str, Vec<Place>> = HashMap::new();
     let mut archive_count = 0usize;
     let hidden = hidden_set(db, cfg, all)?;
     for s in db.all_sessions()? {
@@ -71,21 +85,31 @@ pub fn board_json(db: &Db, cfg: &Config, agents: &Agents, now: i64, all: bool) -
         buckets
             .entry(key)
             .or_default()
-            .push((s.last_activity_at.unwrap_or(0), card));
+            .push(place(card, s.last_activity_at.unwrap_or(0)));
+    }
+    // an idea whose reminder is due is in Needs you, still an idea card
+    let enabled = cfg.enabled_agent_ids();
+    let mut idea_cards = vec![];
+    for i in ideas::list_open(db)?
+        .iter()
+        .filter(|i| !hide::idea_off(&enabled, i))
+    {
+        let card = idea_card(i, agents, cfg, now);
+        if card["remind_due"] == true {
+            let key = Column::NeedsYou.as_str();
+            buckets.entry(key).or_default().push(place(card, 0));
+        } else {
+            idea_cards.push(card);
+        }
     }
     let mut cols = vec![];
     for (c, title) in COLUMN_TITLES {
         let mut cards: Vec<Value> = if c == Column::Ideas {
-            let enabled = cfg.enabled_agent_ids();
-            ideas::list_open(db)?
-                .iter()
-                .filter(|i| !hide::idea_off(&enabled, i))
-                .map(|i| idea_card(i, agents, cfg))
-                .collect()
+            std::mem::take(&mut idea_cards)
         } else {
             let mut v = buckets.remove(c.as_str()).unwrap_or_default();
-            v.sort_by_key(|(t, _)| std::cmp::Reverse(*t));
-            v.into_iter().map(|(_, c)| c).collect()
+            v.sort_by_key(|(due, t, _)| (std::cmp::Reverse(*due), std::cmp::Reverse(*t)));
+            v.into_iter().map(|(_, _, c)| c).collect()
         };
         cards.shrink_to_fit();
         cols.push(json!({"id": c.as_str(), "title": title, "cards": cards}));

@@ -1,12 +1,13 @@
 //! What differs between operating systems, in one place. The rest of eye asks this module to keep
-//! the daemon running (`service`), open a URL, copy text (`clipboard`) or open a terminal tab, and
-//! never looks at the OS itself.
+//! the daemon running (`service`), open a URL, copy text (`clipboard`), show a notice (`notify`) or
+//! open a terminal tab, and never looks at the OS itself.
 //!
 //! The code for every OS is compiled everywhere, so every OS tests all of it. The one place that
 //! chooses between macOS and Linux is `MACOS` below; anything that is not macOS is treated as Linux.
 
 pub mod clipboard;
 mod launchd;
+pub mod notify;
 pub mod service;
 mod systemd;
 pub mod terminal;

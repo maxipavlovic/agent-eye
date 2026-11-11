@@ -39,6 +39,9 @@ pub fn mark(db: &Db, id: &str, status: &str, next: Option<&str>) -> Result<Strin
             }
         }
     }
+    // putting it somewhere by hand is acting on a reminder that came due
+    let finished = matches!(Column::parse(&want), Some(Column::Done | Column::Archive));
+    crate::remind::answered(db, id, now, finished)?;
     if let Some(n) = next.map(str::trim).filter(|n| !n.is_empty()) {
         db.conn.execute(
             "UPDATE session SET next_step=?2 WHERE id=?1",

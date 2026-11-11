@@ -38,6 +38,8 @@ pub mod paths;
 pub mod pick;
 /// What differs between macOS and Linux: the background service, opening URLs, the clipboard.
 pub mod platform;
+/// "Check on this" dates for sessions and ideas: the time parser, the rule and the notice.
+pub mod remind;
 /// What install, uninstall and board on|off print.
 pub mod report;
 /// Opening a command in an iTerm2 tab (macOS) or copying it.

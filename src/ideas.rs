@@ -22,6 +22,9 @@ fn from_row(r: &rusqlite::Row) -> rusqlite::Result<Idea> {
         session_id: r.get("session_id")?,
         sort: r.get("sort")?,
         archived: r.get::<_, i64>("archived")? != 0,
+        remind_at: r.get("remind_at")?,
+        remind_note: r.get("remind_note")?,
+        remind_notified_at: r.get("remind_notified_at")?,
     })
 }
 

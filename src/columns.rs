@@ -6,6 +6,8 @@ const SEVEN_DAYS_MS: i64 = 7 * 24 * 3600 * 1000;
 #[derive(Debug, Clone)]
 pub struct Input<'a> {
     pub archived: bool,
+    /// A "check on this" reminder has come due and the session is not touched since.
+    pub remind_due: bool,
     pub column_manual: Option<Column>,
     pub column_manual_at: Option<i64>,
     pub last_activity_at: i64,
@@ -25,6 +27,7 @@ impl<'a> Input<'a> {
     pub fn from_session(s: &'a Session, has_outputs: bool, now_ms: i64) -> Input<'a> {
         Input {
             archived: s.archived,
+            remind_due: crate::remind::is_due(s.remind_at, s.last_activity_at.unwrap_or(0), now_ms),
             column_manual: s.column_manual.as_deref().and_then(Column::parse),
             column_manual_at: s.column_manual_at,
             last_activity_at: s.last_activity_at.unwrap_or(0),
@@ -44,6 +47,10 @@ impl<'a> Input<'a> {
 pub fn compute(i: &Input) -> Column {
     if i.archived {
         return Column::Archive;
+    }
+    // it comes back whatever the session was doing or wherever you put it
+    if i.remind_due {
+        return Column::NeedsYou;
     }
     if let Some(c) = i.column_manual {
         if i.column_manual_at.unwrap_or(0) >= i.last_activity_at {
@@ -88,6 +95,7 @@ mod tests {
     fn base() -> Input<'static> {
         Input {
             archived: false,
+            remind_due: false,
             column_manual: None,
             column_manual_at: None,
             last_activity_at: 1_000,
@@ -110,6 +118,40 @@ mod tests {
         i.column_manual_at = Some(5_000);
         i.live_status = Some("busy");
         assert_eq!(compute(&i), Column::Archive);
+    }
+
+    #[test]
+    fn a_due_reminder_beats_the_manual_column_and_the_rules_but_not_the_archive() {
+        let mut i = base();
+        i.remind_due = true;
+        i.column_manual = Some(Column::Waiting);
+        i.column_manual_at = Some(1_500);
+        assert_eq!(compute(&i), Column::NeedsYou);
+        i.live_status = Some("busy");
+        i.ai_status = Some(AiStatus::Done);
+        assert_eq!(compute(&i), Column::NeedsYou);
+        i.archived = true;
+        assert_eq!(compute(&i), Column::Archive);
+    }
+
+    #[test]
+    fn a_session_with_a_reminder_that_is_not_due_stays_where_the_rules_put_it() {
+        let mut s = Session {
+            remind_at: Some(5_000),
+            last_activity_at: Some(1_000),
+            column_manual: Some("waiting".into()),
+            column_manual_at: Some(1_000),
+            ..Default::default()
+        };
+        let col = |s: &Session, now| compute(&Input::from_session(s, true, now));
+        assert_eq!(col(&s, 2_000), Column::Waiting, "not yet");
+        assert_eq!(col(&s, 5_000), Column::NeedsYou, "due");
+        s.last_activity_at = Some(5_001);
+        assert_eq!(
+            col(&s, 6_000),
+            Column::Paused,
+            "resumed: the reminder is answered"
+        );
     }
 
     #[test]

@@ -26,6 +26,9 @@ port = 7420
 resume = "{resume}"   # how Resume/Start open a session: "auto" (iTerm2 or Terminal on a Mac, your terminal on Linux, else copy), "iterm", "terminal", "copy"
 done_days = 7      # Done sessions older than this leave the board for the archive view; 0 = keep them
 
+[remind]
+notify = true      # a desktop notice when a "check on" reminder is due (osascript on macOS, notify-send on Linux); it never leaves the machine
+
 [user]
 name = ""          # your name as older summaries wrote it, e.g. "Sam": lines starting "Sam:" show as "You:"
 
@@ -63,6 +66,7 @@ pub struct Config {
     pub summary: SummaryCfg,
     pub user: UserCfg,
     pub board: BoardCfg,
+    pub remind: RemindCfg,
     pub exclude: ExcludeCfg,
     pub outputs: OutputsCfg,
     pub hide: HideCfg,
@@ -255,6 +259,19 @@ impl Default for BoardCfg {
             resume: crate::platform::default_resume().into(),
             done_days: 7,
         }
+    }
+}
+
+/// `[remind]`: what happens when a reminder falls due.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct RemindCfg {
+    /// Show a desktop notice, once per reminder.
+    pub notify: bool,
+}
+impl Default for RemindCfg {
+    fn default() -> Self {
+        Self { notify: true }
     }
 }
 

@@ -118,6 +118,12 @@ pub struct Session {
     pub archived: bool,
     /// Manual override: Some(true) = `eye hide`, Some(false) = `eye unhide`, None = the rule decides.
     pub hidden: Option<bool>,
+    /// When you asked to check on this session (Unix ms); see `remind`.
+    pub remind_at: Option<i64>,
+    /// What to check on, in your words.
+    pub remind_note: Option<String>,
+    /// When you were told it is due, so the notice goes out once.
+    pub remind_notified_at: Option<i64>,
     /// Token use from the transcripts; None until the transcript was read.
     pub tokens: Option<Tokens>,
 }
@@ -255,4 +261,8 @@ pub struct Idea {
     pub session_id: Option<String>,
     pub sort: Option<i64>,
     pub archived: bool,
+    /// When you asked to check on this idea (Unix ms); see `remind`.
+    pub remind_at: Option<i64>,
+    pub remind_note: Option<String>,
+    pub remind_notified_at: Option<i64>,
 }

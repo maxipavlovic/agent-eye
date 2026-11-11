@@ -8,6 +8,7 @@ use crate::folder::{self, FolderMissing, FolderState};
 use crate::hide;
 use crate::ideas;
 use crate::model::Idea;
+use crate::util::now_ms;
 use axum::extract::{Path, Query, State};
 use axum::Json;
 use serde::Deserialize;
@@ -48,7 +49,7 @@ pub(super) async fn api_idea_add(State(st): State<Shared>, Json(b): Json<IdeaBod
         },
     )
     .map_err(|e| ApiError::bad(format!("{e:#}")))?;
-    Ok(Json(idea_card(&idea, &st.agents, &st.cfg)))
+    Ok(Json(idea_card(&idea, &st.agents, &st.cfg, now_ms())))
 }
 
 #[derive(Deserialize)]
@@ -76,7 +77,7 @@ pub(super) async fn api_idea_edit(
         agent: b.agent,
     };
     let idea = ideas::edit(&db, id, &e).map_err(|e| ApiError::bad(format!("{e:#}")))?;
-    Ok(Json(idea_card(&idea, &st.agents, &st.cfg)))
+    Ok(Json(idea_card(&idea, &st.agents, &st.cfg, now_ms())))
 }
 
 pub(super) fn expand_tilde(p: &str) -> String {
