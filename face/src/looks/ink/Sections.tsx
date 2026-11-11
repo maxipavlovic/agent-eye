@@ -6,6 +6,7 @@ import { folderGroup, OUTPUT_NAMES, outputLabel, tok } from '../../format';
 import { INK, MARKS, OUT_TAG } from './art';
 import { Hl } from './highlight';
 import { Mark } from './pieces';
+import { WorkedRows } from './WorkedRows';
 
 /** A titled block of the detail panel, with an optional count. */
 export function Sec({ t, n, children }: { t: string; n?: number | string; children: ComponentChildren }) {
@@ -173,6 +174,7 @@ export function Where({ d }: { d: CardDetail }) {
         {d.folder && (<><dt>FOLDER</dt><dd>{d.folder}</dd></>)}
         {d.branch && (<><dt>BRANCH</dt><dd>{d.branch}</dd></>)}
         {d.started_at && (<><dt>STARTED</dt><dd>{new Date(d.started_at).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}</dd></>)}
+        <WorkedRows w={d.worked} />
       </dl>
     </Sec>
   );

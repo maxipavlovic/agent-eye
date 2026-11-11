@@ -277,6 +277,14 @@ mark { background: var(--ink); color: var(--paper); padding: 0 3px; }
 .where { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 0; font: 400 16px/1.4 var(--f-body); }
 .where dt { font: 400 16px/1.3 var(--f-label); color: var(--mute); }
 .where dd { margin: 0; overflow-wrap: anywhere; }
+/* The days a session was worked on: one box per calendar day, filled by how much was done. */
+.wstrip { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; }
+.wstrip small { font: 400 14px/1 var(--f-body); color: var(--mute); margin-right: 8px; }
+.wcell { display: block; width: 10px; height: 16px; box-sizing: border-box; border: 1px solid var(--ink); }
+.wcell.l1 { background: var(--d25); }
+.wcell.l2 { background: var(--d50); }
+.wcell.l3 { background: var(--d75); }
+.wcell.l4 { background: var(--ink); }
 
 .receipt { margin-top: 34px; background: var(--ink); color: var(--paper); padding: 30px 22px 28px; }
 .receipt .rt { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px 14px; font: 700 16px/1 var(--f-label); letter-spacing: 2px; padding-bottom: 12px; border-bottom: 2px dashed var(--paper); margin-bottom: 14px; }

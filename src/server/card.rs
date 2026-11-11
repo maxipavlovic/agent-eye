@@ -257,6 +257,7 @@ mod tests {
     use crate::ideas;
     use crate::server::test_support::*;
     use crate::util::now_ms;
+    use crate::worked::WorkEvent;
 
     #[tokio::test]
     async fn state_source_names_where_the_state_comes_from() {
@@ -388,5 +389,42 @@ mod tests {
             assert!(c.get("tokens").is_some(), "{c}");
             assert_eq!(c["tokens"] == want, c["id"] == "aaaaaaaa-1");
         }
+    }
+
+    #[tokio::test]
+    async fn the_detail_card_has_the_days_worked_when_they_are_counted() {
+        let e = env();
+        add_session(&e.db, "aaaaaaaa-1", "Counted", None, 3, now_ms());
+        add_session(&e.db, "bbbbbbbb-2", "Not yet", None, 3, now_ms());
+        let noon = 1_790_000_000_000 / 86_400_000 * 86_400_000 + 12 * 3_600_000;
+        let events = [
+            WorkEvent {
+                ts: noon,
+                prompt: true,
+            },
+            WorkEvent {
+                ts: noon + 600_000,
+                prompt: false,
+            },
+        ];
+        crate::worked::store::record(&e.db.conn, "aaaaaaaa-1", &events, true).unwrap();
+        let (_, c) = call(&e, req("GET", "/api/cards/aaaaaaaa-1", None)).await;
+        let w = &c["worked"];
+        assert_eq!(w["active_ms"], 600_000);
+        assert_eq!(
+            (w["days_count"].clone(), w["span_days"].clone()),
+            (json!(1), json!(1))
+        );
+        assert_eq!(w["days"][0]["prompts"], 1);
+        assert_eq!(w["last_at"], noon + 600_000);
+        assert_eq!(w["more_days"], 0);
+        let (_, c) = call(&e, req("GET", "/api/cards/bbbbbbbb-2", None)).await;
+        assert!(c["worked"].is_null());
+        let (_, b) = call(&e, req("GET", "/api/board", None)).await;
+        assert!(b["columns"][0]["cards"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|c| c.get("worked").is_none()));
     }
 }

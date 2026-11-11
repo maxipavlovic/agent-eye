@@ -861,6 +861,29 @@ mod tests {
     }
 
     #[test]
+    fn the_preview_says_the_days_worked_once_they_are_counted() {
+        use crate::worked::{store, WorkEvent};
+        let mut a = app("");
+        let t = render_text(&mut a, 100, 30).unwrap();
+        assert!(!t.contains("worked "), "{t}");
+        let at = a.now - 3_600_000;
+        let events = [
+            WorkEvent {
+                ts: at,
+                prompt: true,
+            },
+            WorkEvent {
+                ts: at + 600_000,
+                prompt: false,
+            },
+        ];
+        let id = a.current().unwrap().id.clone();
+        store::record(&a.db.conn, &id, &events, true).unwrap();
+        let t = render_text(&mut a, 100, 30).unwrap();
+        assert!(t.contains("worked 1 day · 10 m · last "), "{t}");
+    }
+
+    #[test]
     fn with_one_agent_nothing_is_added_to_the_rows_or_the_preview() {
         let mut a = app("");
         let t = render_text(&mut a, 80, 30).unwrap();

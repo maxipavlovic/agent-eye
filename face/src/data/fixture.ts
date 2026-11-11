@@ -71,6 +71,21 @@ function shiftTimes(v: unknown, by: number): void {
   }
 }
 
+/** After `shiftTimes`: moves the days of each `worked` by whole days so its last day is the local day of its last message again. */
+function shiftWorked(details: Record<string, CardDetail>): void {
+  const day = (s: string) => Date.parse(`${s}T00:00:00Z`);
+  for (const d of Object.values(details)) {
+    const w = d.worked;
+    if (!w) continue;
+    const at = new Date(w.last_at);
+    const by = Date.UTC(at.getFullYear(), at.getMonth(), at.getDate()) - day(w.last_day);
+    const move = (s: string) => new Date(day(s) + by).toISOString().slice(0, 10);
+    w.first_day = move(w.first_day);
+    w.last_day = move(w.last_day);
+    w.days.forEach((x) => { x.day = move(x.day); });
+  }
+}
+
 /** The few time words the board sends, read like `eye remind` reads them (the real reading is the engine's). */
 function whenOf(text: string, now = Date.now()): number {
   const t = text.trim().toLowerCase();
@@ -133,6 +148,7 @@ export function fixtureSource(): Source {
   if (files === sample) {
     const by = Date.now() - board.generated_at;
     for (const part of [board, details, archive, ideas, written]) shiftTimes(part, by);
+    shiftWorked(details);
   }
   /** What the real engine would say about a folder: the ones on the board exist, a new one under `~` can be made. */
   const exists = (p: string) => p === '~' || allCards().some((c) => c.folder === p && c.folder_state !== 'missing');

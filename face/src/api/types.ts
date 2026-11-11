@@ -151,11 +151,36 @@ export interface FolderCheck {
   note: string | null;
 }
 
+/** One local day a session was worked on. */
+export interface WorkedDay {
+  /** YYYY-MM-DD. */
+  day: string;
+  prompts: number;
+  active_ms: number;
+}
+
+/** The days a session was worked on (detail cards): absent or null while they are not counted yet. */
+export interface Worked {
+  /** The first and last calendar day of the strip, at most the last 60. */
+  first_day: string;
+  last_day: string;
+  /** The days with work in them inside the strip, oldest first. */
+  days: WorkedDay[];
+  /** Days with work over the whole session, and calendar days from its first to its last. */
+  days_count: number;
+  span_days: number;
+  active_ms: number;
+  last_at: number;
+  /** Calendar days before the strip. */
+  more_days: number;
+}
+
 export interface CardDetail extends Card {
   /** Up to the last 10 prompts, oldest first. */
   prompts: string[];
   first_prompt: string | null;
   last_assistant_text: string | null;
+  worked?: Worked | null;
   /** What Resume does on this machine: 'iterm', 'terminal' or 'copy'. */
   resume_mode: 'iterm' | 'terminal' | 'copy' | string;
   /** The Linux terminal program that Resume opens, when known. */

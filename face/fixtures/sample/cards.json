@@ -360,7 +360,33 @@
         "line": "↻ every 10 min · next 14:20"
       }
     ],
-    "remote_url": null
+    "remote_url": null,
+    "worked": {
+      "first_day": "2026-11-06",
+      "last_day": "2026-11-09",
+      "days": [
+        {
+          "day": "2026-11-06",
+          "prompts": 6,
+          "active_ms": 5700000
+        },
+        {
+          "day": "2026-11-08",
+          "prompts": 8,
+          "active_ms": 8400000
+        },
+        {
+          "day": "2026-11-09",
+          "prompts": 5,
+          "active_ms": 2880000
+        }
+      ],
+      "days_count": 3,
+      "span_days": 4,
+      "active_ms": 16980000,
+      "last_at": 1794214680000,
+      "more_days": 0
+    }
   },
   "e97cde56-38d0-4193-a707-980322069975": {
     "id": "e97cde56-38d0-4193-a707-980322069975",
@@ -477,7 +503,23 @@
     "activity": null,
     "background": [],
     "loops": [],
-    "remote_url": "https://claude.ai/code/session_01SampleSampleSample"
+    "remote_url": "https://claude.ai/code/session_01SampleSampleSample",
+    "worked": {
+      "first_day": "2026-11-09",
+      "last_day": "2026-11-09",
+      "days": [
+        {
+          "day": "2026-11-09",
+          "prompts": 8,
+          "active_ms": 1500000
+        }
+      ],
+      "days_count": 1,
+      "span_days": 1,
+      "active_ms": 1500000,
+      "last_at": 1794214500000,
+      "more_days": 0
+    }
   },
   "f99547eb-fa3f-49b4-a326-3b55de7c0207": {
     "id": "f99547eb-fa3f-49b4-a326-3b55de7c0207",
