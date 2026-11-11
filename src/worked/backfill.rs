@@ -12,7 +12,7 @@ use crate::db::Db;
 use crate::model::Session;
 use crate::paths::Paths;
 use anyhow::{Context, Result};
-use rusqlite::TransactionBehavior;
+use rusqlite::{params, TransactionBehavior};
 
 /// Sessions the daemon counts per tick, so the board and the picker stay quick.
 pub const BATCH: usize = 5;
@@ -26,16 +26,25 @@ pub struct Pass {
     pub left: usize,
 }
 
+/// The sessions to count: those of an enabled agent that have a transcript or a copy of one and no
+/// timeline yet (a session of an agent that is switched off waits until it is switched on).
+const WAITING: &str = "FROM session s WHERE transcript_state IN ('present','archived')
+    AND agent IN (SELECT value FROM json_each(?1))
+    AND NOT EXISTS (SELECT 1 FROM worked_state w WHERE w.session_id=s.id)";
+
+fn enabled_ids(agents: &Agents) -> String {
+    serde_json::json!(agents.iter().map(|a| a.id()).collect::<Vec<_>>()).to_string()
+}
+
 /// Count up to `limit` sessions that have no timeline yet, the most recently active first.
 pub fn run_batch(db: &mut Db, paths: &Paths, agents: &Agents, limit: usize) -> Result<Pass> {
+    let enabled = enabled_ids(agents);
     let ids: Vec<String> = db
         .conn
-        .prepare(
-            "SELECT id FROM session s WHERE transcript_state IN ('present','archived')
-               AND NOT EXISTS (SELECT 1 FROM worked_state w WHERE w.session_id=s.id)
-             ORDER BY last_activity_at DESC LIMIT ?1",
-        )?
-        .query_map([limit as i64], |r| r.get(0))?
+        .prepare(&format!(
+            "SELECT id {WAITING} ORDER BY last_activity_at DESC LIMIT ?2"
+        ))?
+        .query_map(params![enabled, limit as i64], |r| r.get(0))?
         .collect::<rusqlite::Result<_>>()?;
     let mut pass = Pass::default();
     for id in &ids {
@@ -61,7 +70,7 @@ pub fn run_batch(db: &mut Db, paths: &Paths, agents: &Agents, limit: usize) -> R
         }
         tx.commit()?;
     }
-    pass.left = waiting(db)?;
+    pass.left = waiting(db, agents)?;
     Ok(pass)
 }
 
@@ -80,11 +89,10 @@ pub fn run_all(db: &mut Db, paths: &Paths, agents: &Agents) -> Result<Pass> {
 }
 
 /// How many sessions have no timeline yet.
-pub fn waiting(db: &Db) -> Result<usize> {
+pub fn waiting(db: &Db, agents: &Agents) -> Result<usize> {
     let n: i64 = db.conn.query_row(
-        "SELECT count(*) FROM session s WHERE transcript_state IN ('present','archived')
-           AND NOT EXISTS (SELECT 1 FROM worked_state w WHERE w.session_id=s.id)",
-        [],
+        &format!("SELECT count(*) {WAITING}"),
+        [enabled_ids(agents)],
         |r| r.get(0),
     )?;
     Ok(n as usize)

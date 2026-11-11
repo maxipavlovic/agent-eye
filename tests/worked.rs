@@ -160,7 +160,7 @@ fn a_session_read_for_the_first_time_is_counted_by_the_normal_read() {
     let mut e = Env::new();
     e.scan();
     assert_eq!(e.totals(), (15 * MIN, 3, 5));
-    assert_eq!(backfill::waiting(&e.db).unwrap(), 0);
+    assert_eq!(backfill::waiting(&e.db, &e.agents()).unwrap(), 0);
 }
 
 #[test]
@@ -194,7 +194,7 @@ fn an_old_session_is_counted_from_its_timestamps_and_nothing_else_changes() {
     e.scan();
     let counted = e.totals();
     e.forget_hours();
-    assert_eq!(backfill::waiting(&e.db).unwrap(), 1);
+    assert_eq!(backfill::waiting(&e.db, &e.agents()).unwrap(), 1);
     let before = e.untouched();
     let pass = e.backfill();
     assert_eq!((pass.counted, pass.unreadable, pass.left), (1, 0, 0));
@@ -296,6 +296,24 @@ fn a_session_with_no_transcript_and_no_copy_is_given_up_once() {
     assert_eq!((pass.counted, pass.unreadable, pass.left), (0, 1, 0));
     assert!(store::load(&e.db.conn, SID).unwrap().is_none());
     assert_eq!(e.backfill().unreadable, 0);
+}
+
+#[test]
+fn a_session_of_an_agent_that_is_switched_off_waits_instead_of_being_given_up() {
+    let mut e = Env::new();
+    e.scan();
+    e.forget_hours();
+    e.db.conn
+        .execute("UPDATE session SET agent='codex'", [])
+        .unwrap();
+    let pass = e.backfill();
+    assert_eq!((pass.counted, pass.unreadable, pass.left), (0, 0, 0));
+    assert!(!store::is_counted(&e.db.conn, SID).unwrap());
+    assert_eq!(backfill::waiting(&e.db, &e.agents()).unwrap(), 0);
+    e.db.conn
+        .execute("UPDATE session SET agent='claude'", [])
+        .unwrap();
+    assert_eq!(e.backfill().counted, 1);
 }
 
 #[test]
