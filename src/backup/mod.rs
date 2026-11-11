@@ -10,7 +10,7 @@ mod restore;
 
 pub use check::checks;
 pub use names::{Entry, Reason};
-pub use restore::{apply, find, is_snapshot, prepare, schema_version, Applied, Prepared};
+pub use restore::{apply, find, prepare, schema_version, Applied, Prepared};
 
 use crate::archive::compress_file;
 use crate::config::{BackupCfg, Config};
@@ -134,11 +134,14 @@ pub fn daily_if_due(
 /// A new or empty database, one already at `target`, and `enabled = false` make none.
 pub fn before_upgrade(conn: &Connection, db_path: &Path, target: i64) {
     let Some(home) = db_path.parent() else { return };
+    if !needs_upgrade(conn, target) {
+        return;
+    }
     let paths = Paths {
         home: home.to_path_buf(),
     };
     let cfg = crate::install::read_config(&paths);
-    if !cfg.backup.enabled || !needs_upgrade(conn, target) {
+    if !cfg.backup.enabled {
         return;
     }
     if let Err(e) = take(conn, &paths, &cfg.backup, &Reason::PreUpgrade(target)) {

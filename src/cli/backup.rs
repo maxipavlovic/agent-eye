@@ -1,4 +1,4 @@
-//! `eye backup`, `eye backup ls` and `eye restore <snapshot>`.
+//! `eye backup`, `eye backup ls` and `eye backup restore <snapshot>`.
 
 use super::args::BackupCmd;
 use super::Global;
@@ -12,6 +12,7 @@ pub fn run(g: &Global, sub: Option<BackupCmd>) -> Result<()> {
     match sub {
         None => now(g),
         Some(BackupCmd::Ls) => ls(g),
+        Some(BackupCmd::Restore { name, yes }) => restore(g, &name, yes),
     }
 }
 
@@ -56,14 +57,8 @@ fn ls(g: &Global) -> Result<()> {
     Ok(())
 }
 
-/// Is `name` a database snapshot (or `latest`) rather than a session id?
-pub fn names_snapshot(g: &Global, name: &str) -> bool {
-    g.paths()
-        .is_ok_and(|p| backup::is_snapshot(&backup::dir(&p), name))
-}
-
 /// Put a snapshot back as the database, after showing what will happen and asking.
-pub fn restore(g: &Global, name: &str, yes: bool) -> Result<()> {
+fn restore(g: &Global, name: &str, yes: bool) -> Result<()> {
     let paths = g.paths()?;
     let cfg = g.config_read_only(&paths);
     let entry = backup::find(&backup::dir(&paths), name)?;

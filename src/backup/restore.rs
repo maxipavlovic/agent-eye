@@ -61,11 +61,6 @@ pub fn find(dir: &Path, name: &str) -> Result<Entry> {
     found.with_context(|| format!("no snapshot called {name} (see `eye backup ls`)"))
 }
 
-/// Does `name` name a snapshot (or `latest`)? Told apart from a session id by `eye restore`.
-pub fn is_snapshot(dir: &Path, name: &str) -> bool {
-    find(dir, name).is_ok()
-}
-
 /// The schema version a database file says it has; an error when it is not an eye database.
 pub fn schema_of(conn: &Connection) -> Result<i64> {
     conn.query_row(

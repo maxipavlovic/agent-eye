@@ -49,7 +49,7 @@ fn a_snapshot_is_found_by_name_with_or_without_its_suffix_and_by_latest() {
     assert!(find(&d, "eye-20261101-030000-daily").is_ok());
     assert!(find(&d, "eye-20261101-030000-daily.db.zst").is_ok());
     assert!(find(&d, "nothing").is_err());
-    assert!(!is_snapshot(&d, "0123456789abcdef"));
+    assert!(find(&d, "0123456789abcdef").is_err());
     assert!(
         find(&dir(&home().paths), "latest").is_err(),
         "no folder, no snapshot"

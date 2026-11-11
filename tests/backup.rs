@@ -116,10 +116,10 @@ fn the_commands_make_list_and_restore_snapshots() {
     assert!(ls.contains("manual") && ls.lines().count() == 2, "{ls}");
     assert!(ls.trim_end().ends_with(&backup_schema()), "{ls}");
 
-    let asked = eye(t.path(), &["restore", "latest"]);
+    let asked = eye(t.path(), &["backup", "restore", "latest"]);
     assert!(!asked.status.success());
     assert!(text(&asked).contains("--yes"), "{}", text(&asked));
-    let done = eye(t.path(), &["restore", "latest", "--yes"]);
+    let done = eye(t.path(), &["backup", "restore", "latest", "--yes"]);
     assert!(done.status.success(), "{}", text(&done));
     assert!(
         text(&done).contains("next scan brings back"),
@@ -132,14 +132,6 @@ fn the_commands_make_list_and_restore_snapshots() {
 
 fn backup_schema() -> String {
     agent_eye::db::SCHEMA_VERSION.to_string()
-}
-
-#[test]
-fn restore_still_takes_a_session_id() {
-    let t = tempfile::tempdir().unwrap();
-    let o = eye(t.path(), &["restore", S1]);
-    assert!(!o.status.success());
-    assert!(!text(&o).contains("snapshot"), "{}", text(&o));
 }
 
 #[test]

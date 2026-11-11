@@ -130,6 +130,13 @@ pub struct SetupArgs {
 pub enum BackupCmd {
     /// List the snapshots, newest first
     Ls,
+    /// Put a snapshot back as the database (`latest`, or a name from `eye backup ls`)
+    Restore {
+        name: String,
+        /// Do not ask first (needed in a script)
+        #[arg(long)]
+        yes: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -314,15 +321,9 @@ pub enum Cmd {
         #[arg(long)]
         all: bool,
     },
-    /// Put an archived transcript back where its agent expects it, or restore a database snapshot
-    /// (`latest`, or a name from `eye backup ls`)
-    Restore {
-        id: String,
-        /// For a snapshot: do not ask first (needed in a script)
-        #[arg(long)]
-        yes: bool,
-    },
-    /// Snapshot the database now (`eye backup ls` lists the snapshots)
+    /// Put an archived transcript back where its agent expects it
+    Restore { id: String },
+    /// Snapshot the database now (`eye backup ls` lists them, `eye backup restore` puts one back)
     Backup {
         #[command(subcommand)]
         sub: Option<BackupCmd>,

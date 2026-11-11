@@ -12,7 +12,7 @@ ideas, manual column moves, hidden flags and the summaries. The transcript archi
 | `daily` | The daemon makes one when the newest daily snapshot is over 24 hours old. |
 | `pre-v<N>` | Before a new version of eye changes the database to schema `N`. If it cannot be made, eye says why on standard error and goes on. |
 | `manual` | `eye backup`. |
-| `pre-restore` | Before `eye restore` replaces the database. |
+| `pre-restore` | Before `eye backup restore` replaces the database. |
 
 `[backup] enabled = false` in `config.toml` stops the daily and pre-upgrade ones; `eye backup` still
 works. Kept: the newest `keep_daily` (7) daily snapshots, the newest daily of each of the last
@@ -27,17 +27,17 @@ writes.
 ```sh
 eye backup                 # snapshot now, prints where and how big
 eye backup ls              # name, reason, age, size, schema version; newest first
-eye restore latest         # or a name from the list; shows what will happen, asks [y/N]
-eye restore latest --yes   # for scripts (without it a non-terminal refuses)
+eye backup restore latest  # or a name from the list; shows what will happen, asks [y/N]
+eye backup restore latest --yes  # for scripts (without it a non-terminal refuses)
 ```
 
-`eye restore` checks the snapshot first (`PRAGMA quick_check` must say `ok`, and its schema must not
+`eye backup restore` checks the snapshot first (`PRAGMA quick_check` must say `ok`, and its schema must not
 be newer than your eye), keeps the current database as a `pre-restore` snapshot, stops the daemon
 when it runs from the service, replaces `eye.db` (and removes its old `-wal` and `-shm` files),
 and starts the daemon again. A daemon you started by hand has to be stopped first. Transcripts only
 grow, so the next scan reads forward from the restored position and brings back the sessions that
 are newer than the snapshot. What you changed by hand after the snapshot (ideas, column moves)
-is not in it. `eye restore <session id>` still puts an archived transcript back.
+is not in it. (`eye restore <session id>` is a different command: it puts an archived transcript back.)
 
 ## Mirror (optional)
 

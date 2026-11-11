@@ -90,7 +90,7 @@ fn live_check(paths: &Paths) -> Option<Check> {
     Some(match quick_check(&conn) {
         None => Check::ok("database check: ok"),
         Some(found) => Check::warn(format!(
-            "database check failed ({found}); `eye restore latest` puts the newest snapshot back"
+            "database check failed ({found}); `eye backup restore latest` puts the newest snapshot back"
         )),
     })
 }
