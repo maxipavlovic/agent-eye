@@ -541,4 +541,15 @@ describe('the accent picker', () => {
     await vi.waitFor(() => expect($('.hd .accpop')).toBeNull());
     expect(document.documentElement.dataset.accent).toBeUndefined();
   });
+
+  it('stays open while the focus moves between its swatches and closes when Tab leaves it', async () => {
+    const { $, $$ } = await mount();
+    $<HTMLButtonElement>('.hd .accbtn')!.click();
+    await vi.waitFor(() => expect($('.hd .accpop')).not.toBeNull());
+    const [first, second] = $$<HTMLButtonElement>('.hd .accpop .acc');
+    first!.dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: second }));
+    expect($('.hd .accpop')).not.toBeNull();
+    second!.dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: document.body }));
+    await vi.waitFor(() => expect($('.hd .accpop')).toBeNull());
+  });
 });

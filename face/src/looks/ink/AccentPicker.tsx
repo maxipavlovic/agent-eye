@@ -19,11 +19,16 @@ export function AccentPicker({ store }: { store: Store }) {
       setOpen(false);
       button.current?.focus();
     };
+    // tabbing out of the picker closes it too
+    const left = (e: FocusEvent) => { if (!root.current?.contains(e.relatedTarget as Node | null)) setOpen(false); };
+    const el = root.current;
     document.addEventListener('pointerdown', away);
     document.addEventListener('keydown', esc, true);
+    el?.addEventListener('focusout', left);
     return () => {
       document.removeEventListener('pointerdown', away);
       document.removeEventListener('keydown', esc, true);
+      el?.removeEventListener('focusout', left);
     };
   }, [open]);
 

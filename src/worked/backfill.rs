@@ -16,6 +16,8 @@ use rusqlite::{params, TransactionBehavior};
 
 /// Sessions the daemon counts per tick, so the board and the picker stay quick.
 pub const BATCH: usize = 5;
+/// A pass stops early after this long, so a few very long transcripts do not hold up a tick.
+const PASS_BUDGET: std::time::Duration = std::time::Duration::from_secs(1);
 
 /// What a pass did.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -47,17 +49,23 @@ pub fn run_batch(db: &mut Db, paths: &Paths, agents: &Agents, limit: usize) -> R
         .query_map(params![enabled, limit as i64], |r| r.get(0))?
         .collect::<rusqlite::Result<_>>()?;
     let mut pass = Pass::default();
+    let started = std::time::Instant::now();
     for id in &ids {
+        if started.elapsed() > PASS_BUDGET {
+            break;
+        }
         let Some(s) = db.session_by_id(id)? else {
             continue;
         };
-        let events = read(&s, paths, agents);
+        // The file is read while the write lock is held: a scan in another process that appends
+        // between this read and the store would otherwise move its cursor past messages that
+        // neither of them counts.
         let tx = db
             .conn
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
         // A normal read may have counted the session since the query above.
         if !store::is_counted(&tx, id)? {
-            match events {
+            match read(&s, paths, agents) {
                 Ok(events) => {
                     store::record(&tx, id, &events, true)?;
                     pass.counted += 1;
