@@ -23,6 +23,22 @@ use std::process::Command;
 /// Are we on macOS? The only `cfg!` on the operating system in eye's own code.
 const MACOS: bool = cfg!(target_os = "macos");
 
+/// Start a program with `start` (a spawn or an output), trying again for a moment when Linux
+/// refuses with "text file busy": another thread still has the program open for writing, which
+/// happens when a script was written a moment ago. It passes on its own.
+fn retry_busy<T>(mut start: impl FnMut() -> std::io::Result<T>) -> std::io::Result<T> {
+    let mut tries = 0;
+    loop {
+        match start() {
+            Err(e) if e.kind() == std::io::ErrorKind::ExecutableFileBusy && tries < 20 => {
+                tries += 1;
+                std::thread::sleep(std::time::Duration::from_millis(25));
+            }
+            r => return r,
+        }
+    }
+}
+
 /// The account's home from the password database; `$HOME` can be overridden, so it is not trusted.
 pub fn account_home() -> Option<PathBuf> {
     use std::os::unix::ffi::OsStrExt;
@@ -105,6 +121,29 @@ pub fn run_applescript(script: &str) -> Result<std::process::Output> {
 mod tests {
     use super::test_support::stub;
     use super::*;
+    use std::io::{Error, ErrorKind};
+
+    #[test]
+    fn a_busy_program_is_tried_again_and_any_other_error_is_not() {
+        let mut calls = 0;
+        let r = retry_busy(|| {
+            calls += 1;
+            if calls < 3 {
+                Err(Error::from(ErrorKind::ExecutableFileBusy))
+            } else {
+                Ok(calls)
+            }
+        });
+        assert_eq!(r.unwrap(), 3);
+
+        let mut calls = 0;
+        let r = retry_busy(|| -> std::io::Result<()> {
+            calls += 1;
+            Err(Error::from(ErrorKind::NotFound))
+        });
+        assert_eq!(r.unwrap_err().kind(), ErrorKind::NotFound);
+        assert_eq!(calls, 1);
+    }
 
     #[test]
     fn a_url_goes_to_the_open_program_on_the_given_path() {

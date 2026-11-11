@@ -87,18 +87,7 @@ impl Step {
     /// is not installed. It reads nothing from the terminal and writes nothing to it.
     pub fn capture(&self, path: &OsStr) -> Option<Captured> {
         let exe = find_in(self.program, path)?;
-        // Linux refuses to run a file another thread still has open for writing ("text file
-        // busy"), which happens when a script was written a moment ago; it passes on its own.
-        let mut tries = 0;
-        let out = loop {
-            match Command::new(&exe).args(&self.args).output() {
-                Err(e) if e.kind() == std::io::ErrorKind::ExecutableFileBusy && tries < 20 => {
-                    tries += 1;
-                    std::thread::sleep(std::time::Duration::from_millis(25));
-                }
-                r => break r.ok()?,
-            }
-        };
+        let out = super::retry_busy(|| Command::new(&exe).args(&self.args).output()).ok()?;
         Some(Captured {
             ok: out.status.success(),
             code: out.status.code(),

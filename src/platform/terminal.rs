@@ -270,14 +270,16 @@ fn run_terminal(
     name: &str,
     settle: Duration,
 ) -> Result<()> {
-    let mut child = Command::new(exe)
-        .args(args)
-        .args(["sh", "-c", command])
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .with_context(|| format!("running {name}"))?;
+    let mut child = super::retry_busy(|| {
+        Command::new(exe)
+            .args(args)
+            .args(["sh", "-c", command])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+    })
+    .with_context(|| format!("running {name}"))?;
     let until = std::time::Instant::now() + settle;
     loop {
         if let Some(status) = child.try_wait().context("waiting for the terminal")? {
