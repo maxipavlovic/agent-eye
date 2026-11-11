@@ -89,6 +89,7 @@ fn folder(s: &Session) -> String {
 }
 
 fn session_json(s: &Session, col: Column, user: &UserCfg, agents: &Agents) -> Value {
+    let remind = crate::remind::of_session(s, now_ms());
     json!({
         "id": s.id,
         "agent": s.agent,
@@ -110,6 +111,9 @@ fn session_json(s: &Session, col: Column, user: &UserCfg, agents: &Agents) -> Va
         "parent_id": s.parent_session_id,
         "resume_cmd": agents.resume_line(s),
         "tokens": s.tokens.as_ref().map(|t| t.to_json()),
+        "remind_at": remind.as_ref().map(|r| r.at),
+        "remind_note": remind.as_ref().and_then(|r| r.note.as_deref()),
+        "remind_due": remind.as_ref().is_some_and(|r| r.due),
     })
 }
 

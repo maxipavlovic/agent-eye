@@ -4,7 +4,6 @@ use super::state::App;
 use crate::folder::FolderState;
 use crate::model::Column;
 use crate::pick::{self, Row};
-use crate::remind;
 use crate::util::{home_rel, tokens_line};
 use ratatui::layout::{Constraint, Layout, Position, Rect};
 use ratatui::style::{Color, Modifier, Style};
@@ -251,15 +250,7 @@ pub(super) fn preview_lines<'a>(app: &App, r: &Row, pal: &Pal) -> Vec<Line<'a>> 
     ]));
     v.push(Line::raw(""));
     if let Some(rem) = &r.remind {
-        let text = if rem.due {
-            rem.reason()
-        } else {
-            match &rem.note {
-                Some(n) => format!("⏰ {} · {n}", remind::label(rem.at, app.now)),
-                None => format!("⏰ {}", remind::label(rem.at, app.now)),
-            }
-        };
-        v.push(Line::styled(text, pal.fg(Color::Yellow)));
+        v.push(Line::styled(rem.summary(app.now), pal.fg(Color::Yellow)));
     }
     match (&r.session, &r.idea) {
         (Some(s), _) => {

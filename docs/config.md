@@ -41,6 +41,12 @@ database and come back when the agent is enabled again.
 | `resume` | `"auto"` | How Resume and Start open a session. `"auto"`: on macOS an iTerm2 tab when iTerm2 is installed (`/Applications/iTerm.app` or `~/Applications/iTerm.app`), else a Terminal window; on Linux a new terminal window when `DISPLAY` or `WAYLAND_DISPLAY` is set, else the command is copied. `"iterm"`: an iTerm2 tab (macOS only; copies elsewhere). `"terminal"`: a new terminal window: on macOS eye writes the command into a `.command` file in `~/.agent-eye/tmp/` (removed after a day) and opens it, which runs in the app macOS uses for `.command` files, Terminal.app unless you changed it; on Linux the first of `xdg-terminal-exec`, `x-terminal-emulator` and `$TERMINAL` runs `sh -c '<command>'` (this one does not ask for a display). `"copy"`: copies the command. Where `"auto"` or `"terminal"` finds nothing to open, the command is copied. Any other value means `"auto"`. The board shows what a click will do (`ITERM`, `TERMINAL` or `COPY`, with the Linux terminal's name). Copying uses `pbcopy` on macOS and the first of `wl-copy`, `xclip` and `xsel` that works on Linux; with none, the command is shown instead. A config written before `"auto"` with `"iterm"` or `"copy"` keeps working as it was. |
 | `done_days` | `7` | Done sessions idle for longer leave the board for the archive view. `0` keeps them. The picker and `eye ls` are not affected. |
 
+## `[remind]`
+
+| Key | Default | Meaning |
+|---|---|---|
+| `notify` | `true` | When a "check on this" reminder (`eye remind`, the board's REMIND ME, Ctrl-R in the picker) falls due, the daemon shows one desktop notice for it: `osascript` on macOS, `notify-send` on Linux when it is installed, otherwise nothing. The title and the text are passed to the program as arguments, never written into a script. It never leaves the machine. `false` shows none; the card is still in Needs you. |
+
 ## `[hide]`
 
 Throw-away sessions ("/clear", "exit", "cd ..") are left out of the board, search and lists. See

@@ -38,6 +38,15 @@ impl Remind {
     pub fn reason(&self) -> String {
         reason(self.note.as_deref())
     }
+
+    /// One line for a preview or `eye show`: why it is due, or when it will be and the note.
+    pub fn summary(&self, now: i64) -> String {
+        match (self.due, &self.note) {
+            (true, _) => self.reason(),
+            (false, Some(n)) => format!("⏰ {} · {n}", label(self.at, now)),
+            (false, None) => format!("⏰ {}", label(self.at, now)),
+        }
+    }
 }
 
 /// The reason line of a due reminder.

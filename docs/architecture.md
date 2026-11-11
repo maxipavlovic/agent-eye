@@ -46,11 +46,12 @@ leaves the machine except the excerpts sent to your agent for summaries (see `se
 | `columns.rs`, `hide.rs` | Which column a session is in; which sessions are throw-away or belong to a switched-off agent. |
 | `search.rs`, `pick.rs` | Full-text search and ranking; the picker's index, ranking and launching. |
 | `summarize.rs`, `summarize_prompt.txt` | Builds the masked excerpt of a session, asks the summary agent, stores the answer. |
+| `remind/` | "Check on this" reminders: the reading of a time (`when.rs`: `tomorrow`, `mon`, `4h`, `2026-11-20 14:00`, in local time), when one is due, setting, clearing, listing, and telling about due ones once. The column rule is in `columns.rs`; the notice itself is in `platform/notify.rs`. |
 | `ideas.rs`, `mark.rs` | Parked ideas and starting them; putting a session in a column by hand. |
 | `folder.rs` | Whether an idea's folder exists, and the one rule for making it: only inside the home folder. |
 | `archive.rs`, `conversation.rs` | Where and when sessions are copied to the archive and put back (how is the adapter's call); reading a conversation from the session or from a temporary copy of the archive. |
 | `hook.rs`, `daemon.rs`, `install/`, `report.rs` | The hook entry point; the background process; install, uninstall and doctor (`install/` also holds the choice of agents and what is said about the daemon's service); the one-line-per-area summary that install, uninstall and `board on\|off` print. |
-| `platform/` | Everything that differs between macOS and Linux, and nothing else does: the service manager (`service.rs` builds the launchd plist or the systemd unit, knows their commands and runs them, `launchd.rs`, `systemd.rs`), opening a URL, the clipboard tools, and the terminal a resume opens (`terminal.rs`: what `[board] resume` comes to on this machine, and the `.command` file or terminal program that runs the command). See "Platforms" below. |
+| `platform/` | Everything that differs between macOS and Linux, and nothing else does: the service manager (`service.rs` builds the launchd plist or the systemd unit, knows their commands and runs them, `launchd.rs`, `systemd.rs`), opening a URL, the clipboard tools, the desktop notice (`notify.rs`), and the terminal a resume opens (`terminal.rs`: what `[board] resume` comes to on this machine, and the `.command` file or terminal program that runs the command). See "Platforms" below. |
 | `server/` | The board API: router and state, guard (token, Host, Origin), face files, cards, board, ideas, prefs. |
 | `tui/`, `cli/` | The picker screen (state, input, render, terminal); the command line. |
 | `config.rs`, `paths.rs`, `files.rs`, `util.rs`, `resume.rs` | Config; eye's home; safe file writes; helpers (quoting, ids, formatting); opening a command in an iTerm2 tab or a terminal window, or copying it. |
@@ -72,6 +73,7 @@ macOS and Linux share all the code except `src/platform/`, which has the three t
 |---|---|---|
 | Background service | launch agent `dev.agent-eye.daemon` in `~/Library/LaunchAgents`, run with `launchctl` | systemd user unit `agent-eye.service` in `~/.config/systemd/user`, run with `systemctl --user` |
 | Open a URL | `open` | `xdg-open` |
+| Desktop notice (due reminders) | `osascript`, text as arguments | `notify-send` when installed, else none |
 | Copy text | `pbcopy` | the first of `wl-copy`, `xclip`, `xsel` that works |
 | Resume and Start (`[board] resume`) | an iTerm2 tab if installed, else a Terminal window (a `.command` file opened with `open`), or the command copied | a window of `xdg-terminal-exec`, `x-terminal-emulator` or `$TERMINAL` when there is a display, else the command copied |
 

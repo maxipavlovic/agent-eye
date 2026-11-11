@@ -268,6 +268,9 @@ pub fn show(g: &Global, id: &str, json: bool, conversation: bool, n: usize) -> R
     if let Some(v) = s.next_line() {
         println!("next:     {}", printable(&env.cfg.user.as_you(&v)));
     }
+    if let Some(r) = crate::remind::of_session(&s, now_ms()) {
+        println!("remind:   {}", printable(&r.summary(now_ms())));
+    }
     if let Some(v) = &s.recap {
         println!("recap:    {}", printable(v));
     }

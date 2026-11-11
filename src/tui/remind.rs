@@ -179,7 +179,7 @@ mod tests {
 
     /// The picker with the first session in the database, so a reminder can be saved on it.
     fn saved_app() -> App {
-        let mut a = app("");
+        let a = app("");
         a.db.conn
             .execute(
                 "INSERT INTO session(id,title,last_activity_at,prompt_count) VALUES(?1,'Catalog',1,5)",
