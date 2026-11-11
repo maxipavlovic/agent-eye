@@ -4,9 +4,11 @@
 //! no prompt history eye reads; its hooks, a writer lock per open session and the rollouts
 //! themselves say what eye needs.
 
+mod background;
 mod commands;
 mod conversation;
 mod files;
+mod goals;
 mod headless;
 mod hooks;
 mod install;

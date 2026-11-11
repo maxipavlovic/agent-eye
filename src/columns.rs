@@ -1,3 +1,4 @@
+use crate::activity::{self, DIALOG};
 use crate::model::{AiStatus, Column, Session};
 
 const SEVEN_DAYS_MS: i64 = 7 * 24 * 3600 * 1000;
@@ -12,6 +13,10 @@ pub struct Input<'a> {
     pub column_manual_at: Option<i64>,
     pub last_activity_at: i64,
     pub live_status: Option<&'a str>,
+    /// Why the live status says `waiting` (`permission prompt`).
+    pub live_wait: Option<&'a str>,
+    /// The session has a background task or a loop going.
+    pub has_background: bool,
     /// A hook event says the session waits on the user.
     pub hook_waiting: bool,
     pub last_assistant_text: Option<&'a str>,
@@ -32,6 +37,8 @@ impl<'a> Input<'a> {
             column_manual_at: s.column_manual_at,
             last_activity_at: s.last_activity_at.unwrap_or(0),
             live_status: s.live_status.as_deref(),
+            live_wait: s.live_wait.as_deref(),
+            has_background: activity::has_work(s, now_ms),
             hook_waiting: s.waiting_since.is_some(),
             last_assistant_text: s.last_assistant_text.as_deref(),
             ai_status: s.ai_status.as_deref().and_then(AiStatus::parse),
@@ -68,6 +75,14 @@ pub fn compute(i: &Input) -> Column {
         if i.hook_waiting || (ls == "idle" && asks) {
             return Column::NeedsYou;
         }
+        let dialog = i.live_wait.is_some_and(|w| w.eq_ignore_ascii_case(DIALOG));
+        let live_waiting = ls == "waiting" && !dialog;
+        if live_waiting && i.live_wait.is_some() {
+            return Column::NeedsYou;
+        }
+        if i.has_background && !asks && !live_waiting {
+            return Column::Running;
+        }
     }
     match i.ai_status {
         Some(AiStatus::NeedsYou) if i.now_ms - i.last_activity_at <= SEVEN_DAYS_MS => {
@@ -100,6 +115,8 @@ mod tests {
             column_manual_at: None,
             last_activity_at: 1_000,
             live_status: None,
+            live_wait: None,
+            has_background: false,
             hook_waiting: false,
             last_assistant_text: None,
             ai_status: None,
@@ -181,6 +198,81 @@ mod tests {
         i.hook_waiting = false;
         i.last_assistant_text = Some("ok?");
         assert_eq!(compute(&i), Column::Paused);
+    }
+
+    #[test]
+    fn a_session_that_waits_on_a_prompt_needs_you() {
+        let mut i = base();
+        i.live_status = Some("waiting");
+        i.live_wait = Some("permission prompt");
+        assert_eq!(compute(&i), Column::NeedsYou);
+        i.live_wait = Some("input needed");
+        assert_eq!(compute(&i), Column::NeedsYou);
+        i.ai_status = Some(AiStatus::Done);
+        assert_eq!(
+            compute(&i),
+            Column::NeedsYou,
+            "a live ask beats the summary"
+        );
+        i.ai_status = None;
+        i.live_wait = Some("dialog open");
+        assert_eq!(
+            compute(&i),
+            Column::Paused,
+            "a dialog the user opened is no ask"
+        );
+        i.live_wait = None;
+        assert_eq!(compute(&i), Column::Paused, "no reason given: as before");
+    }
+
+    #[test]
+    fn background_work_keeps_an_open_session_in_running() {
+        let mut i = base();
+        i.has_background = true;
+        assert_eq!(compute(&i), Column::Paused, "a closed session never runs");
+        i.live_status = Some("idle");
+        assert_eq!(compute(&i), Column::Running);
+        i.last_assistant_text = Some("Waiting for the build.");
+        assert_eq!(compute(&i), Column::Running);
+        i.live_status = Some("waiting");
+        i.live_wait = Some("dialog open");
+        assert_eq!(compute(&i), Column::Running, "a dialog is not an ask");
+        i.has_background = false;
+        assert_eq!(compute(&i), Column::Paused);
+    }
+
+    #[test]
+    fn background_work_does_not_hide_that_you_are_asked() {
+        let mut i = base();
+        i.has_background = true;
+        i.live_status = Some("idle");
+        i.last_assistant_text = Some("Shall I deploy it?");
+        assert_eq!(compute(&i), Column::NeedsYou);
+        i.last_assistant_text = Some("Done.");
+        i.hook_waiting = true;
+        assert_eq!(compute(&i), Column::NeedsYou);
+        i.hook_waiting = false;
+        i.live_status = Some("waiting");
+        i.live_wait = Some("permission prompt");
+        assert_eq!(compute(&i), Column::NeedsYou);
+        i.live_wait = None;
+        assert_eq!(
+            compute(&i),
+            Column::Paused,
+            "waiting for unknown reasons stays put"
+        );
+    }
+
+    #[test]
+    fn background_work_does_not_beat_a_manual_column_or_the_archive() {
+        let mut i = base();
+        i.live_status = Some("idle");
+        i.has_background = true;
+        i.column_manual = Some(Column::Done);
+        i.column_manual_at = Some(1_000);
+        assert_eq!(compute(&i), Column::Done);
+        i.archived = true;
+        assert_eq!(compute(&i), Column::Archive);
     }
 
     #[test]

@@ -7,6 +7,7 @@ use super::super::outputs::{
     scan_jira_branch, scan_jira_urls, scan_pr, Seen, RESULT_SCAN_CAP,
 };
 use super::super::{Delta, ParseOpts, PROMPTS_CAP, REPLIES_CAP};
+use super::signals::Tracker;
 use crate::model::Tokens;
 use crate::util::{head_chars, iso_to_ms, tail_chars, trim_front_bytes};
 use anyhow::{Context, Result};
@@ -67,10 +68,8 @@ pub fn parse_reader<R: BufRead>(mut r: R, from: u64, opts: &ParseOpts) -> Result
         ..Default::default()
     };
     let mut offset = from;
-    let pending_in: Vec<(String, Pending)> = opts
-        .carry
-        .and_then(|v| serde_json::from_value(v.clone()).ok())
-        .unwrap_or_default();
+    let (pending_in, signals_in) = split_carry(opts.carry);
+    let mut tracker = Tracker::resume(signals_in);
     let mut pending: HashMap<String, Pending> = pending_in.iter().cloned().collect();
     let mut order: Vec<String> = pending_in.iter().map(|(k, _)| k.clone()).collect();
     let mut seen = Seen::new();
@@ -97,7 +96,14 @@ pub fn parse_reader<R: BufRead>(mut r: R, from: u64, opts: &ParseOpts) -> Result
         // before JSON parsing. They embed MEMORY.md and tool lists and would give false links.
         if !matches!(
             ty,
-            "user" | "assistant" | "system" | "ai-title" | "custom-title" | "agent-name" | ""
+            "user"
+                | "assistant"
+                | "system"
+                | "ai-title"
+                | "custom-title"
+                | "agent-name"
+                | "queue-operation"
+                | ""
         ) {
             continue;
         }
@@ -109,6 +115,7 @@ pub fn parse_reader<R: BufRead>(mut r: R, from: u64, opts: &ParseOpts) -> Result
         } else {
             ty
         };
+        tracker.line(&v, ty);
         process(&v, ty, &mut d, &mut pending, &mut seen, opts);
         if pending.len() > order.len() || order.len() > PENDING_CAP * 4 {
             order.retain(|k| pending.contains_key(k));
@@ -127,14 +134,30 @@ pub fn parse_reader<R: BufRead>(mut r: R, from: u64, opts: &ParseOpts) -> Result
             pending_out.push((k, p));
         }
     }
-    if !pending_out.is_empty() {
-        d.carry = serde_json::to_value(&pending_out).ok();
+    d.signals = Some(tracker.signals());
+    let signals_out = tracker.state();
+    if !pending_out.is_empty() || signals_out.is_some() {
+        d.carry = Some(serde_json::json!({"pending": pending_out, "signals": signals_out}));
     }
     trim_front_bytes(&mut d.prompts_text, PROMPTS_CAP);
     trim_front_bytes(&mut d.replies_text, REPLIES_CAP);
     d.marker = offset.to_string();
     d.bytes_read = offset - from;
     Ok(d)
+}
+
+/// What an earlier read carried: the tool calls whose result is still to come, and the state of the
+/// background tasks and loops. Before the second existed the carry was the list alone.
+fn split_carry(carry: Option<&Value>) -> (Vec<(String, Pending)>, Option<&Value>) {
+    let pending = |v: &Value| serde_json::from_value(v.clone()).unwrap_or_default();
+    match carry {
+        Some(v) if v.is_array() => (pending(v), None),
+        Some(v) => (
+            v.get("pending").map(pending).unwrap_or_default(),
+            v.get("signals"),
+        ),
+        None => (vec![], None),
+    }
 }
 
 /// The type of lines that start with `{"type":"..."` (attachments, titles, api-request, ...).
@@ -159,6 +182,7 @@ fn process(
     opts: &ParseOpts,
 ) {
     match ty {
+        "queue-operation" => return,
         "ai-title" => {
             d.ai_title = s(v, "aiTitle")
                 .map(|t| t.trim().to_string())
@@ -248,7 +272,7 @@ pub fn clean_prompt(raw: &str) -> Option<String> {
     Some(t.to_string())
 }
 
-fn result_text(content: Option<&Value>) -> String {
+pub(super) fn result_text(content: Option<&Value>) -> String {
     match content {
         Some(Value::String(t)) => t.clone(),
         Some(Value::Array(a)) => a

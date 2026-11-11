@@ -124,6 +124,14 @@ pub fn fmt_ts(ms: i64) -> String {
     }
 }
 
+/// A Unix ms time as local `HH:MM`.
+pub fn fmt_clock(ms: i64) -> String {
+    match Local.timestamp_millis_opt(ms).single() {
+        Some(d) => d.format("%H:%M").to_string(),
+        None => "?".into(),
+    }
+}
+
 /// "now", "5m ago", "3h ago", "2d ago".
 pub fn ago(now: i64, ms: i64) -> String {
     let s = (now - ms).max(0) / 1000;

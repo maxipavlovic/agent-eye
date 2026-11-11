@@ -1,3 +1,5 @@
+/// Background tasks and loops of an open session: what still counts and how it reads.
+pub mod activity;
 /// Coding agents behind one trait; Claude Code is the first adapter.
 pub mod agents;
 /// Compressed copies of transcripts, and restoring them.

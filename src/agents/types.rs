@@ -2,6 +2,7 @@
 //! returns, what a live session or a background job looks like, and the commands an adapter
 //! builds. Adapters fill these in; the scanner, board and picker only read them.
 
+pub use crate::activity::{BgTask, LoopInfo, Signals};
 pub use crate::model::Stamp;
 use crate::model::Tokens;
 use serde_json::Value;
@@ -117,6 +118,10 @@ pub struct Delta {
     pub child_hits: BTreeSet<String>,
     /// The session itself ran in the background.
     pub bg: bool,
+    /// The background tasks and loops the session has after this read: all of them, not what is
+    /// new (the adapter keeps its own state in `carry`). None when the adapter reports none, which
+    /// leaves what is stored as it is.
+    pub signals: Option<Signals>,
     /// Token use of the lines read (`subagents_total` stays 0).
     pub usage: Tokens,
     /// Id of the last message counted in `usage`; carried to the next read so a message that
@@ -205,6 +210,12 @@ pub struct LiveSession {
     /// How the session was started (an interactive terminal, a headless run).
     pub entrypoint: Option<String>,
     pub alive: bool,
+    /// Why the status is `waiting` ("permission prompt").
+    pub waiting_for: Option<String>,
+    /// The web link of the session while its remote control is on.
+    pub remote_url: Option<String>,
+    /// Loops the live state shows (a goal that restarts turns by itself).
+    pub loops: Vec<LoopInfo>,
 }
 
 /// A session the agent runs in the background.

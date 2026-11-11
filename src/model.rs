@@ -108,6 +108,14 @@ pub struct Session {
     pub waiting_note: Option<String>,
     /// The wait is a prompt (permission, question dialog, plan) that stops the agent mid-task.
     pub waiting_prompt: bool,
+    /// Why the live status says `waiting` ("permission prompt", "input needed").
+    pub live_wait: Option<String>,
+    /// The web link of the session while its remote control is on.
+    pub remote_url: Option<String>,
+    /// Background tasks and loops the transcript shows.
+    pub signals: crate::activity::Signals,
+    /// Loops the agent's live state shows (a Codex goal).
+    pub live_loops: Vec<crate::activity::LoopInfo>,
     pub column_manual: Option<String>,
     pub column_manual_at: Option<i64>,
     pub ai_status: Option<String>,
@@ -139,6 +147,11 @@ impl Session {
         self.waiting_note.as_deref().filter(|_| self.waiting())
     }
 
+    /// What the live status says it waits for ("Permission prompt"), when it is an ask.
+    pub fn live_ask(&self) -> Option<String> {
+        crate::activity::live_ask(self).map(sentence)
+    }
+
     /// The agent is stopped mid-task until you answer a prompt in the session. A finished reply that
     /// ends in a question waits on you too, but is not blocked.
     pub fn blocked(&self) -> bool {
@@ -147,11 +160,21 @@ impl Session {
 
     /// The next step to show: what a waiting session asks of you, else the written summary's.
     pub fn next_line(&self) -> Option<String> {
-        match self.waiting_for() {
-            Some(w) => Some(format!("You: {w}")),
-            None => self.next_step.clone(),
+        match (self.waiting_for(), self.live_ask()) {
+            (Some(w), _) => Some(format!("You: {w}")),
+            (None, Some(ask)) => Some(format!("You: {ask}")),
+            (None, None) => self.next_step.clone(),
         }
     }
+}
+
+/// The text with its first letter in capitals.
+fn sentence(text: &str) -> String {
+    let mut chars = text.chars();
+    chars
+        .next()
+        .map(|c| c.to_uppercase().chain(chars).collect())
+        .unwrap_or_default()
 }
 
 /// A cheap change stamp: the size and the modification time (Unix ms) of something eye reads. When

@@ -12,6 +12,7 @@
 //! raw calls of such a file are skipped; a legacy rollout has only the raw calls. [`decode`] reads
 //! a line in either dialect; [`Reader`] turns the lines of a file into a [`Delta`].
 
+use super::background::Tracker;
 use super::script::{self, Call};
 use crate::agents::append_only::for_each_line;
 use crate::agents::outputs::{
@@ -508,6 +509,9 @@ struct Carry {
     cwd: Option<String>,
     total: Option<Usage>,
     commits: Vec<(String, Option<String>)>,
+    /// The state of the background shells (see `background`).
+    #[serde(default)]
+    background: Option<Value>,
 }
 
 /// What reading a file found.
@@ -531,6 +535,7 @@ pub struct Reader<'a> {
     total: Option<Usage>,
     commits: HashMap<String, Option<String>>,
     order: Vec<String>,
+    background: Tracker,
     restart: bool,
 }
 
@@ -543,6 +548,7 @@ impl<'a> Reader<'a> {
             .filter(|_| resumed)
             .and_then(|v| serde_json::from_value(v.clone()).ok())
             .unwrap_or_default();
+        let background = Tracker::resume(carry.background.as_ref());
         Reader {
             d: Delta::default(),
             seen: Seen::new(),
@@ -555,6 +561,7 @@ impl<'a> Reader<'a> {
             total: None,
             order: carry.commits.iter().map(|(k, _)| k.clone()).collect(),
             commits: carry.commits.into_iter().collect(),
+            background,
             restart: false,
         }
     }
@@ -574,6 +581,7 @@ impl<'a> Reader<'a> {
             self.d.last_ts = Some(self.d.last_ts.map_or(t, |x| x.max(t)));
         }
         let ts = ts.unwrap_or(0);
+        self.background.line(&v);
         match event {
             Event::Meta { id, cwd, branch } => self.meta(id, cwd, branch),
             Event::Turn { cwd: Some(c) } => {
@@ -742,8 +750,10 @@ impl<'a> Reader<'a> {
         };
         self.order.retain(|k| self.commits.contains_key(k));
         let skip = self.order.len().saturating_sub(PENDING_CAP);
+        self.d.signals = Some(self.background.signals());
         let carry = Carry {
             cwd: self.cwd.clone(),
+            background: self.background.state(),
             total: self.total.or(self.before),
             commits: self
                 .order
@@ -1234,6 +1244,7 @@ mod tests {
                 output: 50,
             }),
             commits: vec![],
+            background: None,
         })
         .unwrap();
         let jt = HashSet::new();

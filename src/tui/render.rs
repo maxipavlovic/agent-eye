@@ -2,6 +2,7 @@
 
 use super::state::App;
 use crate::folder::FolderState;
+use crate::activity;
 use crate::model::Column;
 use crate::pick::{self, Row};
 use crate::util::{home_rel, tokens_line};
@@ -137,7 +138,19 @@ pub(super) fn row_line<'a>(
     let chip_w = chip.as_deref().map_or(0, |c| c.width());
     let fixed = 2 + if proj_w > 0 { proj_w + 1 } else { 0 } + agent_w + age_w + 1 + chip_w;
     let title_w = width.saturating_sub(fixed).max(4);
-    let title = clip(&r.title, title_w);
+    // what the session does on its own sits at the end of the title's room
+    let marks = r
+        .session
+        .as_ref()
+        .filter(|_| width >= 60)
+        .map(|s| activity::marker(s, now))
+        .unwrap_or_default();
+    let marks_w = if marks.is_empty() {
+        0
+    } else {
+        marks.width() + 1
+    };
+    let title = clip(&r.title, title_w.saturating_sub(marks_w).max(4));
     let mut spans = vec![Span::styled(
         format!("{} ", pick::mark(r.column)),
         pal.mark(r.column),
@@ -149,7 +162,15 @@ pub(super) fn row_line<'a>(
     };
     spans.extend(highlight(&title, words, base, pal.bold()));
     let tw = title.width();
-    spans.push(Span::raw(" ".repeat(title_w.saturating_sub(tw) + 1)));
+    if marks.is_empty() {
+        spans.push(Span::raw(" ".repeat(title_w.saturating_sub(tw) + 1)));
+    } else {
+        spans.push(Span::raw(
+            " ".repeat(title_w.saturating_sub(marks_w + tw) + 1),
+        ));
+        spans.push(Span::styled(marks, pal.dim()));
+        spans.push(Span::raw(" "));
+    }
     if let Some(c) = chip {
         spans.push(Span::styled(c, pal.fg(Color::Yellow)));
     }
@@ -260,6 +281,24 @@ pub(super) fn preview_lines<'a>(app: &App, r: &Row, pal: &Pal) -> Vec<Line<'a>> 
                     pal.fg(Color::Green),
                 ));
             }
+            for t in activity::tasks(s, app.now) {
+                v.push(Line::from(vec![
+                    label("Running"),
+                    Span::raw(format!("background: {}", activity::task_line(t, app.now))),
+                ]));
+            }
+            for l in activity::loops(s, app.now) {
+                v.push(Line::from(vec![
+                    label("Running"),
+                    Span::raw(activity::loop_line(l, app.now)),
+                ]));
+            }
+            if let Some(url) = activity::remote_url(s) {
+                v.push(Line::from(vec![
+                    label("Remote control on"),
+                    Span::raw(url.to_string()),
+                ]));
+            }
             let state = s
                 .state_line
                 .as_deref()
@@ -279,6 +318,8 @@ pub(super) fn preview_lines<'a>(app: &App, r: &Row, pal: &Pal) -> Vec<Line<'a>> 
                     label("Next (you)"),
                     Span::raw(w.to_string()),
                 ]));
+            } else if let Some(ask) = s.live_ask() {
+                v.push(Line::from(vec![label("Next (you)"), Span::raw(ask)]));
             } else if let Some(n) = s.next_step.as_deref().filter(|t| !t.trim().is_empty()) {
                 let who = match r.column {
                     Column::NeedsYou => "you",

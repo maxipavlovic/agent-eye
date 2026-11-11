@@ -1,6 +1,7 @@
 //! Subcommands that look at sessions: scan, find, ls, show, hide, resume.
 
 use super::{column_of, folder, session_json, Global};
+use crate::activity;
 use crate::columns;
 use crate::model::{Column, Session};
 use crate::resume;
@@ -142,13 +143,16 @@ pub fn ls(g: &Global, column: Option<&str>, all: bool, limit: usize, json: bool)
         );
     } else {
         for (s, c) in &rows {
+            let marks = activity::marker(s, now);
             println!(
-                "{}  {:<9}  {:>8}  {}  [{}]",
+                "{}  {:<9}  {:>8}  {}  [{}]{}{}",
                 short_id(&s.id),
                 c.as_str(),
                 s.last_activity_at.map(|t| ago(now, t)).unwrap_or_default(),
                 printable(s.title.as_deref().unwrap_or("(untitled)")),
-                folder(s)
+                folder(s),
+                if marks.is_empty() { "" } else { "  " },
+                marks
             );
         }
         if rows.is_empty() {
@@ -268,8 +272,21 @@ pub fn show(g: &Global, id: &str, json: bool, conversation: bool, n: usize) -> R
     if let Some(v) = s.next_line() {
         println!("next:     {}", printable(&env.cfg.user.as_you(&v)));
     }
-    if let Some(r) = crate::remind::of_session(&s, now_ms()) {
-        println!("remind:   {}", printable(&r.summary(now_ms())));
+    let now = now_ms();
+    if let Some(r) = crate::remind::of_session(&s, now) {
+        println!("remind:   {}", printable(&r.summary(now)));
+    }
+    for t in activity::tasks(&s, now) {
+        println!(
+            "running:  background: {}",
+            printable(&activity::task_line(t, now))
+        );
+    }
+    for l in activity::loops(&s, now) {
+        println!("running:  {}", printable(&activity::loop_line(l, now)));
+    }
+    if let Some(url) = activity::remote_url(&s) {
+        println!("remote:   {}", printable(url));
     }
     if let Some(v) = &s.recap {
         println!("recap:    {}", printable(v));

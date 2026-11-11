@@ -107,6 +107,8 @@ fn session_json(s: &Session, col: Column, user: &UserCfg, agents: &Agents) -> Va
         "next": s.next_line().map(|n| user.as_you(&n)),
         "recap": s.recap,
         "live_status": s.live_status,
+        "activity": crate::activity::summary(s, now_ms()),
+        "remote_url": crate::activity::remote_url(s),
         "transcript_state": s.transcript_state,
         "parent_id": s.parent_session_id,
         "resume_cmd": agents.resume_line(s),

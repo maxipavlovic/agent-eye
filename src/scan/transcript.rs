@@ -1,5 +1,6 @@
 //! Storing what a transcript parse found: the session row, tokens, outputs and search text.
 
+use crate::activity::to_column;
 use crate::agents::{Agent, Delta, Transcript, PROMPTS_CAP, REPLIES_CAP};
 use crate::config::Config;
 use crate::db::{fts_write, meta_set};
@@ -171,6 +172,13 @@ pub(super) fn apply(
     )?;
 
     // Token counts: the delta on top of what is stored, from zero after a reset.
+    if let Some(signals) = &d.signals {
+        tx.execute(
+            "UPDATE session SET signals=?2 WHERE id=?1 AND signals IS NOT ?2",
+            params![sid, to_column(signals)],
+        )?;
+    }
+
     let b: [i64; 4] = if reset {
         [0; 4]
     } else {

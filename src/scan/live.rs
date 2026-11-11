@@ -1,5 +1,6 @@
 //! Live status and background jobs: who is open right now, and what the agent runs in the background.
 
+use crate::activity::to_column;
 use crate::agents::{Agent, Job, PROMPTS_CAP, REPLIES_CAP};
 use crate::db::fts_write;
 use anyhow::Result;
@@ -113,7 +114,17 @@ pub(super) fn apply_jobs(
     Ok(())
 }
 
-type Want = HashMap<String, (Option<String>, Option<i64>)>;
+/// What the live state says about one open session.
+#[derive(Debug, Clone, PartialEq)]
+struct Live {
+    status: Option<String>,
+    updated: Option<i64>,
+    wait: Option<String>,
+    remote: Option<String>,
+    loops: Option<String>,
+}
+
+type Want = HashMap<String, Live>;
 
 /// For an agent whose live status cannot see a permission prompt: a session a hook recorded a
 /// prompt for is `waiting`, not `busy`, until a hook says the prompt was answered.
@@ -122,63 +133,83 @@ fn show_prompts(tx: &Connection, agent: &dyn Agent, want: &mut Want) -> Result<(
         "SELECT id FROM session WHERE agent=?1 AND waiting_since IS NOT NULL AND waiting_prompt=1",
     )?;
     for id in st.query_map([agent.id()], |r| r.get::<_, String>(0))? {
-        if let Some((status, _)) = want.get_mut(&id?) {
-            if status.as_deref() == Some("busy") {
-                *status = Some("waiting".into());
+        if let Some(live) = want.get_mut(&id?) {
+            if live.status.as_deref() == Some("busy") {
+                live.status = Some("waiting".into());
             }
         }
     }
     Ok(())
 }
 
-/// Copy live status from `sessions/<pid>.json` onto sessions that have a transcript. Entries
-/// without a transcript (eye's own summarizer, `sdk-cli` runs that keep no session) are
-/// ignored: they never become cards. Writes only what changed.
+/// Copy live status from `sessions/<pid>.json` onto sessions that have a transcript, with why it
+/// waits, its remote control link and the loops it shows. Entries without a transcript (eye's own
+/// summarizer, `sdk-cli` runs that keep no session) are ignored: they never become cards. Writes
+/// only what changed.
 pub(super) fn apply_live(tx: &Connection, agent: &dyn Agent) -> Result<()> {
     let mut want = Want::new();
     for s in agent.live_sessions() {
         if s.alive {
-            want.insert(s.session_id, (s.status, s.updated_at));
+            want.insert(
+                s.session_id,
+                Live {
+                    status: s.status,
+                    updated: s.updated_at,
+                    wait: s.waiting_for,
+                    remote: s.remote_url,
+                    loops: to_column(&s.loops),
+                },
+            );
         }
     }
     if !agent.live_status_shows_prompts() {
         show_prompts(tx, agent, &mut want)?;
     }
-    type LiveRow = (String, Option<String>, Option<i64>);
-    let mut have: Vec<LiveRow> = vec![];
+    let mut have: HashMap<String, Live> = HashMap::new();
     {
         let mut st = tx.prepare(
-            "SELECT id, live_status, live_updated_at FROM session
+            "SELECT id, live_status, live_updated_at, live_wait, remote_url, live_loops FROM session
              WHERE agent=?1 AND (live_status IS NOT NULL OR live_updated_at IS NOT NULL)",
         )?;
-        let rows = st.query_map([agent.id()], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?;
+        let rows = st.query_map([agent.id()], |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                Live {
+                    status: r.get(1)?,
+                    updated: r.get(2)?,
+                    wait: r.get(3)?,
+                    remote: r.get(4)?,
+                    loops: r.get(5)?,
+                },
+            ))
+        })?;
         for r in rows {
-            have.push(r?);
+            let (id, live) = r?;
+            have.insert(id, live);
         }
     }
-    for (id, ls, lu) in &have {
-        match want.get(id) {
-            Some((s, u)) if s == ls && u == lu => {}
-            Some(_) => {}
-            None => {
-                tx.execute(
-                    "UPDATE session SET live_status=NULL, live_updated_at=NULL WHERE id=?1",
-                    [id],
-                )?;
-            }
-        }
+    for id in have.keys().filter(|id| !want.contains_key(*id)) {
+        tx.execute(
+            "UPDATE session SET live_status=NULL, live_updated_at=NULL, live_wait=NULL, remote_url=NULL,
+               live_loops=NULL WHERE id=?1",
+            [id],
+        )?;
     }
-    for (id, (status, updated)) in &want {
-        let same = have
-            .iter()
-            .any(|(i, s, u)| i == id && s == status && u == updated);
-        if same {
+    for (id, live) in &want {
+        if have.get(id) == Some(live) {
             continue;
         }
         tx.execute(
-            "UPDATE session SET live_status=?2, live_updated_at=?3, ended_at=NULL
-             WHERE id=?1 AND transcript_state='present'",
-            params![id, status, updated],
+            "UPDATE session SET live_status=?2, live_updated_at=?3, live_wait=?4, remote_url=?5, live_loops=?6,
+               ended_at=NULL WHERE id=?1 AND transcript_state='present'",
+            params![
+                id,
+                live.status,
+                live.updated,
+                live.wait,
+                live.remote,
+                live.loops
+            ],
         )?;
     }
     Ok(())

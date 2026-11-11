@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS session(id TEXT PRIMARY KEY, agent TEXT NOT NULL DEFA
   archive_path TEXT, git_branch TEXT, prompt_count INTEGER, reply_count INTEGER,
   last_user_text TEXT, last_assistant_text TEXT, recap TEXT, recap_at INTEGER,
   live_status TEXT, live_updated_at INTEGER, waiting_since INTEGER, waiting_note TEXT, waiting_prompt INTEGER,
+  live_wait TEXT, remote_url TEXT, signals TEXT, live_loops TEXT,
   column_manual TEXT, column_manual_at INTEGER,
   ai_status TEXT, state_line TEXT, next_step TEXT, summary_at INTEGER, summary_input_hash TEXT,
   archived INTEGER NOT NULL DEFAULT 0, hidden INTEGER,
@@ -174,6 +175,18 @@ impl Db {
         if !has_marker {
             self.conn
                 .execute("ALTER TABLE cursor ADD COLUMN marker TEXT", [])?;
+        }
+        // v10: why a live session waits, its remote control link, and the background tasks and
+        // loops it runs (JSON lists, NULL when there are none).
+        for col in ["live_wait", "remote_url", "signals", "live_loops"] {
+            let has = self
+                .conn
+                .prepare("SELECT 1 FROM pragma_table_info('session') WHERE name=?1")?
+                .exists([col])?;
+            if !has {
+                self.conn
+                    .execute(&format!("ALTER TABLE session ADD COLUMN {col} TEXT"), [])?;
+            }
         }
         if cur < 9 {
             self.conn.execute(
@@ -526,6 +539,12 @@ pub fn session_from_row(r: &Row) -> rusqlite::Result<Session> {
         waiting_since: r.get("waiting_since")?,
         waiting_note: r.get("waiting_note")?,
         waiting_prompt: r.get::<_, Option<i64>>("waiting_prompt")?.unwrap_or(0) != 0,
+        live_wait: r.get("live_wait")?,
+        remote_url: r.get("remote_url")?,
+        signals: crate::activity::from_column(r.get::<_, Option<String>>("signals")?.as_deref()),
+        live_loops: crate::activity::from_column(
+            r.get::<_, Option<String>>("live_loops")?.as_deref(),
+        ),
         column_manual: r.get("column_manual")?,
         column_manual_at: r.get("column_manual_at")?,
         ai_status: r.get("ai_status")?,
@@ -748,6 +767,48 @@ mod tests {
             .cursor_get("/u.jsonl")
             .unwrap()
             .is_some());
+    }
+
+    #[test]
+    fn migration_to_v10_adds_the_live_columns_and_keeps_the_sessions() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("eye.db");
+        {
+            // a v9 database: sessions without the columns of background work
+            let db = Db::open(&path).unwrap();
+            for c in ["live_wait", "remote_url", "signals", "live_loops"] {
+                db.conn
+                    .execute(&format!("ALTER TABLE session DROP COLUMN {c}"), [])
+                    .unwrap();
+            }
+            db.conn
+                .execute(
+                    "INSERT INTO session(id, agent, live_status) VALUES('s1', 'claude', 'idle')",
+                    [],
+                )
+                .unwrap();
+            db.meta_set("schema_version", "9").unwrap();
+        }
+        let db = Db::open(&path).unwrap();
+        assert_eq!(
+            db.meta_get("schema_version").unwrap().as_deref(),
+            Some("10")
+        );
+        let s = db.session_by_id("s1").unwrap().unwrap();
+        assert_eq!(s.live_status.as_deref(), Some("idle"));
+        assert!(s.signals.is_empty() && s.live_loops.is_empty());
+        assert_eq!((s.live_wait, s.remote_url), (None, None));
+        db.conn
+            .execute(
+                "UPDATE session SET signals='{\"tasks\":[{\"id\":\"b\",\"kind\":\"shell\",\"label\":\"x\",\"started_at\":1}]}' WHERE id='s1'",
+                [],
+            )
+            .unwrap();
+        drop(db);
+        // opening it again changes nothing, and tasks without loops still read
+        let db = Db::open(&path).unwrap();
+        let s = db.session_by_id("s1").unwrap().unwrap();
+        assert_eq!(s.signals.tasks.len(), 1);
     }
 
     #[test]

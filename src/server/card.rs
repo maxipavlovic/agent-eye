@@ -1,5 +1,6 @@
 //! The JSON of a card: one session or idea as the board and the detail view show it.
 
+use crate::activity;
 use crate::agents::{self, Agents};
 use crate::columns;
 use crate::config::{Config, UserCfg};
@@ -92,6 +93,28 @@ pub struct CardCtx<'a> {
     pub agents: &'a Agents,
 }
 
+/// The background tasks of a session as the API shows them, each with its line of text.
+fn background_json(s: &Session, now: i64) -> Vec<Value> {
+    activity::tasks(s, now)
+        .into_iter()
+        .map(|t| {
+            json!({"id": t.id, "kind": t.kind, "label": t.label, "started_at": t.started_at,
+                   "line": activity::task_line(t, now)})
+        })
+        .collect()
+}
+
+/// The loops of a session as the API shows them, each with its line of text.
+fn loops_json(s: &Session, now: i64) -> Vec<Value> {
+    activity::loops(s, now)
+        .into_iter()
+        .map(|l| {
+            json!({"kind": l.kind, "schedule": l.schedule, "next_at": l.next_run(now),
+                   "prompt": l.prompt, "line": activity::loop_line(l, now)})
+        })
+        .collect()
+}
+
 /// The card of a session; `detail` adds all streams and outputs.
 pub fn card_json(
     s: &Session,
@@ -156,6 +179,10 @@ pub fn card_json(
         "ai_status": s.ai_status,
         "recap": s.recap,
         "live_status": s.live_status,
+        "activity": activity::summary(s, now),
+        "background": background_json(s, now),
+        "loops": loops_json(s, now),
+        "remote_url": activity::remote_url(s),
         "kind": s.kind,
         "streams": streams.iter().filter(|x| detail || x.kind == "topic").map(stream_json).collect::<Vec<_>>(),
         "outputs": card_outputs(s, outputs),
@@ -198,7 +225,8 @@ pub(super) fn idea_card(i: &Idea, agents: &Agents, cfg: &Config, now: i64) -> Va
         "kind": "idea", "streams": [], "outputs": [], "output_counts": {}, "topics": [],
         "topics_more": 0, "child_count": 0, "child_done": 0, "prompt_count": 0,
         "resumable": false, "resume_cmd": null, "branch": null, "repo": null,
-        "live_status": null, "parent_id": null, "from_session_id": i.from_session_id, "tokens": null,
+        "live_status": null, "activity": null, "background": [], "loops": [], "remote_url": null,
+        "parent_id": null, "from_session_id": i.from_session_id, "tokens": null,
         "remind_at": remind.as_ref().map(|r| r.at),
         "remind_note": remind.as_ref().and_then(|r| r.note.as_deref()),
         "remind_due": due,

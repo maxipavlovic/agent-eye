@@ -20,6 +20,17 @@ fn str_of(v: &Value, k: &str) -> Option<String> {
         .map(String::from)
 }
 
+/// The web link Claude Code builds for a session whose remote control is on. The stored id is
+/// already the form it uses; anything else than plain id characters is not made into a link.
+fn remote_url(id: &str) -> Option<String> {
+    let plain = !id.is_empty()
+        && id.len() <= 120
+        && id
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-');
+    plain.then(|| format!("https://claude.ai/code/{id}"))
+}
+
 /// Only files named `<digits>.json` are opened; `*.key` and `*-session.tmp` never are.
 pub fn read_sessions(dir: &Path) -> Vec<LiveSession> {
     let Ok(rd) = std::fs::read_dir(dir) else {
@@ -53,6 +64,9 @@ pub fn read_sessions(dir: &Path) -> Vec<LiveSession> {
             updated_at: ms_value(v.get("updatedAt")),
             entrypoint: str_of(&v, "entrypoint"),
             alive: pid_alive(pid),
+            waiting_for: str_of(&v, "waitingFor"),
+            remote_url: str_of(&v, "bridgeSessionId").and_then(|id| remote_url(&id)),
+            loops: vec![],
         });
     }
     out
@@ -113,6 +127,40 @@ mod tests {
         assert_eq!(s.len(), 1);
         assert_eq!(s[0].session_id, "s1");
         assert_eq!(s[0].updated_at, Some(5));
+        assert_eq!(s[0].waiting_for, None);
+        assert_eq!(s[0].remote_url, None);
+    }
+
+    #[test]
+    fn reads_why_a_session_waits_and_its_remote_control_link() {
+        let d = tempfile::tempdir().unwrap();
+        std::fs::write(
+            d.path().join("1.json"),
+            r#"{"pid":1,"sessionId":"s1","status":"waiting","waitingFor":"permission prompt","bridgeSessionId":"session_01AbC-x"}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            d.path().join("2.json"),
+            r#"{"pid":2,"sessionId":"s2","status":"idle","bridgeSessionId":"../evil?x=1","waitingFor":""}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            d.path().join("3.json"),
+            r#"{"pid":3,"sessionId":"s3","status":"idle","bridgeSessionId":null}"#,
+        )
+        .unwrap();
+        let mut s = read_sessions(d.path());
+        s.sort_by(|a, b| a.session_id.cmp(&b.session_id));
+        assert_eq!(s[0].waiting_for.as_deref(), Some("permission prompt"));
+        assert_eq!(
+            s[0].remote_url.as_deref(),
+            Some("https://claude.ai/code/session_01AbC-x")
+        );
+        assert_eq!(
+            (s[1].waiting_for.clone(), s[1].remote_url.clone()),
+            (None, None)
+        );
+        assert_eq!(s[2].remote_url, None);
     }
 
     #[test]

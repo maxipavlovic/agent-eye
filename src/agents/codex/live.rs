@@ -83,7 +83,8 @@ pub fn turn_open(path: &Path) -> bool {
     false
 }
 
-/// The sessions whose writer lock is held, busy when a turn is open and idle otherwise.
+/// The sessions whose writer lock is held, busy when a turn is open and idle otherwise. A session
+/// with an active goal is in a loop. Codex has no per-session remote control or waiting reason.
 pub fn sessions(dir: &Path, index: &Index) -> Vec<LiveSession> {
     let Ok(rd) = std::fs::read_dir(dir.join(LOCKS_DIR)) else {
         return vec![];
@@ -97,6 +98,7 @@ pub fn sessions(dir: &Path, index: &Index) -> Vec<LiveSession> {
         })
         .collect();
     ids.sort();
+    let mut goals = super::goals::active(dir);
     let mut out = vec![];
     for id in ids {
         let Some(s) = index.sessions.get(&id) else {
@@ -114,6 +116,9 @@ pub fn sessions(dir: &Path, index: &Index) -> Vec<LiveSession> {
                 .map(|m| crate::util::mtime_ms(&m)),
             entrypoint: Some("cli".into()),
             alive: true,
+            waiting_for: None,
+            remote_url: None,
+            loops: goals.remove(&id).into_iter().collect(),
             session_id: id,
         });
     }

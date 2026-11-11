@@ -11,6 +11,7 @@ mod hooks;
 mod install;
 mod live;
 mod prompt;
+mod signals;
 mod transcript;
 
 use super::*;
