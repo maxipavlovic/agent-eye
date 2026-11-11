@@ -3,6 +3,7 @@
 
 use crate::agents::{self, Agents, Wait, LEGACY_ID};
 use crate::archive;
+use crate::backup;
 use crate::config::Config;
 use crate::db::{meta_set, Db};
 use crate::hook;
@@ -23,6 +24,8 @@ use std::time::{Duration, Instant};
 
 const TICK: Duration = Duration::from_secs(2);
 const WORKER_EVERY: Duration = Duration::from_secs(30);
+/// How often the daemon looks whether a daily snapshot is due.
+const BACKUP_EVERY: Duration = Duration::from_secs(600);
 const LOG_MAX: u64 = 10 << 20;
 const QUEUE_ROTATE: u64 = 1 << 20;
 const SUMMARIES_PER_ROUND: usize = 3;
@@ -372,9 +375,18 @@ pub fn run(paths: Paths, cfg: Config, port: u16, board: bool) -> Result<()> {
                 log(&paths, &format!("waiting state: {e:#}"));
             }
             let mut last_worker: Option<Instant> = None;
+            let mut last_backup: Option<Instant> = None;
             while !stop.load(Ordering::Relaxed) {
                 if let Err(e) = tick(&mut db, &paths, &cfg) {
                     log(&paths, &format!("tick failed: {e:#}"));
+                }
+                if last_backup.is_none_or(|t| t.elapsed() >= BACKUP_EVERY) {
+                    last_backup = Some(Instant::now());
+                    match backup::daily_if_due(&db.conn, &paths, &cfg, now_ms()) {
+                        Ok(Some(s)) => log(&paths, &format!("snapshot {}", s.path.display())),
+                        Ok(None) => {}
+                        Err(e) => log(&paths, &format!("snapshot failed: {e:#}")),
+                    }
                 }
                 let due = last_worker.is_none_or(|t| t.elapsed() >= WORKER_EVERY);
                 if due && !busy.swap(true, Ordering::SeqCst) {

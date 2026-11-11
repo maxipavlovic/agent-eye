@@ -2,6 +2,12 @@
 
 All notable changes are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Added
+
+- Backups of the database: `eye backup` makes a snapshot, `eye backup ls` lists them, `eye restore latest` (or a name from the list) puts one back after asking. The daemon makes one a day and eye makes one before a schema upgrade; the last 7 daily, 4 weekly and a few of each other kind are kept. `[backup] enabled = false` stops the automatic ones. An optional `mirror` folder (it must exist already) gets a copy of each snapshot, and `mirror_archive` the transcript archive too. `eye doctor` shows the newest snapshot, the mirror and a check of the live database. See `docs/backups.md`.
+
 ## 0.1.1 - 2026-11-10
 
 ### Changed

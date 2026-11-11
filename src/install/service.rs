@@ -145,6 +145,39 @@ pub fn stop(o: &Opts) -> Said {
     }
 }
 
+/// Stop the daemon so a file it keeps open can be replaced (a database restore). True when it was
+/// running and the service stopped it, and `resume` starts it again; false when it was not
+/// running. A daemon that runs outside the service (started by hand) is not ours to stop.
+pub fn pause(o: &Opts) -> Result<bool, String> {
+    let paths = crate::paths::Paths {
+        home: o.eye_home.clone(),
+    };
+    let Some(pid) = crate::daemon::running_pid(&paths) else {
+        return Ok(false);
+    };
+    let outside = || {
+        format!(
+            "the daemon (pid {pid}) does not run from the service; stop it, then run this again"
+        )
+    };
+    match o.service_path() {
+        Some(path) if o.unit_serves_home() => match o.manager.stop(&runner(o, &path)) {
+            Ok(Stopped::Stopped) => Ok(true),
+            Ok(Stopped::NotRunning) => Err(outside()),
+            Err(why) => Err(format!(
+                "could not stop the daemon ({why}). Stop it by hand with {}",
+                by_hand(&o.manager.stop_by_hand())
+            )),
+        },
+        _ => Err(outside()),
+    }
+}
+
+/// Start the daemon again after `pause`.
+pub fn resume(o: &Opts) -> Said {
+    start(o, false, FileState::Unchanged)
+}
+
 /// `board on|off`: start the daemon, or restart it so the setting applies. A service file that
 /// runs another eye home is not ours to restart.
 pub fn restart(o: &Opts) -> Report {

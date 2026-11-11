@@ -41,6 +41,13 @@ trivial = true         # hide throw-away sessions ("/clear", "exit", "cd ..") fr
 max_prompts = 1
 max_reply_chars = 200
 commands = ["exit", "quit", "resume", "usage", "clear", "cd", "help"]  # first words that mark a trivial prompt
+
+[backup]
+enabled = true         # a daily snapshot of the database, and one before a schema upgrade; false = only `eye backup` by hand
+keep_daily = 7
+keep_weekly = 4
+mirror = ""            # a folder that already exists (an external disk, a synced folder) to copy each snapshot into; empty = off
+mirror_archive = false # also copy the transcript archive into <mirror>/archive
 "#;
 
 /// The config written on first run.
@@ -59,6 +66,7 @@ pub struct Config {
     pub exclude: ExcludeCfg,
     pub outputs: OutputsCfg,
     pub hide: HideCfg,
+    pub backup: BackupCfg,
 }
 
 /// Which coding agents eye follows, and where each keeps its files.
@@ -150,6 +158,41 @@ impl Default for HideCfg {
                 .map(String::from)
                 .to_vec(),
         }
+    }
+}
+
+/// `[backup]`: snapshots of the database, how many to keep, and the optional mirror folder.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct BackupCfg {
+    /// Automatic snapshots (daily, and before a schema upgrade). `eye backup` always works.
+    pub enabled: bool,
+    pub keep_daily: usize,
+    pub keep_weekly: usize,
+    /// A folder to copy each snapshot into; it must exist already. Empty is off.
+    pub mirror: String,
+    /// Also copy the transcript archive into `<mirror>/archive`.
+    pub mirror_archive: bool,
+}
+impl Default for BackupCfg {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            keep_daily: 7,
+            keep_weekly: 4,
+            mirror: String::new(),
+            mirror_archive: false,
+        }
+    }
+}
+impl BackupCfg {
+    /// The mirror folder, with a leading `~` as the home folder; None when it is off.
+    pub fn mirror_dir(&self) -> Option<PathBuf> {
+        let m = self.mirror.trim();
+        if m.is_empty() {
+            return None;
+        }
+        Some(expand_tilde(m))
     }
 }
 

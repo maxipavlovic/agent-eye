@@ -2,6 +2,7 @@
 //! subcommands.
 
 mod args;
+mod backup;
 mod board;
 mod data;
 mod ideas;
@@ -194,6 +195,13 @@ pub fn run() -> Result<()> {
         Cmd::Uninstall { a, purge } => setup::uninstall(&g, &a, purge),
         Cmd::Doctor => setup::doctor(&g),
         Cmd::Archive { id, all } => data::archive(&g, id.as_deref(), all),
-        Cmd::Restore { id } => data::restore(&g, &id),
+        Cmd::Restore { id, yes } => {
+            if backup::names_snapshot(&g, &id) {
+                backup::restore(&g, &id, yes)
+            } else {
+                data::restore(&g, &id)
+            }
+        }
+        Cmd::Backup { sub } => backup::run(&g, sub),
     }
 }

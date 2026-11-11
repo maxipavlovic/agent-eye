@@ -67,6 +67,7 @@ impl Db {
             .with_context(|| format!("creating {}", path.display()))?;
         crate::files::make_private(path);
         let conn = Connection::open(path).with_context(|| format!("opening {}", path.display()))?;
+        crate::backup::before_upgrade(&conn, path, SCHEMA_VERSION);
         Self::init(conn)
     }
 

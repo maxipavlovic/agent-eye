@@ -124,6 +124,12 @@ pub struct SetupArgs {
 }
 
 #[derive(Subcommand)]
+pub enum BackupCmd {
+    /// List the snapshots, newest first
+    Ls,
+}
+
+#[derive(Subcommand)]
 pub enum BoardCmd {
     /// Turn the web board on and restart the daemon
     On {
@@ -305,8 +311,19 @@ pub enum Cmd {
         #[arg(long)]
         all: bool,
     },
-    /// Put an archived transcript back where its agent expects it
-    Restore { id: String },
+    /// Put an archived transcript back where its agent expects it, or restore a database snapshot
+    /// (`latest`, or a name from `eye backup ls`)
+    Restore {
+        id: String,
+        /// For a snapshot: do not ask first (needed in a script)
+        #[arg(long)]
+        yes: bool,
+    },
+    /// Snapshot the database now (`eye backup ls` lists the snapshots)
+    Backup {
+        #[command(subcommand)]
+        sub: Option<BackupCmd>,
+    },
 }
 
 impl Default for PickArgs {

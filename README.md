@@ -68,7 +68,7 @@ Works with Claude Code and Codex CLI. Unofficial: not affiliated with Anthropic 
 
 ## Docs
 
-[Site](https://maxipavlovic.github.io/agent-eye/) · [Terminal](docs/terminal.md) · [Config](docs/config.md) · [Agents](docs/agents.md) · [API](docs/api.md) · [Changelog](CHANGELOG.md)
+[Site](https://maxipavlovic.github.io/agent-eye/) · [Terminal](docs/terminal.md) · [Config](docs/config.md) · [Backups](docs/backups.md) · [Agents](docs/agents.md) · [API](docs/api.md) · [Changelog](CHANGELOG.md)
 
 ## License
 

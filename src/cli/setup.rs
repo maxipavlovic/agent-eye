@@ -74,7 +74,8 @@ pub fn doctor(g: &Global) -> Result<()> {
     let cfg = g.config_read_only(&paths);
     let agents = agents::enabled(&cfg);
     let o = Opts::resolve(&paths, None, None)?;
-    let res = install::doctor(&o, &paths, &cfg, &agents);
+    let mut res = install::doctor(&o, &paths, &cfg, &agents);
+    res.extend(crate::backup::checks(&paths, &cfg, crate::util::now_ms()));
     let warn = res.iter().filter(|c| !c.ok).count();
     for c in &res {
         println!("{}  {}", if c.ok { "OK  " } else { "WARN" }, c.msg);

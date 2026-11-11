@@ -2,6 +2,8 @@
 pub mod agents;
 /// Compressed copies of transcripts, and restoring them.
 pub mod archive;
+/// Snapshots of the database, restoring them, and the optional mirror.
+pub mod backup;
 /// The command line.
 pub mod cli;
 /// Which board column a session is in.

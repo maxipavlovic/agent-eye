@@ -6,7 +6,7 @@ mod choice;
 mod service;
 
 pub use choice::{choose_agents, save_choice, Choice};
-pub use service::restart as restart_daemon;
+pub use service::{pause as pause_daemon, restart as restart_daemon, resume as resume_daemon};
 
 use crate::agents::{self, Agents, Check, InstallCtx};
 use crate::config::Config;

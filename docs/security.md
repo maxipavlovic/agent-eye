@@ -57,7 +57,13 @@ folder is tightened on the next run):
 - `archive/`: a **full compressed copy of each transcript**. It holds whatever was in the session,
   including anything sensitive you pasted. It is not masked. Delete `~/.agent-eye/archive` (or run
   `eye uninstall --purge`) to remove it.
+- `backups/`: compressed snapshots of `eye.db` (see [backups.md](backups.md)), the same data as the database, kept as long as the rotation says. Delete the folder to remove them; `[backup] enabled = false` stops new ones.
 - `queue/` (the same hook lines, rotated at 1 MB; one older file is kept), `logs/`, `config.toml`, `board.token`, `ui.json` (board theme and layout), `daemon.lock`, `work/`, an empty folder the summary runs in, and `tmp/`, where a copy of an archived session is made while its conversation is read and removed right after.
+
+**A mirror folder** (`[backup] mirror`) is a copy outside `~/.agent-eye`. eye itself makes no network
+call, but if that folder is synced (Dropbox, iCloud Drive, a network share) your sync tool carries
+the snapshots off the machine, and with `mirror_archive` the transcripts too, which can contain
+secrets. Pick a folder that stays where you want it.
 
 eye does not read the credential files that sit next to an agent's live-session files (`*.key`).
 `eye uninstall` keeps the data unless you add `--purge`.

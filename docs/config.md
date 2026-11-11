@@ -66,6 +66,18 @@ Throw-away sessions ("/clear", "exit", "cd ..") are left out of the board, searc
 | `jira_projects` | `[]` | Project prefixes that count as Jira projects, e.g. `["PROJ", "ACME"]`. Empty: eye learns them from links and branch names. |
 | `jira_url` | `""` | Your Jira site, e.g. `"https://acme.atlassian.net"`, for keys that were never seen in a link. |
 
+## `[backup]`
+
+Snapshots of the database (see `backups.md`). Every key is optional.
+
+| Key | Default | Meaning |
+|---|---|---|
+| `enabled` | `true` | Make a snapshot every day (the daemon does it) and before a schema upgrade. `false` stops both; `eye backup` by hand still works and says that automatic ones are off. |
+| `keep_daily` | `7` | How many daily snapshots to keep. |
+| `keep_weekly` | `4` | How many weeks keep one snapshot, the newest daily of that week. |
+| `mirror` | `""` | A folder that **already exists** (an external disk, a synced folder): each snapshot is copied there too, with the same rotation. A folder that is not there is skipped, never created, and `eye doctor` says so. A leading `~` is your home folder. Empty: off. |
+| `mirror_archive` | `false` | Also copy the transcript archive (`~/.agent-eye/archive/`) into `<mirror>/archive`: only files whose size or time changed, and nothing is ever deleted there. |
+
 ## Environment
 
 | Variable | Meaning |
