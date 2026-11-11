@@ -382,6 +382,13 @@ describe('reminders', () => {
     expect(card(root, 'waiting', 'Add rate limits').querySelector('.tabs')).toBeNull();
   });
 
+  it('puts the clock of an idea in its title, so a narrow lane keeps the title whole', async () => {
+    const { root } = await mount();
+    const c = card(root, 'ideas', 'Migration guide');
+    expect(c.querySelector('.tabs')).toBeNull();
+    expect(c.querySelector('h3 .rclock')!.getAttribute('title')).toMatch(/^Reminder: .+/);
+  });
+
   it('sets a reminder from the menu, and clearing is offered once one is set', async () => {
     const { root, $, $$, store } = await mount();
     const open = (title: string) => {

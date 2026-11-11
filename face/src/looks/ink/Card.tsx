@@ -31,8 +31,8 @@ export function Next({ c, hot }: { c: Card; hot?: boolean }) {
 }
 
 /** The marks on a card's top edge: a clock while a reminder is set, `!` in Needs you; the clock's title says when. */
-function Tabs({ c, need }: { c: Card; need: boolean }) {
-  const title = remindTitle(c);
+function Tabs({ c, need, clock = true }: { c: Card; need: boolean; clock?: boolean }) {
+  const title = clock ? remindTitle(c) : null;
   if (!need && !title) return null;
   return (
     <span class="tabs">
@@ -40,6 +40,13 @@ function Tabs({ c, need }: { c: Card; need: boolean }) {
       {need && <span class="tab"><Pix rows={BANG} pal={{ '#': 'var(--on-accent)' }} scale={2} /></span>}
     </span>
   );
+}
+
+/** A small clock in the text while a reminder is set, where a tab has no room: a row, or an idea card
+ *  (no meta line, so a tab would squeeze its title in a narrow lane). */
+function RemindClock({ c }: { c: Card }) {
+  const title = remindTitle(c);
+  return title ? <span class="rclock" role="img" aria-label={title} title={title}><Pix rows={CLOCK} pal={INK_CC} scale={2} /></span> : null;
 }
 
 /** tag: the project key to show as a tag, or null when a project filter is active. */
@@ -54,12 +61,11 @@ export function CardView({ c, store, i, kind, tag }: { c: Card; store: Store; i:
   const agent = store.agents.value.length > 1 && <span class="agent-tag" title={`${c.agent_name} session`}>{c.agent_name}</span>;
 
   if (kind === 'row') {
-    const remind = remindTitle(c);
     return (
       <article {...base} title={c.title}>
         <Sigil id={c.id} />
         <span class="t">{c.title}</span>
-        {remind && <span class="rclock" role="img" aria-label={remind} title={remind}><Pix rows={CLOCK} pal={INK_CC} scale={2} /></span>}
+        <RemindClock c={c} />
         <span class="age">{age}</span>
       </article>
     );
@@ -69,8 +75,8 @@ export function CardView({ c, store, i, kind, tag }: { c: Card; store: Store; i:
     const start = startButton(c);
     return (
       <article {...base}>
-        <Tabs c={c} need={kind === 'need'} />
-        <div class="top"><Sigil id={c.id} /><h3>{c.title}</h3></div>
+        <Tabs c={c} need={kind === 'need'} clock={false} />
+        <div class="top"><Sigil id={c.id} /><h3>{c.title}<RemindClock c={c} /></h3></div>
         {folderMissing(c) && <p class="fmark" title={c.folder_note ?? undefined}>The folder is new</p>}
         <Next c={c} hot={kind === 'need'} />
         <div class="acts">

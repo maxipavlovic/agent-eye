@@ -132,9 +132,9 @@ a:hover { background: var(--ink); color: var(--paper); text-decoration: none; }
 /* Inter leaves ~5 px above its capitals at 16–17 px / 1.35; 4 px puts the icon top level with round capitals (C, O), which rise ~1 px above flat ones. */
 .top > .sigil { flex: none; margin-top: 4px; }
 .card h3 { margin: 0; font: 600 17px/1.35 var(--f-body); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: break-word; flex: 1; min-width: 0; }
-/* An idea card has no meta line, so its title's first line keeps clear of the tabs. */
-.card.idea.need .top h3::before, .card.idea.clock .top h3::before { content: ''; float: right; width: 22px; height: 1em; }
-.card.idea.need.clock .top h3::before { width: 52px; }
+/* An idea card has no meta line, so its title's first line keeps clear of the `!` tab; its clock sits in the title. */
+.card.idea.need .top h3::before { content: ''; float: right; width: 22px; height: 1em; }
+.card h3 .rclock { display: inline-block; margin-left: 6px; vertical-align: -1px; }
 .sigil svg { width: 36px; height: 36px; }
 .sigil.big svg { width: 72px; height: 72px; }
 
