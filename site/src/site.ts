@@ -1,5 +1,6 @@
 import './site.css';
 import { trackEye } from '../../face/src/looks/ink/eyeTracker';
+import { setupAccent } from './accent';
 
 type ThemePref = 'light' | 'dark' | 'auto';
 
@@ -34,6 +35,8 @@ for (const b of document.querySelectorAll<HTMLElement>('[data-theme-set]')) {
     applyTheme(pref);
   });
 }
+
+setupAccent();
 
 // Full screen: the demo frame fills the screen, and the same button (or Esc) brings it back.
 // Without the Fullscreen API (iPhone) the link opens the board on its own page, which links back.

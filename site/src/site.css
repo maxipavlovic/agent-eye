@@ -42,18 +42,27 @@ mark { background: var(--ink); color: var(--paper); padding: 0 .14em; -webkit-bo
 .btn.sm:active { transform: translate(2px, 2px); }
 
 /* ───────── header and footer ───────── */
-.hd-in { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 20px; padding: 6px 0 4px; }
+.hd-in { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 20px; padding-block: 6px 4px; }
 .brand { display: flex; align-items: center; gap: 14px; text-decoration: none; }
 .brand:hover { background: none; color: inherit; }
 .word { font: 700 22px/1 var(--f-label); letter-spacing: 2px; }
 .nav { display: flex; flex-wrap: wrap; gap: 4px 20px; margin-left: auto; }
 .nav a { font: 400 16px/1 var(--f-label); text-decoration: none; padding: 8px 4px 7px; }
+.accpick { position: relative; }
+.accbtn { width: 36px; height: 36px; display: grid; place-items: center; padding: 0; background: var(--paper); border: 2px solid var(--ink); }
+.accbtn i { width: 18px; height: 18px; background: var(--accent); border: 2px solid var(--ink); }
+.accbtn[aria-expanded='true'] { background: var(--ink); }
+.accpop { position: absolute; top: calc(100% + 8px); right: 0; display: flex; gap: 8px; padding: 10px; background: var(--paper); border: 2px solid var(--ink); box-shadow: 4px 4px 0 var(--ink); z-index: 20; }
+.acc { width: 24px; height: 24px; padding: 0; border: 2px solid var(--ink); background: var(--accent); flex: none; }
+.acc[aria-pressed='true'] { box-shadow: 0 0 0 2px var(--paper), 0 0 0 4px var(--ink); }
+.acc:hover { transform: translate(-1px, -1px); }
 .theme { display: flex; border: 2px solid var(--ink); }
 .theme button { width: 36px; height: 36px; display: grid; place-items: center; background: var(--paper); color: var(--ink); border: 0; padding: 0; }
 .theme button + button { border-left: 2px solid var(--ink); }
 .theme button[aria-pressed='true'] { background: var(--ink); color: var(--paper); }
 .theme button[aria-pressed='true'] svg [fill='var(--paper)'] { fill: var(--ink); }
-@media (max-width: 560px) { .nav { order: 3; width: 100%; margin: 0; } .theme { margin-left: auto; } .word { font-size: 18px; } }
+@media (max-width: 560px) { .nav { order: 3; width: 100%; margin: 0; } .accpick, .theme { order: 2; } .accpick { position: static; margin-left: auto; } .hd-in { position: relative; }
+  .accpop { left: 0; right: 0; top: calc(100% - 4px); justify-content: space-between; } .acc { width: 32px; height: 32px; } .word { font-size: 18px; } }
 
 .site-ft { margin-top: 24px; }
 .ft-in { display: grid; gap: 14px; padding: 28px 0 44px; }
