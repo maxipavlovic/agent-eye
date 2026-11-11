@@ -791,8 +791,8 @@ mod tests {
         }
         let db = Db::open(&path).unwrap();
         assert_eq!(
-            db.meta_get("schema_version").unwrap().as_deref(),
-            Some("10")
+            db.meta_get("schema_version").unwrap(),
+            Some(SCHEMA_VERSION.to_string())
         );
         let s = db.session_by_id("s1").unwrap().unwrap();
         assert_eq!(s.live_status.as_deref(), Some("idle"));
