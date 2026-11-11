@@ -89,7 +89,7 @@ describe('fixtureSource with the sample data', () => {
     await expect(src.remind('nope', { when: '1d' })).rejects.toThrow(/No card/);
   });
 
-  it('reads the times the board sends and no look-alikes', async () => {
+  it('reads the times the board sends and nothing that only looks similar', async () => {
     const src = fixtureSource();
     const id = (await src.board()).columns.flatMap((c) => c.cards)[0]!.id;
     for (const when of ['tomorrow', 'mon', 'Monday', '1w', '3d']) {
