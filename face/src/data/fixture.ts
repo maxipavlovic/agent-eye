@@ -167,6 +167,8 @@ export function fixtureSource(): Source {
     return { folder_state: f.state, folder_creatable: f.creatable, folder_note: f.note };
   };
   const agents: Agent[] = [AGENT];
+  /** The desktop notice setting, off by default as in a new config. */
+  const notice = { notify: false, available: true };
   const nameOf = (id: string | null | undefined) => (agents.find((a) => a.id === id) ?? agents.find((a) => a.default)!).short;
   let listeners: Array<() => void> = [];
   const changed = () => listeners.forEach((f) => f());
@@ -325,6 +327,11 @@ export function fixtureSource(): Source {
       } catch (e) {
         return Promise.reject(e);
       }
+    },
+    remindSettings: () => delay({ ...notice }),
+    setRemindSettings: (input) => {
+      notice.notify = input.notify;
+      return delay({ ...notice });
     },
     subscribe: (onChange, onState) => {
       listeners.push(onChange);

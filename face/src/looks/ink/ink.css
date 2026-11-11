@@ -132,21 +132,20 @@ a:hover { background: var(--ink); color: var(--paper); text-decoration: none; }
 /* Inter leaves ~5 px above its capitals at 16–17 px / 1.35; 4 px puts the icon top level with round capitals (C, O), which rise ~1 px above flat ones. */
 .top > .sigil { flex: none; margin-top: 4px; }
 .card h3 { margin: 0; font: 600 17px/1.35 var(--f-body); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: break-word; flex: 1; min-width: 0; }
-.card.need .top h3 { margin-right: 26px; }
+/* An idea card has no meta line, so its title's first line keeps clear of the tabs. */
+.card.idea.need .top h3::before, .card.idea.clock .top h3::before { content: ''; float: right; width: 22px; height: 1em; }
+.card.idea.need.clock .top h3::before { width: 52px; }
 .sigil svg { width: 36px; height: 36px; }
 .sigil.big svg { width: 72px; height: 72px; }
 
-.tab { position: absolute; top: -2px; right: 10px; width: 26px; height: 32px; background: var(--accent); border: 2px solid var(--ink); border-top: 0; display: grid; place-items: start center; padding-top: 7px; }
-.tab::after { content: ''; position: absolute; left: -2px; bottom: -8px; width: 26px; height: 8px; background: var(--ink); clip-path: polygon(0 0, 100% 0, 100% 2px, 50% 100%, 0 2px); display: none; }
+.tabs { position: absolute; top: -2px; right: 10px; display: flex; gap: 4px; }
+.tab { width: 26px; height: 32px; background: var(--accent); border: 2px solid var(--ink); border-top: 0; display: grid; place-items: start center; padding-top: 7px; }
+/* A reminder is set: a paper tab with the clock, left of the `!` of a card in Needs you. */
+.tab.clock { background: var(--paper); color: var(--ink); }
+.rclock { flex: none; color: var(--ink); }
 
 .state { margin: 8px 0 0; font: 400 16px/1.4 var(--f-body); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
 .next { margin: 8px 0 0; font: 400 16px/1.4 var(--f-body); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
-/* A reminder: why a card is back in Needs you, or when it will be. */
-.remind { margin: 8px 0 0; font: 500 16px/1.4 var(--f-body); overflow-wrap: anywhere; }
-.remind.due { display: block; padding: 4px 8px; background: var(--accent); color: var(--on-accent); box-shadow: inset 0 0 0 2px var(--ink); font-weight: 600; }
-.page .remind { font-size: 17px; line-height: 1.55; max-width: 66ch; margin: 0 0 12px; }
-.rchip { display: inline-block; font: 600 15px/1 var(--f-body); padding: 3px 7px; background: var(--paper); color: var(--ink); box-shadow: inset 0 0 0 2px var(--ink); white-space: nowrap; }
-.card.row .rchip { flex: none; }
 .chip { display: inline-flex; align-items: center; gap: 5px; background: var(--ink); color: var(--paper); font: 400 16px/1 var(--f-label); padding: 3px 7px 2px 5px; margin-right: 7px; vertical-align: 1px; text-transform: uppercase; }
 .chip .lbl { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chip.agent { background: var(--paper); color: var(--ink); box-shadow: inset 0 0 0 2px var(--ink); padding: 3px 7px 2px 5px; }
@@ -259,13 +258,17 @@ mark { background: var(--ink); color: var(--paper); padding: 0 3px; }
 .recap { margin: 0; max-width: 66ch; border-left: 4px solid var(--ink); padding: 2px 0 2px 14px; font: 500 17px/1.55 var(--f-body); white-space: pre-wrap; overflow-wrap: anywhere; }
 .dtopics, .kids, .og ul { list-style: none; margin: 0; padding: 0; }
 .dtopics li { display: flex; gap: 12px; margin-bottom: 12px; align-items: flex-start; }
-.dtopics li svg { margin-top: 2px; }
+/* the 14 px mark centred on the first 17 px / 1.4 line of the title */
+.dtopics li svg { margin-top: 5px; }
 .dtopics b { font: 600 17px/1.4 var(--f-body); display: block; }
 .dtopics div { max-width: 66ch; }
 .dtopics span { display: block; font: 400 16px/1.5 var(--f-body); margin-top: 3px; }
 .kids li { display: flex; gap: 8px; align-items: center; font: 400 16px/1.7 var(--f-body); }
 .kidsum { display: flex; gap: 10px; align-items: center; margin: 0; font: 400 16px/1.5 var(--f-body); }
 .kidsum + .kids { margin-top: 8px; }
+/* +N MORE under a long list opens the rest in place */
+.dtopics li.more, .kids li.more, .og li.more { margin-top: 4px; }
+.kids + .kids { margin-top: 0; }
 .lnk { background: none; border: 0; border-bottom: 2px solid var(--ink); padding: 2px 0 1px; font: 400 16px/1.2 var(--f-label); letter-spacing: 1px; cursor: pointer; }
 .lnk:hover, .lnk:focus-visible { background: var(--ink); color: var(--paper); }
 .fbase { margin: 0 0 4px; font: 400 16px/1.5 var(--f-body); color: var(--mute); overflow-wrap: anywhere; }
@@ -329,6 +332,49 @@ mark { background: var(--ink); color: var(--paper); padding: 0 3px; }
 .modal .acts { display: flex; gap: 16px; justify-content: flex-end; margin-top: 8px; }
 .modal .btn.big { font-size: 16px; padding: 14px 18px 12px; }
 
+/* ───────── reminder form: a month of days, a time, the desktop notice ───────── */
+.when { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 16px 28px; margin-bottom: 18px; }
+.flbl { display: block; margin: 0 0 8px; font: 400 16px/1 var(--f-label); }
+.dpick { width: max-content; border: 2px solid var(--ink); padding: 8px 8px 6px; }
+.dphead { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+.dphead span { font: 400 16px/1 var(--f-label); letter-spacing: 1px; }
+.dphead button { width: 32px; height: 28px; display: grid; place-items: center; padding: 0 0 2px; background: var(--paper); color: var(--ink); border: 2px solid var(--ink); font: 700 18px/1 var(--f-body); }
+.dphead button:hover { background: var(--ink); color: var(--paper); }
+.dphead button:disabled, .dphead button:disabled:hover { background: var(--paper); color: var(--mute); border-color: var(--mute); opacity: .4; cursor: default; }
+.dpgrid { border-collapse: separate; border-spacing: 2px; }
+.dpgrid th { padding: 4px 0 4px; font: 400 13px/1 var(--f-label); color: var(--mute); text-align: center; }
+.dpgrid td { padding: 0; }
+.dpgrid button { display: block; width: 36px; height: 32px; padding: 0; background: none; border: 0; color: var(--ink); font: 500 15px/1 var(--f-body); font-variant-numeric: tabular-nums; }
+.dpgrid button:hover { background: var(--ink); color: var(--paper); }
+.dpgrid button.today { box-shadow: inset 0 0 0 2px var(--ink); }
+.dpgrid button.on { background: var(--accent); color: var(--on-accent); box-shadow: inset 0 0 0 2px var(--ink); font-weight: 700; }
+.dpgrid button:disabled { background: none; color: var(--mute); opacity: .45; cursor: default; }
+.dpgrid button:focus-visible { position: relative; outline-offset: 0; }
+.dpgrid button.on:focus-visible { outline-color: var(--ink); }
+.tfield { display: flex; }
+.modal .tfield input { margin: 0; min-width: 0; font: 600 20px/1.2 var(--f-body); font-variant-numeric: tabular-nums; letter-spacing: .5px; }
+.modal .tfield input[aria-invalid] { border-color: var(--accent); }
+.tstep { display: flex; flex-direction: column; margin-left: -2px; }
+.tstep button { flex: 1; width: 36px; display: grid; place-items: center; padding: 0; background: var(--paper); color: var(--ink); border: 2px solid var(--ink); }
+.tstep button + button { margin-top: -2px; }
+.tstep button:hover { background: var(--ink); color: var(--paper); }
+.fchips.tchips { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 10px 0 0; }
+.thint { margin: 10px 0 0; font: 400 14px/1.4 var(--f-body); color: var(--mute); }
+.wtime .fnote { margin-top: 10px; }
+/* one setting for every reminder, styled like the theme switch */
+.notice { margin: 0 0 18px; }
+.page .notice { margin: 22px 0 0; }
+.nrow { display: flex; align-items: center; gap: 14px; font: 400 16px/1 var(--f-label); }
+.theme.seg button { width: auto; height: 32px; padding: 0 12px; font: 400 14px/1 var(--f-label); letter-spacing: 1px; }
+.nhint { margin: 8px 0 0; font: 400 14px/1.4 var(--f-body); color: var(--mute); }
+@media (max-width: 560px) {
+  .when { grid-template-columns: minmax(0, 1fr); }
+  .dpick { width: auto; }
+  .dpgrid { width: 100%; }
+  .dpgrid button { width: 100%; height: 36px; }
+  .fchips.tchips { grid-template-columns: repeat(4, 1fr); }
+}
+
 /* ───────── toasts ───────── */
 .toasts { position: fixed; right: 24px; bottom: 24px; z-index: 80; display: grid; gap: 12px; justify-items: end; }
 .toast { margin: 0; background: var(--ink); color: var(--paper); font: 500 17px/1.4 var(--f-body); padding: 12px 16px; max-width: 420px; box-shadow: 4px 4px 0 var(--accent); animation: slide .24s steps(3) both; }
@@ -372,7 +418,8 @@ mark { background: var(--ink); color: var(--paper); padding: 0 3px; }
 .pbar button.on b { color: var(--paper); }
 
 .card .meta { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; min-height: 18px; }
-.card.need .meta { padding-right: 30px; }
+.card.need .meta, .card.clock .meta { padding-right: 30px; }
+.card.need.clock .meta { padding-right: 60px; }
 .meta .sp { flex: 1; }
 .ptag { font: 600 13px/1 var(--f-body); text-transform: uppercase; color: var(--mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .card .agent-tag { font: 600 11px/1 var(--f-body); text-transform: uppercase; letter-spacing: .4px; color: var(--ink); border: 1.5px solid var(--ink); padding: 2px 4px; flex: none; }
@@ -455,6 +502,7 @@ mark { background: var(--ink); color: var(--paper); padding: 0 3px; }
 /* ───────── tablets and touch ───────── */
 @media (max-width: 1200px), (pointer: coarse) {
   .theme button, .accbtn { width: 40px; height: 40px; }
+  .theme.seg button { height: 40px; }
   .acc { width: 32px; height: 32px; }
   .pbar button { min-height: 40px; }
   .btn.sm { min-height: 40px; }
@@ -536,6 +584,10 @@ mark { background: var(--ink); color: var(--paper); padding: 0 3px; }
 .qmove button[aria-pressed='true'] { background: var(--ink); color: var(--paper); cursor: default; }
 .qmove button.c-needs_you[aria-pressed='true'] { background: var(--accent); color: var(--on-accent); border-color: var(--ink); }
 .qmove button.auto { margin-left: 10px; }
+/* Resume is not a move: it stands apart at the right end, filled. */
+.qmove { row-gap: 8px; }
+.qmove button.resume { margin-left: auto; background: var(--ink); color: var(--paper); box-shadow: 4px 4px 0 var(--accent); }
+.qmove button.resume:hover { background: var(--paper); color: var(--ink); }
 .qmove u { text-decoration: underline 2px; text-underline-offset: 3px; }
 @media (max-width: 1200px), (pointer: coarse) { .qmove button { min-height: 40px; } }
 

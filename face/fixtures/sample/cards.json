@@ -681,6 +681,38 @@
         "link": null
       },
       {
+        "kind": "output",
+        "key": "orders-api#231",
+        "title": "orders-api#231",
+        "status": "opened",
+        "detail": "",
+        "link": "https://example.org/acme/orders-api/pull/231"
+      },
+      {
+        "kind": "output",
+        "key": "Retry policy options",
+        "title": "Retry policy options",
+        "status": "published",
+        "detail": "",
+        "link": "https://example.org/artifact/webhook-retry-options"
+      },
+      {
+        "kind": "output",
+        "key": "ORD-327",
+        "title": "ORD-327",
+        "status": "mentioned",
+        "detail": "",
+        "link": "https://example.org/browse/ORD-327"
+      },
+      {
+        "kind": "output",
+        "key": "Add a retry schedule with jitter",
+        "title": "Add a retry schedule with jitter",
+        "status": "committed",
+        "detail": "",
+        "link": null
+      },
+      {
         "kind": "child",
         "key": "agent-1",
         "title": "Read the delivery code",
@@ -713,34 +745,66 @@
         "link": null
       },
       {
-        "kind": "output",
-        "key": "orders-api#231",
-        "title": "orders-api#231",
-        "status": "opened",
+        "kind": "child",
+        "key": "agent-5",
+        "title": "Check the receivers that time out",
+        "status": "done",
         "detail": "",
-        "link": "https://example.org/acme/orders-api/pull/231"
+        "link": null
       },
       {
-        "kind": "output",
-        "key": "Retry policy options",
-        "title": "Retry policy options",
-        "status": "published",
+        "kind": "child",
+        "key": "agent-6",
+        "title": "List the status codes we retry",
+        "status": "done",
         "detail": "",
-        "link": "https://example.org/artifact/webhook-retry-options"
+        "link": null
       },
       {
-        "kind": "output",
-        "key": "ORD-327",
-        "title": "ORD-327",
-        "status": "mentioned",
+        "kind": "child",
+        "key": "agent-7",
+        "title": "Measure the queue under load",
+        "status": "done",
         "detail": "",
-        "link": "https://example.org/browse/ORD-327"
+        "link": null
       },
       {
-        "kind": "output",
-        "key": "Add a retry schedule with jitter",
-        "title": "Add a retry schedule with jitter",
-        "status": "committed",
+        "kind": "child",
+        "key": "agent-8",
+        "title": "Read the old incident notes",
+        "status": "done",
+        "detail": "",
+        "link": null
+      },
+      {
+        "kind": "child",
+        "key": "agent-9",
+        "title": "Compare with the payments retries",
+        "status": "done",
+        "detail": "",
+        "link": null
+      },
+      {
+        "kind": "child",
+        "key": "agent-10",
+        "title": "Write the dead-letter migration",
+        "status": "done",
+        "detail": "",
+        "link": null
+      },
+      {
+        "kind": "child",
+        "key": "agent-11",
+        "title": "Try the schedule on staging",
+        "status": "done",
+        "detail": "",
+        "link": null
+      },
+      {
+        "kind": "child",
+        "key": "agent-12",
+        "title": "Summarise the receiver survey",
+        "status": "done",
         "detail": "",
         "link": null
       }
@@ -763,8 +827,113 @@
         "url": "https://example.org/browse/ORD-327"
       },
       {
+        "kind": "jira",
+        "value": "ORD-328",
+        "url": "https://example.org/browse/ORD-328"
+      },
+      {
+        "kind": "jira",
+        "value": "ORD-331",
+        "url": "https://example.org/browse/ORD-331"
+      },
+      {
+        "kind": "jira",
+        "value": "ORD-334",
+        "url": "https://example.org/browse/ORD-334"
+      },
+      {
+        "kind": "jira",
+        "value": "ORD-336",
+        "url": "https://example.org/browse/ORD-336"
+      },
+      {
+        "kind": "jira",
+        "value": "ORD-340",
+        "url": "https://example.org/browse/ORD-340"
+      },
+      {
+        "kind": "jira",
+        "value": "ORD-341",
+        "url": "https://example.org/browse/ORD-341"
+      },
+      {
+        "kind": "jira",
+        "value": "ORD-345",
+        "url": "https://example.org/browse/ORD-345"
+      },
+      {
+        "kind": "jira",
+        "value": "ORD-350",
+        "url": "https://example.org/browse/ORD-350"
+      },
+      {
+        "kind": "jira",
+        "value": "ORD-352",
+        "url": "https://example.org/browse/ORD-352"
+      },
+      {
+        "kind": "jira",
+        "value": "ORD-358",
+        "url": "https://example.org/browse/ORD-358"
+      },
+      {
         "kind": "commit",
         "value": "Add a retry schedule with jitter",
+        "url": null
+      },
+      {
+        "kind": "commit",
+        "value": "Cap retries at 5 attempts",
+        "url": null
+      },
+      {
+        "kind": "commit",
+        "value": "Move the backoff to a config value",
+        "url": null
+      },
+      {
+        "kind": "commit",
+        "value": "Log each failed delivery once",
+        "url": null
+      },
+      {
+        "kind": "commit",
+        "value": "Stop retrying on a 410 from the receiver",
+        "url": null
+      },
+      {
+        "kind": "commit",
+        "value": "Keep the retry count on the delivery row",
+        "url": null
+      },
+      {
+        "kind": "commit",
+        "value": "Add a dead-letter table",
+        "url": null
+      },
+      {
+        "kind": "commit",
+        "value": "Send the dead letters to the admin page",
+        "url": null
+      },
+      {
+        "kind": "commit",
+        "value": "Test the schedule against a slow receiver",
+        "url": null
+      },
+      {
+        "kind": "commit",
+        "value": "Name the retry states in one enum",
+        "url": null
+      },
+      {
+        "kind": "commit",
+        "value": "Drop the old fixed delay",
+        "url": null
+      },
+      {
+        "kind": "commit",
+        "value": "Document the policy in the README",
         "url": null
       },
       {
@@ -776,8 +945,8 @@
     "output_counts": {
       "pr": 1,
       "artifact": 1,
-      "jira": 1,
-      "commit": 1,
+      "jira": 11,
+      "commit": 12,
       "folder": 1
     },
     "topics": [
@@ -804,8 +973,8 @@
     "resume_cmd": "cd '/Users/you/code/orders-api' && claude --resume 073b2574-302c-44c1-aaa3-92e6901564b5",
     "resumable": true,
     "parent_id": null,
-    "child_count": 4,
-    "child_done": 4,
+    "child_count": 12,
+    "child_done": 12,
     "prompt_count": 16,
     "tokens": {
       "input": 6300,
@@ -1917,7 +2086,10 @@
     ],
     "first_prompt": "Write the on-call handbook.",
     "last_assistant_text": "Outline and the first two chapters are done. Pinned here on purpose.",
-    "resume_mode": "iterm"
+    "resume_mode": "iterm",
+    "remind_at": 1794992400000,
+    "remind_note": "after the rota change",
+    "remind_due": false
   },
   "e65d1de0-23d2-477f-a784-a9d74fddc2f0": {
     "id": "e65d1de0-23d2-477f-a784-a9d74fddc2f0",

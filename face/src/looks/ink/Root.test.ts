@@ -6,7 +6,9 @@ import { fixtureSource } from '../../data/fixture';
 import { keepPrefsLocal } from '../../prefs';
 import { createStore } from '../../store';
 import { ideaForm } from './IdeaForm';
+import { remindForm } from './Remind';
 import { Root } from './Root';
+import { dateValue } from './DatePick';
 
 const CLAUDE: Agent = { id: 'claude', name: 'Claude Code', short: 'Claude', default: true };
 const CODEX: Agent = { id: 'codex', name: 'Codex CLI', short: 'Codex', default: false };
@@ -55,6 +57,7 @@ beforeEach(() => { localStorage.clear(); });
 afterEach(() => {
   if (mounted) { render(null, mounted); mounted.remove(); mounted = null; }
   ideaForm.value = null;
+  remindForm.value = null;
   document.body.innerHTML = '';
 });
 
@@ -283,6 +286,29 @@ describe('the panel', () => {
     await vi.waitFor(() => expect(store.board.value!.columns.find((c) => c.id === 'needs_you')!.cards.some((c) => c.title.includes('flaky login'))).toBe(true));
   });
 
+  it('resumes the open session from the status row and with R, but not while typing', async () => {
+    const resume = vi.fn(fixtureSource().resume);
+    const { root, $, $$, store } = await mount({ ...fixtureSource(), resume });
+    card(root, 'needs_you', 'flaky login').click();
+    await vi.waitFor(() => expect($('.qmove .resume')).not.toBeNull());
+    const btn = $('.qmove .resume')!;
+    expect(btn.textContent).toBe('RESUME');
+    expect(btn.getAttribute('aria-keyshortcuts')).toBe('R');
+    expect($$('.qmove button').map((b) => b.textContent)).toEqual(['NEEDS YOU', 'WAITING', 'PAUSED', 'DONE', 'RESUME']);
+    btn.click();
+    await vi.waitFor(() => expect(resume).toHaveBeenCalledTimes(1));
+    key('r');
+    await vi.waitFor(() => expect(resume).toHaveBeenCalledTimes(2));
+    expect(resume.mock.calls.map((c) => c[0])).toEqual([store.selected.value, store.selected.value]);
+    const q = $<HTMLInputElement>('#q')!;
+    q.dispatchEvent(new KeyboardEvent('keydown', { key: 'r', bubbles: true }));
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'r', metaKey: true, bubbles: true }));
+    await new Promise((r) => setTimeout(r, 30));
+    expect(resume).toHaveBeenCalledTimes(2);
+    // the receipt and the bottom actions stay
+    expect($('.page .acts.end .btn.big')!.textContent).toBe('RESUME');
+  });
+
   it('loads the conversation when its section is opened', async () => {
     const { root, $, $$ } = await mount();
     card(root, 'needs_you', 'date library').click();
@@ -335,13 +361,25 @@ describe('the card menu', () => {
 });
 
 describe('reminders', () => {
-  it('puts a due card first in Needs you with its reason, and a chip on one that is coming', async () => {
-    const { $, $$ } = await mount();
+  it('puts a due card first in Needs you, its reason on the YOU line and a clock beside the ! tab', async () => {
+    const { $$ } = await mount();
     const first = $$('.c-needs_you .card')[0]!;
-    expect(first.querySelector('.remind.due')!.textContent).toBe("⏰ check on: Dana's CDN rule");
     expect(first.textContent).toContain('Cache the product list');
-    expect($$('.c-waiting .rchip').map((e) => e.textContent)).toEqual([expect.stringMatching(/^⏰ (tomorrow|today \d\d:\d\d)$/)]);
-    expect($$('.c-needs_you .rchip')).toHaveLength(0);
+    expect(first.querySelector('.next')!.textContent).toBe("YOUcheck on this: Dana's CDN rule");
+    expect(first.querySelector('.next .chip.you.hot')).not.toBeNull();
+    expect([...first.querySelectorAll('.tabs > .tab')].map((t) => t.className)).toEqual(['tab clock', 'tab']);
+    expect(first.querySelector('.tab.clock')!.getAttribute('title')).toMatch(/^Reminder due: .+ · Dana's CDN rule$/);
+    // nothing is added below the card's own lines
+    expect(first.querySelector('.remind')).toBeNull();
+  });
+
+  it('marks a card with a reminder set by a clock tab only, the lines as on any other card', async () => {
+    const { root } = await mount();
+    const c = card(root, 'waiting', 'Move the state bucket');
+    expect(c.querySelector('.tabs .tab.clock')!.getAttribute('title')).toMatch(/^Reminder: .+ · Sam's approval$/);
+    expect(c.querySelector('.tabs .tab:not(.clock)')).toBeNull();
+    expect([...c.children].map((e) => e.className)).toEqual(['tabs', 'meta', 'top', 'next']);
+    expect(card(root, 'waiting', 'Add rate limits').querySelector('.tabs')).toBeNull();
   });
 
   it('sets a reminder from the menu, and clearing is offered once one is set', async () => {
@@ -353,29 +391,80 @@ describe('reminders', () => {
     await open('Changelog generator');
     expect($$('.ctx button').map((b) => b.textContent)).not.toContain('CLEAR REMINDER');
     $$('.ctx button').find((b) => b.textContent === 'TOMORROW 9:00')!.click();
-    await vi.waitFor(() => expect(store.toasts.value.some((t) => t.text.startsWith('Reminder set: tomorrow 09:00'))).toBe(true));
-    await vi.waitFor(() => expect(card(root, 'paused', 'Changelog generator').querySelector('.rchip')!.textContent).toBe('⏰ tomorrow'));
+    await vi.waitFor(() => expect(store.toasts.value.some((t) => t.text.startsWith('Reminder set: tomorrow 9:00'))).toBe(true));
+    await vi.waitFor(() => expect(card(root, 'paused', 'Changelog generator').querySelector('.rclock')!.getAttribute('title')).toBe('Reminder: tomorrow 9:00'));
     await open('Changelog generator');
     $$('.ctx button').find((b) => b.textContent === 'CLEAR REMINDER')!.click();
-    await vi.waitFor(() => expect(card(root, 'paused', 'Changelog generator').querySelector('.rchip')).toBeNull());
+    await vi.waitFor(() => expect(card(root, 'paused', 'Changelog generator').querySelector('.rclock')).toBeNull());
   });
 
-  it('opens the form for a date and sends it as words', async () => {
-    const remind = vi.fn(fixtureSource().remind);
-    const { root, $, $$ } = await mount({ ...fixtureSource(), remind });
+  const openForm = async (root: HTMLElement, $: (s: string) => HTMLElement | null, $$: (s: string) => HTMLElement[]) => {
     card(root, 'paused', 'Changelog generator').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 200, clientY: 200 }));
     await vi.waitFor(() => expect($('.ctx')).not.toBeNull());
     $$('.ctx button').find((b) => b.textContent === 'PICK A DATE…')!.click();
-    await vi.waitFor(() => expect($('form.modal')).not.toBeNull());
-    const f = $<HTMLFormElement>('form.modal')!;
-    const field = (n: string) => f.elements.namedItem(n) as HTMLInputElement;
-    field('date').value = '2099-03-04';
-    field('time').value = '';
-    field('note').value = 'before the freeze';
+    await vi.waitFor(() => expect($('form.modal .dpgrid')).not.toBeNull());
+    return $('form.modal') as HTMLFormElement;
+  };
+
+  it('picks a day in the ink month and a typed time, and sends them as words', async () => {
+    const remind = vi.fn(fixtureSource().remind);
+    const { root, $, $$ } = await mount({ ...fixtureSource(), remind });
+    const f = await openForm(root, $, $$);
+    expect(f.querySelector('input[type="date"], input[type="time"]')).toBeNull();
+    f.querySelector<HTMLButtonElement>('[aria-label="Next month"]')!.click();
+    await vi.waitFor(() => expect([...f.querySelectorAll('.dpgrid button')].some((b) => b.textContent === '4' && !(b as HTMLButtonElement).disabled)).toBe(true));
+    [...f.querySelectorAll<HTMLButtonElement>('.dpgrid button')].find((b) => b.textContent === '4')!.click();
+    const time = f.querySelector<HTMLInputElement>('#remind-time')!;
+    time.value = '1430';
+    time.dispatchEvent(new Event('input', { bubbles: true }));
+    (f.elements.namedItem('note') as HTMLInputElement).value = 'before the freeze';
     f.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     await vi.waitFor(() => expect(remind).toHaveBeenCalled());
-    expect(remind.mock.calls[0]![1]).toEqual({ when: '2099-03-04 09:00', note: 'before the freeze' });
+    const d = new Date();
+    d.setDate(1);
+    d.setMonth(d.getMonth() + 1);
+    d.setDate(4);
+    expect(remind.mock.calls[0]![1]).toEqual({ when: `${dateValue(d)} 14:30`, note: 'before the freeze' });
     await vi.waitFor(() => expect($('form.modal')).toBeNull());
+  });
+
+  it('keeps the form open and says why when the time does not read', async () => {
+    const remind = vi.fn(fixtureSource().remind);
+    const { root, $, $$ } = await mount({ ...fixtureSource(), remind });
+    const f = await openForm(root, $, $$);
+    const time = f.querySelector<HTMLInputElement>('#remind-time')!;
+    time.value = '25:00';
+    time.dispatchEvent(new Event('input', { bubbles: true }));
+    f.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => expect(f.querySelector('[role="alert"]')!.textContent).toBe('Write the time as HH:MM, 24 h, e.g. 14:30.'));
+    expect(time.getAttribute('aria-invalid')).toBe('true');
+    expect(remind).not.toHaveBeenCalled();
+    key('Escape');
+    await vi.waitFor(() => expect($('form.modal')).toBeNull());
+  });
+
+  it('switches the desktop notice for every reminder, and hides the switch where there is none', async () => {
+    const set = vi.fn(fixtureSource().setRemindSettings);
+    const { root, $, $$, store } = await mount({ ...fixtureSource(), setRemindSettings: set });
+    const f = await openForm(root, $, $$);
+    await vi.waitFor(() => expect(f.querySelector('.notice')).not.toBeNull());
+    const on = () => [...f.querySelectorAll<HTMLButtonElement>('.notice button')].find((b) => b.getAttribute('aria-pressed') === 'true')!.textContent;
+    expect(on()).toBe('OFF');
+    [...f.querySelectorAll<HTMLButtonElement>('.notice button')].find((b) => b.textContent === 'ON')!.click();
+    await vi.waitFor(() => expect(on()).toBe('ON'));
+    expect(set).toHaveBeenCalledWith({ notify: true });
+    expect(store.notice.value).toEqual({ notify: true, available: true });
+    expect(f.querySelector('.nhint')!.textContent).toBe('Applies to every reminder on this computer.');
+
+    for (const settings of [async () => ({ notify: false, available: false }), async () => { throw new Error('HTTP 404'); }]) {
+      render(null, root);
+      root.remove();
+      const m = await mount({ ...fixtureSource(), remindSettings: settings });
+      const g = await openForm(m.root, m.$, m.$$);
+      await new Promise((r) => setTimeout(r, 80));
+      expect(g.querySelector('.notice')).toBeNull();
+      expect(m.store.toasts.value).toHaveLength(0);
+    }
   });
 
   it('shows the reminder in the panel with a way to change or clear it', async () => {
@@ -383,8 +472,43 @@ describe('reminders', () => {
     card(root, 'needs_you', 'Cache the product list').click();
     await vi.waitFor(() => expect($('.page')).not.toBeNull());
     await vi.waitFor(() => expect($$('.page .sec h4').some((h) => h.textContent === 'REMINDER')).toBe(true));
-    expect($('.page .remind')!.textContent).toBe("⏰ check on: Dana's CDN rule");
+    const sec = $$('.page .sec').find((x) => x.querySelector('h4')!.textContent === 'REMINDER')!;
+    expect(sec.querySelector('.notes')!.textContent).toMatch(/^Due .+ · Dana's CDN rule$/);
     expect($$('.page .acts .btn').map((b) => b.textContent)).toEqual(expect.arrayContaining(['TOMORROW 9:00', 'PICK A DATE…', 'CLEAR']));
+  });
+
+  it('says in plain words that a card has no reminder and what setting one does', async () => {
+    const { root, $, $$ } = await mount();
+    card(root, 'needs_you', 'Upgrade the date library').click();
+    await vi.waitFor(() => expect($$('.page .sec h4').some((h) => h.textContent === 'REMINDER')).toBe(true));
+    const sec = $$('.page .sec').find((x) => x.querySelector('h4')!.textContent === 'REMINDER')!;
+    expect([...sec.querySelectorAll(':scope > p')].map((p) => p.textContent)).toEqual(['No reminder.', 'eye moves this card to Needs you at the time you pick.']);
+    expect([...sec.querySelectorAll('.btn')].map((b) => b.textContent)).not.toContain('CLEAR');
+  });
+});
+
+describe('long lists in the panel', () => {
+  it('shows the first items with a +N MORE button that opens the rest in place and folds them again', async () => {
+    const { root, $, $$ } = await mount();
+    card(root, 'needs_you', 'Review the retry policy').click();
+    const group = (name: string) => $$('.og').find((g) => g.querySelector('h5')!.textContent!.startsWith(name))!;
+    await vi.waitFor(() => expect(group('Commits')).toBeDefined());
+    const commits = group('Commits');
+    expect(commits.querySelectorAll('li:not(.more)')).toHaveLength(8);
+    const more = commits.querySelector<HTMLButtonElement>('li.more button')!;
+    expect(more.textContent).toBe('+4 MORE');
+    expect(more.getAttribute('aria-expanded')).toBe('false');
+    more.click();
+    await vi.waitFor(() => expect(group('Commits').querySelectorAll('li:not(.more)')).toHaveLength(12));
+    expect(group('Commits').querySelector('li.more button')!.textContent).toBe('SHOW LESS');
+    expect(group('Jira').querySelector('li.more button')!.textContent).toBe('+3 MORE');
+    group('Commits').querySelector<HTMLButtonElement>('li.more button')!.click();
+    await vi.waitFor(() => expect(group('Commits').querySelectorAll('li:not(.more)')).toHaveLength(8));
+
+    $$('.kidsum button')[0]!.click();
+    await vi.waitFor(() => expect($$('.kids li:not(.more)')).toHaveLength(8));
+    $<HTMLButtonElement>('.kids li.more button')!.click();
+    await vi.waitFor(() => expect($$('.kids li:not(.more)')).toHaveLength(12));
   });
 });
 

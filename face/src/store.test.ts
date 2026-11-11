@@ -37,6 +37,8 @@ function source(over: Partial<Source> = {}): Source {
     startIdea: async () => ({ dry_run: false, mode: 'iterm', command: 'x', session_id: null, job: null }),
     folderCheck: async () => ({ state: 'ok', creatable: false, note: null }),
     remind: async (id) => card(id, 'paused'),
+    remindSettings: async () => ({ notify: false, available: true }),
+    setRemindSettings: async ({ notify }) => ({ notify, available: true }),
     subscribe: () => () => {},
     ...over,
   };
@@ -369,9 +371,35 @@ describe('remind', () => {
     await expect(store.remind('a', { when: 'tomorrow', note: "Ana's reply" })).resolves.toBe(true);
     expect(remind).toHaveBeenCalledWith('a', { when: 'tomorrow', note: "Ana's reply" });
     expect(boards).toBe(2);
-    expect(store.toasts.value.at(-1)!.text).toMatch(/^Reminder set: tomorrow \d\d:\d\d$/);
+    expect(store.toasts.value.at(-1)!.text).toMatch(/^Reminder set: tomorrow \d?\d:\d\d$/);
     await store.remind('a', { clear: true });
     expect(store.toasts.value.at(-1)!.text).toBe('Reminder cleared');
+  });
+
+  it('loads and sets the desktop notice; an engine without the setting leaves it unknown, quietly', async () => {
+    const setRemindSettings = vi.fn(async ({ notify }: { notify: boolean }) => ({ notify, available: true }));
+    const store = createStore(source({ setRemindSettings }));
+    expect(store.notice.value).toBeNull();
+    store.loadNotice();
+    await vi.waitFor(() => expect(store.notice.value).toEqual({ notify: false, available: true }));
+    await store.setNotice(true);
+    expect(setRemindSettings).toHaveBeenCalledWith({ notify: true });
+    expect(store.notice.value).toEqual({ notify: true, available: true });
+
+    const old = createStore(source({ remindSettings: async () => { throw new Error('HTTP 404'); } }));
+    old.loadNotice();
+    await tick();
+    expect(old.notice.value).toBeNull();
+    expect(old.toasts.value).toHaveLength(0);
+  });
+
+  it('says why the desktop notice cannot be switched, and keeps what it was', async () => {
+    const store = createStore(source({ setRemindSettings: async () => { throw new Error('cannot write the config'); } }));
+    store.loadNotice();
+    await vi.waitFor(() => expect(store.notice.value).not.toBeNull());
+    await store.setNotice(true);
+    expect(store.notice.value).toEqual({ notify: false, available: true });
+    expect(store.toasts.value.at(-1)).toMatchObject({ tone: 'error', text: 'cannot write the config' });
   });
 
   it('keeps the form open and says why when the engine cannot read the time', async () => {

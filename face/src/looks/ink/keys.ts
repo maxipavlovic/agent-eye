@@ -2,9 +2,10 @@ import { useEffect, useRef } from 'preact/hooks';
 import type { Store } from '../../store';
 import { ideaForm } from './IdeaForm';
 import { QUICK, quickMove } from './Move';
+import { remindForm } from './Remind';
 import type { Walk } from './walk';
 
-/** Board keys: / or ⌘K / Ctrl-K searches, N W P D move the open session, ← → walk the cards, Esc backs out one level. */
+/** Board keys: / or ⌘K / Ctrl-K searches, N W P D move the open session, R resumes it, ← → walk the cards, Esc backs out one level. */
 /** Back to the search box, with what is in it selected, so typing starts a new search. */
 export function focusSearch() {
   const q = document.getElementById('q') as HTMLInputElement | null;
@@ -22,12 +23,21 @@ export function useKeys(store: Store, step: Walk['step']) {
       const plain = !e.metaKey && !e.ctrlKey && !e.altKey;
       const d = store.detail.value;
       const quick = QUICK.find((m) => m.key === e.key.toLowerCase());
+      // the reminder form takes the keys while it is open; Esc closes it
+      if (remindForm.value) {
+        if (e.key === 'Escape') remindForm.value = null;
+        return;
+      }
       const findKey = (e.key === '/' && !typing && !e.metaKey && !e.ctrlKey)
         || (e.key.toLowerCase() === 'k' && (e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && !ideaForm.value);
       if (findKey) { e.preventDefault(); focusSearch(); }
       else if (!typing && store.selected.value && d && d.kind !== 'idea' && plain && quick) {
         e.preventDefault();
         quickMove(store, d, quick.to);
+      }
+      else if (!typing && store.selected.value && d?.resumable && plain && !e.shiftKey && e.key.toLowerCase() === 'r') {
+        e.preventDefault();
+        void store.resume(d.id);
       }
       else if ((e.key === 'ArrowRight' || e.key === 'ArrowLeft') && !typing && !ideaForm.value && store.selected.value && plain && !e.shiftKey) {
         e.preventDefault();

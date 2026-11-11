@@ -767,8 +767,8 @@
           "output_counts": {
             "pr": 1,
             "artifact": 1,
-            "jira": 1,
-            "commit": 1,
+            "jira": 11,
+            "commit": 12,
             "folder": 1
           },
           "topics": [
@@ -795,8 +795,8 @@
           "resume_cmd": "cd '/Users/you/code/orders-api' && claude --resume 073b2574-302c-44c1-aaa3-92e6901564b5",
           "resumable": true,
           "parent_id": null,
-          "child_count": 4,
-          "child_done": 4,
+          "child_count": 12,
+          "child_done": 12,
           "prompt_count": 16,
           "tokens": {
             "input": 6300,
@@ -1586,7 +1586,10 @@
             "cache_read": 1071840,
             "total": 1160000,
             "subagents_total": 0
-          }
+          },
+          "remind_at": 1794992400000,
+          "remind_note": "after the rota change",
+          "remind_due": false
         },
         {
           "id": "e65d1de0-23d2-477f-a784-a9d74fddc2f0",
