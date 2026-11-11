@@ -130,17 +130,14 @@ export function codeParts(s: string): Array<{ text: string; code: boolean }> {
 
 const DAY = 86400000;
 
-/** A reminder this many days ahead or nearer shows on its card; a further one only in the panel. */
-export const SOON_DAYS = 3;
-
-const clock = (ms: number) => new Date(ms).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+const clock = (ms: number) => new Date(ms).toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit' });
 
 function daysFrom(ms: number, now: number): number {
   const day = (t: number) => { const d = new Date(t); d.setHours(0, 0, 0, 0); return d.getTime(); };
   return Math.round((day(ms) - day(now)) / DAY);
 }
 
-/** When a reminder is: "today 14:00", "tomorrow 09:00", "Fri 14:00" within the week, else "20 Nov 14:00". */
+/** When a reminder is: "today 14:00", "tomorrow 9:00", "Fri 14:00" within the week, else "20 Nov 14:00". */
 export function remindWhen(at: number, now = Date.now()): string {
   const days = daysFrom(at, now);
   if (days <= 0) return `today ${clock(at)}`;
@@ -149,14 +146,23 @@ export function remindWhen(at: number, now = Date.now()): string {
   return `${new Date(at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} ${clock(at)}`;
 }
 
-/** The chip on a card: the time of a reminder within a few days ("Fri 14:00", "tomorrow"); null for none, a due one or a far one. */
-export function remindChip(c: Card, now = Date.now()): string | null {
-  if (!c.remind_at || c.remind_due || c.remind_at - now > SOON_DAYS * DAY) return null;
-  return daysFrom(c.remind_at, now) === 1 ? 'tomorrow' : remindWhen(c.remind_at, now);
+/** A set reminder in a few words: "tomorrow 9:00 · Ana's reply"; null for none. */
+export function remindText(c: Card, now = Date.now()): string | null {
+  if (!c.remind_at) return null;
+  const when = remindWhen(c.remind_at, now);
+  return c.remind_note ? `${when} · ${c.remind_note}` : when;
 }
 
-/** The line a due card carries: why it is in Needs you. */
-export function remindReason(c: Card): string | null {
+/** The tooltip of a card's clock mark: "Reminder: tomorrow 9:00 · Ana's reply"; null for none. */
+export function remindTitle(c: Card, now = Date.now()): string | null {
+  const text = remindText(c, now);
+  if (!text) return null;
+  return `${c.remind_due ? 'Reminder due' : 'Reminder'}: ${text}`;
+}
+
+/** The next line of a due card, after → YOU: why it is in Needs you. */
+export function remindReason(c: Card, now = Date.now()): string | null {
   if (!c.remind_due) return null;
-  return c.remind_note ? `⏰ check on: ${c.remind_note}` : '⏰ you asked to check on this';
+  if (c.remind_note) return `check on this: ${c.remind_note}`;
+  return c.remind_at ? `you asked to check on this ${remindWhen(c.remind_at, now)}` : 'you asked to check on this';
 }

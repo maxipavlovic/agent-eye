@@ -132,21 +132,20 @@ a:hover { background: var(--ink); color: var(--paper); text-decoration: none; }
 /* Inter leaves ~5 px above its capitals at 16–17 px / 1.35; 4 px puts the icon top level with round capitals (C, O), which rise ~1 px above flat ones. */
 .top > .sigil { flex: none; margin-top: 4px; }
 .card h3 { margin: 0; font: 600 17px/1.35 var(--f-body); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: break-word; flex: 1; min-width: 0; }
-.card.need .top h3 { margin-right: 26px; }
+/* An idea card has no meta line, so its title's first line keeps clear of the tabs. */
+.card.idea.need .top h3::before, .card.idea.clock .top h3::before { content: ''; float: right; width: 22px; height: 1em; }
+.card.idea.need.clock .top h3::before { width: 52px; }
 .sigil svg { width: 36px; height: 36px; }
 .sigil.big svg { width: 72px; height: 72px; }
 
-.tab { position: absolute; top: -2px; right: 10px; width: 26px; height: 32px; background: var(--accent); border: 2px solid var(--ink); border-top: 0; display: grid; place-items: start center; padding-top: 7px; }
-.tab::after { content: ''; position: absolute; left: -2px; bottom: -8px; width: 26px; height: 8px; background: var(--ink); clip-path: polygon(0 0, 100% 0, 100% 2px, 50% 100%, 0 2px); display: none; }
+.tabs { position: absolute; top: -2px; right: 10px; display: flex; gap: 4px; }
+.tab { width: 26px; height: 32px; background: var(--accent); border: 2px solid var(--ink); border-top: 0; display: grid; place-items: start center; padding-top: 7px; }
+/* A reminder is set: a paper tab with the clock, left of the `!` of a card in Needs you. */
+.tab.clock { background: var(--paper); color: var(--ink); }
+.rclock { flex: none; color: var(--ink); }
 
 .state { margin: 8px 0 0; font: 400 16px/1.4 var(--f-body); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
 .next { margin: 8px 0 0; font: 400 16px/1.4 var(--f-body); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
-/* A reminder: why a card is back in Needs you, or when it will be. */
-.remind { margin: 8px 0 0; font: 500 16px/1.4 var(--f-body); overflow-wrap: anywhere; }
-.remind.due { display: block; padding: 4px 8px; background: var(--accent); color: var(--on-accent); box-shadow: inset 0 0 0 2px var(--ink); font-weight: 600; }
-.page .remind { font-size: 17px; line-height: 1.55; max-width: 66ch; margin: 0 0 12px; }
-.rchip { display: inline-block; font: 600 15px/1 var(--f-body); padding: 3px 7px; background: var(--paper); color: var(--ink); box-shadow: inset 0 0 0 2px var(--ink); white-space: nowrap; }
-.card.row .rchip { flex: none; }
 .chip { display: inline-flex; align-items: center; gap: 5px; background: var(--ink); color: var(--paper); font: 400 16px/1 var(--f-label); padding: 3px 7px 2px 5px; margin-right: 7px; vertical-align: 1px; text-transform: uppercase; }
 .chip .lbl { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chip.agent { background: var(--paper); color: var(--ink); box-shadow: inset 0 0 0 2px var(--ink); padding: 3px 7px 2px 5px; }
@@ -372,7 +371,8 @@ mark { background: var(--ink); color: var(--paper); padding: 0 3px; }
 .pbar button.on b { color: var(--paper); }
 
 .card .meta { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; min-height: 18px; }
-.card.need .meta { padding-right: 30px; }
+.card.need .meta, .card.clock .meta { padding-right: 30px; }
+.card.need.clock .meta { padding-right: 60px; }
 .meta .sp { flex: 1; }
 .ptag { font: 600 13px/1 var(--f-body); text-transform: uppercase; color: var(--mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .card .agent-tag { font: 600 11px/1 var(--f-body); text-transform: uppercase; letter-spacing: .4px; color: var(--ink); border: 1.5px solid var(--ink); padding: 2px 4px; flex: none; }

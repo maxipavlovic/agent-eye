@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { artifactName, codeParts, folderGroup, homePath, nextParts, outputLabel, remindChip, remindReason, remindWhen, resumeLabel, tok } from './format';
+import { artifactName, codeParts, folderGroup, homePath, nextParts, outputLabel, remindReason, remindText, remindTitle, remindWhen, resumeLabel, tok } from './format';
 import type { Output } from './api/types';
 
 describe('nextParts', () => {
@@ -74,29 +74,33 @@ describe('codeParts', () => {
 describe('reminders', () => {
   const at = (d: number, h: number, m = 0) => new Date(2026, 5, 10 + d, h, m).getTime();
   const now = at(0, 8);
-  const c = (o: object) => o as Parameters<typeof remindChip>[0];
+  const c = (o: object) => o as Parameters<typeof remindTitle>[0];
 
   it('says when in words', () => {
     expect(remindWhen(at(0, 14), now)).toBe('today 14:00');
-    expect(remindWhen(at(1, 9), now)).toBe('tomorrow 09:00');
+    expect(remindWhen(at(1, 9), now)).toBe('tomorrow 9:00');
     expect(remindWhen(at(3, 14, 30), now)).toBe('Sat 14:30');
-    expect(remindWhen(at(10, 9), now)).toBe('20 Jun 09:00');
+    expect(remindWhen(at(10, 9), now)).toBe('20 Jun 9:00');
   });
 
-  it('puts a chip on a reminder within three days and none on a far or due one', () => {
-    expect(remindChip(c({ remind_at: at(1, 9) }), now)).toBe('tomorrow');
-    expect(remindChip(c({ remind_at: at(0, 14) }), now)).toBe('today 14:00');
-    expect(remindChip(c({ remind_at: at(3, 8) }), now)).toBe('Sat 08:00');
-    expect(remindChip(c({ remind_at: at(4, 9) }), now)).toBeNull();
-    expect(remindChip(c({ remind_at: at(0, 9), remind_due: true }), now)).toBeNull();
-    expect(remindChip(c({}), now)).toBeNull();
-    expect(remindChip(c({ remind_at: null }), now)).toBeNull();
+  it('says when and the note of a set reminder, and nothing without one', () => {
+    expect(remindText(c({ remind_at: at(1, 9), remind_note: "Ana's reply" }), now)).toBe("tomorrow 9:00 · Ana's reply");
+    expect(remindText(c({ remind_at: at(10, 9) }), now)).toBe('20 Jun 9:00');
+    expect(remindText(c({}), now)).toBeNull();
+    expect(remindText(c({ remind_at: null }), now)).toBeNull();
   });
 
-  it('gives a due card the reason line, with or without a note', () => {
-    expect(remindReason(c({ remind_due: true, remind_note: "Ana's reply" }))).toBe("⏰ check on: Ana's reply");
-    expect(remindReason(c({ remind_due: true, remind_note: null }))).toBe('⏰ you asked to check on this');
-    expect(remindReason(c({ remind_due: false, remind_note: 'x' }))).toBeNull();
-    expect(remindReason(c({}))).toBeNull();
+  it('titles the clock mark of any set reminder, near or far, and says when one is due', () => {
+    expect(remindTitle(c({ remind_at: at(1, 9), remind_note: "Ana's reply" }), now)).toBe("Reminder: tomorrow 9:00 · Ana's reply");
+    expect(remindTitle(c({ remind_at: at(30, 9) }), now)).toBe('Reminder: 10 Jul 9:00');
+    expect(remindTitle(c({ remind_at: at(0, 7), remind_due: true }), now)).toBe('Reminder due: today 7:00');
+    expect(remindTitle(c({}), now)).toBeNull();
+  });
+
+  it('gives a due card the reason for its YOU line, with or without a note', () => {
+    expect(remindReason(c({ remind_due: true, remind_at: at(0, 7), remind_note: "Ana's reply" }), now)).toBe("check on this: Ana's reply");
+    expect(remindReason(c({ remind_due: true, remind_at: at(0, 7), remind_note: null }), now)).toBe('you asked to check on this today 7:00');
+    expect(remindReason(c({ remind_due: false, remind_note: 'x' }), now)).toBeNull();
+    expect(remindReason(c({}), now)).toBeNull();
   });
 });

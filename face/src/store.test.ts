@@ -369,7 +369,7 @@ describe('remind', () => {
     await expect(store.remind('a', { when: 'tomorrow', note: "Ana's reply" })).resolves.toBe(true);
     expect(remind).toHaveBeenCalledWith('a', { when: 'tomorrow', note: "Ana's reply" });
     expect(boards).toBe(2);
-    expect(store.toasts.value.at(-1)!.text).toMatch(/^Reminder set: tomorrow \d\d:\d\d$/);
+    expect(store.toasts.value.at(-1)!.text).toMatch(/^Reminder set: tomorrow \d?\d:\d\d$/);
     await store.remind('a', { clear: true });
     expect(store.toasts.value.at(-1)!.text).toBe('Reminder cleared');
   });

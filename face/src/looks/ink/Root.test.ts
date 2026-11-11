@@ -335,13 +335,25 @@ describe('the card menu', () => {
 });
 
 describe('reminders', () => {
-  it('puts a due card first in Needs you with its reason, and a chip on one that is coming', async () => {
-    const { $, $$ } = await mount();
+  it('puts a due card first in Needs you, its reason on the YOU line and a clock beside the ! tab', async () => {
+    const { $$ } = await mount();
     const first = $$('.c-needs_you .card')[0]!;
-    expect(first.querySelector('.remind.due')!.textContent).toBe("⏰ check on: Dana's CDN rule");
     expect(first.textContent).toContain('Cache the product list');
-    expect($$('.c-waiting .rchip').map((e) => e.textContent)).toEqual([expect.stringMatching(/^⏰ (tomorrow|today \d\d:\d\d)$/)]);
-    expect($$('.c-needs_you .rchip')).toHaveLength(0);
+    expect(first.querySelector('.next')!.textContent).toBe("YOUcheck on this: Dana's CDN rule");
+    expect(first.querySelector('.next .chip.you.hot')).not.toBeNull();
+    expect([...first.querySelectorAll('.tabs > .tab')].map((t) => t.className)).toEqual(['tab clock', 'tab']);
+    expect(first.querySelector('.tab.clock')!.getAttribute('title')).toMatch(/^Reminder due: .+ · Dana's CDN rule$/);
+    // nothing is added below the card's own lines
+    expect(first.querySelector('.remind')).toBeNull();
+  });
+
+  it('marks a card with a reminder set by a clock tab only, the lines as on any other card', async () => {
+    const { root } = await mount();
+    const c = card(root, 'waiting', 'Move the state bucket');
+    expect(c.querySelector('.tabs .tab.clock')!.getAttribute('title')).toMatch(/^Reminder: .+ · Sam's approval$/);
+    expect(c.querySelector('.tabs .tab:not(.clock)')).toBeNull();
+    expect([...c.children].map((e) => e.className)).toEqual(['tabs', 'meta', 'top', 'next']);
+    expect(card(root, 'waiting', 'Add rate limits').querySelector('.tabs')).toBeNull();
   });
 
   it('sets a reminder from the menu, and clearing is offered once one is set', async () => {
@@ -353,11 +365,11 @@ describe('reminders', () => {
     await open('Changelog generator');
     expect($$('.ctx button').map((b) => b.textContent)).not.toContain('CLEAR REMINDER');
     $$('.ctx button').find((b) => b.textContent === 'TOMORROW 9:00')!.click();
-    await vi.waitFor(() => expect(store.toasts.value.some((t) => t.text.startsWith('Reminder set: tomorrow 09:00'))).toBe(true));
-    await vi.waitFor(() => expect(card(root, 'paused', 'Changelog generator').querySelector('.rchip')!.textContent).toBe('⏰ tomorrow'));
+    await vi.waitFor(() => expect(store.toasts.value.some((t) => t.text.startsWith('Reminder set: tomorrow 9:00'))).toBe(true));
+    await vi.waitFor(() => expect(card(root, 'paused', 'Changelog generator').querySelector('.rclock')!.getAttribute('title')).toBe('Reminder: tomorrow 9:00'));
     await open('Changelog generator');
     $$('.ctx button').find((b) => b.textContent === 'CLEAR REMINDER')!.click();
-    await vi.waitFor(() => expect(card(root, 'paused', 'Changelog generator').querySelector('.rchip')).toBeNull());
+    await vi.waitFor(() => expect(card(root, 'paused', 'Changelog generator').querySelector('.rclock')).toBeNull());
   });
 
   it('opens the form for a date and sends it as words', async () => {
