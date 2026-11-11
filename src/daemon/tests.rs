@@ -32,7 +32,23 @@ fn add_session(db: &Db, id: &str, last: i64) {
 }
 
 #[test]
-fn a_due_reminder_is_announced_once_and_not_when_notices_are_off() {
+fn a_due_reminder_is_announced_once() {
+    let (_t, p, db) = env();
+    add_session(&db, "s1", 100);
+    db.conn
+        .execute("UPDATE session SET remind_at=200, title='Ana'", [])
+        .unwrap();
+    let seen = std::cell::RefCell::new(vec![]);
+    let mut send = |t: &str, _: &str| seen.borrow_mut().push(t.to_string());
+    let mut on = Config::default();
+    on.remind.notify = true;
+    notify_reminders(&db, &p, &on, &mut send);
+    notify_reminders(&db, &p, &on, &mut send);
+    assert_eq!(*seen.borrow(), ["Check on: Ana"]);
+}
+
+#[test]
+fn while_notices_are_off_due_reminders_are_marked_told_without_a_notice() {
     let (_t, p, db) = env();
     add_session(&db, "s1", 100);
     db.conn
@@ -44,19 +60,23 @@ fn a_due_reminder_is_announced_once_and_not_when_notices_are_off() {
     off.remind.notify = false;
     notify_reminders(&db, &p, &off, &mut send);
     assert!(seen.borrow().is_empty());
-    let mut on = Config::default();
-    on.remind.notify = true;
-    notify_reminders(&db, &p, &on, &mut send);
-    notify_reminders(&db, &p, &on, &mut send);
-    assert_eq!(*seen.borrow(), ["Check on: Ana"]);
+    let told: Option<i64> = db
+        .conn
+        .query_row("SELECT remind_notified_at FROM session", [], |r| r.get(0))
+        .unwrap();
+    assert!(told.is_some(), "marked as told");
 }
 
 #[test]
 fn a_switch_made_while_the_daemon_runs_counts_at_once() {
     let (_t, p, db) = env();
     add_session(&db, "s1", 100);
+    add_session(&db, "s2", 100);
     db.conn
-        .execute("UPDATE session SET remind_at=200, title='Ana'", [])
+        .execute(
+            "UPDATE session SET remind_at=200, title='Old' WHERE id='s1'",
+            [],
+        )
         .unwrap();
     let seen = std::cell::RefCell::new(vec![]);
     let mut send = |t: &str, _: &str| seen.borrow_mut().push(t.to_string());
@@ -65,7 +85,18 @@ fn a_switch_made_while_the_daemon_runs_counts_at_once() {
     assert!(seen.borrow().is_empty(), "off unless asked");
     crate::remind::notices::set(&p, true).unwrap();
     notify_reminders(&db, &p, &started_with, &mut send);
-    assert_eq!(*seen.borrow(), ["Check on: Ana"]);
+    assert!(
+        seen.borrow().is_empty(),
+        "what fell due while off stays quiet"
+    );
+    db.conn
+        .execute(
+            "UPDATE session SET remind_at=?1, title='New' WHERE id='s2'",
+            [crate::util::now_ms() - 1000],
+        )
+        .unwrap();
+    notify_reminders(&db, &p, &started_with, &mut send);
+    assert_eq!(*seen.borrow(), ["Check on: New"]);
 }
 
 #[test]

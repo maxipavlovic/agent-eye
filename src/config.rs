@@ -348,13 +348,20 @@ impl Config {
     }
 }
 
+/// Is this line the table header `header` (`[remind]`)? Spaces around and inside the brackets and a
+/// trailing `# comment` do not matter, as in TOML.
+fn is_header(line: &str, header: &str) -> bool {
+    let code = line.split('#').next().unwrap_or_default();
+    code.split_whitespace().collect::<String>() == header
+}
+
 /// Set `key = value` in the section with this header (`[board]`) of a config.toml text, keeping every
 /// other line and comment: a key that is there is replaced (its comment stays), one that is not is
 /// added under the header, and a section that is not there is added at the end.
 fn set_key(text: &str, header: &str, key: &str, value: &str) -> String {
     let lines: Vec<&str> = text.lines().collect();
     let line = format!("{key} = {value}");
-    let at = lines.iter().position(|l| l.trim() == header);
+    let at = lines.iter().position(|l| is_header(l, header));
     let mut out: Vec<String> = lines.iter().map(|l| l.to_string()).collect();
     match at {
         Some(h) => {
@@ -411,31 +418,19 @@ pub fn set_agents_enabled(text: &str, ids: &[String]) -> String {
     )
 }
 
-/// The text of the config file, or the defaults when it is not there.
-fn text_or_default(path: &Path) -> Result<String> {
-    if path.exists() {
-        std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))
-    } else {
-        Ok(default_toml())
-    }
-}
-
 /// Write `[board] enabled` into the config file (created from the defaults when missing).
 pub fn write_board_enabled(path: &Path, on: bool) -> Result<()> {
-    let text = set_board_enabled(&text_or_default(path)?, on);
-    crate::files::write_private(path, &text).with_context(|| format!("writing {}", path.display()))
+    crate::config_edit::rewrite(path, |t| set_board_enabled(t, on))
 }
 
 /// Write `[remind] notify` into the config file (created from the defaults when missing).
 pub fn write_remind_notify(path: &Path, on: bool) -> Result<()> {
-    let text = set_remind_notify(&text_or_default(path)?, on);
-    crate::files::write_private(path, &text).with_context(|| format!("writing {}", path.display()))
+    crate::config_edit::rewrite(path, |t| set_remind_notify(t, on))
 }
 
 /// Write `[agents] enabled` into the config file (created from the defaults when missing).
 pub fn write_agents_enabled(path: &Path, ids: &[String]) -> Result<()> {
-    let text = set_agents_enabled(&text_or_default(path)?, ids);
-    crate::files::write_private(path, &text).with_context(|| format!("writing {}", path.display()))
+    crate::config_edit::rewrite(path, |t| set_agents_enabled(t, ids))
 }
 
 #[cfg(test)]
@@ -489,6 +484,29 @@ mod tests {
             t,
             "[board]\nport = 7500 # mine\n\n[remind]\nnotify = true\n"
         );
+    }
+
+    #[test]
+    fn a_table_header_is_found_with_spaces_and_a_comment() {
+        for header in [
+            "  [remind]",
+            "[remind]  ",
+            "[ remind ]",
+            "[remind]  # mine",
+            "\t[ remind ] # mine",
+        ] {
+            let old = format!("[board]\nport = 7500\n\n{header}\nnotify = false\n");
+            let t = set_remind_notify(&old, true);
+            assert_eq!(t.matches("remind").count(), 1, "{header}: {t}");
+            assert!(Config::parse(&t).unwrap().remind.notify, "{header}: {t}");
+            assert!(t.contains(header), "the header stays as it was: {t}");
+        }
+    }
+
+    #[test]
+    fn a_header_with_a_comment_gets_a_missing_key_under_it() {
+        let t = set_remind_notify("[remind] # mine\n", true);
+        assert_eq!(t, "[remind] # mine\nnotify = true\n");
     }
 
     #[test]

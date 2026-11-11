@@ -89,6 +89,28 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_post_with_a_config_that_does_not_parse_is_a_400_and_writes_nothing() {
+        let e = env();
+        let path = e._tmp.path().join("home").join("config.toml");
+        std::fs::write(&path, "[remind\nnotify = false\n").unwrap();
+        let (st, v) = call(
+            &e,
+            req(
+                "POST",
+                "/api/remind/settings",
+                Some(json!({"notify": true})),
+            ),
+        )
+        .await;
+        assert_eq!(st, StatusCode::BAD_REQUEST);
+        assert!(v["error"].as_str().unwrap().contains("does not parse"));
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "[remind\nnotify = false\n"
+        );
+    }
+
+    #[tokio::test]
     async fn a_post_without_notify_is_refused() {
         let e = env();
         let (st, v) = call(&e, req("POST", "/api/remind/settings", Some(json!({})))).await;

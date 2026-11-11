@@ -81,6 +81,9 @@ impl App {
         let Some(on) = input.notify else {
             return;
         };
+        if !on && !input.can_notify {
+            return;
+        }
         match notices::set(paths, !on) {
             Ok(()) => input.notify = Some(!on),
             Err(e) => input.error = Some(format!("could not save: {e:#}")),
@@ -426,6 +429,18 @@ mod tests {
         assert_eq!(a.remind.as_ref().unwrap().notify, Some(true), "it stays");
         a.key(key(KeyCode::Tab));
         assert!(!notices::is_on(&paths, true));
+    }
+
+    #[test]
+    fn tab_does_nothing_when_no_program_can_show_a_notice_and_notices_are_off() {
+        let (_t, mut a) = app_at_home();
+        a.key(ctrl('r'));
+        a.remind.as_mut().unwrap().can_notify = false;
+        a.key(key(KeyCode::Tab));
+        assert_eq!(a.remind.as_ref().unwrap().notify, Some(false));
+        let paths = a.paths.clone().unwrap();
+        assert!(!paths.config_path().exists(), "nothing was written");
+        assert!(!notices::is_on(&paths, false));
     }
 
     #[test]
