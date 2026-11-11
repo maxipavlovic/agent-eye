@@ -12,7 +12,7 @@ import { MoveMenu, QuickMove } from './Move';
 import { Next } from './Card';
 import { RemindPanel } from './Remind';
 import { Sigil } from './pieces';
-import { Kids, Outputs, Sec, TokenSec, Topics, Where } from './Sections';
+import { Kids, Outputs, Remote, Running, Sec, TokenSec, Topics, Where } from './Sections';
 import type { Walk } from './walk';
 
 /** The torn-edge outline of the resume receipt. */
@@ -120,6 +120,8 @@ export function Detail({ store, walk }: { store: Store; walk: Walk }) {
         {snip && <p class="match"><b>MATCH</b><span>{snippetParts(snip).map((p, j) => (p.hit ? <mark key={j}>{p.text}</mark> : p.text))}</span></p>}
         {session && d.state && <p class="lead"><Hl s={d.state} /></p>}
         <Next c={d} hot={need} />
+        <Running d={d} />
+        <Remote d={d} />
         {d.kind === 'idea' && d.idea_id != null && <IdeaBody d={d} store={store} />}
         {d.recap && <Sec t="RECAP"><p class="recap"><Hl s={d.recap} /></p></Sec>}
         {d.idea?.notes && <Sec t="IDEA NOTES"><p class="notes"><Hl s={d.idea.notes} /></p></Sec>}

@@ -184,7 +184,19 @@
       "title": "Dark mode for the checkout",
       "notes": "Use the tokens from the design file. Keep text at AA contrast or better.",
       "prompt": null
-    }
+    },
+    "activity": "background: npm run dev · 4 min",
+    "background": [
+      {
+        "id": "bsrv1",
+        "kind": "shell",
+        "label": "npm run dev",
+        "started_at": 1794214560000,
+        "line": "npm run dev · 4 min"
+      }
+    ],
+    "loops": [],
+    "remote_url": null
   },
   "f3a379f4-1054-4974-ae7f-1b1651fc9aaa": {
     "id": "f3a379f4-1054-4974-ae7f-1b1651fc9aaa",
@@ -336,7 +348,19 @@
     ],
     "first_prompt": "Invoice export runs inside the request and times out for big accounts. Move it to the job queue, keep the same CSV format.",
     "last_assistant_text": "The worker now retries a timed-out export up to five times with a growing delay. I am writing the test that makes the database slow on purpose.",
-    "resume_mode": "iterm"
+    "resume_mode": "iterm",
+    "activity": "↻ every 10 min · next 14:20",
+    "background": [],
+    "loops": [
+      {
+        "kind": "interval",
+        "schedule": "every 10 min",
+        "next_at": 1794215160000,
+        "prompt": "check the export queue",
+        "line": "↻ every 10 min · next 14:20"
+      }
+    ],
+    "remote_url": null
   },
   "e97cde56-38d0-4193-a707-980322069975": {
     "id": "e97cde56-38d0-4193-a707-980322069975",
@@ -449,7 +473,11 @@
     ],
     "first_prompt": "The sync command fetches one remote after the other. Make it fetch them at the same time and keep the output readable.",
     "last_assistant_text": "Four remotes run at once and each gets one progress line. The slow remote test still needs a fake server that waits.",
-    "resume_mode": "iterm"
+    "resume_mode": "iterm",
+    "activity": null,
+    "background": [],
+    "loops": [],
+    "remote_url": "https://claude.ai/code/session_01SampleSampleSample"
   },
   "f99547eb-fa3f-49b4-a326-3b55de7c0207": {
     "id": "f99547eb-fa3f-49b4-a326-3b55de7c0207",

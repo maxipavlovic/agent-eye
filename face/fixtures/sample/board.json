@@ -275,7 +275,19 @@
             "cache_read": 2424576,
             "total": 3200000,
             "subagents_total": 576000
-          }
+          },
+          "activity": "background: npm run dev · 4 min",
+          "background": [
+            {
+              "id": "bsrv1",
+              "kind": "shell",
+              "label": "npm run dev",
+              "started_at": 1794214560000,
+              "line": "npm run dev · 4 min"
+            }
+          ],
+          "loops": [],
+          "remote_url": null
         },
         {
           "id": "f3a379f4-1054-4974-ae7f-1b1651fc9aaa",
@@ -374,7 +386,19 @@
             "cache_read": 4180176,
             "total": 5800000,
             "subagents_total": 1276000
-          }
+          },
+          "activity": "↻ every 10 min · next 14:20",
+          "background": [],
+          "loops": [
+            {
+              "kind": "interval",
+              "schedule": "every 10 min",
+              "next_at": 1794215160000,
+              "prompt": "check the export queue",
+              "line": "↻ every 10 min · next 14:20"
+            }
+          ],
+          "remote_url": null
         },
         {
           "id": "e97cde56-38d0-4193-a707-980322069975",
@@ -467,7 +491,11 @@
             "cache_read": 591360,
             "total": 640000,
             "subagents_total": 0
-          }
+          },
+          "activity": null,
+          "background": [],
+          "loops": [],
+          "remote_url": "https://claude.ai/code/session_01SampleSampleSample"
         }
       ]
     },

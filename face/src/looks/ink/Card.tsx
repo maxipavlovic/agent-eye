@@ -81,11 +81,13 @@ export function CardView({ c, store, i, kind, tag }: { c: Card; store: Store; i:
         {ptag}
         {agent}
         <span class="sp" />
+        {c.remote_url && <span class="rc" title="Remote Control is on for this session">RC</span>}
         {kind === 'run' && <span class="live"><i />LIVE</span>}
         <Tok t={c.tokens} />
         <span class="age">{age}</span>
       </div>
       <div class="top"><Sigil id={c.id} /><h3>{c.title}</h3></div>
+      {kind === 'run' && c.activity && <p class="activity">{c.activity}</p>}
       {kind === 'run' && c.state && <p class="state">{c.state}</p>}
       {kind !== 'run' && <Next c={c} hot={kind === 'need'} />}
       <RemindLine c={c} />

@@ -17,6 +17,29 @@ export function Sec({ t, n, children }: { t: string; n?: number | string; childr
   );
 }
 
+/** What an open session does on its own: each background task and loop on a line. */
+export function Running({ d }: { d: CardDetail }) {
+  const tasks = d.background ?? [];
+  const loops = d.loops ?? [];
+  if (tasks.length + loops.length === 0) return null;
+  return (
+    <Sec t="RUNNING" n={tasks.length + loops.length}>
+      <ul class="druns">
+        {tasks.map((t) => <li key={t.id}><span class="k">{t.kind.toUpperCase()}</span>{t.line}</li>)}
+        {loops.map((l, i) => <li key={i}><span class="k">LOOP</span>{l.line}{l.prompt && l.kind !== 'goal' && <small>{l.prompt}</small>}</li>)}
+      </ul>
+    </Sec>
+  );
+}
+
+/** The session's Remote Control link, when it is on. */
+export function Remote({ d }: { d: CardDetail }) {
+  if (!d.remote_url) return null;
+  return (
+    <p class="remote"><span class="k">REMOTE CONTROL</span> on · <a href={d.remote_url} target="_blank" rel="noopener">open in browser</a></p>
+  );
+}
+
 /** A section that starts folded: the heading (with an optional one-line summary) opens it. */
 export function FoldSec({ t, sum, open, toggle, children }: { t: string; sum?: string; open: boolean; toggle: () => void; children: ComponentChildren }) {
   return (

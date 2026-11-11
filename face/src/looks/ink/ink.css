@@ -365,6 +365,14 @@ mark { background: var(--ink); color: var(--paper); padding: 0 3px; }
 .card .age { font: 500 14px/1 var(--f-body); color: var(--mute); font-variant-numeric: tabular-nums; flex: none; }
 .live { display: inline-flex; align-items: center; gap: 5px; font: 400 16px/1 var(--f-label); }
 .live i { width: 8px; height: 8px; background: var(--ink); animation: blink 1s steps(1) infinite; }
+.rc { font: 400 16px/1 var(--f-label); border: 2px solid var(--ink); padding: 2px 4px 1px; flex: none; }
+.card .activity { margin: 7px 0 0; font: 500 15px/1.35 var(--f-body); color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.druns { list-style: none; margin: 0; padding: 0; }
+.druns li { margin-bottom: 8px; font: 400 17px/1.4 var(--f-body); }
+.druns .k, .remote .k { font: 400 16px/1 var(--f-label); margin-right: 8px; }
+.druns small { display: block; font-size: 15px; color: var(--ink); opacity: .75; }
+.remote { margin: 12px 0; font: 400 17px/1.4 var(--f-body); }
+.remote a { color: var(--ink); }
 .card .state { -webkit-line-clamp: 1; margin-top: 7px; font-size: 15px; color: var(--mute); }
 .card .next { -webkit-line-clamp: 2; margin-top: 8px; }
 .card.wait .next { -webkit-line-clamp: 1; }

@@ -54,6 +54,27 @@ export interface Tokens {
   subagents_total: number;
 }
 
+/** A task an open session started and left running. */
+export interface BackgroundTask {
+  id: string;
+  kind: 'shell' | 'agent' | 'monitor';
+  /** The command or description, one line. */
+  label: string;
+  started_at: number;
+  /** The line as the terminal shows it: `npm run dev · 4 min`. */
+  line: string;
+}
+
+/** A loop an open session runs: a schedule, a self-paced wake-up or a goal. */
+export interface LoopItem {
+  kind: 'interval' | 'self_paced' | 'goal';
+  schedule: string;
+  next_at: number | null;
+  prompt: string;
+  /** The line as the terminal shows it: `↻ every 10 min · next 14:20`. */
+  line: string;
+}
+
 export interface Card {
   id: string;
   /** Agent id, e.g. "claude". */
@@ -80,6 +101,14 @@ export interface Card {
   /** The agent's own recap ("Goal… Next…"), when it keeps one. */
   recap: string | null;
   live_status: LiveStatus | null;
+  /** One line of what an open session does on its own: its background tasks, else its loop. */
+  activity?: string | null;
+  /** Background tasks of an open session. */
+  background?: BackgroundTask[];
+  /** Loops of an open session. */
+  loops?: LoopItem[];
+  /** The web link of the session while its remote control is on. */
+  remote_url?: string | null;
   kind: CardKind;
   /** Board cards: topics only. Detail cards: topics, children and outputs. */
   streams: Stream[];

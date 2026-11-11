@@ -101,6 +101,30 @@ describe('the board', () => {
   });
 });
 
+describe('what a session does on its own', () => {
+  it('shows a background task, a loop and the remote control mark on the cards in Running', async () => {
+    const { $$ } = await mount();
+    const lines = $$('.c-running .card .activity').map((e) => e.textContent);
+    expect(lines).toEqual(['background: npm run dev · 4 min', '↻ every 10 min · next 14:20']);
+    expect($$('.c-running .card .rc')).toHaveLength(1);
+    expect($$('.c-needs_you .card .rc, .c-needs_you .card .activity')).toHaveLength(0);
+  });
+
+  it('lists them in the panel, with the link to the remote session', async () => {
+    const { $, $$, store } = await mount();
+    const running = (await fixtureSource().board()).columns.find((c) => c.id === 'running')!.cards;
+    store.open(running.find((c) => c.remote_url)!.id);
+    await vi.waitFor(() => expect($('.remote a')).not.toBeNull());
+    const a = $<HTMLAnchorElement>('.remote a')!;
+    expect(a.getAttribute('rel')).toBe('noopener');
+    expect(a.getAttribute('href')).toMatch(/^https:\/\/claude\.ai\/code\//);
+    expect($('.remote')!.textContent).toBe('REMOTE CONTROL on · open in browser');
+    store.open(running.find((c) => c.background?.length)!.id);
+    await vi.waitFor(() => expect($$('.druns li').map((e) => e.textContent)).toEqual(['SHELLnpm run dev · 4 min']));
+    expect($('.remote')).toBeNull();
+  });
+});
+
 describe('a board with nothing on it', () => {
   const welcomed = (root: HTMLElement) => expect(root.querySelector('.welcome')).not.toBeNull();
 
