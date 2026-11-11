@@ -20,6 +20,7 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ### Fixed
 
+- A background shell is named for what it does: the Bash call's description when there is one, else the command from the program on, without `VAR=value`, `cd ... &&`, `exec` and long absolute paths (Codex shells too).
 - Codex sessions: a pull request or a Jira site link that an MCP server or a dynamic tool returns now shows in the session's outputs, as it already did for Claude Code.
 - The accent colours are one button in the board's header that opens a row of the eight, so the header keeps its height on a small screen. The `CREATE FOLDER + START` button wraps inside a narrow idea card instead of running past it.
 - Opening a terminal on Linux no longer fails now and then with "text file busy" when the terminal program was written a moment before.

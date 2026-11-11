@@ -8,6 +8,7 @@
 use super::super::{BgTask, LoopInfo, Signals};
 use super::transcript::result_text;
 use crate::activity::one_line;
+use crate::agents::command_label;
 use crate::util::iso_to_ms;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -165,9 +166,16 @@ impl Tracker {
         let input = b.get("input").unwrap_or(&Value::Null);
         let label = |k: &str| s(input, k).map(one_line).filter(|l| !l.is_empty());
         let call = match name {
+            // the call's own description says what it is for; the command line is the fallback
             "Bash" => Some(Call::Task {
                 kind: "shell".into(),
-                label: label("command").unwrap_or_else(|| "shell".into()),
+                label: label("description")
+                    .or_else(|| {
+                        s(input, "command")
+                            .map(command_label::of)
+                            .filter(|l| !l.is_empty())
+                    })
+                    .unwrap_or_else(|| "shell".into()),
             }),
             "Agent" | "Task" => Some(Call::Task {
                 kind: "agent".into(),
@@ -374,6 +382,40 @@ mod tests {
         );
         t.line(&notice(T2, "b1x", "completed"), "queue-operation");
         assert!(t.signals().tasks.is_empty());
+    }
+
+    #[test]
+    fn a_background_shell_is_named_by_its_description_or_else_by_its_program() {
+        let label_of = |input: Value| {
+            let t = feed(&[
+                assistant(T1, "Bash", "tu1", input),
+                result(
+                    T1,
+                    "tu1",
+                    "Command running in background with ID: b1x",
+                    json!({"backgroundTaskId": "b1x"}),
+                ),
+            ]);
+            t.signals().tasks[0].label.clone()
+        };
+        let setup = "S=/tmp/work/scratch; EYE_HOME=$S/x exec $S/bin daemon --port 7421";
+        assert_eq!(
+            label_of(json!({"command": setup, "description": "Run the daemon on port 7421"})),
+            "Run the daemon on port 7421"
+        );
+        assert_eq!(
+            label_of(json!({"command": setup, "description": "  "})),
+            "bin daemon --port 7421"
+        );
+        assert_eq!(
+            label_of(json!({"command": setup})),
+            "bin daemon --port 7421"
+        );
+        assert_eq!(
+            label_of(json!({"description": "Watch the build"})),
+            "Watch the build"
+        );
+        assert_eq!(label_of(json!({})), "shell");
     }
 
     #[test]

@@ -6,7 +6,7 @@
 //! whole result, so a process whose id was never shown is not found.
 
 use super::script::{self, Call};
-use crate::activity::one_line;
+use crate::agents::command_label;
 use crate::agents::{BgTask, Signals};
 use crate::util::iso_to_ms;
 use regex::Regex;
@@ -135,7 +135,7 @@ impl Tracker {
         self.state.calls.retain(|(k, _)| k != call_id);
         self.state.calls.push((
             call_id.to_string(),
-            command.map(|c| one_line(&c)).unwrap_or_default(),
+            command.map(|c| command_label::of(&c)).unwrap_or_default(),
         ));
     }
 
@@ -223,6 +223,19 @@ mod tests {
         assert_eq!(feed(&cut(9)).signals().tasks.len(), 1);
         // the closing item of process 36096 ends it
         assert!(feed(FIXTURE).signals().tasks.is_empty());
+    }
+
+    #[test]
+    fn a_shell_is_named_by_its_program_not_by_its_set_up() {
+        let mut t = Tracker::default();
+        let cmd = "S=/tmp/work/scratch; EYE_HOME=$S/x exec $S/bin daemon --port 7421";
+        t.line(&json!({"type":"response_item","payload":{"type":"function_call","call_id":"c1","name":"exec_command",
+            "arguments": json!({"cmd": cmd}).to_string()}}));
+        t.line(
+            &json!({"type":"response_item","payload":{"type":"function_call_output","call_id":"c1",
+            "output":"Chunk ID: 1\nProcess running with session ID 7\nOutput:\n"}}),
+        );
+        assert_eq!(t.signals().tasks[0].label, "bin daemon --port 7421");
     }
 
     #[test]
