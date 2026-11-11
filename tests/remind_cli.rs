@@ -77,7 +77,7 @@ fn a_reminder_is_set_listed_and_cleared_on_a_session_and_an_idea() {
         "{out}"
     );
     h.ok(&["idea", "add", "Look at the queue"]);
-    h.ok(&["remind", "idea:1", "2026-12-31", "23:30"]);
+    h.ok(&["remind", "idea:1", "2099-12-31", "23:30"]);
     let list = h.ok(&["remind", "ls"]);
     let lines: Vec<&str> = list.lines().collect();
     assert_eq!(lines.len(), 2, "{list}");
