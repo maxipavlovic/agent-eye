@@ -499,7 +499,7 @@ describe('the accent picker', () => {
     const b = $<HTMLButtonElement>('.hd .accbtn')!;
     expect(b.tagName).toBe('BUTTON');
     expect(b.dataset.accent).toBe('vermilion');
-    expect(b.getAttribute('aria-label')).toBe('Accent colour: Vermilion');
+    expect(b.getAttribute('aria-label')).toBe('Accent colour: Vermilion (original)');
     expect(b.getAttribute('aria-expanded')).toBe('false');
     expect($$('.hd .acc')).toHaveLength(0);
     expect($('.hd [aria-label="Theme"]')!.nextElementSibling).toBe($('.hd .accpick'));
@@ -510,7 +510,7 @@ describe('the accent picker', () => {
     $<HTMLButtonElement>('.hd .accbtn')!.click();
     await vi.waitFor(() => expect($('.hd .accpop')).not.toBeNull());
     const sw = $$<HTMLButtonElement>('.hd .accpop .acc');
-    expect(sw.map((s) => s.getAttribute('aria-label'))).toEqual(['Vermilion', 'Cobalt', 'Teal', 'Moss', 'Amber', 'Magenta', 'Violet', 'Graphite']);
+    expect(sw.map((s) => s.getAttribute('aria-label'))).toEqual(['Vermilion (original)', 'Cobalt', 'Teal', 'Moss', 'Amber', 'Magenta', 'Violet', 'Graphite']);
     expect(sw.map((s) => s.title)).toEqual(sw.map((s) => s.getAttribute('aria-label')));
     expect(sw.map((s) => s.getAttribute('aria-pressed'))).toEqual(['true', ...Array(7).fill('false')]);
     expect($('.hd .accbtn')!.getAttribute('aria-expanded')).toBe('true');
