@@ -37,6 +37,7 @@ pub(super) fn sess(id: &str, title: &str, col: Column, mins_ago: i64, now: i64) 
         sort: 0,
         session: Some(s),
         idea: None,
+        remind: None,
     }
 }
 
@@ -100,6 +101,7 @@ pub(super) fn app(query: &str) -> App {
             folder: Some("/tmp/demo/auth".into()),
             ..Default::default()
         }),
+        remind: None,
     });
     let mut a = App::new(db, Index { rows }, query, false, now);
     a.agents = Agents::from_vec(vec![std::sync::Arc::new(

@@ -4,6 +4,7 @@ use super::state::App;
 use crate::folder::FolderState;
 use crate::model::Column;
 use crate::pick::{self, Row};
+use crate::remind;
 use crate::util::{home_rel, tokens_line};
 use ratatui::layout::{Constraint, Layout, Position, Rect};
 use ratatui::style::{Color, Modifier, Style};
@@ -128,7 +129,14 @@ pub(super) fn row_line<'a>(
         String::new()
     };
     let agent_w = agent.map_or(0, |(_, w)| if width >= 60 { w + 1 } else { 0 });
-    let fixed = 2 + if proj_w > 0 { proj_w + 1 } else { 0 } + agent_w + age_w + 1;
+    // a reminder that is near or due: the chip takes its room from the title
+    let chip = if width >= 60 {
+        super::remind::chip(r, now).map(|c| format!("{c} "))
+    } else {
+        None
+    };
+    let chip_w = chip.as_deref().map_or(0, |c| c.width());
+    let fixed = 2 + if proj_w > 0 { proj_w + 1 } else { 0 } + agent_w + age_w + 1 + chip_w;
     let title_w = width.saturating_sub(fixed).max(4);
     let title = clip(&r.title, title_w);
     let mut spans = vec![Span::styled(
@@ -143,6 +151,9 @@ pub(super) fn row_line<'a>(
     spans.extend(highlight(&title, words, base, pal.bold()));
     let tw = title.width();
     spans.push(Span::raw(" ".repeat(title_w.saturating_sub(tw) + 1)));
+    if let Some(c) = chip {
+        spans.push(Span::styled(c, pal.fg(Color::Yellow)));
+    }
     if let (Some((name, w)), true) = (agent, agent_w > 0) {
         spans.push(Span::styled(pad(&clip(name, w), agent_w), pal.dim()));
     }
@@ -239,6 +250,17 @@ pub(super) fn preview_lines<'a>(app: &App, r: &Row, pal: &Pal) -> Vec<Line<'a>> 
         ),
     ]));
     v.push(Line::raw(""));
+    if let Some(rem) = &r.remind {
+        let text = if rem.due {
+            rem.reason()
+        } else {
+            match &rem.note {
+                Some(n) => format!("⏰ {} · {n}", remind::label(rem.at, app.now)),
+                None => format!("⏰ {}", remind::label(rem.at, app.now)),
+            }
+        };
+        v.push(Line::styled(text, pal.fg(Color::Yellow)));
+    }
     match (&r.session, &r.idea) {
         (Some(s), _) => {
             if s.live_status.is_some() {
@@ -669,18 +691,23 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     }
 
     // hint / message
-    let hint_full = "↑↓ move   Enter resume   Ctrl-F fork   Ctrl-T talk   Ctrl-Y copy   Ctrl-X hide   Tab preview   Ctrl-A hidden+archive   Esc quit";
+    let hint_full = "↑↓ move   Enter resume   Ctrl-F fork   Ctrl-T talk   Ctrl-R remind   Ctrl-Y copy   Ctrl-X hide   Tab preview   Ctrl-A hidden+archive   Esc quit";
     let hint_mid =
-        "↑↓  Enter resume  ^F fork  ^T talk  ^Y copy  ^X hide  Tab preview  ^A all  Esc quit";
+        "↑↓  Enter resume  ^F fork  ^T talk  ^R remind  ^Y copy  ^X hide  Tab preview  ^A all  Esc quit";
     let hint_short = "Enter resume  ^F fork  ^T talk  ^Y copy  ^X hide  Esc quit";
     let hint_min = "Enter resume  ^F fork  ^T talk  Esc quit";
     let w = foot.width as usize;
-    let text = match &app.msg {
-        Some(m) => m.clone(),
-        None if hint_full.width() <= w => hint_full.into(),
-        None if hint_mid.width() <= w => hint_mid.into(),
-        None if hint_short.width() <= w => hint_short.into(),
-        None => hint_min.into(),
+    let remind_text = app.remind.as_ref().map(|i| {
+        let note = i.error.as_deref().unwrap_or(super::remind::HINT);
+        format!("remind › {}▏  {note}", i.text)
+    });
+    let text = match (&remind_text, &app.msg) {
+        (Some(t), _) => t.clone(),
+        (None, Some(m)) => m.clone(),
+        (None, None) if hint_full.width() <= w => hint_full.into(),
+        (None, None) if hint_mid.width() <= w => hint_mid.into(),
+        (None, None) if hint_short.width() <= w => hint_short.into(),
+        (None, None) => hint_min.into(),
     };
     f.render_widget(
         Paragraph::new(Line::styled(clip(&text, w), pal.dim())),

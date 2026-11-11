@@ -21,6 +21,10 @@ use rusqlite::{params, types::Value};
 /// The longest note kept.
 const NOTE_CHARS: usize = 200;
 
+/// A reminder this many days ahead or nearer is shown on the card and the row; a further one only
+/// in the panel and the lists.
+pub const SOON_DAYS: i64 = 3;
+
 /// A reminder that still matters: set for later, or due now.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Remind {

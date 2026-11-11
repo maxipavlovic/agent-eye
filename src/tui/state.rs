@@ -52,6 +52,8 @@ pub struct App {
     pub(super) talk_cache: HashMap<String, Talk>,
     /// The folder eye may create idea folders inside (None: it creates none).
     pub folder_root: Option<PathBuf>,
+    /// The one-line input for a reminder, while it is open (Ctrl-R).
+    pub(super) remind: Option<super::remind::Input>,
 }
 
 impl App {
@@ -81,6 +83,7 @@ impl App {
             talk_scroll: 0,
             talk_cache: HashMap::new(),
             folder_root: None,
+            remind: None,
         };
         a.research();
         a

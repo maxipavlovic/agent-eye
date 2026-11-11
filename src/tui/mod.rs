@@ -1,6 +1,7 @@
 //! The interactive picker screen. Drawn on /dev/tty so stdout stays clean for `--print`.
 
 mod input;
+mod remind;
 mod render;
 mod state;
 mod terminal;

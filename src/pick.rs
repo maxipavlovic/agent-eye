@@ -9,6 +9,7 @@ use crate::hide;
 use crate::ideas;
 use crate::model::{Column, Idea, Output, Session, Stream};
 use crate::paths::Paths;
+use crate::remind::{self, Remind};
 use crate::search::{rank_key, RankKey};
 use crate::util::{head_chars, printable, shell_quote, short_id};
 use anyhow::{Context, Result};
@@ -45,6 +46,8 @@ pub struct Row {
     pub sort: i64,
     pub session: Option<Session>,
     pub idea: Option<Idea>,
+    /// A reminder to check on this, set for later or due.
+    pub remind: Option<Remind>,
 }
 
 /// needs_you > running > waiting > idea > paused > done > archive
@@ -120,6 +123,7 @@ impl Index {
                 last: s.last_activity_at.unwrap_or(0),
                 hidden,
                 sort: 0,
+                remind: remind::of_session(&s, now),
                 session: Some(s),
                 idea: None,
             });
@@ -131,6 +135,13 @@ impl Index {
             .enumerate()
         {
             let title = one_line(&i.title);
+            let remind = remind::of_idea(&i, now);
+            // a due idea is in Needs you, as it is on the board
+            let column = if remind.as_ref().is_some_and(|r| r.due) {
+                Column::NeedsYou
+            } else {
+                Column::Ideas
+            };
             rows.push(Row {
                 kind: Kind::Idea,
                 id: format!("idea:{}", i.id),
@@ -144,12 +155,13 @@ impl Index {
                     .to_lowercase(),
                 project: i.folder.as_deref().map(project_of).unwrap_or_default(),
                 folder: i.folder.clone(),
-                column: Column::Ideas,
+                column,
                 last: i.created_at.unwrap_or(0),
                 hidden: false,
                 sort: n as i64,
                 session: None,
                 idea: Some(i),
+                remind,
             });
         }
         Ok(Index { rows })
@@ -233,6 +245,7 @@ impl Index {
             let r = &self.rows[i];
             (
                 rank(r.column),
+                !r.remind.as_ref().is_some_and(|r| r.due),
                 if r.kind == Kind::Idea {
                     r.sort
                 } else {
@@ -561,6 +574,7 @@ mod tests {
             sort: 0,
             session: None,
             idea: None,
+            remind: None,
         }
     }
 
