@@ -456,7 +456,7 @@ pub(super) fn preview_lines<'a>(app: &App, r: &Row, pal: &Pal) -> Vec<Line<'a>> 
                 .agents
                 .resolve(i.agent.as_deref())
                 .map_or("the agent", |a| a.short_name());
-            if let Some(note) = app.idea_folder(r).and_then(|st| st.note()) {
+            if let Some(note) = r.folder_state.as_ref().and_then(|st| st.note()) {
                 v.push(Line::styled(note, pal.dim()));
             }
             v.push(Line::styled(
@@ -669,7 +669,7 @@ pub fn draw(f: &mut Frame, app: &mut App) {
         .map(|&i| {
             let r = &app.idx.rows[i];
             let label = (label_w > 0).then(|| (agent_name(app, r), label_w));
-            let new_folder = matches!(app.idea_folder(r), Some(st) if st != FolderState::Exists);
+            let new_folder = matches!(&r.folder_state, Some(st) if *st != FolderState::Exists);
             ListItem::new(row_line(r, lw, app.now, &pal, &words, label, new_folder))
         })
         .collect();

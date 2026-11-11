@@ -4,13 +4,11 @@ use crate::agents::Agents;
 use crate::config::UserCfg;
 use crate::conversation::{self, Message};
 use crate::db::Db;
-use crate::folder::{self, FolderState};
 use crate::paths::Paths;
 use crate::pick::{self, Detail, Index, Kind, Row};
 use anyhow::Result;
 use ratatui::widgets::ListState;
 use std::collections::HashMap;
-use std::path::PathBuf;
 
 /// Messages kept per session in the conversation view (the newest ones).
 pub(super) const TALK_KEEP: usize = 200;
@@ -50,8 +48,6 @@ pub struct App {
     pub(super) talk_scroll: usize,
     /// Conversations read so far, per row id.
     pub(super) talk_cache: HashMap<String, Talk>,
-    /// The folder eye may create idea folders inside (None: it creates none).
-    pub folder_root: Option<PathBuf>,
     /// The one-line input for a reminder, while it is open (Ctrl-R).
     pub(super) remind: Option<super::remind::Input>,
 }
@@ -82,7 +78,6 @@ impl App {
             talk: false,
             talk_scroll: 0,
             talk_cache: HashMap::new(),
-            folder_root: None,
             remind: None,
         };
         a.research();
@@ -98,12 +93,6 @@ impl App {
         self.msg = None;
         self.confirm = None;
         self.refresh_detail();
-    }
-
-    /// What the folder of an idea row is; None for a session or an idea without a folder.
-    pub(super) fn idea_folder(&self, r: &Row) -> Option<FolderState> {
-        let dir = r.idea.as_ref()?.folder.as_deref()?;
-        Some(folder::classify(self.folder_root.as_deref(), dir))
     }
 
     /// The selected row.

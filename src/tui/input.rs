@@ -34,7 +34,7 @@ impl App {
             KeyCode::Enter => {
                 if let Some(r) = self.current() {
                     if pick::actionable(r) {
-                        match self.idea_folder(r) {
+                        match r.folder_state.clone() {
                             Some(FolderState::Missing { creatable: true }) => {
                                 if self.confirm.as_deref() != Some(r.id.as_str()) {
                                     let msg = format!(
@@ -241,11 +241,19 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let mut a = app("zephyr");
         let dir = tmp.path().join(sub).to_string_lossy().into_owned();
-        a.folder_root = Some(tmp.path().to_path_buf());
         let row = &mut a.idx.rows[a.results[0]];
+        row.folder_state = Some(crate::folder::classify(Some(tmp.path()), &dir));
         row.folder = Some(dir.clone());
         row.idea.as_mut().unwrap().folder = Some(dir);
         (tmp, a)
+    }
+
+    /// The idea row's folder asked about again, as loading the rows would, with `root` as the
+    /// folder eye may create folders inside.
+    fn classify_again(a: &mut App, root: &std::path::Path) {
+        let row = &mut a.idx.rows[a.results[0]];
+        let dir = row.folder.clone().unwrap();
+        row.folder_state = Some(crate::folder::classify(Some(root), &dir));
     }
 
     #[test]
@@ -276,7 +284,7 @@ mod tests {
     #[test]
     fn an_idea_whose_folder_cannot_be_made_says_why_and_does_not_start() {
         let (tmp, mut a) = idea_app("new");
-        a.folder_root = Some(tmp.path().join("elsewhere"));
+        classify_again(&mut a, &tmp.path().join("elsewhere"));
         assert!(a.key(key(KeyCode::Enter)).is_none());
         assert!(a.key(key(KeyCode::Enter)).is_none());
         assert!(a
@@ -286,6 +294,7 @@ mod tests {
             .contains("inside your home folder"));
         let (tmp, mut a) = idea_app("file");
         std::fs::write(tmp.path().join("file"), "x").unwrap();
+        classify_again(&mut a, tmp.path());
         assert!(a.key(key(KeyCode::Enter)).is_none());
         assert_eq!(a.msg.as_deref(), Some("Not a folder"));
     }

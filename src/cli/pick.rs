@@ -77,7 +77,6 @@ pub fn run(g: &Global, a: &PickArgs) -> Result<()> {
     app.paths = Some(paths.clone());
     app.user = cfg.user.clone();
     app.agents = agents.clone();
-    app.folder_root = cfg.folder_root();
     app.all = a.all;
     if a.all {
         app.research();

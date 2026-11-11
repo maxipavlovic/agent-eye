@@ -1,6 +1,6 @@
 //! The board and the archive view.
 
-use super::api::{hidden_set, open_db, wants_all, AllQ, ApiResult};
+use super::api::{blocking, hidden_set, open_db, wants_all, AllQ, ApiResult};
 use super::card::{card_json, idea_card, CardCtx};
 use super::Shared;
 use crate::agents::Agents;
@@ -118,14 +118,14 @@ pub fn board_json(db: &Db, cfg: &Config, agents: &Agents, now: i64, all: bool) -
 }
 
 pub(super) async fn api_board(State(st): State<Shared>, Query(q): Query<AllQ>) -> ApiResult {
-    let db = open_db(&st)?;
-    Ok(Json(board_json(
-        &db,
-        &st.cfg,
-        &st.agents,
-        now_ms(),
-        wants_all(&q.all),
-    )?))
+    // an idea's folder is looked up on disk, which can hang on a dead mount: off the runtime
+    let all = wants_all(&q.all);
+    let board = blocking(move || {
+        let db = open_db(&st)?;
+        Ok(board_json(&db, &st.cfg, &st.agents, now_ms(), all)?)
+    })
+    .await?;
+    Ok(Json(board))
 }
 
 #[derive(Deserialize)]

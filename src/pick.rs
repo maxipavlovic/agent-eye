@@ -5,6 +5,7 @@ use crate::agents::Agents;
 use crate::columns;
 use crate::config::Config;
 use crate::db::Db;
+use crate::folder::{self, FolderState};
 use crate::hide;
 use crate::ideas;
 use crate::model::{Column, Idea, Output, Session, Stream};
@@ -39,6 +40,9 @@ pub struct Row {
     /// Last folder segment.
     pub project: String,
     pub folder: Option<String>,
+    /// What the folder of an idea is, found once when the rows are loaded (the disk is not asked
+    /// again per frame); None for a session or an idea without a folder.
+    pub folder_state: Option<FolderState>,
     pub column: Column,
     pub last: i64,
     pub hidden: bool,
@@ -119,6 +123,7 @@ impl Index {
                 notes_lc: String::new(),
                 project: s.cwd.as_deref().map(project_of).unwrap_or_default(),
                 folder: s.cwd.clone(),
+                folder_state: None,
                 column,
                 last: s.last_activity_at.unwrap_or(0),
                 hidden,
@@ -154,6 +159,10 @@ impl Index {
                     .unwrap_or_default()
                     .to_lowercase(),
                 project: i.folder.as_deref().map(project_of).unwrap_or_default(),
+                folder_state: i
+                    .folder
+                    .as_deref()
+                    .map(|f| folder::classify(cfg.folder_root().as_deref(), f)),
                 folder: i.folder.clone(),
                 column,
                 last: i.created_at.unwrap_or(0),
@@ -559,6 +568,36 @@ pub fn rc_line(shell: &str, bin: &str) -> String {
 mod tests {
     use super::*;
 
+    #[test]
+    fn an_idea_row_knows_its_folder_from_the_load_and_a_session_row_asks_nothing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut cfg = Config::with_claude_dir(&tmp.path().join("c"));
+        cfg.folder_root = Some(tmp.path().to_path_buf());
+        let db = Db::open_memory().unwrap();
+        let folder = tmp.path().join("new").to_string_lossy().into_owned();
+        for f in [Some(folder.as_str()), None] {
+            ideas::add(
+                &db,
+                &ideas::NewIdea {
+                    title: "Try it",
+                    folder: f,
+                    ..ideas::NewIdea::default()
+                },
+            )
+            .unwrap();
+        }
+        let idx = Index::load(&db, &cfg, 1_000).unwrap();
+        let states: Vec<_> = idx.rows.iter().map(|r| r.folder_state.clone()).collect();
+        assert!(states.contains(&Some(FolderState::Missing { creatable: true })));
+        assert!(states.contains(&None), "an idea without a folder");
+        std::fs::create_dir(tmp.path().join("new")).unwrap();
+        let again = Index::load(&db, &cfg, 1_000).unwrap();
+        assert!(again
+            .rows
+            .iter()
+            .any(|r| r.folder_state == Some(FolderState::Exists)));
+    }
+
     fn row(id: &str, title: &str, col: Column, last: i64) -> Row {
         Row {
             kind: Kind::Session,
@@ -568,6 +607,7 @@ mod tests {
             notes_lc: String::new(),
             project: "p".into(),
             folder: Some("/tmp/p".into()),
+            folder_state: None,
             column: col,
             last,
             hidden: false,
