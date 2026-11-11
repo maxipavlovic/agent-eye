@@ -343,7 +343,7 @@ mark { background: var(--ink); color: var(--paper); padding: 0 3px; }
 .dphead button:hover { background: var(--ink); color: var(--paper); }
 .dphead button:disabled, .dphead button:disabled:hover { background: var(--paper); color: var(--mute); border-color: var(--mute); opacity: .4; cursor: default; }
 .dpgrid { border-collapse: separate; border-spacing: 2px; }
-.dpgrid th { padding: 4px 0 4px; font: 400 13px/1 var(--f-label); color: var(--mute); text-align: center; }
+.dpgrid th { padding: 4px 0 4px; font: 400 16px/1 var(--f-label); color: var(--ink); text-align: center; }
 .dpgrid td { padding: 0; }
 .dpgrid button { display: block; width: 36px; height: 32px; padding: 0; background: none; border: 0; color: var(--ink); font: 500 15px/1 var(--f-body); font-variant-numeric: tabular-nums; }
 .dpgrid button:hover { background: var(--ink); color: var(--paper); }
@@ -360,14 +360,14 @@ mark { background: var(--ink); color: var(--paper); padding: 0 3px; }
 .tstep button + button { margin-top: -2px; }
 .tstep button:hover { background: var(--ink); color: var(--paper); }
 .fchips.tchips { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 10px 0 0; }
-.thint { margin: 10px 0 0; font: 400 14px/1.4 var(--f-body); color: var(--mute); }
+.thint { margin: 10px 0 0; font: 400 16px/1.45 var(--f-body); color: var(--ink); }
 .wtime .fnote { margin-top: 10px; }
 /* one setting for every reminder, styled like the theme switch */
 .notice { margin: 0 0 18px; }
 .page .notice { margin: 22px 0 0; }
 .nrow { display: flex; align-items: center; gap: 14px; font: 400 16px/1 var(--f-label); }
 .theme.seg button { width: auto; height: 32px; padding: 0 12px; font: 400 14px/1 var(--f-label); letter-spacing: 1px; }
-.nhint { margin: 8px 0 0; font: 400 14px/1.4 var(--f-body); color: var(--mute); }
+.nhint, .rhint { margin: 8px 0 0; font: 400 16px/1.45 var(--f-body); color: var(--ink); }
 @media (max-width: 560px) {
   .when { grid-template-columns: minmax(0, 1fr); }
   .dpick { width: auto; }
