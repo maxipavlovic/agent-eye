@@ -46,7 +46,7 @@ brew install maxipavlovic/tap/agent-eye   # or: cargo install agent-eye
 agent-eye install                         # --dry-run shows what it changes
 ```
 
-No Homebrew or Rust? Take the installer script from the [latest release](https://github.com/maxipavlovic/agent-eye/releases/latest). `agent-eye install` sets up the hooks, the background service and the `eye` command.
+No Homebrew or Rust? Take the installer script from the [latest release](https://github.com/maxipavlovic/agent-eye/releases/latest). `agent-eye install` sets up the hooks, the background service and the `eye` command. Upgrade the way you installed (`brew upgrade agent-eye`, `cargo install agent-eye`, or the script again); the background service moves to the new version by itself.
 
 Needs macOS 11+ or Linux (glibc 2.35+), and Claude Code or Codex CLI. Codex runs eye's hooks after you approve them once with `/hooks`. Linux notes: [docs/linux.md](docs/linux.md).
 

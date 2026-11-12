@@ -94,6 +94,13 @@ A service that is not loaded is bootstrapped (systemd: `daemon-reload` and `enab
 result is checked with `launchctl print` or `systemctl is-active`. What these commands print is
 captured and never shown; a failure is reported in one line and `install` exits with an error.
 
+The hooks and the service run eye from where Homebrew or cargo keeps it, when it came from there
+(`<prefix>/opt/agent-eye/bin`, which every `brew upgrade` moves along, or cargo's bin folder; see
+`install/package.rs`), and eye never copies, relinks or deletes those files. Any other binary is
+copied to `~/.local/bin`. The daemon looks at the file it was started from at every tick. When an
+upgrade has replaced it (the same new file at two looks in a row), it stops as it does on SIGTERM
+(board requests still open get two seconds) and execs the new binary with the same arguments, in the same process (`daemon/upgrade.rs`).
+
 `install`, `uninstall` and `board on|off` print a short summary (`report.rs`): one line for each
 area (`agents`, `binary`, `claude`, `codex`, `daemon`, `board`), home paths as `~`, and what the
 person has to do next as a `Next:` line at the end. The diff of each changed file is kept as the
