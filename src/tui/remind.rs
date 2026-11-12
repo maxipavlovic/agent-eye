@@ -413,6 +413,7 @@ mod tests {
     fn tab_in_the_input_switches_desktop_notices_and_the_footer_says_which() {
         let (_t, mut a) = app_at_home();
         a.key(ctrl('r'));
+        a.remind.as_mut().unwrap().can_notify = true;
         let foot = render_text(&mut a, 200, 24).unwrap();
         assert!(foot.contains("notices off (Tab: turn on)"), "{foot}");
         a.key(key(KeyCode::Tab));
