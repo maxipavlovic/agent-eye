@@ -3,6 +3,7 @@
 //! installed through its adapter. Every path can be overridden and `--dry-run` writes nothing.
 
 mod choice;
+mod package;
 mod service;
 
 pub use choice::{choose_agents, save_choice, Choice};
@@ -18,6 +19,7 @@ use crate::platform::{account_home, search_path};
 use crate::report::{Report, Row};
 use crate::util::{ago, find_in, now_ms, show_path};
 use anyhow::{Context, Result};
+use package::Package;
 use service::FileState;
 use std::collections::HashSet;
 use std::ffi::{OsStr, OsString};
@@ -33,6 +35,11 @@ pub const ALIAS_NAME: &str = "eye";
 pub struct Opts {
     pub eye_home: PathBuf,
     pub bin_dir: PathBuf,
+    /// The package manager whose folder `bin_dir` is, when eye runs from there and copies nothing.
+    pub package: Option<Package>,
+    /// Where earlier installs copied the binary (`~/.local/bin`), when `bin_dir` is a package
+    /// manager's folder instead: a copy left there becomes a link to the package's binary.
+    pub old_bin_dir: Option<PathBuf>,
     /// Which service manager keeps the daemon running.
     pub manager: Manager,
     /// Where the service file goes: the launch agents folder or the systemd user folder.
@@ -62,12 +69,26 @@ impl Opts {
     ) -> Result<Opts> {
         let home = PathBuf::from(std::env::var_os("HOME").context("HOME is not set")?);
         let manager = Manager::current();
+        let exe = std::env::current_exe().context("finding the eye binary")?;
+        // Homebrew's or cargo's binary runs from their folder, so their upgrades reach the service
+        // and the hooks; any other binary is copied to ~/.local/bin
+        let local = home.join(".local/bin");
+        let (bin_dir, package) = match bin_dir {
+            Some(dir) => (dir, None),
+            None => match package::owner(&exe, package::cargo_home().as_deref()) {
+                Some((p, dir)) => (dir, Some(p)),
+                None => (local.clone(), None),
+            },
+        };
+        let old_bin_dir = package.and(Some(local)).filter(|d| *d != bin_dir);
         Ok(Opts {
             eye_home: paths.home.clone(),
-            bin_dir: bin_dir.unwrap_or_else(|| home.join(".local/bin")),
+            bin_dir,
+            package,
+            old_bin_dir,
             manager,
             service_dir: service_dir.unwrap_or_else(|| manager.default_dir(&home)),
-            exe: std::env::current_exe().context("finding the eye binary")?,
+            exe,
             dry_run: false,
             no_service: false,
             purge: false,
@@ -180,9 +201,10 @@ pub fn unit_text(o: &Opts, agents: &Agents) -> String {
 /// Copy the binary into place and link the `eye` alias next to it; the row says what changed.
 fn install_binary(o: &Opts) -> Result<Row> {
     let dry = o.dry_run;
-    let same_exe = std::fs::canonicalize(&o.exe).ok() == std::fs::canonicalize(o.eye_bin()).ok();
+    let same_exe = same_target(&o.exe, &o.eye_bin());
+    let owned = o.package.map(|p| format!("{}'s", p.name()));
     let state = if same_exe || same_file(&o.exe, &o.eye_bin()) {
-        "unchanged"
+        owned.as_deref().unwrap_or("unchanged")
     } else {
         let existed = o.eye_bin().exists();
         if !dry {
@@ -196,8 +218,10 @@ fn install_binary(o: &Opts) -> Result<Row> {
             (true, true) => "would update",
         }
     };
-    // the `eye` alias is a symlink next to the binary (it replaces an old copy of the binary)
-    let alias_ok = std::fs::read_link(o.alias_bin()).is_ok_and(|t| t == Path::new(BIN_NAME));
+    // the `eye` alias is a symlink next to the binary (it replaces an old copy of the binary); one
+    // that already runs this binary, like Homebrew's own link, stays as it is
+    let alias_ok = std::fs::read_link(o.alias_bin()).is_ok_and(|t| t == Path::new(BIN_NAME))
+        || same_target(&o.alias_bin(), &o.eye_bin());
     if !dry && !alias_ok {
         let a = o.alias_bin();
         if a.symlink_metadata().is_ok() {
@@ -210,13 +234,49 @@ fn install_binary(o: &Opts) -> Result<Row> {
         (false, false) => " (linked)",
         (false, true) => " (would link)",
     };
-    Ok(Row::new(
-        "binary",
-        format!(
-            "{} ({state}), {ALIAS_NAME} -> {BIN_NAME}{link}",
-            show_path(&o.eye_bin())
-        ),
-    ))
+    let mut text = format!(
+        "{} ({state}), {ALIAS_NAME} -> {BIN_NAME}{link}",
+        show_path(&o.eye_bin())
+    );
+    if let Some(note) = relink_old_copy(o)? {
+        text.push_str(&format!("; {note}"));
+    }
+    Ok(Row::new("binary", text))
+}
+
+/// A copy an earlier install left in `~/.local/bin` becomes a link to the package manager's binary:
+/// sessions already running keep calling the path their hooks had, and a `PATH` that finds that
+/// folder first must not run an old version.
+fn relink_old_copy(o: &Opts) -> Result<Option<String>> {
+    let Some(dir) = &o.old_bin_dir else {
+        return Ok(None);
+    };
+    let old = dir.join(BIN_NAME);
+    if !old
+        .symlink_metadata()
+        .is_ok_and(|m| m.file_type().is_file())
+    {
+        return Ok(None);
+    }
+    if !o.dry_run {
+        let tmp = dir.join(format!(".{BIN_NAME}.link"));
+        let _ = std::fs::remove_file(&tmp);
+        std::os::unix::fs::symlink(o.eye_bin(), &tmp)?;
+        std::fs::rename(&tmp, &old)?;
+    }
+    let verb = if o.dry_run { "would link" } else { "now links" };
+    Ok(Some(format!(
+        "the older copy {} {verb} to it",
+        show_path(&old)
+    )))
+}
+
+/// Do these two paths end at the same file, after every link?
+fn same_target(a: &Path, b: &Path) -> bool {
+    matches!(
+        (std::fs::canonicalize(a), std::fs::canonicalize(b)),
+        (Ok(x), Ok(y)) if x == y
+    )
 }
 
 /// Are these two files the same bytes?
@@ -395,30 +455,56 @@ pub fn uninstall(o: &Opts, agents: &Agents) -> Result<Report> {
     text.extend(gone);
     rep.push(Row::new(service::AREA, text.join(", ")));
 
-    // the binary and the alias
-    let present: Vec<PathBuf> = [o.eye_bin(), o.alias_bin()]
-        .into_iter()
-        .filter(|p| p.symlink_metadata().is_ok())
-        .collect();
+    // the binary and the alias. A package manager's binary is its own to remove, and so is
+    // Homebrew's `eye` link; the links eye made go.
+    let owner = package::owner(&o.eye_bin(), package::cargo_home().as_deref()).map(|(p, _)| p);
+    let mut present = vec![];
+    if owner.is_none() {
+        present.push(o.eye_bin());
+    }
+    if owner != Some(Package::Homebrew) {
+        present.push(o.alias_bin());
+    }
+    if let Some(dir) = &o.old_bin_dir {
+        let old = dir.join(BIN_NAME);
+        if std::fs::read_link(&old).is_ok_and(|t| t == o.eye_bin()) {
+            present.push(old);
+            let alias = dir.join(ALIAS_NAME);
+            if std::fs::read_link(&alias).is_ok_and(|t| t == Path::new(BIN_NAME)) {
+                present.push(alias);
+            }
+        }
+    }
+    present.retain(|p| p.symlink_metadata().is_ok());
     for p in &present {
         if !dry {
             std::fs::remove_file(p)?;
         }
     }
-    let binary = match present.split_first() {
-        None => format!("not there ({})", show_path(&o.eye_bin())),
-        Some((first, rest)) => {
-            let names: Vec<String> = std::iter::once(show_path(first))
-                .chain(
-                    rest.iter()
-                        .filter_map(|p| p.file_name())
-                        .map(|n| n.to_string_lossy().into_owned()),
-                )
-                .collect();
-            format!("{remove} {}", names.join(", "))
-        }
-    };
-    rep.push(Row::new("binary", binary));
+    // each path in full, then only the name of one in the same folder as the one before it
+    let mut names = vec![];
+    for (i, p) in present.iter().enumerate() {
+        let same_dir = i > 0 && present[i - 1].parent() == p.parent();
+        names.push(match p.file_name().filter(|_| same_dir) {
+            Some(n) => n.to_string_lossy().into_owned(),
+            None => show_path(p),
+        });
+    }
+    let mut binary = vec![];
+    if let Some(p) = owner {
+        binary.push(format!(
+            "kept {} (`{}` removes it)",
+            show_path(&o.eye_bin()),
+            p.remove_hint()
+        ));
+    }
+    if !names.is_empty() {
+        binary.push(format!("{remove} {}", names.join(", ")));
+    }
+    if binary.is_empty() {
+        binary.push(format!("not there ({})", show_path(&o.eye_bin())));
+    }
+    rep.push(Row::new("binary", binary.join("; ")));
 
     let eye_bin = o.eye_bin();
     let ctx = InstallCtx {
@@ -627,6 +713,8 @@ mod tests {
         Opts {
             eye_home: t.join("home"),
             bin_dir: t.join("bin"),
+            package: None,
+            old_bin_dir: None,
             manager,
             service_dir: t.join("agents"),
             exe: std::env::current_exe().unwrap(),
@@ -789,6 +877,99 @@ mod tests {
                 && !skill.exists()
         );
         assert!(!t.path().join("claude/skills/eye").exists());
+    }
+
+    /// Options for a Homebrew install under `t/brew`, run the way `Opts::resolve` sets it up, with
+    /// an older copy of the binary (and its alias) in `t/local`.
+    fn homebrew_opts(t: &Path) -> Opts {
+        let prefix = package::tests::brew(&t.join("brew"), "0.2.0");
+        let local = t.join("local");
+        std::fs::create_dir_all(&local).unwrap();
+        std::fs::write(local.join(BIN_NAME), "an older copy").unwrap();
+        std::os::unix::fs::symlink(BIN_NAME, local.join(ALIAS_NAME)).unwrap();
+        let mut o = opts(t);
+        o.exe = prefix.join("bin/agent-eye");
+        o.bin_dir = prefix.join("opt/agent-eye/bin");
+        o.package = Some(Package::Homebrew);
+        o.old_bin_dir = Some(local);
+        o
+    }
+
+    #[test]
+    fn a_homebrew_binary_runs_where_it_is_and_an_older_copy_becomes_a_link_to_it() {
+        let t = tempfile::tempdir().unwrap();
+        let o = homebrew_opts(t.path());
+        let keg = o.bin_dir.join(BIN_NAME).canonicalize().unwrap();
+        let rep = install(&o, &Agents::default()).unwrap();
+        let row = &rep.row("binary").unwrap().text;
+        assert!(
+            row.contains("agent-eye (Homebrew's), eye -> agent-eye;"),
+            "{row}"
+        );
+        assert!(row.contains("now links to it"), "{row}");
+        // Homebrew's files are as brew left them
+        assert_eq!(std::fs::read_to_string(&keg).unwrap(), "0.2.0");
+        assert_eq!(
+            std::fs::read_link(keg.with_file_name(ALIAS_NAME)).unwrap(),
+            Path::new(BIN_NAME)
+        );
+        // the older copy is now the current binary, and the service runs the one that upgrades
+        let local = o.old_bin_dir.clone().unwrap();
+        assert_eq!(
+            std::fs::read_link(local.join(BIN_NAME)).unwrap(),
+            o.eye_bin()
+        );
+        assert_eq!(
+            std::fs::read_to_string(local.join(ALIAS_NAME)).unwrap(),
+            "0.2.0"
+        );
+        let unit = std::fs::read_to_string(o.unit()).unwrap();
+        assert!(unit.contains(&o.eye_bin().display().to_string()), "{unit}");
+
+        let again = install(&o, &Agents::default()).unwrap();
+        assert!(!again.row("binary").unwrap().text.contains("links"));
+
+        let gone = uninstall(&o, &Agents::default()).unwrap();
+        let row = &gone.row("binary").unwrap().text;
+        assert!(
+            row.contains("(`brew uninstall agent-eye` removes it); removed "),
+            "{row}"
+        );
+        assert!(keg.is_file() && keg.with_file_name(ALIAS_NAME).exists());
+        assert!(local.join(BIN_NAME).symlink_metadata().is_err());
+        assert!(local.join(ALIAS_NAME).symlink_metadata().is_err());
+    }
+
+    #[test]
+    fn a_dry_run_says_it_would_link_the_older_copy_and_leaves_it() {
+        let t = tempfile::tempdir().unwrap();
+        let mut o = homebrew_opts(t.path());
+        o.dry_run = true;
+        let rep = install(&o, &Agents::default()).unwrap();
+        assert!(rep.row("binary").unwrap().text.contains("would link to it"));
+        let old = o.old_bin_dir.unwrap().join(BIN_NAME);
+        assert_eq!(std::fs::read_to_string(old).unwrap(), "an older copy");
+    }
+
+    #[test]
+    fn an_eye_that_already_runs_the_binary_is_left_as_it_is() {
+        // `--bin-dir /opt/homebrew/bin`: brew's own `eye` link must survive, or the next
+        // `brew upgrade` cannot link the new version
+        let t = tempfile::tempdir().unwrap();
+        let prefix = package::tests::brew(t.path(), "0.2.0");
+        let mut o = opts(t.path());
+        o.exe = prefix.join("bin/agent-eye");
+        o.bin_dir = prefix.join("bin");
+        let brews = std::fs::read_link(o.alias_bin()).unwrap();
+        let rep = install(&o, &Agents::default()).unwrap();
+        let row = &rep.row("binary").unwrap().text;
+        assert!(!row.contains("linked"), "{row}");
+        assert_eq!(std::fs::read_link(o.alias_bin()).unwrap(), brews);
+
+        let gone = uninstall(&o, &Agents::default()).unwrap();
+        assert!(gone.row("binary").unwrap().text.starts_with("kept "));
+        assert_eq!(std::fs::read_link(o.alias_bin()).unwrap(), brews);
+        assert!(o.eye_bin().exists());
     }
 
     #[test]

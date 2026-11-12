@@ -60,6 +60,8 @@ fn restoring_an_older_snapshot_and_scanning_brings_back_the_newer_session() {
     let o = Opts {
         eye_home: paths.home.clone(),
         bin_dir: paths.home.join("bin"),
+        package: None,
+        old_bin_dir: None,
         manager: Manager::current(),
         service_dir: paths.home.join("agents"),
         exe: std::env::current_exe().unwrap(),

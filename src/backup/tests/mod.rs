@@ -62,6 +62,8 @@ pub(super) fn opts(h: &Home, no_service: bool) -> Opts {
     Opts {
         eye_home: h.paths.home.clone(),
         bin_dir: h.paths.home.join("bin"),
+        package: None,
+        old_bin_dir: None,
         manager: Manager::current(),
         service_dir: h.paths.home.join("agents"),
         exe: std::env::current_exe().unwrap(),

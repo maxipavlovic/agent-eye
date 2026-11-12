@@ -115,7 +115,7 @@ pub struct SetupArgs {
     /// Show the changes to each file (a dry run always does)
     #[arg(long)]
     pub verbose: bool,
-    /// Where the binary goes (default ~/.local/bin)
+    /// Where the binary goes (default ~/.local/bin; Homebrew's or cargo's folder, with nothing copied, when eye came from there)
     #[arg(long)]
     pub bin_dir: Option<PathBuf>,
     /// Where the service file goes (default ~/Library/LaunchAgents on macOS, ~/.config/systemd/user on Linux)
