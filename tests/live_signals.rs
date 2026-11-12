@@ -316,12 +316,42 @@ fn a_session_with_nothing_going_on_has_empty_fields() {
 
 // ---------- Codex ----------
 
+/// The recorded run moved in time so that it starts a minute ago. Eye stops believing a background
+/// task 12 hours after it started, so the times as recorded go stale the morning after. Moved once,
+/// so every part a test reads lines up.
+fn codex_run_now() -> &'static str {
+    static RUN: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    RUN.get_or_init(moved_codex_run)
+}
+
+fn moved_codex_run() -> String {
+    let start = agent_eye::util::iso_to_ms("2026-11-11T20:00:29.980Z").unwrap();
+    let shift = agent_eye::util::now_ms() - 60_000 - start;
+    let stamps = regex::Regex::new(r#""timestamp":"([^"]+)""#).unwrap();
+    let text = stamps.replace_all(CODEX_FIXTURE, |c: &regex::Captures| {
+        let ms = agent_eye::util::iso_to_ms(&c[1]).unwrap();
+        format!(r#""timestamp":"{}""#, iso(ms + shift))
+    });
+    let clocks = regex::Regex::new(r#"("[a-z_]+_at(_ms)?":)(\d+)"#).unwrap();
+    clocks
+        .replace_all(&text, |c: &regex::Captures| {
+            let t: i64 = c[3].parse().unwrap();
+            let moved = if c.get(2).is_some() {
+                t + shift
+            } else {
+                t + shift / 1000
+            };
+            format!("{}{moved}", &c[1])
+        })
+        .into_owned()
+}
+
 fn codex_world(upto_line: usize) -> (World, PathBuf, Vec<std::fs::File>) {
     let w = World::new("codex");
     let dir = w.agent_dir.join("sessions/2026/11/11");
     std::fs::create_dir_all(&dir).unwrap();
     let file = dir.join(format!("rollout-2026-11-11T20-00-29-{CODEX_SESSION}.jsonl"));
-    let head: String = CODEX_FIXTURE
+    let head: String = codex_run_now()
         // the recorded run was a `codex exec`, which eye leaves out; make it an interactive one
         .replace("<prompt>", "Run two sleeps in the background and report")
         .replace("codex_exec", "codex_cli_rs")
@@ -354,7 +384,7 @@ fn a_codex_background_shell_keeps_the_session_in_running_until_its_item_closes()
     assert_eq!(c["background"][0]["label"], "sleep 80");
     assert_eq!(c["background"][0]["id"], "36096");
     // the rest of the run: a foreground command, the turn's end, and the item that closes the shell
-    for l in CODEX_FIXTURE.lines().skip(5) {
+    for l in codex_run_now().lines().skip(5) {
         append(&file, &format!("{l}\n"));
     }
     w.scan();
