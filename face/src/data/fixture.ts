@@ -94,7 +94,7 @@ function whenOf(text: string, now = Date.now()): number {
   const weekday = t.length >= 3 ? names.findIndex((n) => n.startsWith(t)) : -1;
   const rel = /^([1-9]\d*)([mhdw])$/.exec(t);
   const abs = /^(\d{4})-(\d\d)-(\d\d)(?:[ t](\d\d):(\d\d))?$/.exec(t);
-  let at = NaN;
+  let at = Number.NaN;
   if (t === 'tomorrow') at = day(1);
   else if (weekday >= 0) at = day(((weekday - new Date(now).getDay() + 6) % 7) + 1);
   else if (rel) at = rel[2] === 'm' ? now + +rel[1]! * 60000 : rel[2] === 'h' ? now + +rel[1]! * 3600000 : day(+rel[1]! * (rel[2] === 'w' ? 7 : 1), new Date(now).getHours(), new Date(now).getMinutes());
@@ -153,7 +153,8 @@ export function fixtureSource(): Source {
   /** What the real engine would say about a folder: the ones on the board exist, a new one under `~` can be made. */
   const exists = (p: string) => p === '~' || allCards().some((c) => c.folder === p && c.folder_state !== 'missing');
   const folderCheck = (path: string): FolderCheck => {
-    const p = path.trim().replace(/\/+$/, '');
+    let p = path.trim();
+    while (p.endsWith('/')) p = p.slice(0, -1);
     if (!p) return { state: 'unusable', creatable: false, note: 'No folder given' };
     if (exists(p)) return { state: 'ok', creatable: false, note: null };
     if (p.startsWith('~/')) return { state: 'missing', creatable: true, note: 'Folder does not exist yet; Start will create it' };

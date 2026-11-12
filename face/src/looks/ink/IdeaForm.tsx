@@ -75,7 +75,7 @@ function IdeaForm({ store, idea, focus, onClose }: { store: Store; idea?: CardDe
   };
   return (
     <>
-      <div class="scrim" onClick={onClose} />
+      <div class="scrim" role="presentation" onClick={onClose} />
       <form class="modal" onSubmit={submit} aria-label={idea ? 'Edit idea' : 'New idea'}>
         <div class="dis" />
         <h2><Pix rows={ICONS.ideas} pal={INK} scale={4} /> {idea ? 'EDIT IDEA' : 'NEW IDEA'}</h2>

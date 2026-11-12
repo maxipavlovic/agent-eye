@@ -67,12 +67,25 @@ export function folderGroup(values: string[]): { base: string | null; rels: stri
   return { base: segs[0]!.slice(0, n).join('/') + '/', rels: segs.map((x) => x.slice(n).join('/')) };
 }
 
+const PR_PATHS = new Set(['pull-requests', 'pull', 'merge_requests']);
+
+/** The repo and number of a pull request link: `…/<repo>/pull/12`, `/pull-requests/12`, `/merge_requests/12`. */
+function prRef(url: string): { repo: string; n: string } | null {
+  const parts = url.split('/');
+  for (let i = 1; i + 1 < parts.length; i++) {
+    const [repo = '', kind = '', num = ''] = parts.slice(i - 1, i + 2);
+    const n = /^\d+/.exec(num);
+    if (n && repo && PR_PATHS.has(kind)) return { repo, n: n[0] };
+  }
+  return null;
+}
+
 /** Short chip text for an output. */
 export function outputLabel(o: Output): string {
   switch (o.kind) {
     case 'pr': {
-      const m = o.value.match(/([^/]+)\/(?:pull-requests|pull|merge_requests)\/(\d+)/);
-      return m ? `${m[1]}#${m[2]}` : 'PR';
+      const ref = prRef(o.value);
+      return ref ? `${ref.repo}#${ref.n}` : 'PR';
     }
     case 'artifact': return artifactName(o);
     case 'jira': return o.value;
@@ -93,8 +106,18 @@ export function isBusy(c: Card): boolean {
 
 /** Split "[match]" snippets from search into plain/marked parts. */
 export function snippetParts(s: string): Array<{ text: string; hit: boolean }> {
-  return s.split(/(\[[^\]]*\])/).filter(Boolean).map((t) =>
-    t.startsWith('[') && t.endsWith(']') ? { text: t.slice(1, -1), hit: true } : { text: t, hit: false });
+  const parts: Array<{ text: string; hit: boolean }> = [];
+  let i = 0;
+  for (;;) {
+    const open = s.indexOf('[', i);
+    const close = open < 0 ? -1 : s.indexOf(']', open + 1);
+    if (close < 0) break;
+    if (open > i) parts.push({ text: s.slice(i, open), hit: false });
+    parts.push({ text: s.slice(open + 1, close), hit: true });
+    i = close + 1;
+  }
+  if (i < s.length) parts.push({ text: s.slice(i), hit: false });
+  return parts;
 }
 
 /** Token counts for a card: 840, 1.2k, 12k, 340k, 1.2M, 12M. */

@@ -98,7 +98,7 @@ function RemindForm({ store, id, onClose }: { store: Store; id: string; onClose:
   };
   return (
     <>
-      <div class="scrim" onClick={onClose} />
+      <div class="scrim" role="presentation" onClick={onClose} />
       <form ref={form} class="modal" onSubmit={submit} aria-label="Remind me">
         <div class="dis" />
         <h2><Pix rows={ICONS.needs_you} pal={INK} scale={4} /> REMIND ME</h2>
@@ -108,7 +108,7 @@ function RemindForm({ store, id, onClose }: { store: Store; id: string; onClose:
             <DatePicker value={date.value} min={today} labelId="remind-date" onChange={(d) => { date.value = d; problem.value = null; }} />
           </div>
           <div class="wtime">
-            <label class="flbl" for="remind-time">TIME</label>
+            <label class="flbl" htmlFor="remind-time">TIME</label>
             <TimeField id="remind-time" value={time.value} invalid={!!problem.value} onChange={(t) => { time.value = t; problem.value = null; }} />
             {problem.value && <p class="fnote" id="remind-time-err" role="alert">{problem.value}</p>}
           </div>

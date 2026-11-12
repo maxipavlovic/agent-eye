@@ -60,7 +60,7 @@ export function MoreList<T>({ items, n, row, cls }: { items: T[]; n: number; row
   const open = useSignal(false);
   return (
     <ul class={cls}>
-      {(open.value ? items : items.slice(0, n)).map(row)}
+      {(open.value ? items : items.slice(0, n)).map((item, i) => row(item, i))}
       {items.length > n && (
         <li class="more">
           <button class="lnk" aria-expanded={open.value} onClick={() => { open.value = !open.value; }}>{open.value ? 'SHOW LESS' : `+${items.length - n} MORE`}</button>

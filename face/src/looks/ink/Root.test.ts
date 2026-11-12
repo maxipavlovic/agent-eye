@@ -435,6 +435,7 @@ describe('reminders', () => {
     await vi.waitFor(() => expect([...f.querySelectorAll('.dpgrid button')].some((b) => b.textContent === '4' && !(b as HTMLButtonElement).disabled)).toBe(true));
     [...f.querySelectorAll<HTMLButtonElement>('.dpgrid button')].find((b) => b.textContent === '4')!.click();
     const time = f.querySelector<HTMLInputElement>('#remind-time')!;
+    expect(f.querySelector('label[for="remind-time"]')?.textContent).toBe('TIME');
     time.value = '1430';
     time.dispatchEvent(new Event('input', { bubbles: true }));
     (f.elements.namedItem('note') as HTMLInputElement).value = 'before the freeze';

@@ -17,7 +17,28 @@ export interface DocPage {
 const ORDER = ['getting-started', 'install', 'terminal', 'board', 'config', 'agents', 'api'];
 
 const slugify = (s: string) => s.toLowerCase().replace(/`/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'section';
-const plain = (s: string) => s.replace(/[`*_]/g, '').replace(/\[([^\]]*)\]\([^)]*\)/g, '$1');
+const plain = (s: string) => unlink(s.replace(/[`*_]/g, ''));
+
+/** `[label](url)` as `label`, in one pass (the regex for it backtracks on a long run of `[`). */
+function unlink(s: string): string {
+  let out = '';
+  let i = 0;
+  for (;;) {
+    const open = s.indexOf('[', i);
+    const close = open < 0 ? -1 : s.indexOf(']', open + 1);
+    if (close < 0) break;
+    if (s[close + 1] !== '(') {
+      out += s.slice(i, close + 1);
+      i = close + 1;
+      continue;
+    }
+    const end = s.indexOf(')', close + 2);
+    if (end < 0) break;
+    out += s.slice(i, open) + s.slice(open + 1, close);
+    i = end + 1;
+  }
+  return out + s.slice(i);
+}
 
 /** A link in docs/<file>.md as it should read on the site: other docs become pages, other repo files open on GitHub. */
 export function siteLink(href: string): string {

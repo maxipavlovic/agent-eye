@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { artifactName, codeParts, folderGroup, homePath, nextParts, outputLabel, remindReason, remindText, remindTitle, remindWhen, resumeLabel, tok } from './format';
+import { artifactName, codeParts, folderGroup, homePath, nextParts, outputLabel, remindReason, remindText, remindTitle, remindWhen, resumeLabel, snippetParts, tok } from './format';
 import type { Output } from './api/types';
 
 describe('nextParts', () => {
@@ -31,6 +31,32 @@ describe('artifactName', () => {
   it('falls back to a short id', () => {
     expect(artifactName(art({ url: 'https://claude.ai/artifact/7fK2aB9x1234abcd' }))).toBe('artifact 7fK2aB9x…');
     expect(outputLabel(art({ title: null }))).toBe('artifact 7fK2aB9x…');
+  });
+});
+
+const pr = (value: string): Output => ({ kind: 'pr', value, url: null });
+
+describe('pull request labels', () => {
+  it('reads GitHub, Bitbucket and GitLab links', () => {
+    expect(outputLabel(pr('https://github.com/o/agent-eye/pull/12'))).toBe('agent-eye#12');
+    expect(outputLabel(pr('https://bitbucket.org/t/connect/pull-requests/7/overview'))).toBe('connect#7');
+    expect(outputLabel(pr('https://gitlab.com/g/r/-/merge_requests/5#note_1'))).toBe('-#5');
+  });
+  it('says PR for anything else, and stays fast on a long link', () => {
+    expect(outputLabel(pr('https://example.com/pulls/12'))).toBe('PR');
+    expect(outputLabel(pr('a'.repeat(100_000)))).toBe('PR');
+  });
+});
+
+describe('snippetParts', () => {
+  it('marks the [matches]', () => {
+    expect(snippetParts('fix [login] then [deploy]')).toEqual([
+      { text: 'fix ', hit: false }, { text: 'login', hit: true }, { text: ' then ', hit: false }, { text: 'deploy', hit: true },
+    ]);
+  });
+  it('keeps an unclosed bracket as text, and stays fast on many of them', () => {
+    expect(snippetParts('a [b')).toEqual([{ text: 'a [b', hit: false }]);
+    expect(snippetParts('['.repeat(100_000))).toHaveLength(1);
   });
 });
 

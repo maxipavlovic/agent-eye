@@ -75,6 +75,7 @@ export function Root({ store }: { store: Store }) {
         <>
           <div
             class="scrim"
+            role="presentation"
             onClick={() => store.close()}
             onContextMenu={(e) => {
               // Right-click beside the panel: close it and open the menu of the card under the pointer.
