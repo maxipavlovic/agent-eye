@@ -27,6 +27,8 @@ const TICK: Duration = Duration::from_secs(2);
 const WORKER_EVERY: Duration = Duration::from_secs(30);
 /// How often the daemon looks whether a daily snapshot is due.
 const BACKUP_EVERY: Duration = Duration::from_secs(600);
+/// The longest an upgrade restart waits for a snapshot or a summary round to finish.
+const RESTART_WAIT: Duration = Duration::from_secs(60);
 const LOG_MAX: u64 = 10 << 20;
 const QUEUE_ROTATE: u64 = 1 << 20;
 const SUMMARIES_PER_ROUND: usize = 3;
@@ -387,14 +389,19 @@ pub fn tick(db: &mut Db, paths: &Paths, cfg: &Config) -> Result<()> {
 }
 
 /// Run until SIGINT/SIGTERM. With `board` and `board.enabled`, the board is served from this process.
+/// When its binary is upgraded on disk, it stops the same way and starts the new one in its place.
 pub fn run(paths: Paths, cfg: Config, port: u16, board: bool) -> Result<()> {
     paths.ensure_home()?;
-    let _lock = Lock::acquire(&paths)?;
+    let lock = Lock::acquire(&paths)?;
     log(&paths, &format!("daemon start pid {}", std::process::id()));
     let stop = Arc::new(AtomicBool::new(false));
     let worker_busy = Arc::new(AtomicBool::new(false));
+    let mut watch = upgrade::Watch::of_this_process();
+    let bin = watch.as_ref().map(|w| w.path().to_path_buf());
+    let upgraded = Arc::new(AtomicBool::new(false));
     let handle = {
         let (paths, cfg, stop, busy) = (paths.clone(), cfg.clone(), stop.clone(), worker_busy);
+        let upgraded = upgraded.clone();
         std::thread::spawn(move || {
             let mut db = match Db::open(&paths.db_path()) {
                 Ok(d) => d,
@@ -442,6 +449,16 @@ pub fn run(paths: Paths, cfg: Config, port: u16, board: bool) -> Result<()> {
                         busy.store(false, Ordering::SeqCst);
                     });
                 }
+                if watch.as_mut().is_some_and(|w| w.upgraded()) {
+                    log(&paths, "the binary was upgraded; restarting into it");
+                    let since = Instant::now();
+                    while busy.load(Ordering::SeqCst) && since.elapsed() < RESTART_WAIT {
+                        std::thread::sleep(Duration::from_millis(200));
+                    }
+                    upgraded.store(true, Ordering::SeqCst);
+                    server::ask_shutdown();
+                    break;
+                }
                 std::thread::sleep(TICK);
             }
         })
@@ -477,8 +494,14 @@ pub fn run(paths: Paths, cfg: Config, port: u16, board: bool) -> Result<()> {
     stop.store(true, Ordering::Relaxed);
     let _ = handle.join();
     log(&paths, "daemon stop");
+    if let Some(bin) = bin.filter(|_| upgraded.load(Ordering::SeqCst)) {
+        drop(lock);
+        return Err(upgrade::restart(&bin));
+    }
     result
 }
+
+mod upgrade;
 
 #[cfg(test)]
 mod tests;

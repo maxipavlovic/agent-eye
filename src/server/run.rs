@@ -9,6 +9,8 @@ use anyhow::{Context, Result};
 use axum::extract::State;
 use axum::response::sse::{Event, KeepAlive, Sse};
 use std::convert::Infallible;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
 use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::StreamExt;
 
@@ -47,7 +49,22 @@ pub(super) fn spawn_watcher(st: Shared) {
     });
 }
 
-/// Resolves on Ctrl-C or SIGTERM.
+static SHUTDOWN_ASKED: AtomicBool = AtomicBool::new(false);
+/// How long requests still open at shutdown get to finish.
+const SHUTDOWN_GRACE: Duration = Duration::from_secs(2);
+
+/// Make `shutdown_signal` resolve as a signal would: the daemon does this to restart itself.
+pub fn ask_shutdown() {
+    SHUTDOWN_ASKED.store(true, Ordering::SeqCst);
+}
+
+async fn shutdown_asked() {
+    while !SHUTDOWN_ASKED.load(Ordering::SeqCst) {
+        tokio::time::sleep(Duration::from_millis(500)).await;
+    }
+}
+
+/// Resolves on Ctrl-C, SIGTERM or `ask_shutdown`.
 pub async fn shutdown_signal() {
     use tokio::signal::unix::{signal, SignalKind};
     match signal(SignalKind::terminate()) {
@@ -55,10 +72,14 @@ pub async fn shutdown_signal() {
             tokio::select! {
                 _ = tokio::signal::ctrl_c() => {}
                 _ = term.recv() => {}
+                _ = shutdown_asked() => {}
             }
         }
         Err(_) => {
-            let _ = tokio::signal::ctrl_c().await;
+            tokio::select! {
+                _ = tokio::signal::ctrl_c() => {}
+                _ = shutdown_asked() => {}
+            }
         }
     }
 }
@@ -88,9 +109,16 @@ pub fn serve(
         let state = new_state(paths, cfg, token.clone(), port);
         spawn_watcher(state.clone());
         on_ready(&board_url(port, &token))?;
-        axum::serve(listener, router(state))
-            .with_graceful_shutdown(shutdown_signal())
-            .await?;
+        let server = axum::serve(listener, router(state)).with_graceful_shutdown(shutdown_signal());
+        // An open event stream never ends by itself: after the signal, requests get a moment to
+        // finish, and then the server stops without them.
+        tokio::select! {
+            r = server => r?,
+            _ = async {
+                shutdown_signal().await;
+                tokio::time::sleep(SHUTDOWN_GRACE).await;
+            } => {}
+        }
         Ok(())
     })
 }

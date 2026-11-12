@@ -18,7 +18,7 @@ mod test_support;
 pub use board::board_json;
 pub use card::{card_json, CardCtx};
 pub use guard::ensure_token;
-pub use run::{board_url, serve, shutdown_signal};
+pub use run::{ask_shutdown, board_url, serve, shutdown_signal};
 
 use crate::agents::{self, Agents};
 use crate::config::Config;
