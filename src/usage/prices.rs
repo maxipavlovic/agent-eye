@@ -12,6 +12,8 @@ use crate::config::{PriceCfg, UsageCfg};
 pub const CLAUDE_SOURCE: &str = "https://platform.claude.com/docs/en/about-claude/pricing";
 /// Where OpenAI prices come from (checked 2026-11-21).
 pub const OPENAI_SOURCE: &str = "https://developers.openai.com/api/docs/pricing";
+/// Where Gemini prices come from (checked 2026-11-21). agy runs Gemini models through Google.
+pub const GOOGLE_SOURCE: &str = "https://ai.google.dev/gemini-api/docs/pricing";
 /// The date the table was checked.
 pub const CHECKED: &str = "2026-11-21";
 /// What every cost line says it is.
@@ -81,6 +83,34 @@ const OPENAI: &[(&str, Price)] = &[
     ("gpt-5", p(1.25, 10.0, 0.0, 0.125)),
 ];
 
+/// Gemini, from the Gemini API pricing page (standard tier, no prompt-size tiers on these models):
+/// input, output with thinking, no cache write, cache read. Gemini 3.8 Flash costs $0.75 / $3.75 /
+/// $0.075 through 2026-12-31 and double from 2027-01-01 (this table has the price now); agy's
+/// High, Medium and Low are reasoning levels of the same model and cost the same. GPT-OSS 120B,
+/// which agy also offers, is not on that page and has no price here (`[usage.prices]` adds one).
+const GOOGLE: &[(&str, Price)] = &[
+    ("gemini-3.8-flash", p(0.75, 3.75, 0.0, 0.075)),
+    ("gemini-3.8-flash-high", p(0.75, 3.75, 0.0, 0.075)),
+    ("gemini-3.8-flash-medium", p(0.75, 3.75, 0.0, 0.075)),
+    ("gemini-3.8-flash-low", p(0.75, 3.75, 0.0, 0.075)),
+    ("gemini-3.6-flash", p(0.75, 3.75, 0.0, 0.075)),
+    ("gemini-3-flash-preview", p(0.50, 3.0, 0.0, 0.05)),
+    ("gemini-3.5-flash-lite", p(0.30, 2.50, 0.0, 0.03)),
+    ("gemini-3.1-flash-lite", p(0.25, 1.50, 0.0, 0.025)),
+];
+
+/// agy's database names a call by its display name (`Gemini 3.8 Flash (High)`), its log by the key
+/// (`gemini-3.8-flash-high`): the display name as the key.
+fn gemini_key(m: &str) -> String {
+    match m.strip_prefix("gemini ").and_then(|r| r.strip_suffix(')')) {
+        Some(r) => match r.split_once(" (") {
+            Some((name, level)) => format!("gemini-{}-{level}", name.replace(' ', "-")),
+            None => m.to_string(),
+        },
+        None => m.replace(' ', "-"),
+    }
+}
+
 /// `claude-opus-4-5-20251101` as `claude-opus-4-5`: lower case, no `[1m]` tag, no date.
 fn normalize(model: &str) -> String {
     let m = model.trim().to_ascii_lowercase();
@@ -107,10 +137,16 @@ pub fn lookup(model: &str, cfg: &UsageCfg) -> Option<Price> {
     {
         return Some(p);
     }
+    let key = if norm.starts_with("gemini ") {
+        gemini_key(&norm)
+    } else {
+        norm
+    };
     CLAUDE
         .iter()
         .chain(OPENAI.iter())
-        .find(|(id, _)| *id == norm)
+        .chain(GOOGLE.iter())
+        .find(|(id, _)| *id == key)
         .map(|(_, p)| *p)
 }
 
@@ -196,11 +232,32 @@ mod tests {
         let mut ids: Vec<&str> = CLAUDE
             .iter()
             .chain(OPENAI.iter())
+            .chain(GOOGLE.iter())
             .map(|(i, _)| *i)
             .collect();
         ids.sort_unstable();
         let n = ids.len();
         ids.dedup();
         assert_eq!(n, ids.len());
+    }
+
+    #[test]
+    fn gemini_costs_follow_google_prices_by_key_or_display_name() {
+        let cfg = UsageCfg::default();
+        let by_key = lookup("gemini-3.8-flash-low", &cfg).unwrap();
+        assert_eq!(lookup("Gemini 3.8 Flash (High)", &cfg), Some(by_key));
+        assert_eq!(lookup("Gemini 3.8 Flash (Low)", &cfg), Some(by_key));
+        // 1M in, 1M out, 1M cached: 0.75 + 3.75 + 0.075
+        let c = cost_of(
+            "gemini-3.8-flash-high",
+            [1_000_000, 1_000_000, 0, 1_000_000],
+            &cfg,
+        )
+        .unwrap();
+        assert!((c - 4.575).abs() < 1e-9, "{c}");
+        let lite = cost_of("gemini-3.5-flash-lite", [2_000_000, 1_000_000, 0, 0], &cfg).unwrap();
+        assert!((lite - 3.10).abs() < 1e-9, "{lite}");
+        assert!(lookup("GPT-OSS 120B (Medium)", &cfg).is_none());
+        assert!(lookup("Gemini 9 Nothing (High)", &cfg).is_none());
     }
 }

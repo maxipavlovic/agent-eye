@@ -3,13 +3,18 @@
 //! plain JSON log agy writes in that folder (`.system_generated/logs/transcript_full.jsonl`, see
 //! `log.rs`), the model of each call from the database, titles and folders from
 //! `conversation_summaries.db` and prompts from `history.jsonl`. The session is the folder
-//! `brain/<id>/`. agy has hooks, but only in a workspace's `.agents/hooks.json` or a plugin, so
-//! eye installs none: status comes from the files changing.
+//! `brain/<id>/`. Live status comes from `presence/<id>.lock`, the summaries row and the last step
+//! of the database (`live.rs`); hooks are a plugin of eye's in `~/.gemini/config/plugins`
+//! (`install.rs`); sub-agent conversations are child streams of their parent.
 
 mod archive;
+mod cli_log;
 mod commands;
 mod files;
 mod headless;
+mod hooks;
+mod install;
+mod live;
 mod log;
 mod wire;
 
@@ -102,6 +107,32 @@ impl Agy {
         }
     }
 
+    /// agy's global customization folder, `~/.gemini/config`, next to its own.
+    fn config_dir(&self) -> PathBuf {
+        self.dir
+            .parent()
+            .map_or_else(|| self.dir.join("config"), |p| p.join("config"))
+    }
+
+    /// eye's plugin (its hooks), in the global plugins folder.
+    fn plugin_dir(&self) -> PathBuf {
+        self.config_dir().join("plugins").join(install::PLUGIN)
+    }
+
+    fn skill_path(&self) -> PathBuf {
+        self.config_dir().join("skills/eye/SKILL.md")
+    }
+
+    /// How conversation `id` was started, as agy says it: the `source` of its summaries row, else
+    /// `print-mode` when agy's own log shows a `-p` run.
+    fn origin_of(&self, id: &str) -> Option<String> {
+        let source = self.summary(id).source;
+        if !source.is_empty() {
+            return Some(source);
+        }
+        cli_log::headless(&self.dir, id).then(|| "print-mode".to_string())
+    }
+
     fn summary(&self, id: &str) -> files::Summary {
         let cached = self
             .sums
@@ -186,6 +217,10 @@ impl Agent for Agy {
         d.cwd = s.folder;
         d.ai_title = s.title;
         d.carry = Some(serde_json::json!({ "calls": p.model_calls }));
+        if resumed.is_none() {
+            // asked on a whole read only: it looks through agy's process logs
+            d.origin_raw = self.origin_of(&t.session_id);
+        }
         Ok(d)
     }
 
@@ -195,6 +230,88 @@ impl Agent for Agy {
 
     fn usage_msgs(&self, path: &Path) -> Result<Vec<UsageMsg>> {
         log::usage_msgs(&files::log_of(path), &|| models_of(path))
+    }
+
+    fn origin_raw(&self, path: &Path) -> Option<String> {
+        self.origin_of(path.file_name()?.to_str()?)
+    }
+
+    /// Sub-agent conversations (agy's `invoke_subagent`) below the session, as child streams. The
+    /// title is the role the parent gave (`brain/<parent>/.system_generated/subagents/<id>.json`),
+    /// the detail the kind (`self`). A child is finished when its turn is not running.
+    fn subagents(&self, t: &Transcript) -> SubAgents {
+        let sums = files::summaries(&self.dir);
+        let mut out = SubAgents::default();
+        for id in files::descendants(&sums, &t.session_id) {
+            let s = &sums[&id];
+            let folder = self.dir.join(files::BRAIN).join(&id);
+            let Some(stamp) = files::stamp(&folder, s.modified) else {
+                continue;
+            };
+            let manifest = s
+                .parent
+                .as_deref()
+                .and_then(|p| files::subagent_manifest(&self.dir, p, &id));
+            let (role, kind) = manifest.unwrap_or_default();
+            out.transcripts.push(Source {
+                path: folder,
+                stamp,
+            });
+            out.children.push(ChildWork {
+                id,
+                title: Some(role)
+                    .filter(|r| !r.is_empty())
+                    .or_else(|| s.title.clone())
+                    .unwrap_or_else(|| "sub-agent".into()),
+                detail: Some(kind)
+                    .filter(|k| !k.is_empty())
+                    .or_else(|| Some(s.agent.clone()).filter(|a| !a.is_empty())),
+                finished: !s.running,
+                updated_at: stamp.mtime,
+            });
+        }
+        out
+    }
+
+    /// A sub-agent's conversation is a log like any other: read whole, the tokens summed.
+    fn read_usage(
+        &self,
+        source: &Source,
+        _since: Option<LastRead>,
+        last_id: Option<String>,
+    ) -> Result<UsageRead> {
+        let msgs = log::usage_msgs(&files::log_of(&source.path), &|| models_of(&source.path))?;
+        let mut tokens = crate::model::Tokens::default();
+        for m in &msgs {
+            tokens.input += m.input;
+            tokens.output += m.output;
+            tokens.cache_read += m.cache_read;
+        }
+        Ok(UsageRead {
+            tokens,
+            msgs,
+            last_id,
+            marker: source.stamp.size.to_string(),
+            replaces: true,
+        })
+    }
+
+    fn live_sessions(&self) -> Vec<LiveSession> {
+        live::sessions(&self.dir, &files::summaries_with_folders(&self.dir))
+    }
+
+    /// The status is read from the database, where agy writes the approval it waits for: a
+    /// `waiting` session is trusted as it is.
+    fn live_status_shows_prompts(&self) -> bool {
+        true
+    }
+
+    fn queue_line(&self, event: &str, payload: &Value, ts: i64) -> Option<Value> {
+        Some(hooks::queue_line(event, payload, ts))
+    }
+
+    fn wait_effect(&self, kind: &str, event: &Value, ts: i64) -> Option<Wait> {
+        hooks::wait_effect(kind, event, ts)
     }
 
     fn owns_transcript(&self, path: &Path) -> bool {
@@ -253,8 +370,18 @@ impl Agent for Agy {
         archive::archive(path, copy)
     }
 
+    /// Restoring into agy's own `brain/` also puts the database and the summaries row back, so
+    /// that `agy --conversation <id>` opens the conversation after agy deleted it.
     fn unarchive(&self, copy: &Path, dest: &Path) -> Result<()> {
-        archive::unarchive(copy, dest)
+        archive::unarchive(copy, dest)?;
+        // the copy is named by the conversation id; `dest` is a sibling while it is restored
+        let id = copy.file_name().and_then(|n| n.to_str());
+        if let Some(id) = id.filter(|i| valid_session_id(i)) {
+            if self.owns_transcript(dest) {
+                archive::reinstall(&self.dir, id, dest)?;
+            }
+        }
+        Ok(())
     }
 
     fn read_conversation(&self, path: &Path) -> Result<Vec<crate::conversation::Message>> {
@@ -283,6 +410,26 @@ impl Agent for Agy {
 
     fn start(&self, req: &StartRequest) -> Result<StartPlan> {
         commands::start(req)
+    }
+
+    fn preflight(&self, ctx: &InstallCtx) -> Result<()> {
+        install::preflight(self, ctx)
+    }
+
+    fn install(&self, ctx: &InstallCtx) -> Result<Report> {
+        install::install(self, ctx)
+    }
+
+    fn refresh_skill(&self) -> Result<Option<skill_file::State>> {
+        skill_file::refresh(&self.skill_path(), install::SKILL_MD)
+    }
+
+    fn uninstall(&self, ctx: &InstallCtx) -> Result<Report> {
+        install::uninstall(self, ctx)
+    }
+
+    fn doctor(&self, ctx: &InstallCtx) -> Vec<Check> {
+        install::doctor(self, ctx)
     }
 
     fn executable_dir(&self) -> Option<PathBuf> {

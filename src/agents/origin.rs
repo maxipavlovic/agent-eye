@@ -22,6 +22,7 @@ pub fn classify(agent: &str, raw: &str) -> Option<&'static str> {
     match agent {
         "claude" => claude(raw),
         "codex" => codex(raw),
+        "agy" => agy(raw),
         _ => None,
     }
 }
@@ -75,6 +76,27 @@ fn codex(raw: &str) -> Option<&'static str> {
         o if o.starts_with("Codex ") => Some("desktop"),
         _ => None,
     }
+}
+
+/// agy writes `source` in its summaries row, empty in every conversation seen on agy 1.5.14, `-p`
+/// runs and the terminal alike. What is mapped: `print-mode`, which the adapter sets when agy's own
+/// log shows a `-p` run, and the values of agy's trajectory source enum (read from its binary, not
+/// seen on disk): `CORTEX_TRAJECTORY_SOURCE_CLI` terminal, the SDK ones app, `..._VSCODE` ide, the
+/// remote and asynchronous ones web. Anything else maps to None.
+fn agy(raw: &str) -> Option<&'static str> {
+    if raw == "print-mode" {
+        return Some("headless");
+    }
+    let v = raw
+        .strip_prefix("CORTEX_TRAJECTORY_SOURCE_")?
+        .to_ascii_lowercase();
+    Some(match v.as_str() {
+        "cli" => "terminal",
+        "sdk" | "python_sdk" | "agent_api" => "app",
+        "vscode" => "ide",
+        v if v.starts_with("async_") || v.starts_with("remote") => "web",
+        _ => return None,
+    })
 }
 
 /// The origin to store: a session whose folder is under eye's `night` folder is a night run; any
@@ -181,5 +203,28 @@ mod tests {
             ),
             Some("headless")
         );
+    }
+
+    #[test]
+    fn agy_maps_a_print_run_and_its_source_values() {
+        assert_eq!(classify("agy", "print-mode"), Some("headless"));
+        assert_eq!(
+            classify("agy", "CORTEX_TRAJECTORY_SOURCE_CLI"),
+            Some("terminal")
+        );
+        assert_eq!(
+            classify("agy", "CORTEX_TRAJECTORY_SOURCE_PYTHON_SDK"),
+            Some("app")
+        );
+        assert_eq!(
+            classify("agy", "CORTEX_TRAJECTORY_SOURCE_VSCODE"),
+            Some("ide")
+        );
+        assert_eq!(
+            classify("agy", "CORTEX_TRAJECTORY_SOURCE_ASYNC_CF"),
+            Some("web")
+        );
+        assert_eq!(classify("agy", "CORTEX_TRAJECTORY_SOURCE_JETBOX"), None);
+        assert_eq!(classify("agy", ""), None);
     }
 }
