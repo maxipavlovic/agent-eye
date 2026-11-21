@@ -167,7 +167,8 @@ layouts: the `session_v2` tables, the older `session`/`message`/`part` tables (b
 (`storage/session|message|part`). A session of a database is no file, so its transcript path is `<db>#<id>` and
 `transcript_exists` asks the database. OpenCode's extensions are JavaScript plugins, so there are no hooks, and
 `opencode run` cannot answer with a schema, so it cannot write summaries (set `[summary] agent` to another agent).
-Sub-agent sessions (with a parent) are left out. Notes: `notes/v0.3/opencode-spec.md`.
+Sub-agent sessions (with a parent) are left out. The older table and JSON layouts are tested on synthetic
+data only.
 
 ## Adding an agent
 
