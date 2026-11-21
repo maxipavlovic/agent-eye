@@ -8,16 +8,23 @@ import { barPercents, costText, limitHot, percentText, resetText, seenText, toke
 /** Is the USAGE panel open? The header button sets it. */
 export const usagePanel = signal(false);
 
-/** Horizontal bars, one row each: the name, a bar scaled to the largest, then the cost and tokens. */
+/** The cost and the tokens of a row, in two right-aligned columns of fixed width. */
+function Vals({ s }: { s: UsageSum }) {
+  const cost = costText(s);
+  return (<><b class="uc" title={cost}>{cost}</b><small class="ut">{tokensText(s)}</small></>);
+}
+
+/** Horizontal bars, one row each: the name, a bar scaled to the largest, then the cost and tokens.
+ *  Every row is the same grid, so every bar track is as wide as the next. */
 function Bars({ rows, onPick }: { rows: UsageRow[]; onPick?: (r: UsageRow) => void }) {
   const pct = barPercents(rows);
   return (
     <ul class="ubars">
       {rows.map((r, i) => (
         <li key={r.id ?? r.name}>
-          {onPick && r.id ? <button class="uname" onClick={() => onPick(r)} title="Open this session">{r.name || r.id.slice(0, 8)}</button> : <span class="uname">{r.name}</span>}
+          {onPick && r.id ? <button class="uname" onClick={() => onPick(r)} title="Open this session">{r.name || r.id.slice(0, 8)}</button> : <span class="uname" title={r.name}>{r.name}</span>}
           <span class="utrack" aria-hidden="true"><i style={`width:${pct[i]}%`} /></span>
-          <span class="uval"><b>{costText(r)}</b> <small>{tokensText(r)}</small></span>
+          <Vals s={r} />
         </li>
       ))}
     </ul>
@@ -46,7 +53,7 @@ function Trend({ weeks }: { weeks: UsageReport['weeks'] }) {
         <li key={w.from}>
           <span class="uname">{w.from.slice(5)} to {w.to.slice(5)}</span>
           <span class="utrack" aria-hidden="true"><i style={`width:${pct[i]}%`} /></span>
-          <span class="uval"><b>{costText(w)}</b> <small>{tokensText(w)}</small></span>
+          <Vals s={w} />
         </li>
       ))}
     </ul>

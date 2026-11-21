@@ -431,11 +431,15 @@ mark { background: var(--ink); color: var(--paper); padding: 0 3px; }
 
 .card .meta { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 7px; min-height: 18px; }
 /* The tags wrap onto a second line in a narrow lane; the tokens and age stay together at the top right, so nothing is cut off or split. */
-.card .meta .ml { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; flex: 1; min-width: 0; }
+/* one row: the project name gives way (ellipsis), the chips never wrap, tokens and age stay at the right */
+.card .meta .ml { display: flex; flex-wrap: nowrap; align-items: center; gap: 6px 8px; flex: 1; min-width: 0; overflow: hidden; }
 .card .meta .mr { display: flex; align-items: center; gap: 8px; flex: none; min-height: 23px; }
 .card.need .meta, .card.clock .meta { padding-right: 30px; }
 .card.need.clock .meta { padding-right: 60px; }
-.ptag { font: 600 13px/1 var(--f-body); text-transform: uppercase; color: var(--mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; max-width: 100%; }
+.ptag { font: 600 13px/1 var(--f-body); text-transform: uppercase; color: var(--mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 3ch; flex: 0 1 auto; }
+.card .meta .ml > .mk { flex: none; }
+/* the state chips (LIVE, loose ends, night) get a row of their own, so they never push the project, agent and Remote chips around */
+.card .mx { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: -2px 0 7px; }
 .card .meta .tok { flex: none; white-space: nowrap; }
 /* The chip family of a card and its panel: the agent tag and the Remote Control mark (Inter, normal case, an ink frame). */
 .mk { display: inline-flex; align-items: center; gap: 5px; flex: none; white-space: nowrap; font: 600 13px/1 var(--f-body); color: var(--ink); background: var(--paper); border: 2px solid var(--ink); padding: 3px 6px; text-decoration: none; }
@@ -630,35 +634,43 @@ a.mk:hover { background: var(--ink); color: var(--paper); }
 
 /* New idea: recent folders, one click fills the field. */
 .fchips { display: flex; flex-wrap: wrap; gap: 6px; margin: -6px 0 6px; }
-.fchips button { font: 400 14px/1 var(--f-body); background: var(--paper); color: var(--ink); border: 2px solid var(--ink); padding: 6px 9px; cursor: pointer; }
+.fchips button { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 400 14px/1 var(--f-body); background: var(--paper); color: var(--ink); border: 2px solid var(--ink); padding: 6px 9px; cursor: pointer; }
 .fchips button:hover, .fchips button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
 @media (max-width: 1200px), (pointer: coarse) { .fchips button { min-height: 40px; } }
 
 /* Usage panel: Inter 17px body, ink on paper, one accent only for a limit above 80%. */
-.usage .umeta, .usage .unote, .ucost + .umeta { font: 400 17px/1.5 var(--f-body); color: var(--ink); margin: 10px 0 0; max-width: 66ch; }
+.usage .umeta, .usage .unote { font: 400 17px/1.5 var(--f-body); color: var(--ink); margin: 10px 0 0; max-width: 66ch; }
 .usage .state, .usage .uempty { font: 400 17px/1.5 var(--f-body); max-width: 66ch; margin: 18px 0 0; }
 .usage .acts { margin-top: 22px; }
 .ubars, .ulimits { list-style: none; margin: 0; padding: 0; font: 400 17px/1.5 var(--f-body); }
-.ubars li { display: grid; grid-template-columns: minmax(0, 11em) 1fr auto; gap: 14px; align-items: center; padding: 6px 0; }
+.ubars li { display: grid; grid-template-columns: 12em minmax(0, 1fr) 5.5em 7.5em; gap: 14px; align-items: center; padding: 6px 0; }
 .ubars .uname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; font: inherit; color: var(--ink); background: none; border: 0; padding: 0; }
 .ubars button.uname { text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .ubars .utrack { display: block; height: 14px; border: 2px solid var(--ink); background: var(--paper); }
 .ubars .utrack i { display: block; height: 100%; background: var(--ink); }
-.ubars .uval { white-space: nowrap; }
-.ubars .uval small, .ulimits small { font: inherit; opacity: .85; margin-left: 6px; }
+.ubars .uc, .ubars .ut { white-space: nowrap; text-align: right; font: inherit; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; }
+.ubars .uc { font-weight: 600; }
+.ubars .ut { opacity: .85; }
+.ulimits small { font: inherit; opacity: .85; margin-left: 6px; }
 .ulimits li { padding: 6px 0; }
 .ulimits li.hot { border-left: 6px solid var(--accent); padding-left: 10px; font-weight: 600; }
-.ucost { font: 400 17px/1.5 var(--f-body); margin: 0; }
-.ucost b { font-size: 24px; font-weight: 600; margin-right: 8px; }
-@media (max-width: 640px) { .ubars li { grid-template-columns: 1fr auto; } .ubars .utrack { grid-column: 1 / -1; order: 3; } }
+@media (max-width: 640px) { .ubars li { grid-template-columns: minmax(0, 1fr) 5em 6.5em; gap: 6px 10px; } .ubars .utrack { grid-column: 1 / -1; order: 3; } }
 
 /* ---- night shift: calm, ink only; the accent stays for what needs you ---- */
 .btn.tonight { background: transparent; }
 .mk.night { background: transparent; border-style: dotted; }
-.nplan { display: flex; flex-direction: column; gap: 10px; margin: 12px 0 0; padding: 12px; border: 2px solid var(--ink); background: var(--paper); }
-.nplan label, .nset label { display: flex; flex-direction: column; gap: 4px; font: 600 16px/1.3 var(--f-body); }
-.nplan textarea, .nplan input:not([type=checkbox]), .nset input, .nset select, .nlim input { font: 400 17px/1.4 var(--f-body); color: var(--ink); background: var(--paper); border: 2px solid var(--ink); padding: 6px 8px; }
-.nplan .hint, .nset .hint { font: 400 16px/1.4 var(--f-body); color: var(--ink); margin: 0; }
+.nplan { margin: 12px 0 0; max-width: 600px; }
+.nplan label { display: block; margin-bottom: 16px; font: 400 16px/1 var(--f-label); }
+.nplan textarea, .nplan input:not([type=checkbox]) { display: block; width: 100%; margin-top: 8px; background: var(--paper); color: var(--ink); border: 2px solid var(--ink); padding: 10px 12px; font: 500 17px/1.4 var(--f-body); resize: vertical; }
+.nplan textarea:focus, .nplan input:focus { outline: 2px solid var(--accent); outline-offset: 2px; }
+.nplan .pick, .modal .pick { margin: 0 0 16px; padding: 0; border: 0; min-width: 0; }
+.nplan .pick legend { padding: 0; font: 400 16px/1 var(--f-label); }
+.nplan .pick .fchips { margin: 10px 0 0; }
+.nplan .hint, .nset .hint { display: block; margin-top: 6px; font: 400 16px/1.45 var(--f-body); color: var(--ink); }
+.nplan > .hint { margin: 0 0 16px; }
+.nplan .acts { margin-top: 8px; }
+.nset label { display: flex; flex-direction: column; gap: 4px; font: 600 16px/1.3 var(--f-body); }
+.nset input, .nset select, .nlim input { font: 400 17px/1.4 var(--f-body); color: var(--ink); background: var(--paper); border: 2px solid var(--ink); padding: 6px 8px; }
 label.chk { flex-direction: row !important; align-items: center; gap: 8px !important; font-weight: 400 !important; }
 .nset { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: flex-end; margin: 0 0 12px; }
 .nrun { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 0 0 12px; font: 400 17px/1.4 var(--f-body); }
@@ -687,3 +699,21 @@ fieldset.nightpick .fchips { margin: 4px 0 0; }
 .forget .fcheck { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; font: 600 17px/1.3 var(--f-body); cursor: pointer; }
 .forget .fcheck input { display: inline-block; width: 20px; height: 20px; margin: 0; accent-color: var(--ink); }
 .forget .danger { background: var(--ink); color: var(--paper); }
+
+/* the panel's reminder row: next to state and RESUME, the same clock and bold time as on the card */
+.rrow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 16px 0 0; font: 600 17px/1.3 var(--f-body); color: var(--ink); }
+.rrow b { font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.rrow .wn { font-weight: 400; color: var(--ink); overflow-wrap: anywhere; min-width: 0; }
+.rrow .lnk { margin-left: 4px; }
+.rrow .lnk + .lnk { margin-left: 0; }
+.page .x.qk { right: 104px; padding: 8px 12px 7px; }
+.btn u { text-decoration: underline 2px; text-underline-offset: 3px; }
+.keyhelp { width: min(480px, 92vw); }
+.keyhelp .where { grid-template-columns: 4.5em 1fr; margin: 12px 0 8px; }
+@media (max-width: 1200px) { .page .x.qk { right: 100px; } }
+
+/* a narrow card keeps one meta row by letting go of the least needed first: Remote shrinks to its icon, then the project name goes */
+.card:not(.row) { container: card / inline-size; }
+@container card (max-width: 340px) { .card .meta .mk.rc span { display: none; } }
+@container card (max-width: 310px) { .card .meta .ptag { display: none; } }
+.modal > .fchips { margin: -6px 0 16px; }

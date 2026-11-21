@@ -6,6 +6,7 @@ import { copy } from './copy';
 import { startButton } from './folder';
 import { ideaForm } from './IdeaForm';
 import { openForget } from './Forget';
+import { tonightOpen } from './Night';
 import { openRemind, REMIND_PRESETS } from './Remind';
 
 interface Open {
@@ -131,6 +132,7 @@ function rows(c: Card, store: Store): Row[] {
   out.push({ label: 'FORGET…', run: go(() => openForget(c)) });
   if (c.resume_cmd) out.push({ label: 'COPY RESUME COMMAND', run: go(() => copy(c.resume_cmd!, store)) });
   if (c.resume_cmd) out.push({ label: 'FORK', run: go(() => { void store.resume(c.id, true); }) });
+  if (c.resumable && store.night.value !== null) out.push({ label: 'CONTINUE TONIGHT…', run: go(() => { tonightOpen.value = c.id; store.open(c.id); }) });
   out.push(open);
   return out;
 }

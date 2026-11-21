@@ -19,24 +19,29 @@ export function emptyUsage(days: number): UsageReport {
 /** The demo board's usage: a few projects, two agents, four weeks, and a Codex limit near the top. */
 export function demoUsage(days: number): UsageReport {
   const projects = [
-    row('~/code/billing', sum(9_000, 2_400_000, 610_000_000, 142.6)),
-    row('~/code/docs', sum(4_000, 900_000, 190_000_000, 51.3)),
-    row('~/code/site', sum(2_000, 310_000, 70_000_000, 18.9)),
-    row('~/code/scratch', sum(600, 40_000, 8_000_000, 2.1)),
+    row('billing', sum(9_000, 2_400_000, 610_000_000, 142.6)),
+    row('adobe-insights-multi-account', sum(5_000, 1_300_000, 300_000_000, 78.4)),
+    row('docs', sum(4_000, 900_000, 190_000_000, 51.3)),
+    row('agentic-layer-stack', sum(2_000, 410_000, 90_000_000, 22.1)),
+    row('site', sum(2_000, 310_000, 70_000_000, 8.9)),
+    row('home', sum(300, 20_000, 3_000_000, 0.9)),
+    // temp folders, a folder-less session and tiny projects fold into one row, as the engine does
+    row('other (6)', sum(600, 40_000, 8_000_000, 2.1)),
   ];
-  const agents = [row('claude', sum(14_000, 3_500_000, 860_000_000, 214.7)), row('codex', sum(1_600, 150_000, 18_000_000, 0.2))];
+  const total = projects.reduce((t, r) => sum(t.input + r.input, t.output + r.output, t.cache_write + t.cache_read + r.cache_write + r.cache_read, (t.cost_usd ?? 0) + (r.cost_usd ?? 0)), sum(0, 0, 0, 0));
+  const agents = [row('claude', sum(total.input - 1_600, total.output - 150_000, total.cache_write + total.cache_read - 18_000_000, Math.round((total.cost_usd! - 0.2) * 10) / 10)), row('codex', sum(1_600, 150_000, 18_000_000, 0.2))];
   const sessions = ['Fix the invoice rounding', 'Rewrite the install page', 'Plan the 0.4 release', 'Speed up the picker', 'Trim the changelog']
     .map((t, i) => row(t, sum(2_000 - i * 300, 600_000 - i * 90_000, 140_000_000 - i * 22_000_000, 40 - i * 6), { id: `a000000${i + 1}-0000-4000-8000-00000000000${i + 1}`, agent: i === 3 ? 'codex' : 'claude' }));
   const weeks: UsageWeek[] = [
     { from: '2026-11-02', to: '2026-11-08', ...sum(6_000, 1_900_000, 430_000_000, 101.4) },
     { from: '2026-11-09', to: '2026-11-15', ...sum(9_000, 2_700_000, 640_000_000, 158.0) },
     { from: '2026-11-16', to: '2026-11-22', ...sum(11_000, 3_000_000, 700_000_000, 176.2) },
-    { from: '2026-11-23', to: '2026-11-29', ...sum(15_600, 3_650_000, 878_000_000, 214.9) },
+    { from: '2026-11-23', to: '2026-11-29', ...total },
   ];
   const now = Date.now();
   return {
     estimate: ESTIMATE, days, from: '2026-11-23', to: '2026-11-29', by: 'project',
-    rows: projects, totals: sum(15_600, 3_650_000, 878_000_000, 214.9),
+    rows: projects, totals: total,
     by_project: projects, by_agent: agents, by_model: [], top_sessions: sessions, weeks,
     limits: [
       { agent: 'codex', name: 'Codex', seen_at: now - 12 * 60_000, plan: 'plus', windows: [{ label: 'weekly', used_percent: 86, window_minutes: 10_080, resets_at: now + 2 * 86_400_000, reset: false }], lines: ['Codex: 86% of the weekly limit, resets Mon 09:00 (seen 12 min ago)'] },

@@ -294,7 +294,7 @@ pub enum Cmd {
         /// The last 30 days
         #[arg(long)]
         month: bool,
-        /// Group rows by project, agent, model or session
+        /// Group rows by project, folder, agent, model or session
         #[arg(long, default_value = "project")]
         by: String,
         #[arg(long)]

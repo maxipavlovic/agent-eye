@@ -115,12 +115,16 @@ export function CardView({ c, store, i, kind, tag }: { c: Card; store: Store; i:
           {agent}
           <OriginMark origin={c.origin} raw={c.origin_raw} />
           {c.remote_url && <RemoteMark />}
-          <LooseMark n={c.loose} />
-          <NightMark n={c.night} />
-          {kind === 'run' && <span class="live"><i />LIVE</span>}
         </span>
         <span class="mr"><Tok t={c.tokens} /><span class="age">{age}</span></span>
       </div>
+      {(kind === 'run' || !!c.loose || !!c.night) && (
+        <div class="mx">
+          {kind === 'run' && <span class="live"><i />LIVE</span>}
+          <LooseMark n={c.loose} />
+          <NightMark n={c.night} />
+        </div>
+      )}
       <div class="top"><Sigil id={c.id} /><h3>{c.title}</h3></div>
       {kind === 'run' && c.activity && <p class="activity">{c.activity}</p>}
       {kind === 'run' && c.state && <p class="state">{c.state}</p>}

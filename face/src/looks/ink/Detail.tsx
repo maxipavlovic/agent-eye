@@ -9,14 +9,14 @@ import { Conversation } from './Conversation';
 import { openForget } from './Forget';
 import { Hl, HlWords, hlPattern } from './highlight';
 import { ideaForm } from './IdeaForm';
-import { MoveMenu, QuickMove } from './Move';
+import { keyHelp } from './KeyHelp';
+import { hideSession, Keyed, MoveMenu, QuickMove } from './Move';
 import { Next } from './Card';
 import { LeftBehind } from './Loose';
-import { ContinueTonight, NightRunSection, TonightIdea } from './Night';
-import { RemindPanel } from './Remind';
+import { ContinueTonight, NightRunSection, TonightButton, TonightIdea, tonightOpen } from './Night';
+import { RemindPanel, RemindRow } from './Remind';
 import { AgentTag, OriginMark, RemoteMark, Sigil } from './pieces';
 import { Kids, Outputs, Running, Sec, TokenSec, Topics, Where } from './Sections';
-import { costText, tokensText } from './usageText';
 import type { Walk } from './walk';
 
 /** The torn-edge outline of the resume receipt. */
@@ -76,11 +76,13 @@ function Receipt({ d }: { d: CardDetail }) {
 function Actions({ d, store }: { d: CardDetail; store: Store }) {
   return (
     <div class="acts end">
-      {d.resumable && <button class="btn big" onClick={() => void store.resume(d.id)}>RESUME</button>}
-      {d.resumable && d.resume_cmd && <button class="btn" title="Resume as a new session branched from this one" onClick={() => void store.resume(d.id, true)}>FORK</button>}
-      {d.resume_cmd && <button class="btn" onClick={() => copy(d.resume_cmd!, store)}>COPY</button>}
-      {d.kind !== 'idea' && <a class="btn" href={`/api/sessions/${encodeURIComponent(d.id)}/export?format=html`} download title="Save this session as one readable page; secrets are masked">EXPORT</a>}
-      {d.kind !== 'idea' && <button class="btn ghost" aria-keyshortcuts="X" title="Remove this session from eye, and optionally from its agent (X)" onClick={() => openForget(d)}>FORGET…</button>}
+      {d.resumable && <button class="btn big" aria-keyshortcuts="R" title="Resume (R)" onClick={() => void store.resume(d.id)}>RESUME</button>}
+      {d.resumable && d.resume_cmd && <button class="btn" aria-keyshortcuts="F" title="Resume as a new session branched from this one (F)" onClick={() => void store.resume(d.id, true)}><Keyed label="FORK" k="f" /></button>}
+      {d.resume_cmd && <button class="btn" aria-keyshortcuts="C" title="Copy the resume command (C)" onClick={() => copy(d.resume_cmd!, store)}><Keyed label="COPY" k="c" /></button>}
+      {d.kind !== 'idea' && <a class="btn" aria-keyshortcuts="E" href={`/api/sessions/${encodeURIComponent(d.id)}/export?format=html`} download title="Save this session as one readable page; secrets are masked (E)"><Keyed label="EXPORT" k="e" /></a>}
+      <TonightButton d={d} store={store} />
+      {d.kind !== 'idea' && <button class="btn ghost" aria-keyshortcuts="H" title="Hide this session from the board (H)" onClick={() => hideSession(store, d.id)}><Keyed label="HIDE" k="h" /></button>}
+      {d.kind !== 'idea' && <button class="btn ghost" data-key="x" aria-keyshortcuts="X" title="Remove this session from eye, and optionally from its agent (X)" onClick={() => openForget(d)}>FORGET…</button>}
       {d.kind !== 'idea' ? <MoveMenu d={d} store={store} /> : <button class="btn ghost" onClick={() => { void store.move(d.id, 'archive').then(() => store.close()); }}>ARCHIVE</button>}
     </div>
   );
@@ -92,6 +94,8 @@ export function Detail({ store, walk }: { store: Store; walk: Walk }) {
   const id = store.selected.value!;
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => { ref.current?.scrollTo(0, 0); }, [id]);
+  // a CONTINUE TONIGHT form open for this card closes with it
+  useEffect(() => () => { if (tonightOpen.peek() === id) tonightOpen.value = null; }, [id]);
   if (!d) {
     return <div class="page ld" ref={ref}><button class="x" onClick={() => store.close()}>ESC</button><p class="state">Loading…<i class="dots" /></p></div>;
   }
@@ -108,6 +112,7 @@ export function Detail({ store, walk }: { store: Store; walk: Walk }) {
     <HlWords.Provider value={re}>
       <div class="page" ref={ref}>
         <button class="x" onClick={() => store.close()} aria-label="Close (Esc)">ESC ✕</button>
+        <button class="x qk" onClick={() => { keyHelp.value = true; }} aria-label="Keyboard shortcuts (?)" title="Keyboard shortcuts (?)">?</button>
         <WalkNav walk={walk} />
         <header class="dh">
           <Sigil id={d.id} big />
@@ -126,6 +131,7 @@ export function Detail({ store, walk }: { store: Store; walk: Walk }) {
           </div>
         </header>
         {session && <QuickMove d={d} store={store} />}
+        <RemindRow c={d} store={store} />
         {snip && <p class="match"><b>MATCH</b><span>{snippetParts(snip).map((p, j) => (p.hit ? <mark key={j}>{p.text}</mark> : p.text))}</span></p>}
         {session && d.state && <p class="lead"><Hl s={d.state} /></p>}
         <Next c={d} hot={need} />
@@ -145,16 +151,10 @@ export function Detail({ store, walk }: { store: Store; walk: Walk }) {
         {d.first_prompt && <Sec t="FIRST PROMPT"><blockquote class="prompt first"><Hl s={d.first_prompt} /></blockquote></Sec>}
         {session && <Conversation store={store} id={d.id} agent={d.agent_name} fallback={prompts} />}
         {d.tokens && <TokenSec key={d.id} t={d.tokens} />}
-        {d.usage && d.usage.total > 0 && (
-          <Sec t="COST">
-            <p class="ucost"><b>{costText(d.usage)}</b> <span>{tokensText(d.usage)}</span></p>
-            <p class="umeta">{d.usage.estimate}</p>
-          </Sec>
-        )}
         <Where d={d} />
-        <ContinueTonight d={d} store={store} />
         <RemindPanel c={d} store={store} />
         <Receipt d={d} />
+        <ContinueTonight d={d} store={store} />
         <Actions d={d} store={store} />
       </div>
     </HlWords.Provider>
