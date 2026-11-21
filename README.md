@@ -74,7 +74,7 @@ Works with Claude Code, Codex CLI, Antigravity CLI (`agy`) and OpenCode. Unoffic
 
 ## Docs
 
-[Site](https://maxipavlovic.github.io/agent-eye/) · [Terminal](docs/terminal.md) · [Config](docs/config.md) · [Usage](docs/usage.md) · [Night shift](docs/night.md) · [Backups](docs/backups.md) · [Agents](docs/agents.md) · [API](docs/api.md) · [Changelog](CHANGELOG.md)
+[Site](https://maxipavlovic.github.io/agent-eye/) · [Terminal](docs/terminal.md) · [Config](docs/config.md) · [Usage](docs/usage.md) · [Night shift](docs/night.md) · [Backups](docs/backups.md) · [Agents](docs/agents.md) · [API](docs/api.md) · [Testing](docs/testing.md) · [Changelog](CHANGELOG.md)
 
 ## License
 
