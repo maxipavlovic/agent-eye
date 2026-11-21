@@ -243,6 +243,8 @@ fn a_pack_moves_everything_to_an_empty_home_with_another_path() {
         );
     }
     drop(db);
+    // even a fresh home keeps a snapshot of what it had (an empty database) before the import
+    assert!(b.ok(&["backup", "ls"]).contains("pre-import"));
     // the board's token never travels
     assert!(!b.eye_home().join("board.token").exists());
 }

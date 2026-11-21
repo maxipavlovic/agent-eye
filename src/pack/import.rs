@@ -145,6 +145,27 @@ fn in_project_dir(path: &str, old_pd: Option<&str>, remap: &Remap) -> String {
     path.to_string()
 }
 
+/// Where a session's archive copy (an absolute path on the other machine) is on this one. The
+/// pack's eye home is not always the folder the path says (`EYE_HOME`, or the `~/.claude-eye` of
+/// before the rename), so the part after `…/archive/` is taken and put under this machine's own.
+fn archive_path_here(path: &str, m: &Manifest, root: &Path, remap: &Remap) -> Option<String> {
+    let roots = [
+        m.eye_home.clone(),
+        format!("{}/.agent-eye", m.home),
+        format!("{}/.claude-eye", m.home),
+    ];
+    roots.iter().find_map(|r| {
+        let rel = path.strip_prefix(&format!("{}/archive/", r.trim_end_matches('/')))?;
+        let rel = archive_rel(&format!("archive/{rel}"), remap)?;
+        Some(
+            root.join("archive")
+                .join(rel)
+                .to_string_lossy()
+                .into_owned(),
+        )
+    })
+}
+
 /// Rewrite the paths of the staged database for this machine, and say where each session's copy
 /// of the transcript is and whether the agent still has the transcript.
 fn prepare_db(db: &Path, remap: &Remap, m: &Manifest, root: &Path) -> Result<()> {
@@ -173,7 +194,10 @@ fn prepare_db(db: &Path, remap: &Remap, m: &Manifest, root: &Path) -> Result<()>
                         4 => remap.project_dir(v),
                         // the agent's folder for the project is named after the path: so is the
                         // folder the transcript and its copy sit in
-                        2 | 3 => in_project_dir(&remap.path(v), old_pd.as_deref(), remap),
+                        2 => in_project_dir(&remap.path(v), old_pd.as_deref(), remap),
+                        3 => archive_path_here(v, m, root, remap).unwrap_or_else(|| {
+                            in_project_dir(&remap.path(v), old_pd.as_deref(), remap)
+                        }),
                         _ => remap.path(v),
                     })
                 })
@@ -407,7 +431,8 @@ pub fn apply(o: &Opts, cfg: &Config, plan: Plan) -> Result<Done> {
         files_copied += 1;
     }
     if plan.fresh {
-        // `replace_with` moves the file; keep the scratch folder's copy out of its clean-up
+        // an empty database is made first, so the snapshot before the import exists
+        drop(Db::open(&paths.db_path())?);
         let applied = backup::replace_with(o, cfg, &plan.staged_db, &Reason::PreImport)?;
         return Ok(Done {
             applied,
@@ -567,4 +592,80 @@ fn merge(local: &Connection, staged: &Path, take: &[&String]) -> Result<usize> {
     })();
     let _ = local.execute("DETACH DATABASE pk", []);
     r
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::pack::{Counts, Live};
+    use std::collections::BTreeMap;
+
+    fn manifest() -> Manifest {
+        Manifest {
+            format: 1,
+            eye_version: "0".into(),
+            schema: 1,
+            created_at: 0,
+            host: "h".into(),
+            home: "/Users/max".into(),
+            eye_home: "/tmp/elsewhere/eye".into(),
+            user: "max".into(),
+            counts: Counts::default(),
+            live: Vec::<Live>::new(),
+            files: BTreeMap::new(),
+        }
+    }
+
+    #[test]
+    fn archive_files_land_in_this_archive_with_the_project_folder_renamed() {
+        let r = Remap::new(
+            "/Users/max",
+            "/home/max",
+            "/tmp/elsewhere/eye",
+            "/home/max/.agent-eye",
+        );
+        let p = |n: &str| archive_rel(n, &r).unwrap().to_string_lossy().into_owned();
+        assert_eq!(
+            p("archive/-Users-max-code/a.jsonl.zst"),
+            "-home-max-code/a.jsonl.zst"
+        );
+        assert_eq!(p("archive/@codex/2026/11/a.zst"), "@codex/2026/11/a.zst");
+        assert_eq!(
+            p("live/claude/-Users-max-x/a.jsonl.zst"),
+            "-home-max-x/a.jsonl.zst"
+        );
+        assert_eq!(p("live/codex/2026-11/a.zst"), "@codex/2026-11/a.zst");
+        assert!(archive_rel("eye.db", &r).is_none());
+        // a stored archive path is found whichever eye home it names, the old `.claude-eye` too
+        let root = Path::new("/home/max/.agent-eye");
+        for old in [
+            "/tmp/elsewhere/eye/archive/-Users-max-code/a.jsonl.zst",
+            "/Users/max/.agent-eye/archive/-Users-max-code/a.jsonl.zst",
+            "/Users/max/.claude-eye/archive/-Users-max-code/a.jsonl.zst",
+        ] {
+            assert_eq!(
+                archive_path_here(old, &manifest(), root, &r).as_deref(),
+                Some("/home/max/.agent-eye/archive/-home-max-code/a.jsonl.zst"),
+                "{old}"
+            );
+        }
+        assert_eq!(
+            archive_path_here("/elsewhere/a.zst", &manifest(), root, &r),
+            None
+        );
+    }
+
+    #[test]
+    fn a_transcript_s_folder_is_renamed_with_the_project() {
+        let r = Remap::new("/Users/max", "/home/max", "", "");
+        assert_eq!(
+            in_project_dir(
+                "/home/max/.claude/projects/-Users-max-code/a.jsonl",
+                Some("-Users-max-code"),
+                &r
+            ),
+            "/home/max/.claude/projects/-home-max-code/a.jsonl"
+        );
+        assert_eq!(in_project_dir("/x/y/a.jsonl", None, &r), "/x/y/a.jsonl");
+    }
 }
