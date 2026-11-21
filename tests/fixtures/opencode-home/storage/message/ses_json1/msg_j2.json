@@ -1,0 +1,1 @@
+{"id":"msg_j2","sessionID":"ses_json1","role":"assistant","time":{"created":1793000010000,"completed":1793000020000},"parentID":"msg_j1","modelID":"wombat-1","providerID":"acme","mode":"build","agent":"build","path":{"cwd":"/work/legacy app","root":"/work/legacy app"},"cost":0,"tokens":{"input":120,"output":30,"reasoning":10,"cache":{"read":400,"write":0}}}
