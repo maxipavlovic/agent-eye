@@ -710,3 +710,102 @@ fn a_command_that_just_started_and_listens_on_no_port_is_not_a_leftover_yet() {
         .line;
     assert!(line.ends_with("started just now"), "{line}");
 }
+
+fn real_git(dir: &Path, args: &[&str]) -> bool {
+    std::process::Command::new("git")
+        .args(["-c", "user.email=t@example.com", "-c", "user.name=t"])
+        .args(args)
+        .current_dir(dir)
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .output()
+        .is_ok_and(|o| o.status.success())
+}
+
+/// Real git in temp folders: a worktree in a scratchpad is found, git itself refuses to remove it
+/// while it has changes, and removes it once it has none. A worktree whose folder was deleted is
+/// found as prunable and cleared.
+#[test]
+fn real_git_finds_and_removes_a_scratch_worktree_and_refuses_one_with_changes() {
+    if !real_git(Path::new("/"), &["--version"]) {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let repo = tmp.path().join("work/repo");
+    let sid = "99999999-0000-4000-8000-000000000009";
+    let wt = tmp.path().join("claude-501/proj").join(sid).join("wt");
+    let gone = tmp.path().join("elsewhere/gone");
+    std::fs::create_dir_all(&repo).unwrap();
+    assert!(real_git(&repo, &["init", "-q", "-b", "main"]));
+    std::fs::write(repo.join("a.txt"), "1").unwrap();
+    assert!(real_git(&repo, &["add", "a.txt"]));
+    assert!(real_git(&repo, &["commit", "-q", "-m", "first"]));
+    std::fs::create_dir_all(wt.parent().unwrap()).unwrap();
+    assert!(real_git(
+        &repo,
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "scratch",
+            &wt.display().to_string()
+        ]
+    ));
+    std::fs::create_dir_all(gone.parent().unwrap()).unwrap();
+    assert!(real_git(
+        &repo,
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "other",
+            &gone.display().to_string()
+        ]
+    ));
+    std::fs::remove_dir_all(&gone).unwrap();
+    std::fs::write(wt.join("a.txt"), "changed").unwrap();
+
+    let sys = System::with_roots(vec![tmp.path().join("claude-501")]);
+    let r = repo.display().to_string();
+    let inp = input(
+        vec![Sess {
+            id: sid.into(),
+            cwd: Some(r.clone()),
+            repo_root: Some(r),
+            last: NOW,
+            live: false,
+        }],
+        &[],
+    );
+    let found: Vec<LooseEnd> = find(&inp, &sys, NOW)
+        .into_iter()
+        .filter(|f| f.kind == Kind::Worktree)
+        .collect();
+    assert_eq!(found.len(), 2, "{found:?}");
+    let scratch = found
+        .iter()
+        .find(|f| f.detail.ends_with("scratchpad"))
+        .unwrap();
+    let missing = found
+        .iter()
+        .find(|f| f.detail.ends_with("folder gone"))
+        .unwrap();
+    let (_t, db) = open_db();
+    replace(&db, &found, NOW).unwrap();
+    // git refuses, and says so; the folder and the item stay
+    let e = remove(&db, &sys, &scratch.key).unwrap_err().to_string();
+    assert!(e.contains("contains modified or untracked files"), "{e}");
+    assert!(wt.exists() && get(&db, &scratch.key).unwrap().is_some());
+    // once nothing is modified, it goes (without --force)
+    assert!(real_git(&wt, &["checkout", "--", "a.txt"]));
+    remove(&db, &sys, &scratch.key).unwrap();
+    assert!(!wt.exists() && get(&db, &scratch.key).unwrap().is_none());
+    // the record of a folder that is gone is cleared
+    remove(&db, &sys, &missing.key).unwrap();
+    assert!(get(&db, &missing.key).unwrap().is_none());
+    let left = System::new()
+        .git(&repo, &["worktree", "list", "--porcelain"])
+        .unwrap();
+    assert_eq!(left.matches("worktree ").count(), 1, "{left}");
+}
