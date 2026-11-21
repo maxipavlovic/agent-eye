@@ -49,4 +49,4 @@ docker run --rm --init --ipc=host --name eye-e2e-run --user "$user" \
   -v "$PWD:/work" -w /work/e2e \
   -e HOME=/tmp -e CI="${CI:-}" \
   "$pw_image" \
-  bash -c 'npm ci --ignore-scripts --no-audit --no-fund >/dev/null && exec npx playwright test "$@"' _ "${args[@]}"
+  bash -c 'npm ci --ignore-scripts --no-audit --no-fund >/dev/null && exec npx playwright test "$@"' _ ${args[@]+"${args[@]}"}

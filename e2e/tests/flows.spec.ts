@@ -63,7 +63,7 @@ test.describe('panel', () => {
     await expect(board.getByRole('heading', { level: 2, name: /Retry failed webhook/ })).toBeVisible();
     await board.keyboard.press('d');
     await expect(done(board)).toHaveAccessibleName('Done, 5 cards. Unfold');
-    expect((await eye.api(`/api/cards/${sid(3)}`)).column).toBe('done');
+    await expect.poll(async () => (await eye.api(`/api/cards/${sid(3)}`)).column).toBe('done');
   });
 
   // U1 adds these panel keys.

@@ -33,20 +33,26 @@ const VIEWS: Record<string, (p: Page) => Promise<void>> = {
   },
 };
 
+// The page is made at its width and scheme (not resized afterwards), so nothing re-lays out under
+// the screenshot.
 for (const scheme of SCHEMES) {
   for (const width of WIDTHS) {
-    for (const [name, open] of Object.entries(VIEWS)) {
-      test(`${name} ${scheme} ${width}`, async ({ board }) => {
-        await board.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
-        await board.setViewportSize({ width, height: 900 });
-        await open(board);
-        await board.evaluate(() => document.fonts.ready);
-        // the connection chip and the header eye follow the live connection and the pointer
-        await board.mouse.move(width - 5, 895);
-        await expect(board).toHaveScreenshot(`${name}-${scheme}-${width}.png`, {
-          mask: [board.locator('.brand'), board.locator('.conn')],
+    test.describe(`${scheme} ${width}`, () => {
+      test.use({ colorScheme: scheme, viewport: { width, height: 900 } });
+      for (const [name, open] of Object.entries(VIEWS)) {
+        test(name, async ({ board }) => {
+          await open(board);
+          await board.waitForLoadState('networkidle');
+          await board.evaluate(() => document.fonts.ready);
+          await board.evaluate(() => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))));
+          // the pointer rests in a corner, away from any hover state
+          await board.mouse.move(width - 5, 895);
+          // the connection chip and the header eye follow the live connection and the pointer
+          await expect(board).toHaveScreenshot(`${name}-${scheme}-${width}.png`, {
+            mask: [board.locator('.brand'), board.locator('.conn')],
+          });
         });
-      });
-    }
+      }
+    });
   }
 }
