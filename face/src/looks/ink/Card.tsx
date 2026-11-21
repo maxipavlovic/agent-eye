@@ -8,7 +8,7 @@ import { ARROW, BANG, CLOCK, INK_CC } from './art';
 import { KIND, type BoardCtx, type Kind } from './columns';
 import { folderMissing, startButton } from './folder';
 import { Hl } from './highlight';
-import { AgentTag, RemoteMark, Sigil, Tok } from './pieces';
+import { AgentTag, LooseMark, RemoteMark, Sigil, Tok } from './pieces';
 
 /** The open session is stopped until you answer in it: a due reminder or a prompt you owe (the card's border pulses, the chip blinks in the panel). */
 export function asksYou(c: Card): boolean {
@@ -112,6 +112,7 @@ export function CardView({ c, store, i, kind, tag }: { c: Card; store: Store; i:
           {ptag}
           {agent}
           {c.remote_url && <RemoteMark />}
+          <LooseMark n={c.loose} />
           {kind === 'run' && <span class="live"><i />LIVE</span>}
         </span>
         <span class="mr"><Tok t={c.tokens} /><span class="age">{age}</span></span>

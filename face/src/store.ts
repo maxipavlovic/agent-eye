@@ -4,7 +4,7 @@ import { pushPref } from './prefs';
 import { signal, computed, effect, batch, type Signal, type ReadonlySignal } from '@preact/signals';
 import type {
   Agent, ArchivePage, Board, Card, CardDetail, ColumnId, Connection, ConversationPage, IdeaInput, MoveTarget,
-  FolderCheck, RemindInput, RemindSettings, ResumePlan, SearchHit, Source, StartPlan,
+  FolderCheck, LooseAct, RemindInput, RemindSettings, ResumePlan, SearchHit, Source, StartPlan,
 } from './api/types';
 
 export type ThemePref = 'auto' | 'light' | 'dark';
@@ -62,6 +62,10 @@ export interface Store {
   folderCheck(path: string): Promise<FolderCheck>;
   /** Sets (`when`, in the words of `eye remind`) or clears a reminder; true when saved, else a toast says why. */
   remind(id: string, input: RemindInput): Promise<boolean>;
+  /** Stops, removes or ignores one thing a session left behind; the page asked first. True when done, else a toast says why. */
+  looseAct(action: LooseAct, key: string): Promise<boolean>;
+  /** Opens the session with a message that lists what it left behind. */
+  looseSend(id: string): Promise<boolean>;
   /** Reads the desktop notice setting into `notice`; an engine without it leaves `notice` null, quietly. */
   loadNotice(): void;
   /** Turns the desktop notice for every reminder on or off; a toast says why when it cannot. */
@@ -327,6 +331,30 @@ export function createStore(src: Source, { defaultTheme = 'auto' }: { defaultThe
     }
   }
 
+  async function looseAct(action: LooseAct, key: string) {
+    try {
+      const r = await src.looseAct(action, key);
+      toast(r.note || (action === 'ignore' ? 'Ignored' : 'Done'));
+      await refresh();
+      return true;
+    } catch (e) {
+      fail(e);
+      await refresh();
+      return false;
+    }
+  }
+
+  async function looseSend(id: string) {
+    try {
+      const plan = await src.looseSend(id, false);
+      toast(await planNote(plan, 'Opening'));
+      return true;
+    } catch (e) {
+      fail(e);
+      return false;
+    }
+  }
+
   function loadNotice() {
     src.remindSettings().then((s) => { notice.value = s; }, () => { notice.value = null; });
   }
@@ -351,7 +379,7 @@ export function createStore(src: Source, { defaultTheme = 'auto' }: { defaultThe
   return {
     source: src.name,
     board, selected, detail, query, results, searching, connection, themePref, accent, theme, toasts, agents, notice, needsYou, error,
-    open, close, search, move, setHidden, resume, conversation, addIdea, editIdea, startIdea, folderCheck: (path) => src.folderCheck(path), remind, loadNotice, setNotice,
+    open, close, search, move, setHidden, resume, conversation, addIdea, editIdea, startIdea, folderCheck: (path) => src.folderCheck(path), remind, looseAct, looseSend, loadNotice, setNotice,
     archive: (offset, limit = 50) => src.archive(offset, limit),
     setTheme, setAccent, toast, dismissToast, refresh,
   };

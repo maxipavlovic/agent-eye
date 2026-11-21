@@ -1,5 +1,5 @@
 import type {
-  Agent, ArchivePage, Board, Card, CardDetail, ColumnId, ConversationPage, FolderCheck, Idea, Message, SearchHit, Source, StartPlan, Tokens,
+  Agent, ArchivePage, Board, Card, CardDetail, ColumnId, ConversationPage, FolderCheck, Idea, LooseEnd, Message, SearchHit, Source, StartPlan, Tokens,
 } from '../api/types';
 
 // fixtures/sample/ is synthetic: every build, test, screenshot and the site use it. fixtures/real/
@@ -139,6 +139,30 @@ function demoStates(board: Board, details: Record<string, CardDetail>, ideas: Id
   }
 }
 
+/** What two demo sessions left behind: two servers and a commit on no remote, and a scratch worktree. */
+function demoLoose(board: Board): Record<string, LooseEnd[]> {
+  const cards = board.columns.flatMap((c) => c.cards).filter((c) => c.kind !== 'idea');
+  const [a, b] = [cards.find((c) => c.column === 'waiting') ?? cards[0], cards.find((c) => c.column === 'running') ?? cards[1]];
+  const hour = 3_600_000;
+  const item = (c: Card, o: Partial<LooseEnd> & Pick<LooseEnd, 'key' | 'kind' | 'line' | 'what' | 'action'>): LooseEnd => ({
+    session_id: c.id, detail: o.what, since_ms: Date.now() - 20 * hour, confirm: null, command: null, ...o,
+  });
+  const out: Record<string, LooseEnd[]> = {};
+  if (a) {
+    out[a.id] = [
+      item(a, { key: 'proc:38090:1', kind: 'process', action: 'stop', what: 'node vite (pid 38090, port 4321)', line: 'node vite (pid 38090) is still serving port 4321, started 6d ago', confirm: 'Stop node vite (pid 38090, port 4321)?' }),
+      item(a, { key: 'proc:38112:1', kind: 'process', action: 'stop', what: 'node api (pid 38112, port 4350)', line: 'node api (pid 38112) is still serving port 4350, started 6d ago', confirm: 'Stop node api (pid 38112, port 4350)?' }),
+      item(a, { key: 'unpushed:/Users/you/code/web:abc1234', kind: 'unpushed', action: 'push', what: '3 commits in web', line: '3 commits in web are on no remote', command: "cd '/Users/you/code/web' && git push --all" }),
+    ];
+  }
+  if (b) {
+    out[b.id] = [
+      item(b, { key: 'worktree:/private/tmp/claude-501/p/s/wt', kind: 'worktree', action: 'remove', what: '/private/tmp/claude-501/p/s/wt', line: 'worktree /private/tmp/claude-501/p/s/wt of web sits in a scratchpad', confirm: 'Remove worktree /private/tmp/claude-501/p/s/wt?' }),
+    ];
+  }
+  return out;
+}
+
 /** A believable conversation from the stored prompts, long enough to page through. */
 function conversationOf(d: CardDetail): Message[] {
   const base = d.last_assistant_text ? 1 : 0;
@@ -187,6 +211,8 @@ export function fixtureSource(demo = false): Source {
     shiftWorked(details);
     if (demo) demoStates(board, details, ideas.ideas);
   }
+  const left = demo && files === sample ? demoLoose(board) : {};
+  for (const c of [...board.columns.flatMap((x) => x.cards), ...Object.values(details)]) if (left[c.id]) c.loose = left[c.id]!.length;
   /** What the real engine would say about a folder: the ones on the board exist, a new one under `~` can be made. */
   const exists = (p: string) => p === '~' || allCards().some((c) => c.folder === p && c.folder_state !== 'missing');
   const folderCheck = (path: string): FolderCheck => {
@@ -220,7 +246,8 @@ export function fixtureSource(demo = false): Source {
   const detailOf = (c: Card): CardDetail => {
     const d: CardDetail = details[c.id] ? { ...details[c.id]!, column: c.column, manual: c.manual } : { ...c, prompts: [], first_prompt: null, last_assistant_text: null, resume_mode: 'iterm' };
     const i = ideaOf(c);
-    return i ? { ...d, notes: i.notes || null, prompt: i.prompt ?? null } : d;
+    const withLoose = left[c.id] ? { ...d, loose: left[c.id]!.length, loose_ends: left[c.id] } : d;
+    return i ? { ...withLoose, notes: i.notes || null, prompt: i.prompt ?? null } : withLoose;
   };
 
   return {
@@ -366,6 +393,18 @@ export function fixtureSource(demo = false): Source {
         return Promise.reject(e);
       }
     },
+    looseAct: (action, key) => {
+      const sid = Object.keys(left).find((id) => left[id]!.some((x) => x.key === key));
+      if (!sid) return Promise.reject(new Error(`no such loose end: ${key}`));
+      left[sid] = left[sid]!.filter((x) => x.key !== key);
+      for (const x of allCards().filter((c) => c.id === sid)) x.loose = left[sid]!.length;
+      changed();
+      return delay({ ok: true, note: action === 'ignore' ? 'ignored' : action === 'stop' ? 'sent SIGTERM (fixture)' : 'removed (fixture)' });
+    },
+    looseSend: (session, _dry) => delay({
+      dry_run: true, mode: 'iterm', command: `claude --resume ${session} 'Before you call this finished, please deal with what this session left behind'`,
+      note: 'Fixture: would open the session with the list',
+    }),
     remindSettings: () => delay({ ...notice }),
     setRemindSettings: (input) => {
       notice.notify = input.notify;

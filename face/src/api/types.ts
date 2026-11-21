@@ -134,6 +134,8 @@ export interface Card {
   remind_note?: string | null;
   /** The reminder's time has come: the card is in Needs you (an idea stays an idea card). */
   remind_due?: boolean;
+  /** What the session left behind (servers still running, commits on no remote, ...), not counting what was ignored. */
+  loose?: number;
   /** Idea cards with a folder: what the folder is now. Older engines leave all three out. */
   folder_state?: FolderState;
   /** Idea cards: a missing folder that Start may create. */
@@ -175,7 +177,31 @@ export interface Worked {
   more_days: number;
 }
 
+/** One thing a session left behind. */
+export interface LooseEnd {
+  /** Stable across scans; what the actions send. */
+  key: string;
+  session_id: string;
+  kind: 'process' | 'container' | 'worktree' | 'unpushed' | 'uncommitted';
+  /** One plain sentence. */
+  line: string;
+  /** What it is, in a few words: the confirm question names it. */
+  what: string;
+  detail: string;
+  since_ms: number;
+  /** What eye can do: stop, remove, or (git work it never touches) copy a command. */
+  action: 'stop' | 'remove' | 'push' | 'commit';
+  /** The question to ask before the action (stop and remove only). */
+  confirm: string | null;
+  /** The git command to copy (push and commit only); eye never runs it. */
+  command: string | null;
+}
+
+export type LooseAct = 'stop' | 'remove' | 'ignore';
+
 export interface CardDetail extends Card {
+  /** What the session left behind, ignored items left out. */
+  loose_ends?: LooseEnd[];
   /** Up to the last 10 prompts, oldest first. */
   prompts: string[];
   first_prompt: string | null;
@@ -325,6 +351,10 @@ export interface Source {
   folderCheck(path: string): Promise<FolderCheck>;
   /** Sets or clears a "check on this" reminder on a session or an idea card (POST /api/cards/:id/remind). */
   remind(id: string, input: RemindInput): Promise<Card>;
+  /** Stops, removes or ignores one thing a session left behind (POST /api/loose/<action>); the engine refuses what no longer matches. */
+  looseAct(action: LooseAct, key: string): Promise<{ ok: boolean; note?: string }>;
+  /** Resumes the session with a first message that lists what it left (POST /api/loose/send). */
+  looseSend(session: string, dryRun: boolean): Promise<ResumePlan>;
   /** Whether a due reminder shows a desktop notice (GET /api/remind/settings); an older engine answers 404. */
   remindSettings(): Promise<RemindSettings>;
   /** Turns the desktop notice on or off; it takes effect at once (POST /api/remind/settings). */

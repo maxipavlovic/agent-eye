@@ -10,6 +10,7 @@ import { Hl, HlWords, hlPattern } from './highlight';
 import { ideaForm } from './IdeaForm';
 import { MoveMenu, QuickMove } from './Move';
 import { Next } from './Card';
+import { LeftBehind } from './Loose';
 import { RemindPanel } from './Remind';
 import { AgentTag, RemoteMark, Sigil } from './pieces';
 import { Kids, Outputs, Running, Sec, TokenSec, Topics, Where } from './Sections';
@@ -122,6 +123,7 @@ export function Detail({ store, walk }: { store: Store; walk: Walk }) {
         {session && d.state && <p class="lead"><Hl s={d.state} /></p>}
         <Next c={d} hot={need} />
         <Running d={d} />
+        <LeftBehind key={d.id} d={d} store={store} />
         {d.kind === 'idea' && d.idea_id != null && <IdeaBody d={d} store={store} />}
         {d.recap && <Sec t="RECAP"><p class="recap"><Hl s={d.recap} /></p></Sec>}
         {d.idea?.notes && <Sec t="IDEA NOTES"><p class="notes"><Hl s={d.idea.notes} /></p></Sec>}

@@ -37,6 +37,8 @@ function source(over: Partial<Source> = {}): Source {
     startIdea: async () => ({ dry_run: false, mode: 'iterm', command: 'x', session_id: null, job: null }),
     folderCheck: async () => ({ state: 'ok', creatable: false, note: null }),
     remind: async (id) => card(id, 'paused'),
+    looseAct: async () => ({ ok: true, note: 'sent SIGTERM to x' }),
+    looseSend: async () => ({ dry_run: false, mode: 'copy', command: 'x' }),
     remindSettings: async () => ({ notify: false, available: true }),
     setRemindSettings: async ({ notify }) => ({ notify, available: true }),
     subscribe: () => () => {},
@@ -407,5 +409,39 @@ describe('remind', () => {
     await tick();
     await expect(store.remind('a', { when: 'soon' })).resolves.toBe(false);
     expect(store.toasts.value.at(-1)).toMatchObject({ tone: 'error', text: "cannot read 'soon'" });
+  });
+});
+
+describe('loose ends', () => {
+  it('sends the action and the key, says what was done, and reloads the board', async () => {
+    let boards = 0;
+    const looseAct = vi.fn(async () => ({ ok: true, note: 'sent SIGTERM to node (pid 5)' }));
+    const store = createStore(source({ board: async () => { boards++; return boardOf({ waiting: ['a'] }); }, looseAct }));
+    await tick();
+    await expect(store.looseAct('stop', 'proc:5:1')).resolves.toBe(true);
+    expect(looseAct).toHaveBeenCalledWith('stop', 'proc:5:1');
+    expect(boards).toBe(2);
+    expect(store.toasts.value.at(-1)!.text).toBe('sent SIGTERM to node (pid 5)');
+  });
+
+  it('shows the engine\'s refusal as it is, and reloads so the list is true again', async () => {
+    let boards = 0;
+    const store = createStore(source({
+      board: async () => { boards++; return boardOf({ waiting: ['a'] }); },
+      looseAct: async () => { throw new Error('fatal: contains modified or untracked files, use --force to delete it'); },
+    }));
+    await tick();
+    await expect(store.looseAct('remove', 'worktree:/w')).resolves.toBe(false);
+    expect(store.toasts.value.at(-1)).toMatchObject({ tone: 'error', text: 'fatal: contains modified or untracked files, use --force to delete it' });
+    expect(boards).toBe(2);
+  });
+
+  it('send back runs the plan for real, not a dry run', async () => {
+    const looseSend = vi.fn(async () => ({ dry_run: false, mode: 'iterm', command: 'x', note: 'opened in iTerm' }));
+    const store = createStore(source({ looseSend }));
+    await tick();
+    await expect(store.looseSend('a')).resolves.toBe(true);
+    expect(looseSend).toHaveBeenCalledWith('a', false);
+    expect(store.toasts.value.at(-1)!.text).toBe('opened in iTerm');
   });
 });

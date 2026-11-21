@@ -57,6 +57,8 @@ export function liveSource(): Source {
       call<StartPlan>(`/api/ideas/${ideaId}/start`, { method: 'POST', body: createFolder ? { background, dry_run: dryRun, create_folder: true } : { background, dry_run: dryRun } }),
     folderCheck: (path) => call<FolderCheck>(`/api/folder?path=${enc(path)}`),
     remind: (id, input: RemindInput) => call<Card>(`/api/cards/${enc(id)}/remind`, { method: 'POST', body: input }),
+    looseAct: (action, key) => call<{ ok: boolean; note?: string }>(`/api/loose/${action}`, { method: 'POST', body: { key } }),
+    looseSend: (session, dryRun) => call<ResumePlan>('/api/loose/send', { method: 'POST', body: { session, dry_run: dryRun } }),
     remindSettings: () => call<RemindSettings>('/api/remind/settings'),
     setRemindSettings: (input) => call<RemindSettings>('/api/remind/settings', { method: 'POST', body: input }),
     subscribe(onChange, onState) {
