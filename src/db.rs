@@ -1,11 +1,11 @@
 use crate::model::{Output, Session, Stamp, Stream};
 use crate::util::trim_front_bytes;
 use anyhow::{Context, Result};
-use rusqlite::{params, Connection, OptionalExtension, Row};
+use rusqlite::{params, Connection, OptionalExtension, Row, TransactionBehavior};
 use std::path::Path;
 
 /// The schema version this build writes; older databases are migrated on open.
-pub const SCHEMA_VERSION: i64 = 12;
+pub const SCHEMA_VERSION: i64 = 13;
 
 const SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS session(id TEXT PRIMARY KEY, agent TEXT NOT NULL DEFAULT 'claude', project_dir TEXT, cwd TEXT, repo_root TEXT, title TEXT, title_source TEXT,
@@ -38,7 +38,9 @@ CREATE TABLE IF NOT EXISTS worked_state(session_id TEXT PRIMARY KEY, last_ts INT
 CREATE INDEX IF NOT EXISTS idx_stream_session ON stream(session_id);
 CREATE INDEX IF NOT EXISTS idx_output_session ON output(session_id);
 CREATE INDEX IF NOT EXISTS idx_event_session ON event(session_id);
-CREATE VIRTUAL TABLE IF NOT EXISTS session_fts USING fts5(session_id UNINDEXED, title, prompts, replies, extra);
+CREATE VIRTUAL TABLE IF NOT EXISTS session_fts USING fts5(session_id UNINDEXED, title, prompts, replies, extra,
+  tokenize='porter unicode61 remove_diacritics 2');
+CREATE VIRTUAL TABLE IF NOT EXISTS session_fts_vocab USING fts5vocab(session_fts, 'row');
 "#;
 
 /// The SQLite database of sessions, streams, outputs, ideas, events and read cursors.
@@ -208,6 +210,10 @@ impl Db {
         // v12: `worked_hour` and `worked_state` (the work timeline) are created with the schema
         // above. Nothing is read again for them: sessions without a timeline are counted by
         // `worked::backfill`, from their timestamps only.
+        // v13: `session_fts` stems words (`porter`), so "tokens" finds "token". An older table is
+        // copied into the new one, row for row; nothing is read from a transcript again. The
+        // `porter` tokenizer is part of SQLite, so 0.2.x still reads the result.
+        self.stem_session_fts()?;
         if cur == 1 || (cur > 0 && cur < 4) {
             // v2 keeps pending tool_use ids and Jira candidates, v4 token counts: re-read every
             // transcript once.
@@ -216,6 +222,43 @@ impl Db {
         if cur < SCHEMA_VERSION {
             self.meta_set("schema_version", &SCHEMA_VERSION.to_string())?;
         }
+        Ok(())
+    }
+
+    /// Move `session_fts` to the stemming tokenizer when it does not use it yet. The check and the
+    /// copy run in one write transaction, so a second process that opened the same old file waits,
+    /// sees the new table and does nothing.
+    fn stem_session_fts(&self) -> Result<()> {
+        let stems = |c: &Connection| -> Result<bool> {
+            let sql: Option<String> = c
+                .query_row(
+                    "SELECT sql FROM sqlite_master WHERE name='session_fts'",
+                    [],
+                    |r| r.get(0),
+                )
+                .optional()?;
+            Ok(sql.is_none_or(|s| s.contains("porter")))
+        };
+        if stems(&self.conn)? {
+            return Ok(());
+        }
+        let tx = rusqlite::Transaction::new_unchecked(&self.conn, TransactionBehavior::Immediate)?;
+        if stems(&tx)? {
+            return Ok(());
+        }
+        tx.execute_batch(
+            "DROP TABLE IF EXISTS session_fts_new;
+             CREATE VIRTUAL TABLE session_fts_new USING fts5(session_id UNINDEXED, title, prompts, replies, extra,
+               tokenize='porter unicode61 remove_diacritics 2');
+             INSERT INTO session_fts_new(rowid, session_id, title, prompts, replies, extra)
+               SELECT rowid, session_id, title, prompts, replies, extra FROM session_fts;
+             DROP TABLE IF EXISTS session_fts_vocab;
+             DROP TABLE session_fts;
+             ALTER TABLE session_fts_new RENAME TO session_fts;
+             CREATE VIRTUAL TABLE session_fts_vocab USING fts5vocab(session_fts, 'row');",
+        )
+        .context("moving session_fts to the stemming tokenizer")?;
+        tx.commit()?;
         Ok(())
     }
 

@@ -324,3 +324,120 @@ fn fts_append_and_cap() {
         .unwrap();
     assert_eq!(n, 1);
 }
+
+/// A schema-12 file: the index has the old tokenizer and rows already in it.
+fn old_index() -> Connection {
+    let conn = Connection::open_in_memory().unwrap();
+    conn.execute(
+        "CREATE TABLE session(id TEXT PRIMARY KEY, title TEXT, recap TEXT, state_line TEXT, next_step TEXT, archived INTEGER NOT NULL DEFAULT 0)",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "CREATE VIRTUAL TABLE session_fts USING fts5(session_id UNINDEXED, title, prompts, replies, extra)",
+        [],
+    )
+    .unwrap();
+    for (n, (id, title)) in [("s1", "Stale tokens"), ("s2", "Billing"), ("s3", "Notes")]
+        .into_iter()
+        .enumerate()
+    {
+        conn.execute("INSERT INTO session(id,title) VALUES(?1,?2)", [id, title])
+            .unwrap();
+        conn.execute(
+            "INSERT INTO session_fts(rowid,session_id,title,prompts,replies,extra) VALUES(?1,?2,?3,'we rebranded it','','')",
+            params![n as i64 + 1, id, title],
+        )
+        .unwrap();
+    }
+    conn.execute("CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT)", [])
+        .unwrap();
+    conn.execute("INSERT INTO meta VALUES('schema_version','12')", [])
+        .unwrap();
+    conn
+}
+
+fn count(db: &Db, q: &str) -> i64 {
+    db.conn
+        .query_row(
+            "SELECT count(*) FROM session_fts WHERE session_fts MATCH ?1",
+            [q],
+            |r| r.get(0),
+        )
+        .unwrap()
+}
+
+#[test]
+fn migration_13_stems_the_index_and_keeps_every_row() {
+    let conn = old_index();
+    // the old tokenizer does not know word forms
+    let n: i64 = conn
+        .query_row(
+            "SELECT count(*) FROM session_fts WHERE session_fts MATCH 'token'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(n, 0);
+    let db = Db::init(conn).unwrap();
+    assert_eq!(
+        db.meta_get("schema_version").unwrap(),
+        Some(SCHEMA_VERSION.to_string())
+    );
+    let rows: Vec<(i64, String, String)> = db
+        .conn
+        .prepare("SELECT rowid, session_id, title FROM session_fts ORDER BY rowid")
+        .unwrap()
+        .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+        .unwrap()
+        .collect::<rusqlite::Result<_>>()
+        .unwrap();
+    assert_eq!(
+        rows,
+        [
+            (1, "s1".into(), "Stale tokens".into()),
+            (2, "s2".into(), "Billing".into()),
+            (3, "s3".into(), "Notes".into())
+        ]
+    );
+    // word forms work, in the title and in the text
+    assert_eq!(count(&db, "token"), 1);
+    assert_eq!(count(&db, "rebranding"), 3);
+    // the word list for typo fixing exists and holds stems
+    let doc: i64 = db
+        .conn
+        .query_row(
+            "SELECT doc FROM session_fts_vocab WHERE term='rebrand'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(doc, 3);
+    // opening it again, or another process opening it, changes nothing
+    db.migrate().unwrap();
+    db.stem_session_fts().unwrap();
+    assert_eq!(count(&db, "token"), 1);
+    // a row written afterwards is stemmed too
+    db.conn
+        .execute(
+            "INSERT INTO session(id,title) VALUES('s4','Tokens again')",
+            [],
+        )
+        .unwrap();
+    fts_write(&db.conn, "s4", "x", "", true, 100, 100).unwrap();
+    assert_eq!(count(&db, "token"), 2);
+}
+
+#[test]
+fn a_new_database_stems_from_the_start() {
+    let db = Db::open_memory().unwrap();
+    let sql: String = db
+        .conn
+        .query_row(
+            "SELECT sql FROM sqlite_master WHERE name='session_fts'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert!(sql.contains("porter"));
+}
