@@ -60,7 +60,7 @@ pub(super) fn parse_unpushed(text: &str) -> Vec<(String, i64, String)> {
         .collect()
 }
 
-/// Modified tracked files out of `git status --porcelain` (untracked `??` are left out).
+/// Modified tracked files out of `git status --porcelain` (untracked `??` are left out, and `-uno` keeps git from walking untracked folders).
 pub(super) fn parse_modified(text: &str) -> Vec<String> {
     text.lines()
         .filter(|l| l.len() > 3 && !l.starts_with("??") && !l.starts_with("!!"))

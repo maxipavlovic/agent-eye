@@ -285,7 +285,7 @@ fn git_world() -> (tempfile::TempDir, Input, Fake) {
         "aaa1111\t1799999000\tnewest\nbbb2222\t1799990000\toldest\n".into(),
     );
     git.insert(
-        format!("{r} status --porcelain"),
+        format!("{r} status --porcelain -uno"),
         " M src/a.rs\nM  src/b.rs\n?? scratch.txt\n".into(),
     );
     let inp = input(
