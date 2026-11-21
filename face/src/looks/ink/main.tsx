@@ -6,5 +6,5 @@ import { Root } from './Root';
 import './ink.css';
 
 keepPrefsLocal();
-const store = createStore(fixtureSource(), { defaultTheme: 'light' });
+const store = createStore(fixtureSource(true), { defaultTheme: 'light' });
 render(<Root store={store} />, document.getElementById('app')!);
