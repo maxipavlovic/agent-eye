@@ -33,6 +33,8 @@ pub struct Outcome {
     pub own: OwnCopy,
     /// The session is out of eye's index (false when removing the agent's copy failed).
     pub forgotten: bool,
+    /// eye's own archive copy was found and removed (false when there was none).
+    pub archive_removed: bool,
 }
 
 #[derive(Debug)]
@@ -79,9 +81,24 @@ pub fn is_open(s: &Session) -> bool {
 
 /// The place of eye's archive copy of a session, when there is one.
 pub fn archive_copy(s: &Session, paths: &Paths, agents: &Agents) -> Option<PathBuf> {
+    archive_copy_in(s, paths, agents, None)
+}
+
+/// As `archive_copy`; `known` (every registered agent, enabled or not) gives the archive layout of
+/// a session whose agent is switched off, when the stored path lies outside this archive (a
+/// session that came in from a pack).
+fn archive_copy_in(
+    s: &Session,
+    paths: &Paths,
+    agents: &Agents,
+    known: Option<&Agents>,
+) -> Option<PathBuf> {
     let archive_root = paths.home.join("archive");
     let mut spots: Vec<PathBuf> = s.archive_path.iter().map(PathBuf::from).collect();
-    if let (Some(a), Some(pd)) = (agents.of_session(s), s.project_dir.as_deref()) {
+    let layout = agents
+        .of_session(s)
+        .or_else(|| known.and_then(|k| k.of_session(s)));
+    if let (Some(a), Some(pd)) = (layout, s.project_dir.as_deref()) {
         spots.push(crate::archive::archive_path(paths, a.as_ref(), pd, &s.id));
     }
     spots.into_iter().find(|p| {
@@ -118,6 +135,7 @@ pub fn forget(
     }
     let snap = backup::take(&db.conn, paths, &cfg.backup, &Reason::Manual)
         .context("making a snapshot before forgetting anything")?;
+    let known = crate::agents::known(cfg);
     let mut outcomes = vec![];
     for s in sessions {
         let title = s.title.clone().unwrap_or_default();
@@ -132,22 +150,31 @@ pub fn forget(
                 title,
                 own,
                 forgotten: false,
+                archive_removed: false,
             });
             continue;
         }
-        if let Some(copy) = archive_copy(s, paths, agents) {
-            if std::fs::symlink_metadata(&copy).is_ok_and(|m| m.is_dir()) {
-                std::fs::remove_dir_all(&copy)?;
+        // the archive copy goes only once the rows are really gone
+        let copy = archive_copy_in(s, paths, agents, Some(&known));
+        remove_rows(&db.conn, s, transcript)?;
+        let mut archive_removed = false;
+        if let Some(copy) = copy {
+            let gone = if std::fs::symlink_metadata(&copy).is_ok_and(|m| m.is_dir()) {
+                std::fs::remove_dir_all(&copy)
             } else {
-                std::fs::remove_file(&copy)?;
+                std::fs::remove_file(&copy)
+            };
+            match gone {
+                Ok(()) => archive_removed = true,
+                Err(e) => eprintln!("warn: could not remove {}: {e}", copy.display()),
             }
         }
-        remove_rows(&db.conn, s, transcript)?;
         outcomes.push(Outcome {
             id: s.id.clone(),
             title,
             own,
             forgotten: true,
+            archive_removed,
         });
     }
     Ok(Done {

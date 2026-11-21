@@ -535,6 +535,10 @@ fn the_command_line_lists_asks_and_removes() {
     let a = &CLAUDE_A[..8];
     let dry = c.ok(&["forget", a, "--dry-run"]);
     assert!(dry.contains(a) && dry.contains("dry run"), "{dry}");
+    assert!(
+        dry.contains("would remove") && !dry.contains("removed from eye"),
+        "{dry}"
+    );
     assert_eq!(c.sessions(), n, "a dry run changes nothing");
     let o = c.eye(&["forget", a]);
     assert!(!o.status.success());
@@ -571,4 +575,51 @@ fn the_command_line_forgets_a_folder() {
     assert!(before >= 2, "{out}");
     c.ok(&["forget", "--folder", "/work/billing", "--yes"]);
     assert_eq!(c.sessions(), n - before);
+}
+
+#[test]
+fn a_disabled_agents_foreign_archive_path_falls_back_to_its_own_layout() {
+    let w = world();
+    let real = w.archive_of(OC_A).unwrap();
+    // as after an import: the stored path is from another machine's home
+    sql(
+        &w.db.conn,
+        "UPDATE session SET archive_path='/old-machine/.agent-eye/archive/@opencode/x/y.zst' WHERE id=?1",
+        [OC_A],
+    );
+    let only_claude = Config::parse(&format!(
+        "[agents]\nenabled = [\"claude\"]\n[agents.opencode]\ndir = \"{}\"\n",
+        w.opencode.display()
+    ))
+    .unwrap();
+    let agents = agents::enabled(&only_claude);
+    assert!(agents
+        .of_session(&w.db.session_by_id(OC_A).unwrap().unwrap())
+        .is_none());
+    let s = forget::by_ids(&w.db, &[OC_A.to_string()]).unwrap();
+    let done = forget::forget(&w.db, &w.paths, &only_claude, &agents, &s, false).unwrap();
+    assert!(done.outcomes[0].forgotten && done.outcomes[0].archive_removed);
+    assert!(!real.exists(), "the copy at the agent's own layout goes");
+    // a session with no copy anywhere says so
+    let s = forget::by_ids(&w.db, &[OC_B.to_string()]).unwrap();
+    std::fs::remove_file(w.archive_of(OC_B).unwrap()).ok();
+    let done = forget::forget(&w.db, &w.paths, &only_claude, &agents, &s, false).unwrap();
+    assert!(done.outcomes[0].forgotten && !done.outcomes[0].archive_removed);
+}
+
+#[test]
+fn the_archive_file_stays_when_the_database_change_fails() {
+    let w = world();
+    let copy = w.archive_of(CLAUDE_A).unwrap();
+    sql(
+        &w.db.conn,
+        "CREATE TRIGGER no_delete BEFORE DELETE ON session BEGIN SELECT RAISE(ABORT, 'forced'); END",
+        [],
+    );
+    assert!(w.forget(&[CLAUDE_A], false).is_err());
+    assert!(copy.exists(), "no row change, so the copy stays");
+    assert!(w.has(CLAUDE_A) && w.rows("session_fts", CLAUDE_A) > 0);
+    sql(&w.db.conn, "DROP TRIGGER no_delete", []);
+    assert!(w.forget(&[CLAUDE_A], false).unwrap().outcomes[0].archive_removed);
+    assert!(!copy.exists());
 }

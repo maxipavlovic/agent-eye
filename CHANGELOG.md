@@ -38,7 +38,7 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 - `config.toml`: a section or key this version does not know is listed once on standard error and ignored; text that is not TOML is still refused.
 - Night runs: a run is claimed before it starts, so two starters or a cancel cannot start it twice; a run whose process start time cannot be read is marked lost and never signalled. In `acceptEdits` mode only build and test commands are allowed.
 - `eye import` takes the `pre-import` snapshot before copying files, skips files that already match, and refuses a pack that unpacks to more than its manifest says. `POST /api/loose/stop|remove` need `confirm: true`. The usage backfill runs in its own thread.
-- Going back to 0.2.x: remove the `[night]`, `[loose]` and `[usage]` sections from `config.toml` first (0.2.x refuses sections it does not know). 0.2.x still reads and writes the schema 17 database.
+- Going back to 0.2.x works: it ignores the new config sections and still reads and writes the schema 17 database.
 
 ## 0.2.1 - 2026-11-12
 

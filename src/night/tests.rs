@@ -834,6 +834,7 @@ fn discard_removes_worktree_and_branch_and_protects_uncommitted_work() {
     std::fs::write(i.root.join("scratch.txt"), "unsaved\n").unwrap();
     let e = iso::discard(&p, &night, &run, false).unwrap_err();
     assert!(format!("{e}").contains("uncommitted"), "{e}");
+    assert!(format!("{e}").contains("--lose-changes"), "{e}");
     assert!(i.root.exists());
     let said = iso::discard(&p, &night, &run, true).unwrap();
     assert!(said.contains("night/20261121-x"), "{said}");

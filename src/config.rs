@@ -66,7 +66,7 @@ allow_unsandboxed = false # start Claude runs even where its sandbox is missing 
 # network = ["registry.npmjs.org", "pypi.org", "files.pythonhosted.org", "crates.io", "index.crates.io", "static.crates.io", "proxy.golang.org"]  # the only hosts a sandboxed Claude run may reach (never github.com, gitlab.com, bitbucket.org); this is the default
 
 [loose]
-enabled = true         # list what a session left behind (servers still running, commits on no remote, ...); it only reads
+enabled = true         # list what a session left behind (servers still running, commits on no remote, ...); it never changes repos or processes, it keeps what it found in eye's database
 days = 30              # look at the folders of sessions active in the last this many days
 "#;
 
@@ -463,7 +463,7 @@ impl Default for NightCfg {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct LooseCfg {
-    /// Look for loose ends at all. It only reads, so it is on by default.
+    /// Look for loose ends at all. It never changes repos or processes (it keeps what it found in eye's database), so it is on by default.
     pub enabled: bool,
     /// Only repos and folders of sessions active in the last this many days are looked at.
     pub days: u32,

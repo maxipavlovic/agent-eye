@@ -1,8 +1,8 @@
 //! Loose ends: what a session left behind. Servers and shells still running, containers, git
 //! worktrees in a scratchpad, commits on no remote, modified files nobody committed.
 //!
-//! Finding them only reads (`find`). Acting (`act`) happens only on a confirmed request that names
-//! one stored item, and never pushes, commits, force-removes or kills with SIGKILL.
+//! Finding them never changes a repo or process (`find`; the findings go to eye's own `loose` table).
+//! Acting (`act`) happens only on a confirmed request that names one stored item, and never pushes, commits, force-removes or kills with SIGKILL.
 
 mod act;
 mod find;

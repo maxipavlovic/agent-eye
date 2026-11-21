@@ -290,7 +290,7 @@ pub fn discard(
         );
     } else if run.branch.is_some() && has_uncommitted(p, run) && !lose_changes {
         bail!(
-            "the worktree has uncommitted changes that would be lost; confirm to discard them too"
+            "the worktree has uncommitted changes that would be lost; to discard them too, run `eye night discard <id> --yes --lose-changes`"
         );
     }
     if wt.exists() {

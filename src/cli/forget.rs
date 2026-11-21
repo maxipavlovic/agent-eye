@@ -36,10 +36,15 @@ pub fn run(
         if sessions.len() == 1 { "" } else { "s" }
     );
     for s in &sessions {
-        println!("{}", line(s, &env, transcript));
+        println!("{}", line(s, &env, transcript, dry_run));
     }
     println!(
-        "removed from eye: the session, its search text, its archive copy{}",
+        "{} the session, its search text, its archive copy (if there is one){}",
+        if dry_run {
+            "would remove from eye:"
+        } else {
+            "removed from eye:"
+        },
         if transcript {
             "; and the agent's own copy"
         } else {
@@ -91,13 +96,20 @@ pub fn run(
             }
         };
         let verb = if o.forgotten { "forgot" } else { "kept" };
-        println!("{verb} {}{what}", short_id(&o.id));
+        let arch = if !o.forgotten {
+            ""
+        } else if o.archive_removed {
+            ", removed its archive copy"
+        } else {
+            ", it had no archive copy"
+        };
+        println!("{verb} {}{arch}{what}", short_id(&o.id));
     }
     anyhow::ensure!(failed == 0, "{failed} could not be removed");
     Ok(())
 }
 
-fn line(s: &Session, env: &super::Env, transcript: bool) -> String {
+fn line(s: &Session, env: &super::Env, transcript: bool, dry_run: bool) -> String {
     let agent = env.agents.short_name(&s.agent);
     let mut l = format!(
         "  {}  {}  {}  {}",
@@ -107,7 +119,11 @@ fn line(s: &Session, env: &super::Env, transcript: bool) -> String {
         super::folder(s)
     );
     if forget::is_open(s) {
-        l.push_str("  [open now: refused]");
+        l.push_str(if dry_run {
+            "  [open now: the real run will refuse]"
+        } else {
+            "  [open now: refused]"
+        });
     }
     if transcript && env.agents.of_session(s).is_none() {
         l.push_str("  [agent not enabled: its own copy stays]");

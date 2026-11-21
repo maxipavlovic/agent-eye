@@ -57,6 +57,20 @@ pub fn waiting_for(folder: &Path) -> Option<&'static str> {
     })
 }
 
+/// Does a process hold the presence lock of any conversation? Then agy is running, and the files
+/// it shares between conversations (history, caches) are not ours to edit.
+pub fn any_lock_held(dir: &Path) -> bool {
+    let Ok(rd) = std::fs::read_dir(dir.join(PRESENCE)) else {
+        return false;
+    };
+    rd.flatten().any(|e| {
+        e.file_name()
+            .to_str()
+            .and_then(|n| n.strip_suffix(".lock"))
+            .is_some_and(|id| lock_held(dir, id))
+    })
+}
+
 /// The open conversations of agy: those whose presence lock is held, that are not sub-agents.
 pub fn sessions(dir: &Path, sums: &HashMap<String, Summary>) -> Vec<LiveSession> {
     let Ok(rd) = std::fs::read_dir(dir.join(PRESENCE)) else {

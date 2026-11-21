@@ -72,7 +72,7 @@ Runs that start by themselves inside a time window. Off until you switch it on. 
 
 | Key | Default | Meaning |
 |---|---|---|
-| `enabled` | `true` | Look for what sessions left behind: servers and shells still running, containers, git worktrees in a scratchpad or with no folder, commits on no remote, modified files nobody committed. On by default because finding them only reads. The daemon looks every 5 minutes and shortly after a session stops or ends (at most once in 20 seconds); `eye loose` looks at once. `false` stops the daemon's scans, hides the card chip, the panel section and the picker line, and makes `eye loose` say it is off. Stored results stay until the next scan that is allowed. |
+| `enabled` | `true` | Look for what sessions left behind: servers and shells still running, containers, git worktrees in a scratchpad or with no folder, commits on no remote, modified files nobody committed. On by default because it never changes repos or processes; it keeps what it found in eye's database (the `loose` table). The daemon looks every 5 minutes and shortly after a session stops or ends (at most once in 20 seconds); `eye loose` looks at once. `false` stops the daemon's scans, hides the card chip, the panel section and the picker line, and makes `eye loose` say it is off. Stored results stay until the next scan that is allowed. |
 | `days` | `30` | Only the folders and repos of sessions active in the last this many days are looked at. A scan reads `ps` and `lsof` (macOS) or `/proc` (Linux), `docker ps` when docker is installed (2 s limit) and a few read-only git commands per repo, each with a time limit. |
 
 ## `[hide]`

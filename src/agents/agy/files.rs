@@ -314,13 +314,7 @@ fn delete_one(dir: &Path, folder: &Path, id: &str) -> anyhow::Result<Vec<String>
             gone.push(crate::util::show_path(&p));
         }
     }
-    let lines = forget_history(dir, id)?;
-    if lines > 0 {
-        gone.push(format!("{lines} line(s) of history.jsonl"));
-    }
-    for f in scrub_caches(dir, id)? {
-        gone.push(f);
-    }
+    gone.extend(edit_shared_files(dir, id)?);
     let sums = dir.join("conversation_summaries.db");
     if sums.is_file() {
         let c = Connection::open(&sums)?;
@@ -335,6 +329,25 @@ fn delete_one(dir: &Path, folder: &Path, id: &str) -> anyhow::Result<Vec<String>
             gone.push("its row in conversation_summaries.db".to_string());
         }
     }
+    Ok(gone)
+}
+
+/// Take conversation `id` out of the files agy shares between conversations (`history.jsonl`, the
+/// caches). They are rewritten through a temp file and a rename in the same folder, and left
+/// alone, with a line saying so, while any agy conversation is open: agy writes them too.
+fn edit_shared_files(dir: &Path, id: &str) -> anyhow::Result<Vec<String>> {
+    if super::live::any_lock_held(dir) {
+        return Ok(vec![
+            "history.jsonl and the cache files NOT edited: agy is open now (close it and run forget again to clean them)"
+                .to_string(),
+        ]);
+    }
+    let mut gone = vec![];
+    let lines = forget_history(dir, id)?;
+    if lines > 0 {
+        gone.push(format!("{lines} line(s) of history.jsonl"));
+    }
+    gone.extend(scrub_caches(dir, id)?);
     Ok(gone)
 }
 
@@ -475,6 +488,72 @@ mod tests {
         assert_eq!(uri_path("file:///x%2").as_deref(), Some("/x%2"));
         assert_eq!(uri_path("https://x"), None);
         assert_eq!(uri_path("file://rel"), None);
+    }
+
+    fn shared_files(dir: &Path) {
+        std::fs::create_dir_all(dir.join("cache")).unwrap();
+        std::fs::write(
+            dir.join("history.jsonl"),
+            "{\"conversationId\":\"gone\",\"text\":\"a\"}\n{\"conversationId\":\"stay\",\"text\":\"b\"}\n",
+        )
+        .unwrap();
+        std::fs::write(
+            dir.join("cache/last_conversations.json"),
+            "{\"/x\":\"gone\",\"/y\":\"stay\"}\n",
+        )
+        .unwrap();
+    }
+
+    fn names(dir: &Path) -> Vec<String> {
+        let mut v: Vec<String> = std::fs::read_dir(dir)
+            .unwrap()
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .collect();
+        v.sort();
+        v
+    }
+
+    #[test]
+    fn shared_files_are_rewritten_through_a_temp_file_in_the_same_folder() {
+        let t = tempfile::tempdir().unwrap();
+        shared_files(t.path());
+        let gone = edit_shared_files(t.path(), "gone").unwrap();
+        assert_eq!(gone.len(), 2, "{gone:?}");
+        let h = std::fs::read_to_string(t.path().join("history.jsonl")).unwrap();
+        assert!(h.contains("stay") && !h.contains("gone"));
+        let c = std::fs::read_to_string(t.path().join("cache/last_conversations.json")).unwrap();
+        assert!(c.contains("stay") && !c.contains("gone"));
+        assert_eq!(
+            names(t.path()),
+            ["cache", "history.jsonl"],
+            "no temp file left"
+        );
+        assert_eq!(names(&t.path().join("cache")), ["last_conversations.json"]);
+    }
+
+    #[test]
+    fn shared_files_are_left_alone_while_a_presence_lock_is_held() {
+        let t = tempfile::tempdir().unwrap();
+        shared_files(t.path());
+        std::fs::create_dir_all(t.path().join("presence")).unwrap();
+        let lock = std::fs::File::create(t.path().join("presence/other.lock")).unwrap();
+        lock.lock().unwrap();
+        let before = std::fs::read_to_string(t.path().join("history.jsonl")).unwrap();
+        let said = edit_shared_files(t.path(), "gone").unwrap();
+        assert_eq!(said.len(), 1);
+        assert!(said[0].contains("NOT edited"), "{said:?}");
+        assert_eq!(
+            std::fs::read_to_string(t.path().join("history.jsonl")).unwrap(),
+            before
+        );
+        assert!(
+            std::fs::read_to_string(t.path().join("cache/last_conversations.json"))
+                .unwrap()
+                .contains("gone")
+        );
+        lock.unlock().unwrap();
+        assert_eq!(edit_shared_files(t.path(), "gone").unwrap().len(), 2);
     }
 
     #[test]
