@@ -73,6 +73,17 @@ Each run has a folder `<eye home>/night/<run id>/` with `log` (stdout and stderr
 
 Always denied, in either mode: `git push`, `git -C ... push`, `git remote`, `gh pr create`, `gh pr merge`, `gh release`.
 
+#### The barrier around your own folders
+
+Every Claude run also gets `--settings '<json>'` (made per run, see `src/night/barrier.rs`), so that a session that remembers the absolute paths of your folder cannot write there:
+
+- **Sandbox for Bash.** `sandbox.enabled`, `failIfUnavailable` (Claude refuses to start rather than run unsandboxed) and `allowUnsandboxedCommands = false` (no retry outside the sandbox). Claude's sandbox allows writes in the working directory and the temp folder; eye adds the git folders a commit in a worktree writes: `objects`, `refs/heads/night`, `logs/refs/heads/night` and the worktree's own folder under `.git/worktrees`.
+- **Deny rules.** `sandbox.filesystem.denyWrite` and `Edit(//<path>/**)` rules for the planned folder, for the whole repo when the run started in a sub-folder, and for the continued session's original working folder. A deny rule is checked before any allow rule in every settings scope, so an allow rule or `additionalDirectories` in your own settings cannot open these folders for a night run. The Edit rules cover the Edit, Write and NotebookEdit tools.
+- **In a repo** the original `.git` must stay writable for the worktree's commits, and Claude's sandbox lets a deny rule beat an allow rule on the same path, so the folder cannot be denied whole. eye denies every entry of it except `.git`, and inside `.git` the `hooks` folder and the `config`, `HEAD` and `index` files. A plain folder (a copy run) is denied whole.
+- **Two hooks** (`PreToolUse`) cover what no rule names, a *new* file directly in the original folder: the file tools are refused when `file_path` is in a guarded folder or climbs out with `..`, and Bash is refused when the command contains the folder's path. The hooks are a net for the mistake this exists for, a remembered absolute path. A command that builds the path some other way gets past the hook and, in a repo, can still create a new entry directly in the original folder; it cannot change anything that exists there.
+- **No sandbox, no run.** macOS has the sandbox built in. On Linux it needs `bubblewrap` (`bwrap`) and `socat` on PATH (`apt-get install bubblewrap socat`); elsewhere it is not available. A Claude run that cannot get it fails at start with the reason and nothing is created. `[night] allow_unsandboxed = true` starts it anyway: the Edit rules and the hooks stay, Bash is then not confined. Default `false`.
+- **What it does not do.** Reads are not blocked (the run can read the original folder and anything else Claude's sandbox can read). Network follows Claude's sandbox rules. A rule in a repo's own committed `.claude/settings.json` is not checked. Codex runs are not changed: they use `--sandbox workspace-write`, which limits writes to the working directory and temp folders, with `.git` read-only, and has no network.
+
 ### Codex
 
 `codex exec --sandbox workspace-write --cd <worktree> --skip-git-repo-check <prompt>`. The sandbox has no network by default, so nothing can be pushed. Its rollout is picked up like any other session: eye treats a `codex exec` rollout as a session only when it ran in a night run's folder (`<eye home>/night/<n>/wt` or `work`); every other `exec` rollout stays hidden.
@@ -82,7 +93,7 @@ Always denied, in either mode: `git push`, `git -C ... push`, `git remote`, `gh 
 - **Claude:** eye copies the session's transcript (restoring it from the archive when Claude deleted it) into the project folder Claude uses for the worktree, then runs `claude -p <prompt> --resume <id> --fork-session --session-id <new uuid>`. `--session-id` names the fork, so the new session is known at once. The original session is untouched.
 - **Codex:** `codex exec fork <id> <prompt>` (the installed CLI has it) with `-c sandbox_mode="workspace-write"`, started in the worktree.
 
-The prompt of a continued run starts with a note: it works in a copy at `<worktree>`, the earlier conversation mentions paths of the original folder, use the same files under the worktree and change nothing in the original. The agent can still write outside its folder if it ignores that (Claude's `auto` mode is the only guard); see `security.md`.
+The prompt of a continued run starts with a note: it works in a copy at `<worktree>`, the earlier conversation mentions paths of the original folder, use the same files under the worktree and change nothing in the original. The note is only advice; the barrier above is what holds. See `security.md`.
 
 ## What a run leaves
 

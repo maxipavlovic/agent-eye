@@ -4,11 +4,13 @@
 //! * `clock`: the window, which night a moment belongs to, local dates.
 //! * this file: the `night_run` table, limits and planning.
 //! * `iso`: the worktree or copy a run works in, its diff, and discarding it.
+//! * `barrier`: the sandbox and deny rules that keep a Claude run out of the user's own folders.
 //! * `launch`: the command line of a run for each agent and starting it detached.
 //! * `sched`: the once-a-minute check that starts, watches, stops and finishes runs.
 //!
 //! Nothing runs unless `[night] enabled = true` and a run is planned. See `docs/night.md`.
 
+pub mod barrier;
 pub mod clock;
 pub mod iso;
 pub mod launch;

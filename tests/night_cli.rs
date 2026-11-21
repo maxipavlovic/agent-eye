@@ -64,6 +64,13 @@ impl Home {
         let p = h.join("bin/claude");
         std::fs::write(&p, FAKE_CLAUDE).unwrap();
         std::fs::set_permissions(&p, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+        // the fake agent needs no sandbox, and a Linux box may have none
+        std::fs::create_dir_all(h.join(".agent-eye")).unwrap();
+        std::fs::write(
+            h.join(".agent-eye/config.toml"),
+            "[night]\nallow_unsandboxed = true\n",
+        )
+        .unwrap();
         Home { dir }
     }
     fn path(&self) -> &Path {
@@ -279,7 +286,7 @@ fn a_rate_limited_run_starts_again_on_the_other_agent_when_it_allows_it() {
     std::fs::create_dir_all(h.eye_home()).unwrap();
     std::fs::write(
         h.eye_home().join("config.toml"),
-        "[agents]\nenabled = [\"claude\", \"codex\"]\n",
+        "[agents]\nenabled = [\"claude\", \"codex\"]\n[night]\nallow_unsandboxed = true\n",
     )
     .unwrap();
     let repo = h.repo();

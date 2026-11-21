@@ -60,6 +60,7 @@ parallel = 2           # runs going at once; planned runs never wait for each ot
 claude_permission = "auto"  # `auto`, or `acceptEdits` (then only build and test commands are allowed)
 claude_model = ""      # a model for Claude night runs; empty = Claude's default
 codex_model = ""       # a model for Codex night runs; empty = Codex's default
+allow_unsandboxed = false # start Claude runs even where its sandbox is missing (Linux without bubblewrap and socat); Bash is then not confined
 
 [loose]
 enabled = true         # list what a session left behind (servers still running, commits on no remote, ...); it only reads
@@ -319,6 +320,8 @@ pub struct NightCfg {
     pub claude_permission: String,
     pub claude_model: String,
     pub codex_model: String,
+    /// Start Claude runs even where its sandbox is not available (Bash is then not confined).
+    pub allow_unsandboxed: bool,
 }
 impl Default for NightCfg {
     fn default() -> Self {
@@ -330,6 +333,7 @@ impl Default for NightCfg {
             claude_permission: "auto".into(),
             claude_model: String::new(),
             codex_model: String::new(),
+            allow_unsandboxed: false,
         }
     }
 }

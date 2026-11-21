@@ -62,6 +62,7 @@ Runs that start by themselves inside a time window. Off until you switch it on. 
 | `claude_permission` | `"auto"` | Claude's permission mode for night runs: `auto`, or `acceptEdits` (then only build and test commands are allowed). |
 | `claude_model` | `""` | A model for Claude night runs (an alias such as `haiku`); empty is Claude's default. |
 | `codex_model` | `""` | A model for Codex night runs; empty is Codex's default. |
+| `allow_unsandboxed` | `false` | Claude night runs need Claude Code's sandbox (built in on macOS; `bubblewrap` and `socat` on Linux) and refuse to start without it. `true` starts them anyway; the deny rules stay, Bash is then not confined. See `night.md`. |
 
 ## `[loose]`
 
