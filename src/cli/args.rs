@@ -142,7 +142,7 @@ pub enum NightCmd {
         /// One optional limit: 30% (weekly plan), 2M or 500k (tokens), 90m or 2h (time)
         #[arg(long)]
         limit: Option<String>,
-        /// claude or codex (default: the idea's agent)
+        /// claude, codex, agy or opencode (default: the idea's agent)
         #[arg(long)]
         agent: Option<String>,
         /// Start again on the other agent when this one's plan runs out (ideas only)

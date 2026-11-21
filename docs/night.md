@@ -13,7 +13,7 @@ Park work during the day, let it run at night inside the plan you already pay fo
 
 ```
 eye night on | off
-eye night add idea:<n> [--limit 30%|2M|90m] [--agent claude|codex|agy] [--switch] [--isolation worktree|copy]
+eye night add idea:<n> [--limit 30%|2M|90m] [--agent claude|codex|agy|opencode] [--switch] [--isolation worktree|copy]
 eye night add <session> --prompt "what it should do tonight" [--limit ...]
 eye night ls                      # the default
 eye night cancel <run>
