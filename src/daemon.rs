@@ -165,6 +165,93 @@ pub fn refresh_waits(db: &Db, agents: &Agents) -> Result<usize> {
     Ok(n)
 }
 
+/// Change the wait of the session `sid` as `kind` says; the number of rows changed (0: no such
+/// session, or the event does not change a wait).
+fn apply_wait(
+    db: &Db,
+    agent: &crate::agents::AgentRef,
+    kind: &str,
+    ev: &Value,
+    ts: i64,
+    sid: &str,
+) -> Result<usize> {
+    let Some(w) = agent.wait_effect(kind, ev, ts) else {
+        return Ok(1);
+    };
+    // `?5` limits the change to a wait that is a prompt
+    let sql = if kind == "Notification" {
+        "UPDATE session SET waiting_since=?2, waiting_note=CASE WHEN waiting_since IS NULL
+           THEN ?3 ELSE COALESCE(waiting_note, ?3) END, waiting_prompt=?4
+         WHERE id=?1 AND (NOT ?5 OR waiting_prompt=1)"
+    } else {
+        "UPDATE session SET waiting_since=?2, waiting_note=?3, waiting_prompt=?4
+         WHERE id=?1 AND (NOT ?5 OR waiting_prompt=1)"
+    };
+    let n = db.conn.execute(
+        sql,
+        params![sid, w.since, w.note, w.prompt, w.only_if_prompt],
+    )?;
+    // an update that finds the session but changes nothing (`?5`) is not a missing session
+    Ok(if n == 0 && session_exists(db, sid) {
+        1
+    } else {
+        n
+    })
+}
+
+fn session_exists(db: &Db, sid: &str) -> bool {
+    db.conn
+        .query_row("SELECT 1 FROM session WHERE id=?1", [sid], |_| Ok(()))
+        .is_ok()
+}
+
+/// Events of sessions the index did not have yet, with how many passes they have waited.
+static UNPLACED: std::sync::Mutex<Vec<(Value, u8)>> = std::sync::Mutex::new(Vec::new());
+
+fn remember_unplaced(ev: &Value) {
+    let mut v = UNPLACED.lock().unwrap_or_else(|e| e.into_inner());
+    if v.len() < 200 {
+        v.push((ev.clone(), 0));
+    }
+}
+
+/// After a scan: apply the waits of events whose session was not there before. An event that
+/// still finds none after a few passes is dropped.
+pub fn apply_unplaced(db: &Db, agents: &Agents) -> Result<()> {
+    let pending: Vec<(Value, u8)> =
+        std::mem::take(&mut *UNPLACED.lock().unwrap_or_else(|e| e.into_inner()));
+    for (ev, tries) in pending {
+        let kind = ev.get("event").and_then(Value::as_str).unwrap_or("");
+        let ts = ev.get("ts").and_then(Value::as_i64).unwrap_or_else(now_ms);
+        let agent_id = ev.get("agent").and_then(Value::as_str).unwrap_or(LEGACY_ID);
+        let (Some(sid), Some(agent)) = (
+            ev.get("session_id").and_then(Value::as_str),
+            agents.get(agent_id),
+        ) else {
+            continue;
+        };
+        // a later event of the session has said more since: it wins
+        let later = db
+            .conn
+            .query_row(
+                "SELECT 1 FROM event WHERE session_id=?1 AND ts>?2 LIMIT 1",
+                params![sid, ts],
+                |_| Ok(()),
+            )
+            .is_ok();
+        if later {
+            continue;
+        }
+        if apply_wait(db, agent, kind, &ev, ts, sid)? == 0 && tries < 3 {
+            UNPLACED
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .push((ev, tries + 1));
+        }
+    }
+    Ok(())
+}
+
 /// Apply the effect of one queue line on the session row.
 fn apply_event(db: &Db, agents: &Agents, ev: &Value) -> Result<()> {
     let kind = ev.get("event").and_then(Value::as_str).unwrap_or("");
@@ -180,20 +267,10 @@ fn apply_event(db: &Db, agents: &Agents, ev: &Value) -> Result<()> {
     let Some(agent) = agents.get(agent_id) else {
         return Ok(());
     };
-    if let Some(w) = agent.wait_effect(kind, ev, ts) {
-        // `?5` limits the change to a wait that is a prompt
-        let sql = if kind == "Notification" {
-            "UPDATE session SET waiting_since=?2, waiting_note=CASE WHEN waiting_since IS NULL
-               THEN ?3 ELSE COALESCE(waiting_note, ?3) END, waiting_prompt=?4
-             WHERE id=?1 AND (NOT ?5 OR waiting_prompt=1)"
-        } else {
-            "UPDATE session SET waiting_since=?2, waiting_note=?3, waiting_prompt=?4
-             WHERE id=?1 AND (NOT ?5 OR waiting_prompt=1)"
-        };
-        db.conn.execute(
-            sql,
-            params![sid, w.since, w.note, w.prompt, w.only_if_prompt],
-        )?;
+    if apply_wait(db, agent, kind, ev, ts, sid)? == 0 {
+        // the session is not in the index yet (a session that began a moment ago is found by the
+        // scan after this drain): try again after the next scan
+        remember_unplaced(ev);
     }
     if kind == "SessionEnd" {
         db.conn.execute(
@@ -433,6 +510,7 @@ fn notify_reminders(db: &Db, paths: &Paths, cfg: &Config, send: &mut dyn FnMut(&
 pub fn tick(db: &mut Db, paths: &Paths, cfg: &Config) -> Result<()> {
     let n = drain_queue(db, paths, &agents::enabled(cfg))?;
     let st = scan::scan(db, cfg, false)?;
+    apply_unplaced(db, &agents::enabled(cfg))?;
     if n > 0 || st.files_parsed > 0 {
         log(
             paths,

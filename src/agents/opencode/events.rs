@@ -53,6 +53,10 @@ pub struct Loaded {
     pub directory: String,
     pub title: Option<String>,
     pub events: Vec<Ev>,
+    /// What `opencode session export` printed for the session, when OpenCode could be asked: what
+    /// `opencode session import` needs to put the session back.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub native: Option<Value>,
 }
 
 fn s<'a>(v: &'a Value, k: &str) -> &'a str {

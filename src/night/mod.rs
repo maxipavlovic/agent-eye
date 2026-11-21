@@ -334,6 +334,14 @@ fn pick_mode(cfg: &Config, o: &PlanOpts, folder: &str) -> Result<Mode> {
     Ok(want)
 }
 
+/// An agent that cannot be confined runs only when the config says so, and the plan says why not.
+fn check_runnable(cfg: &Config, agent: &crate::agents::AgentRef) -> Result<()> {
+    if agent.id() == "opencode" {
+        barrier::gate_unsandboxed(cfg)?;
+    }
+    Ok(())
+}
+
 fn clean(s: Option<&str>) -> Option<&str> {
     s.map(str::trim).filter(|v| !v.is_empty())
 }
@@ -346,6 +354,8 @@ pub fn check_limit(db: &Db, agent: &crate::agents::AgentRef, l: Limit) -> Result
         if !have {
             let how = if agent.id() == crate::agents::LEGACY_ID {
                 " Run `eye statusline` setup (`eye install`) so Claude Code reports its limits, then plan again."
+            } else if agent.id() == "opencode" {
+                " OpenCode writes no plan limits to disk (they are the provider's), so use a token limit instead."
             } else {
                 " Open a Codex session once so its rollout reports the limits, then plan again."
             };
@@ -418,6 +428,7 @@ pub fn plan_idea(
         None => crate::ideas::agent_of(agents, &idea)?,
     };
     iso::check_plain_size(std::path::Path::new(folder))?;
+    check_runnable(cfg, &agent)?;
     let mode = pick_mode(cfg, o, folder)?;
     if let Some(l) = o.limit {
         check_limit(db, &agent, l)?;
@@ -479,6 +490,7 @@ pub fn plan_session(
         "the folder {cwd} no longer exists"
     );
     iso::check_plain_size(std::path::Path::new(cwd))?;
+    check_runnable(cfg, agent)?;
     let mode = pick_mode(cfg, o, cwd)?;
     if let Some(l) = o.limit {
         check_limit(db, agent, l)?;

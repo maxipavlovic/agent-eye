@@ -33,6 +33,29 @@ pub const DENY: [&str; 11] = [
     "Bash(docker push*)",
 ];
 
+/// OpenCode's permission rules for a run: everything is allowed except what `DENY` names (the
+/// same commands, as OpenCode's patterns), and nothing outside the run's folder. `--auto` then
+/// approves whatever is not denied. The rules match the text of a tool call; they are not a
+/// sandbox (a shell command can still write anywhere), which is why the run needs
+/// `[night] allow_unsandboxed`.
+pub fn opencode_permissions() -> String {
+    let mut bash = serde_json::Map::new();
+    bash.insert("*".into(), "allow".into());
+    for d in DENY {
+        let pat = d
+            .strip_prefix("Bash(")
+            .and_then(|r| r.strip_suffix(')'))
+            .unwrap_or(d);
+        bash.insert(pat.into(), "deny".into());
+    }
+    serde_json::json!({"permission": {
+        "bash": bash,
+        "edit": "allow",
+        "external_directory": "deny"
+    }})
+    .to_string()
+}
+
 /// Package registries a sandboxed run may reach by default: `[night] network` replaces it.
 pub const NETWORK: [&str; 7] = [
     "registry.npmjs.org",
@@ -127,6 +150,7 @@ pub fn build(
     };
     let mut args: Vec<String> = vec![];
     let mut session_id = None;
+    let mut program = exe.to_string();
     if run.agent == LEGACY_ID {
         args.extend(["-p".into(), prompt]);
         if cont {
@@ -152,6 +176,28 @@ pub fn build(
         if !cfg.night.claude_model.trim().is_empty() {
             args.extend(["--model".into(), cfg.night.claude_model.trim().into()]);
         }
+    } else if run.agent == "opencode" {
+        // `env` hands OpenCode a permission config for this run only; `--standalone` makes the
+        // server that applies it a private one, not OpenCode's background service
+        program = "env".into();
+        args.extend([
+            format!("OPENCODE_CONFIG_CONTENT={}", opencode_permissions()),
+            exe.into(),
+            "run".into(),
+            "--standalone".into(),
+            "--auto".into(),
+        ]);
+        if !cfg.night.opencode_model.trim().is_empty() {
+            args.extend(["-m".into(), cfg.night.opencode_model.trim().into()]);
+        }
+        if cont {
+            args.extend([
+                "--fork".into(),
+                "--session".into(),
+                run.session_id.clone().unwrap_or_default(),
+            ]);
+        }
+        args.push(prompt);
     } else {
         args.push("exec".into());
         if cont {
@@ -179,7 +225,7 @@ pub fn build(
         args.push(prompt);
     }
     Spec {
-        program: exe.into(),
+        program,
         args,
         cwd: cwd.into(),
         session_id,
@@ -302,6 +348,9 @@ pub fn start(
     // a Claude run needs its sandbox, or the user's say-so to go without, before anything is made
     let sandboxed = if run.agent == LEGACY_ID {
         barrier::gate(cfg)?
+    } else if run.agent == "opencode" {
+        barrier::gate_unsandboxed(cfg)?;
+        false
     } else {
         true
     };

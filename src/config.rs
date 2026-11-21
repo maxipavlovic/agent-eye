@@ -60,7 +60,8 @@ parallel = 2           # runs going at once; planned runs never wait for each ot
 claude_permission = "auto"  # `auto`, or `acceptEdits` (then only build and test commands are allowed)
 claude_model = ""      # a model for Claude night runs; empty = Claude's default
 codex_model = ""       # a model for Codex night runs; empty = Codex's default
-allow_unsandboxed = false # start Claude runs even where its sandbox is missing (Linux without bubblewrap and socat); Bash is then not confined
+opencode_model = ""    # a model (provider/model) for OpenCode night runs; empty = OpenCode's default
+allow_unsandboxed = false # start Claude runs even where its sandbox is missing (Linux without bubblewrap and socat), and OpenCode runs at all (it has no sandbox); Bash is then not confined
 # network = ["registry.npmjs.org", "pypi.org", "files.pythonhosted.org", "crates.io", "index.crates.io", "static.crates.io", "proxy.golang.org"]  # the only hosts a sandboxed Claude run may reach (never github.com, gitlab.com, bitbucket.org); this is the default
 
 [loose]
@@ -112,6 +113,7 @@ const KNOWN: &[(&str, &[&str])] = &[
             "claude_permission",
             "claude_model",
             "codex_model",
+            "opencode_model",
             "allow_unsandboxed",
             "network",
         ],
@@ -410,7 +412,10 @@ pub struct NightCfg {
     pub claude_permission: String,
     pub claude_model: String,
     pub codex_model: String,
-    /// Start Claude runs even where its sandbox is not available (Bash is then not confined).
+    /// A model (`provider/model`) for OpenCode night runs.
+    pub opencode_model: String,
+    /// Start Claude runs even where its sandbox is not available, and OpenCode runs at all (it has
+    /// none): Bash is then not confined.
     pub allow_unsandboxed: bool,
     /// The hosts a sandboxed Claude run may reach (package registries); empty = the built-in list.
     pub network: Vec<String>,
@@ -441,6 +446,7 @@ impl Default for NightCfg {
             claude_permission: "auto".into(),
             claude_model: String::new(),
             codex_model: String::new(),
+            opencode_model: String::new(),
             allow_unsandboxed: false,
             network: vec![],
             isolation: "worktree".into(),

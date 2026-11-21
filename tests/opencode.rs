@@ -43,6 +43,8 @@ fn sql(conn: &Connection, q: &str, p: impl rusqlite::Params) {
 
 impl World {
     fn new() -> World {
+        // never the real `opencode`: the archive asks it for an export
+        std::env::set_var("EYE_OPENCODE_BIN", "/nonexistent/opencode");
         let tmp = tempfile::tempdir().unwrap();
         let dir = tmp.path().join("opencode");
         fixtures::copy_dir(
@@ -304,8 +306,9 @@ fn a_database_session_is_read_though_it_is_no_file() {
     assert!(tail
         .iter()
         .any(|t| matches!(t, agents::TailItem::Tool(l) if l == "$ wc -l wombats.csv")));
-    // restoring is never offered, and a missing database row is not "there"
-    assert!(!agent.owns_transcript(Path::new(s.transcript_path.as_deref().unwrap())));
+    // a database session is restorable, and a missing database row is not "there"
+    assert!(agent.owns_transcript(Path::new(s.transcript_path.as_deref().unwrap())));
+    assert!(!agent.owns_transcript(Path::new("/elsewhere/opencode.db#ses_v2koala")));
     assert!(!agent.transcript_exists(&w.dir.join("opencode.db#ses_nope")));
 }
 
@@ -360,9 +363,15 @@ fn the_archive_is_an_export_that_reads_after_the_database_is_gone() {
     assert_eq!(a.len(), 2);
     let j = conversation::read(&w.session(JSON), &w.paths, agent.as_ref()).unwrap();
     assert_eq!((j.len(), j[1].tools), (2, 1));
+    // made without OpenCode's export (it is not there), the copy reads but is not put back
+    let e = archive::restore(&w.db, &w.paths, &agents, V2).unwrap_err();
     assert!(
-        archive::restore(&w.db, &w.paths, &agents, V2).is_err(),
-        "nothing is written back"
+        format!("{e:#}").contains("without `opencode session export`"),
+        "{e:#}"
+    );
+    assert!(
+        !w.dir.join("opencode.db#ses_v2koala").exists(),
+        "nothing stray is written"
     );
 }
 

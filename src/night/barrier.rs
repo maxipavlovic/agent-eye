@@ -286,6 +286,18 @@ pub fn gate(cfg: &Config) -> Result<bool> {
     gate_with(cfg, available())
 }
 
+/// Whether an OpenCode night run may start. OpenCode has no sandbox of its own: its permission
+/// rules refuse `git push`, `gh`, `ssh` and the publish commands and edits outside the run's
+/// folder, but a shell command can still write anywhere. So it runs only when `[night]
+/// allow_unsandboxed = true` says so.
+pub fn gate_unsandboxed(cfg: &Config) -> Result<()> {
+    anyhow::ensure!(
+        cfg.night.allow_unsandboxed,
+        "OpenCode has no sandbox: its permission rules refuse git push, gh, ssh, the publish commands and edits outside the run's folder, but a shell command could still write anywhere. eye does not start an OpenCode night run unless [night] allow_unsandboxed = true"
+    );
+    Ok(())
+}
+
 pub fn gate_with(cfg: &Config, avail: Result<(), String>) -> Result<bool> {
     match avail {
         Ok(()) => Ok(true),

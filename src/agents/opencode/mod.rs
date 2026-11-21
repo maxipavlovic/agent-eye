@@ -1,19 +1,31 @@
-//! OpenCode (`opencode`). Built from its source (sst/opencode, tag v2.3.2) and not tried on a real
-//! install. Sessions are rows of a SQLite database (`session_v2`, or the older `session` tables) or,
-//! before v1.2, JSON files; see `store.rs`. A database session has no file of its own, so its
-//! transcript path is `<db>#<session id>` and the adapter says whether it exists
-//! (`Agent::transcript_exists`). eye reads a session whole whenever its row count or update time
-//! moves. OpenCode's hooks are JavaScript plugins, so eye installs none, and `opencode run` cannot
-//! answer with a schema, so there are no summaries from it.
+//! OpenCode (`opencode`), checked on a real OpenCode 2.3.2. Sessions are rows of a SQLite database
+//! (`session_v2`, or the older `session` tables) or, before v1.2, JSON files; see `store.rs`. A
+//! database session has no file of its own, so its transcript path is `<db>#<session id>` and the
+//! adapter says whether it exists (`Agent::transcript_exists`). eye reads a session whole whenever
+//! its row count or update time moves.
+//!
+//! - live status: `live.rs` reads the turn times OpenCode writes on the session's row; a permission
+//!   prompt is seen by the plugin eye installs (`plugin.js`, `hooks.rs`);
+//! - summaries: `headless.rs`, `opencode run --format json` with a JSON-only prompt, validated;
+//! - archive and restore: the archive keeps `opencode session export`, restore is `session import`
+//!   (`cli.rs`); eye never writes OpenCode's database;
+//! - install: the plugin and the `/eye` command (`install.rs`).
 
+mod cli;
 mod events;
+mod headless;
+mod hooks;
+mod install;
+mod live;
 mod store;
 
 use super::*;
 use crate::config::AgentCfg;
+use crate::report::Report;
 use crate::util::{find_in_path, head_chars, tail_chars, trim_front_bytes};
 use anyhow::{Context, Result};
 use events::{Ev, Loaded};
+use serde_json::Value;
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -29,6 +41,8 @@ const MSG_CAP: usize = 4_000;
 #[derive(Debug)]
 pub struct OpenCode {
     dir: PathBuf,
+    /// OpenCode's config folder: where its plugins and commands are.
+    config_dir: PathBuf,
     exe: Option<String>,
 }
 
@@ -56,10 +70,39 @@ fn resolve_dir(cfg: &AgentCfg) -> PathBuf {
         })
 }
 
+/// `$XDG_CONFIG_HOME/opencode`, else `~/.config/opencode`.
+fn default_config_dir() -> PathBuf {
+    std::env::var_os("XDG_CONFIG_HOME")
+        .filter(|v| !v.is_empty())
+        .map(|v| PathBuf::from(v).join("opencode"))
+        .unwrap_or_else(|| {
+            std::env::var_os("HOME")
+                .map(PathBuf::from)
+                .unwrap_or_else(|| PathBuf::from("/nonexistent"))
+                .join(".config/opencode")
+        })
+}
+
 impl OpenCode {
     /// An adapter for OpenCode's data folder `dir`.
     pub fn new(dir: PathBuf) -> OpenCode {
-        OpenCode { dir, exe: None }
+        OpenCode {
+            dir,
+            config_dir: default_config_dir(),
+            exe: None,
+        }
+    }
+
+    /// Bring the plugin (which names the `agent-eye` at `eye_bin`) and the command that are
+    /// installed up to date; neither is added.
+    pub fn refresh_skill_with(&self, eye_bin: &Path) -> Result<Option<skill_file::State>> {
+        install::refresh(self, eye_bin)
+    }
+
+    /// Install the plugin and the command in this config folder instead of the usual one.
+    pub fn with_config_dir(mut self, dir: PathBuf) -> OpenCode {
+        self.config_dir = dir;
+        self
     }
 
     /// Run this program instead of `opencode`.
@@ -221,10 +264,12 @@ impl Agent for OpenCode {
         Ok(delta_of(&store::load(path)?, "").usage_msgs)
     }
 
-    /// Nothing is restored: a database session cannot be written back, and a file of the older
-    /// layout is not worth overwriting with an export. The archive is for reading.
-    fn owns_transcript(&self, _path: &Path) -> bool {
-        false
+    /// A session of this adapter's database, or a file of its older layout.
+    fn owns_transcript(&self, path: &Path) -> bool {
+        match store::split_db_path(path) {
+            Some((db, _)) => db.parent() == Some(self.dir.as_path()),
+            None => crate::agents::is_inside(&self.dir, path),
+        }
     }
 
     fn transcript_exists(&self, path: &Path) -> bool {
@@ -248,11 +293,45 @@ impl Agent for OpenCode {
         format!("{session_id}.json.zst")
     }
 
-    /// The session as one JSON export, compressed.
+    /// The session as one JSON export, compressed: what eye reads, and `opencode session export`
+    /// when OpenCode can be asked (what restoring needs).
     fn archive(&self, path: &Path, copy: &Path) -> Result<()> {
-        let l = store::load(path)?;
+        let mut l = store::load(path)?;
+        let id = match store::split_db_path(path) {
+            Some((db, id)) => db.is_file().then_some(id),
+            None => path.file_stem().and_then(|s| s.to_str()).map(String::from),
+        };
+        if let Some(id) = id {
+            l.native = self.export_native(&id);
+        }
         let bytes = zstd::encode_all(serde_json::to_vec(&l)?.as_slice(), 3)?;
         write_private(copy, &bytes)
+    }
+
+    /// Put the session back into OpenCode with `opencode session import`, so that `opencode
+    /// --session <id>` resumes it after OpenCode deleted it. A copy made without OpenCode's export
+    /// can only be read.
+    fn restore_archived(&self, copy: &Path, dest: &Path) -> Option<Result<()>> {
+        Some((|| {
+            anyhow::ensure!(
+                !self.has_session(dest),
+                "the session is still in OpenCode; nothing restored"
+            );
+            let json = zstd::decode_all(std::fs::File::open(copy)?).context("decompressing")?;
+            let l: events::Loaded =
+                serde_json::from_slice(&json).context("reading the archived copy")?;
+            let native = l.native.context(
+                "this copy was made without `opencode session export` (OpenCode was not there), so it can be read but not put back",
+            )?;
+            let tmp = copy.with_extension("import.json");
+            self.import_native(&native, &tmp)?;
+            anyhow::ensure!(
+                self.has_session(dest),
+                "`opencode session import` ran but the session is not in {}",
+                crate::util::show_path(&self.dir)
+            );
+            Ok(())
+        })())
     }
 
     fn unarchive(&self, copy: &Path, dest: &Path) -> Result<()> {
@@ -334,6 +413,65 @@ impl Agent for OpenCode {
             }
         }
         Ok(items.into())
+    }
+
+    /// A session is live while its turn runs (or just ended); the plugin's prompts win over `busy`.
+    fn live_sessions(&self) -> Vec<LiveSession> {
+        live::sessions(&self.dir)
+    }
+
+    /// The turn times on the session's row do not show a permission prompt; the plugin does.
+    fn live_status_shows_prompts(&self) -> bool {
+        false
+    }
+
+    fn queue_line(&self, event: &str, payload: &Value, ts: i64) -> Option<Value> {
+        hooks::queue_line(event, payload, ts)
+    }
+
+    fn wait_effect(&self, kind: &str, event: &Value, ts: i64) -> Option<Wait> {
+        hooks::wait_effect(kind, event, ts)
+    }
+
+    fn ask(&self, req: &HeadlessRequest) -> Result<HeadlessReply> {
+        headless::ask(self, req)
+    }
+
+    /// `free`: the small free model `opencode models` lists (names of free models come and go).
+    fn default_summary_model(&self) -> &'static str {
+        headless::FREE
+    }
+
+    fn preflight(&self, ctx: &InstallCtx) -> Result<()> {
+        install::preflight(self, ctx)
+    }
+
+    fn install(&self, ctx: &InstallCtx) -> Result<Report> {
+        install::install(self, ctx)
+    }
+
+    fn refresh_skill(&self) -> Result<Option<skill_file::State>> {
+        match std::env::current_exe() {
+            Ok(exe) => self.refresh_skill_with(&exe),
+            Err(_) => Ok(None),
+        }
+    }
+
+    fn uninstall(&self, ctx: &InstallCtx) -> Result<Report> {
+        install::uninstall(self, ctx)
+    }
+
+    fn doctor(&self, ctx: &InstallCtx) -> Vec<Check> {
+        install::doctor(self, ctx)
+    }
+
+    fn daemon_env(&self) -> Vec<(String, String)> {
+        self.env()
+            .into_iter()
+            .filter(|(k, v)| {
+                k == "XDG_DATA_HOME" && std::env::var(k).ok().as_deref() != Some(v.as_str())
+            })
+            .collect()
     }
 
     fn executable(&self) -> String {

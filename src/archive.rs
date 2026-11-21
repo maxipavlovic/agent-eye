@@ -187,6 +187,10 @@ pub fn restore(db: &Db, paths: &Paths, agents: &Agents, id: &str) -> Result<Path
     );
     let src = copy_of(&s, paths, agent.as_ref());
     anyhow::ensure!(src.exists(), "no archived copy at {}", src.display());
+    if let Some(done) = agent.restore_archived(&src, &dest) {
+        done?;
+        return Ok(dest);
+    }
     std::fs::create_dir_all(dest.parent().context("no parent dir")?)?;
     let tmp = sibling(&dest, ".restoring");
     remove_any(&tmp);
