@@ -158,7 +158,7 @@ function demoLoose(board: Board): Record<string, LooseEnd[]> {
   }
   if (b) {
     out[b.id] = [
-      item(b, { key: 'worktree:/private/tmp/claude-501/p/s/wt', kind: 'worktree', action: 'remove', what: '/private/tmp/claude-501/p/s/wt', line: 'worktree /private/tmp/claude-501/p/s/wt of web sits in a scratchpad', confirm: 'Remove worktree /private/tmp/claude-501/p/s/wt?' }),
+      item(b, { key: 'worktree:/Users/you/code/web-retry', kind: 'worktree', action: 'remove', what: '/Users/you/code/web-retry', line: 'worktree /Users/you/code/web-retry of web: its folder is gone', confirm: 'Remove worktree /Users/you/code/web-retry?' }),
     ];
   }
   return out;
