@@ -4,7 +4,6 @@
 
 use super::{LimitWindow, PlanLimits};
 use anyhow::Result;
-use chrono::{Local, TimeZone};
 use rusqlite::{params, Connection, OptionalExtension};
 
 fn key(agent: &str) -> String {
@@ -55,10 +54,7 @@ pub fn label(w: &LimitWindow) -> String {
 
 /// `Mon 09:00` in local time.
 pub fn reset_text(ms: i64) -> String {
-    Local
-        .timestamp_millis_opt(ms)
-        .earliest()
-        .map_or_else(String::new, |d| d.format("%a %H:%M").to_string())
+    crate::util::local_time(ms).map_or_else(String::new, |d| d.strftime("%a %H:%M").to_string())
 }
 
 fn percent(p: f64) -> String {

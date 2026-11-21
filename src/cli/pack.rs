@@ -68,7 +68,7 @@ pub fn export(
         if html || md {
             bail!("--html and --md write one session: give its id (`eye export <session> --html`)");
         }
-        let name = pack::pack_name(&pack::host_name(), chrono::Local::now());
+        let name = pack::pack_name(&pack::host_name(), &jiff::Zoned::now());
         if to.is_some_and(is_stdio) {
             if std::io::stdout().is_terminal() {
                 bail!("a pack is binary: send it to a program or a file, e.g. `eye export --to - | age -p > {name}.age`");

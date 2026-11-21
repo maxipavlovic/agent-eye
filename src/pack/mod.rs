@@ -145,11 +145,11 @@ pub fn file_word(s: &str) -> String {
 }
 
 /// `agent-eye-<host>-<YYYYMMDD-HHMM>.eyepack`
-pub fn pack_name(host: &str, at: chrono::DateTime<chrono::Local>) -> String {
+pub fn pack_name(host: &str, at: &jiff::Zoned) -> String {
     format!(
         "agent-eye-{}-{}.{EXT}",
         file_word(host),
-        at.format("%Y%m%d-%H%M")
+        at.strftime("%Y%m%d-%H%M")
     )
 }
 

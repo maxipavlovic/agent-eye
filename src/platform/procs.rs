@@ -6,7 +6,6 @@
 //! made in `list_own` and `info`.
 
 use super::MACOS;
-use chrono::TimeZone;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::Command;
@@ -52,11 +51,9 @@ pub fn parse_ps_line(line: &str) -> Option<(u32, u32, u32, i64, String)> {
 /// `Sat Nov 21 10:11:12 2026` in local time, as Unix seconds.
 pub fn parse_lstart(w: &[&str; 5]) -> Option<i64> {
     let text = w.join(" ");
-    let naive = chrono::NaiveDateTime::parse_from_str(&text, "%a %b %e %H:%M:%S %Y").ok()?;
-    chrono::Local
-        .from_local_datetime(&naive)
-        .earliest()
-        .map(|t| t.timestamp())
+    let civil = jiff::civil::DateTime::strptime("%a %b %e %H:%M:%S %Y", &text).ok()?;
+    crate::util::wall_earliest(&jiff::tz::TimeZone::system(), civil)
+        .map(|t| t.timestamp().as_second())
 }
 
 /// `lsof -a -d cwd -Fpn` output: pid to working folder.
@@ -366,15 +363,29 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_start_time_with_a_one_digit_day_is_read() {
+        let at = parse_lstart(&["Sun", "Nov", "1", "09:05:06", "2026"]).unwrap();
+        let local = jiff::Timestamp::from_second(at)
+            .unwrap()
+            .to_zoned(jiff::tz::TimeZone::system());
+        assert_eq!(
+            local.strftime("%Y-%m-%d %H:%M:%S").to_string(),
+            "2026-11-01 09:05:06"
+        );
+    }
+
+    #[test]
     fn a_ps_line_is_read() {
         let (pid, ppid, uid, start, cmd) = parse_ps_line(
             "38090     1   501 Sat Nov 21 10:11:12 2026 /opt/homebrew/bin/node /x/vite.js --port 4321",
         )
         .unwrap();
         assert_eq!((pid, ppid, uid), (38090, 1, 501));
-        let local = chrono::Local.timestamp_opt(start, 0).unwrap();
+        let local = jiff::Timestamp::from_second(start)
+            .unwrap()
+            .to_zoned(jiff::tz::TimeZone::system());
         assert_eq!(
-            local.format("%Y-%m-%d %H:%M:%S").to_string(),
+            local.strftime("%Y-%m-%d %H:%M:%S").to_string(),
             "2026-11-21 10:11:12"
         );
         assert_eq!(cmd, "/opt/homebrew/bin/node /x/vite.js --port 4321");
@@ -410,7 +421,7 @@ mod tests {
     fn info_reads_this_process_and_terminate_refuses_pid_one() {
         let me = info(std::process::id()).unwrap();
         assert_eq!(me.uid, super::super::uid());
-        assert!((chrono::Utc::now().timestamp() - me.start) >= 0);
+        assert!((jiff::Timestamp::now().as_second() - me.start) >= 0);
         assert!(terminate(0).is_err() && terminate(1).is_err());
         assert!(info(u32::MAX - 1).is_none());
     }

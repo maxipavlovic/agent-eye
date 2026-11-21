@@ -1,4 +1,8 @@
-use chrono::{DateTime, Local, TimeZone};
+use jiff::{
+    civil::DateTime,
+    tz::{AmbiguousOffset, TimeZone},
+    Timestamp, Zoned,
+};
 
 /// Shell-quote with single quotes: `it's` becomes `'it'\''s'`.
 pub fn shell_quote(s: &str) -> String {
@@ -66,9 +70,7 @@ pub fn new_uuid() -> std::io::Result<String> {
 
 /// An RFC 3339 time as Unix ms.
 pub fn iso_to_ms(s: &str) -> Option<i64> {
-    DateTime::parse_from_rfc3339(s)
-        .ok()
-        .map(|d| d.timestamp_millis())
+    s.parse::<Timestamp>().ok().map(|t| t.as_millisecond())
 }
 
 /// First `max` chars.
@@ -113,21 +115,40 @@ pub fn hex(b: &[u8]) -> String {
 
 /// Now, in Unix ms.
 pub fn now_ms() -> i64 {
-    chrono::Utc::now().timestamp_millis()
+    Timestamp::now().as_millisecond()
+}
+
+/// A Unix ms time on the wall clock of this machine; None when it is out of range.
+pub fn local_time(ms: i64) -> Option<Zoned> {
+    Some(
+        Timestamp::from_millisecond(ms)
+            .ok()?
+            .to_zoned(TimeZone::system()),
+    )
+}
+
+/// A wall-clock time in a zone: the first one when the clocks go back and it happens twice, None
+/// when they go forward and it never happens.
+pub fn wall_earliest(tz: &TimeZone, wall: DateTime) -> Option<Zoned> {
+    let amb = tz.to_ambiguous_zoned(wall);
+    if matches!(amb.offset(), AmbiguousOffset::Gap { .. }) {
+        return None;
+    }
+    amb.earlier().ok()
 }
 
 /// A Unix ms time as local `YYYY-MM-DD HH:MM`.
 pub fn fmt_ts(ms: i64) -> String {
-    match Local.timestamp_millis_opt(ms).single() {
-        Some(d) => d.format("%Y-%m-%d %H:%M").to_string(),
+    match local_time(ms) {
+        Some(d) => d.strftime("%Y-%m-%d %H:%M").to_string(),
         None => "?".into(),
     }
 }
 
 /// A Unix ms time as local `HH:MM`.
 pub fn fmt_clock(ms: i64) -> String {
-    match Local.timestamp_millis_opt(ms).single() {
-        Some(d) => d.format("%H:%M").to_string(),
+    match local_time(ms) {
+        Some(d) => d.strftime("%H:%M").to_string(),
         None => "?".into(),
     }
 }

@@ -16,7 +16,6 @@ use crate::model::{Idea, Session};
 use crate::pick::session_title;
 use crate::util::head_chars;
 use anyhow::{ensure, Context, Result};
-use chrono::{Datelike, Local, TimeZone};
 use rusqlite::{params, types::Value};
 
 /// The longest note kept.
@@ -225,19 +224,16 @@ pub fn list(db: &Db, now: i64) -> Result<Vec<Entry>> {
 /// When a reminder is, in words: `today 14:00`, `tomorrow 09:00`, `Fri 14:00` within the week,
 /// else the date.
 pub fn label(at: i64, now: i64) -> String {
-    let (Some(a), Some(n)) = (
-        Local.timestamp_millis_opt(at).single(),
-        Local.timestamp_millis_opt(now).single(),
-    ) else {
+    let (Some(a), Some(n)) = (crate::util::local_time(at), crate::util::local_time(now)) else {
         return "?".into();
     };
-    let time = a.format("%H:%M");
-    match (a.date_naive() - n.date_naive()).num_days() {
+    let time = a.strftime("%H:%M");
+    match (a.date() - n.date()).get_days() {
         0 => format!("today {time}"),
         1 => format!("tomorrow {time}"),
-        2..=6 => format!("{} {time}", a.format("%a")),
-        _ if a.year() == n.year() => format!("{} {time}", a.format("%-d %b")),
-        _ => format!("{} {time}", a.format("%-d %b %Y")),
+        2..=6 => format!("{} {time}", a.strftime("%a")),
+        _ if a.year() == n.year() => format!("{} {time}", a.strftime("%-d %b")),
+        _ => format!("{} {time}", a.strftime("%-d %b %Y")),
     }
 }
 

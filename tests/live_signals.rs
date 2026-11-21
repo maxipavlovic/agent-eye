@@ -177,9 +177,9 @@ fn claude_world(live: Value) -> (World, PathBuf) {
 
 /// `YYYY-MM-DDTHH:MM:SS.mmmZ` of a Unix ms time.
 fn iso(ms: i64) -> String {
-    chrono::DateTime::from_timestamp_millis(ms)
+    jiff::Timestamp::from_millisecond(ms)
         .unwrap()
-        .format("%Y-%m-%dT%H:%M:%S%.3fZ")
+        .strftime("%Y-%m-%dT%H:%M:%S%.3fZ")
         .to_string()
 }
 
