@@ -159,8 +159,8 @@ pub fn parse_docker_ps(text: &str) -> Vec<Docker> {
                 .take(3)
                 .collect::<Vec<_>>()
                 .join(" ");
-            let created = chrono::DateTime::parse_from_str(&created, "%Y-%m-%d %H:%M:%S %z")
-                .map(|t| t.timestamp())
+            let created = jiff::Timestamp::strptime("%Y-%m-%d %H:%M:%S %z", &created)
+                .map(|t| t.as_second())
                 .unwrap_or(0);
             let mounts = s("Mounts")
                 .split(',')

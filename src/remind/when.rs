@@ -1,13 +1,15 @@
 //! The words for a time: `tomorrow`, `mon`..`sun`, `3d`, `1w`, `4h`, `2026-11-20`, `2026-11-20 14:00`.
 //! One parser for the command line, the board and the picker. A day without a time is 9:00.
 
-use anyhow::{bail, ensure, Result};
-use chrono::{
-    DateTime, Datelike, Duration, Local, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Weekday,
+use anyhow::{anyhow, bail, ensure, Result};
+use jiff::{
+    civil::{Date, DateTime, Weekday},
+    tz::TimeZone,
+    Span, Timestamp, Zoned,
 };
 
 /// The hour of the day the words mean when they name a day and no time.
-const MORNING_HOUR: i64 = 9;
+const MORNING_HOUR: i8 = 9;
 
 /// The most days, weeks or hours that a relative time may reach ahead, so a typo cannot overflow.
 const MAX_AHEAD: i64 = 10_000;
@@ -16,51 +18,62 @@ const HELP: &str =
     "say when as tomorrow, mon..sun, 30m, 4h, 3d, 1w, 2026-11-20 or 2026-11-20 14:00";
 
 const WEEKDAYS: [(&str, Weekday); 7] = [
-    ("monday", Weekday::Mon),
-    ("tuesday", Weekday::Tue),
-    ("wednesday", Weekday::Wed),
-    ("thursday", Weekday::Thu),
-    ("friday", Weekday::Fri),
-    ("saturday", Weekday::Sat),
-    ("sunday", Weekday::Sun),
+    ("monday", Weekday::Monday),
+    ("tuesday", Weekday::Tuesday),
+    ("wednesday", Weekday::Wednesday),
+    ("thursday", Weekday::Thursday),
+    ("friday", Weekday::Friday),
+    ("saturday", Weekday::Saturday),
+    ("sunday", Weekday::Sunday),
 ];
 
 /// The time `text` names, in Unix ms, in local time and after `now_ms`.
 pub fn parse_local(text: &str, now_ms: i64) -> Result<i64> {
-    let now = Local
-        .timestamp_millis_opt(now_ms)
-        .single()
-        .ok_or_else(|| anyhow::anyhow!("the clock is out of range"))?;
+    let now = Timestamp::from_millisecond(now_ms)
+        .map_err(|_| anyhow!("the clock is out of range"))?
+        .to_zoned(TimeZone::system());
     parse(text, &now)
 }
 
 /// The time `text` names, in Unix ms, in the zone of `now` and after it.
-pub fn parse<Tz: TimeZone>(text: &str, now: &DateTime<Tz>) -> Result<i64> {
+pub fn parse(text: &str, now: &Zoned) -> Result<i64> {
     let t = text.trim().to_lowercase();
     ensure!(!t.is_empty(), "{HELP}");
-    let tz = now.timezone();
-    let today = now.date_naive();
-    let nine = |d: NaiveDate| at(&tz, morning(d));
+    let tz = now.time_zone();
+    let today = now.date();
+    let out_of_range = || anyhow!("{} is out of range", text.trim());
+    let days = |from: DateTime, n: i64| -> Result<DateTime> {
+        let span = Span::new().try_days(n).map_err(|_| out_of_range())?;
+        from.checked_add(span).map_err(|_| out_of_range())
+    };
+    let nine = |d: Date| at(tz, morning(d));
     let when = if t == "tomorrow" {
-        nine(today + Duration::days(1))
+        nine(days(today.into(), 1)?.date())?
     } else if let Some(day) = weekday(&t) {
-        let ahead = (day.num_days_from_monday() + 7 - today.weekday().num_days_from_monday()) % 7;
-        nine(today + Duration::days(if ahead == 0 { 7 } else { i64::from(ahead) }))
+        let ahead = (i64::from(day.to_monday_zero_offset()) + 7
+            - i64::from(today.weekday().to_monday_zero_offset()))
+            % 7;
+        nine(days(today.into(), if ahead == 0 { 7 } else { ahead })?.date())?
     } else if let Some((n, unit)) = relative(&t) {
         match unit {
-            'm' => now.clone() + Duration::minutes(n),
-            'h' => now.clone() + Duration::hours(n),
+            'm' => now.checked_add(Span::new().minutes(n)),
+            'h' => now.checked_add(Span::new().hours(n)),
             // days and weeks keep the time of day, whatever the clocks did in between
-            'd' => at(&tz, now.naive_local() + Duration::days(n)),
-            _ => at(&tz, now.naive_local() + Duration::days(7 * n)),
+            'd' => return finish(text, now, at(tz, days(now.datetime(), n)?)?),
+            _ => return finish(text, now, at(tz, days(now.datetime(), 7 * n)?)?),
         }
+        .map_err(|_| out_of_range())?
     } else if let Some(d) = absolute(&t) {
-        at(&tz, d)
+        at(tz, d)?
     } else {
         bail!("cannot read '{}': {HELP}", text.trim());
     };
+    finish(text, now, when)
+}
+
+fn finish(text: &str, now: &Zoned, when: Zoned) -> Result<i64> {
     ensure!(when > *now, "{} has already passed", text.trim());
-    Ok(when.timestamp_millis())
+    Ok(when.timestamp().as_millisecond())
 }
 
 fn weekday(t: &str) -> Option<Weekday> {
@@ -78,116 +91,51 @@ fn relative(t: &str) -> Option<(i64, char)> {
 }
 
 /// A date, with a time or at the default one.
-fn absolute(t: &str) -> Option<NaiveDateTime> {
+fn absolute(t: &str) -> Option<DateTime> {
     // the lower-cased text of `2026-11-20T14:00` has a `t` where a space may be
-    NaiveDateTime::parse_from_str(&t.replacen('t', " ", 1), "%Y-%m-%d %H:%M")
+    DateTime::strptime("%Y-%m-%d %H:%M", t.replacen('t', " ", 1))
         .ok()
-        .or_else(|| NaiveDate::parse_from_str(t, "%Y-%m-%d").ok().map(morning))
+        .or_else(|| Date::strptime("%Y-%m-%d", t).ok().map(morning))
 }
 
 /// A day at the default time.
-fn morning(d: NaiveDate) -> NaiveDateTime {
-    d.and_time(NaiveTime::MIN + Duration::hours(MORNING_HOUR))
+fn morning(d: Date) -> DateTime {
+    d.at(MORNING_HOUR, 0, 0, 0)
 }
 
 /// A wall-clock time in a zone. When the clocks go back and it happens twice, the first one; when
 /// they go forward and it never happens, the same time an hour later.
-fn at<Tz: TimeZone>(tz: &Tz, wall: NaiveDateTime) -> DateTime<Tz> {
-    let first = |w: NaiveDateTime| tz.from_local_datetime(&w).earliest();
+fn at(tz: &TimeZone, wall: DateTime) -> Result<Zoned> {
+    let first = |w: DateTime| crate::util::wall_earliest(tz, w);
     first(wall)
-        .or_else(|| first(wall + Duration::hours(1)))
-        .unwrap_or_else(|| tz.from_utc_datetime(&wall))
+        .or_else(|| first(wall.checked_add(Span::new().hours(1)).ok()?))
+        .ok_or_else(|| anyhow!("{wall} is out of range"))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::{FixedOffset, LocalResult, Offset, Utc};
 
-    /// Central European time with its real rules for 2026: +01:00, +02:00 from 29 March 01:00 UTC
-    /// (02:00 becomes 03:00) to 25 October 01:00 UTC (03:00 becomes 02:00).
-    #[derive(Clone, Copy, Debug)]
-    struct Cet;
-
-    fn forward() -> NaiveDateTime {
-        NaiveDate::from_ymd_opt(2026, 3, 29)
-            .unwrap()
-            .and_hms_opt(1, 0, 0)
-            .unwrap()
-    }
-    fn back() -> NaiveDateTime {
-        NaiveDate::from_ymd_opt(2026, 10, 25)
-            .unwrap()
-            .and_hms_opt(1, 0, 0)
-            .unwrap()
-    }
-    fn offset_at_utc(utc: &NaiveDateTime) -> FixedOffset {
-        let hours = if *utc >= forward() && *utc < back() {
-            2
-        } else {
-            1
-        };
-        FixedOffset::east_opt(hours * 3600).unwrap()
+    /// Spain's real rules, from the bundled tz database: +01:00, +02:00 from 29 March 2026 01:00
+    /// UTC (02:00 becomes 03:00) to 25 October 2026 01:00 UTC (03:00 becomes 02:00).
+    fn madrid() -> TimeZone {
+        TimeZone::get("Europe/Madrid").unwrap()
     }
 
-    #[derive(Clone, Copy, Debug)]
-    struct CetOffset(FixedOffset);
-    impl Offset for CetOffset {
-        fn fix(&self) -> FixedOffset {
-            self.0
-        }
-    }
-
-    impl TimeZone for Cet {
-        type Offset = CetOffset;
-        fn from_offset(_: &CetOffset) -> Cet {
-            Cet
-        }
-        fn offset_from_local_date(&self, d: &NaiveDate) -> LocalResult<CetOffset> {
-            self.offset_from_local_datetime(&d.and_hms_opt(12, 0, 0).unwrap())
-        }
-        fn offset_from_local_datetime(&self, l: &NaiveDateTime) -> LocalResult<CetOffset> {
-            let as_winter = *l - Duration::hours(1);
-            let as_summer = *l - Duration::hours(2);
-            let winter = offset_at_utc(&as_winter).local_minus_utc() == 3600;
-            let summer = offset_at_utc(&as_summer).local_minus_utc() == 7200;
-            match (winter, summer) {
-                (true, true) => LocalResult::Ambiguous(
-                    CetOffset(offset_at_utc(&as_summer)),
-                    CetOffset(offset_at_utc(&as_winter)),
-                ),
-                (true, false) => LocalResult::Single(CetOffset(offset_at_utc(&as_winter))),
-                (false, true) => LocalResult::Single(CetOffset(offset_at_utc(&as_summer))),
-                (false, false) => LocalResult::None,
-            }
-        }
-        fn offset_from_utc_date(&self, d: &NaiveDate) -> CetOffset {
-            self.offset_from_utc_datetime(&d.and_hms_opt(12, 0, 0).unwrap())
-        }
-        fn offset_from_utc_datetime(&self, utc: &NaiveDateTime) -> CetOffset {
-            CetOffset(offset_at_utc(utc))
-        }
-    }
-
-    impl std::fmt::Display for CetOffset {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            self.0.fmt(f)
-        }
-    }
-
-    /// A moment as local wall-clock text in `Cet`.
+    /// A moment as local wall-clock text in Madrid.
     fn show(ms: i64) -> String {
-        Cet.timestamp_millis_opt(ms)
+        Timestamp::from_millisecond(ms)
             .unwrap()
-            .format("%a %Y-%m-%d %H:%M")
+            .to_zoned(madrid())
+            .strftime("%a %Y-%m-%d %H:%M")
             .to_string()
     }
 
-    fn now(y: i32, m: u32, d: u32, h: u32, mi: u32) -> DateTime<Cet> {
-        Cet.with_ymd_and_hms(y, m, d, h, mi, 0).earliest().unwrap()
+    fn now(y: i16, m: i8, d: i8, h: i8, mi: i8) -> Zoned {
+        crate::util::wall_earliest(&madrid(), jiff::civil::date(y, m, d).at(h, mi, 0, 0)).unwrap()
     }
 
-    fn at_(text: &str, from: &DateTime<Cet>) -> String {
+    fn at_(text: &str, from: &Zoned) -> String {
         show(parse(text, from).unwrap())
     }
 
@@ -225,12 +173,33 @@ mod tests {
         // the night of 29 March 2026 is one hour short
         let n = now(2026, 3, 28, 10, 0);
         assert_eq!(at_("1d", &n), "Sun 2026-03-29 10:00");
-        assert_eq!(at_("24h", &n.clone()), "Sun 2026-03-29 11:00");
+        assert_eq!(at_("24h", &n), "Sun 2026-03-29 11:00");
         assert_eq!(at_("tomorrow", &n), "Sun 2026-03-29 09:00");
         // the night of 25 October 2026 is one hour long
         let n = now(2026, 10, 24, 10, 0);
         assert_eq!(at_("1d", &n), "Sun 2026-10-25 10:00");
         assert_eq!(at_("24h", &n), "Sun 2026-10-25 09:00");
+    }
+
+    #[test]
+    fn tomorrow_at_nine_is_nine_on_the_change_days_and_the_days_around_them() {
+        for (from, want) in [
+            (now(2026, 3, 28, 22, 0), "Sun 2026-03-29 09:00"),
+            (now(2026, 3, 29, 12, 0), "Mon 2026-03-30 09:00"),
+            (now(2026, 3, 29, 1, 30), "Mon 2026-03-30 09:00"),
+            (now(2026, 10, 24, 22, 0), "Sun 2026-10-25 09:00"),
+            (now(2026, 10, 25, 12, 0), "Mon 2026-10-26 09:00"),
+        ] {
+            assert_eq!(at_("tomorrow", &from), want);
+        }
+        // the distance in real time is 23, 25, 24 and 24 hours, and never 24 by force
+        let hours = |a: &Zoned, text: &str| {
+            (parse(text, a).unwrap() - a.timestamp().as_millisecond()) as f64 / 3_600_000.0
+        };
+        assert_eq!(hours(&now(2026, 3, 28, 9, 0), "tomorrow"), 24.0 - 1.0);
+        assert_eq!(hours(&now(2026, 10, 24, 9, 0), "tomorrow"), 24.0 + 1.0);
+        assert_eq!(hours(&now(2026, 3, 29, 9, 0), "tomorrow"), 24.0);
+        assert_eq!(hours(&now(2026, 3, 27, 9, 0), "tomorrow"), 24.0);
     }
 
     #[test]
@@ -243,9 +212,10 @@ mod tests {
         assert_eq!(show(first), "Sun 2026-10-25 02:30");
         assert_eq!(show(second), "Sun 2026-10-25 02:30");
         assert_eq!(
-            Utc.timestamp_millis_opt(first)
+            Timestamp::from_millisecond(first)
                 .unwrap()
-                .format("%H:%M")
+                .to_zoned(TimeZone::UTC)
+                .strftime("%H:%M")
                 .to_string(),
             "00:30"
         );

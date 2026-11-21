@@ -67,7 +67,7 @@ fn restore(g: &Global, name: &str, yes: bool) -> Result<()> {
     println!(
         "restore {} (made {}, schema {}, {:.1} MB)",
         e.name,
-        e.local_stamp().format("%Y-%m-%d %H:%M"),
+        e.local_stamp(),
         prepared.schema,
         e.bytes as f64 / 1e6
     );

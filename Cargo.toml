@@ -37,7 +37,7 @@ path = "src/main.rs"
 [dependencies]
 anyhow = "1"
 axum = { version = "0.7", default-features = false, features = ["http1", "tokio", "json", "query"] }
-chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+jiff = { version = "0.2", default-features = false, features = ["std", "tz-system", "tzdb-bundle-platform"] }
 clap = { version = "4", features = ["derive", "env"] }
 libc = "0.2"
 regex = "1"
@@ -56,6 +56,8 @@ tar = { version = "0.4.46", default-features = false }
 sha2 = "0.10"
 
 [dev-dependencies]
+# tests name Europe/Madrid, and a bare Linux image has no tz database
+jiff = { version = "0.2", default-features = false, features = ["std", "tz-system", "tzdb-bundle-always"] }
 http-body-util = "0.1"
 tempfile = "3"
 tower = { version = "0.5", features = ["util"] }

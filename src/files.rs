@@ -76,7 +76,7 @@ pub fn backup_name(p: &Path) -> PathBuf {
     let mut n = p.file_name().unwrap_or_default().to_os_string();
     n.push(format!(
         ".eye-backup-{}",
-        chrono::Local::now().format("%Y%m%d-%H%M%S")
+        jiff::Zoned::now().strftime("%Y%m%d-%H%M%S")
     ));
     p.with_file_name(n)
 }

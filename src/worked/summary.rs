@@ -4,7 +4,6 @@
 
 use super::{hour_start, store, Hour};
 use anyhow::Result;
-use chrono::{Local, NaiveDate, Offset, TimeZone};
 use rusqlite::Connection;
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -18,10 +17,7 @@ pub type OffsetFn<'a> = &'a dyn Fn(i64) -> i64;
 
 /// The offset of this machine's time zone at `utc_ms`.
 pub fn local_offset_ms(utc_ms: i64) -> i64 {
-    Local
-        .timestamp_millis_opt(utc_ms)
-        .earliest()
-        .map_or(0, |d| i64::from(d.offset().fix().local_minus_utc()) * 1000)
+    crate::util::local_time(utc_ms).map_or(0, |d| i64::from(d.offset().seconds()) * 1000)
 }
 
 /// One local day with work in it.
@@ -59,10 +55,11 @@ fn local_day(utc_ms: i64, offset: OffsetFn) -> i64 {
 
 /// `YYYY-MM-DD` of a day number (days since 1970-01-01).
 pub fn day_name(day: i64) -> String {
-    i32::try_from(day + 719_163)
+    jiff::Span::new()
+        .try_days(day)
         .ok()
-        .and_then(NaiveDate::from_num_days_from_ce_opt)
-        .map_or_else(|| "?".into(), |d| d.format("%Y-%m-%d").to_string())
+        .and_then(|d| jiff::civil::date(1970, 1, 1).checked_add(d).ok())
+        .map_or_else(|| "?".into(), |d| d.strftime("%Y-%m-%d").to_string())
 }
 
 /// Group hours into local days. `hours` must not be empty.

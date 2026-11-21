@@ -32,7 +32,7 @@ pub fn export(
         if html || md {
             bail!("--html and --md write one session: give its id (`eye export <session> --html`)");
         }
-        let name = pack::pack_name(&pack::host_name(), chrono::Local::now());
+        let name = pack::pack_name(&pack::host_name(), &jiff::Zoned::now());
         let out = target(to, &name)?;
         let done = pack::export(&env.db, &env.paths, &env.agents, &out)?;
         let c = &done.counts;
