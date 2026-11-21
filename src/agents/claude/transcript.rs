@@ -17,7 +17,7 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
-use std::io::{BufRead, BufReader, Seek, SeekFrom};
+use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
 use std::path::Path;
 use std::sync::LazyLock;
 
@@ -53,6 +53,25 @@ pub enum Pending {
     Commit {
         message: Option<String>,
     },
+}
+
+/// The `entrypoint` of the first lines of the transcript at `path` that have one.
+pub fn head_origin(path: &Path) -> Option<String> {
+    let f = std::fs::File::open(path).ok()?;
+    for line in BufReader::new(f.take(256 * 1024)).split(b'\n').take(60) {
+        let line = line.ok()?;
+        if !String::from_utf8_lossy(&line).contains("\"entrypoint\"") {
+            continue;
+        }
+        if let Some(e) = serde_json::from_slice::<Value>(&line).ok().and_then(|v| {
+            s(&v, "entrypoint")
+                .filter(|e| !e.is_empty())
+                .map(String::from)
+        }) {
+            return Some(e);
+        }
+    }
+    None
 }
 
 /// Parse the transcript at `path` from byte offset `from`; the marker of the result is the offset
@@ -225,6 +244,11 @@ fn process(
     }
     if d.cwd.is_none() {
         d.cwd = s(v, "cwd").filter(|c| !c.is_empty()).map(String::from);
+    }
+    if d.origin_raw.is_none() {
+        d.origin_raw = s(v, "entrypoint")
+            .filter(|e| !e.is_empty())
+            .map(String::from);
     }
     if let Some(b) = s(v, "gitBranch") {
         if !b.is_empty() && b != "HEAD" {
@@ -712,6 +736,33 @@ mod tests {
         assert!(d.last_assistant_text.as_deref().unwrap().ends_with('?'));
         assert!(d.bg);
         assert!(d.reply_count >= 3);
+    }
+
+    #[test]
+    fn the_entrypoint_of_the_first_line_that_has_one_is_the_origin() {
+        let d = parse(
+            br#"{"type":"user","sessionId":"s","timestamp":"2026-11-01T10:00:00.000Z","message":{"role":"user","content":"a"}}
+{"type":"user","sessionId":"s","entrypoint":"sdk-ts","timestamp":"2026-11-01T10:00:01.000Z","message":{"role":"user","content":"b"}}
+{"type":"user","sessionId":"s","entrypoint":"cli","timestamp":"2026-11-01T10:00:02.000Z","message":{"role":"user","content":"c"}}
+"#,
+        );
+        assert_eq!(d.origin_raw.as_deref(), Some("sdk-ts"));
+        assert_eq!(parse(b"").origin_raw, None);
+    }
+
+    #[test]
+    fn the_head_origin_reads_only_the_first_lines() {
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("s.jsonl");
+        std::fs::write(
+            &p,
+            "{\"type\":\"user\",\"entrypoint\":\"claude-desktop\"}\n{\"type\":\"user\"}\n",
+        )
+        .unwrap();
+        assert_eq!(head_origin(&p).as_deref(), Some("claude-desktop"));
+        std::fs::write(&p, "{\"type\":\"user\"}\n").unwrap();
+        assert_eq!(head_origin(&p), None);
+        assert_eq!(head_origin(&dir.path().join("none.jsonl")), None);
     }
 
     #[test]

@@ -95,6 +95,11 @@ pub struct Session {
     pub transcript_state: Option<String>,
     pub archive_path: Option<String>,
     pub git_branch: Option<String>,
+    /// Where the session was started: `terminal`, `headless`, `app`, `desktop`, `ide`, `web` or
+    /// `night`; None when unknown.
+    pub origin: Option<String>,
+    /// What the agent wrote that `origin` was mapped from.
+    pub origin_raw: Option<String>,
     pub prompt_count: i64,
     pub reply_count: i64,
     pub last_user_text: Option<String>,

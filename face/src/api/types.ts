@@ -75,6 +75,9 @@ export interface LoopItem {
   line: string;
 }
 
+/** Where a session was started; `null` when unknown. The terminal is the normal case. */
+export type Origin = 'terminal' | 'headless' | 'app' | 'desktop' | 'ide' | 'web' | 'night';
+
 export interface Card {
   id: string;
   /** Agent id, e.g. "claude". */
@@ -85,6 +88,10 @@ export interface Card {
   folder: string | null;
   repo: string | null;
   branch: string | null;
+  /** Where the session was started (see `Origin`). */
+  origin?: Origin | null;
+  /** What the agent wrote that `origin` was mapped from (`sdk-ts`). */
+  origin_raw?: string | null;
   column: Where;
   auto_column: Where;
   manual: boolean;

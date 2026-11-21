@@ -1947,3 +1947,19 @@ mod install_cli {
         );
     }
 }
+
+#[test]
+fn a_session_says_where_codex_was_started() {
+    let mut w = World::new();
+    w.scan();
+    let of = |id: &str| {
+        let s = w.session(id);
+        (s.origin, s.origin_raw)
+    };
+    let t = |o: &str, r: &str| (Some(o.to_string()), Some(r.to_string()));
+    assert_eq!(of(A), t("terminal", "codex_cli_rs/cli"));
+    assert_eq!(of(B), t("terminal", "codex_cli_rs/cli"));
+    assert_eq!(of(R1), t("terminal", "codex-tui/cli"));
+    // the source says it came from the editor, whatever the originator
+    assert_eq!(of(R2), t("ide", "codex-tui/vscode"));
+}

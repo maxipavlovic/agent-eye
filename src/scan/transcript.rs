@@ -39,6 +39,7 @@ pub(super) fn prompt_title(p: &str) -> String {
 }
 
 /// Store what one parse of a transcript found: the session row, its tokens, outputs and search text.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn apply(
     tx: &Connection,
     agent: &dyn Agent,
@@ -47,6 +48,7 @@ pub(super) fn apply(
     reset_in: bool,
     cfg: &Config,
     repo_cache: &mut HashMap<String, Option<String>>,
+    night_dir: Option<&std::path::Path>,
 ) -> Result<()> {
     let sid = f.session_id.as_str();
     let found: Option<Ex> = tx
@@ -170,6 +172,32 @@ pub(super) fn apply(
             recap.map(|r| r.0),
         ],
     )?;
+
+    // Where the session was started: set by the first read that finds it, kept after that. A night
+    // run is told by its folder, which a read without the entrypoint line can still see.
+    {
+        let (raw, cwd) = tx.query_row(
+            "SELECT origin_raw, cwd FROM session WHERE id=?1",
+            [sid],
+            |r| {
+                Ok((
+                    r.get::<_, Option<String>>(0)?,
+                    r.get::<_, Option<String>>(1)?,
+                ))
+            },
+        )?;
+        let raw = d.origin_raw.clone().or(raw.filter(|r| !r.is_empty()));
+        let origin = crate::agents::origin::of_session(
+            agent.id(),
+            raw.as_deref(),
+            cwd.as_deref(),
+            night_dir,
+        );
+        tx.execute(
+            "UPDATE session SET origin=?2, origin_raw=?3 WHERE id=?1",
+            params![sid, origin, raw.unwrap_or_default()],
+        )?;
+    }
 
     // Token counts: the delta on top of what is stored, from zero after a reset.
     if let Some(signals) = &d.signals {

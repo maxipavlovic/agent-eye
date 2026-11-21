@@ -9,7 +9,7 @@ import { KIND, type BoardCtx, type Kind } from './columns';
 import { folderMissing, startButton } from './folder';
 import { Hl } from './highlight';
 import { NightMark, nightAsk } from './Night';
-import { AgentTag, LooseMark, RemoteMark, Sigil, Tok } from './pieces';
+import { AgentTag, LooseMark, OriginMark, RemoteMark, Sigil, Tok } from './pieces';
 
 /** The open session is stopped until you answer in it: a due reminder or a prompt you owe (the card's border pulses, the chip blinks in the panel). */
 export function asksYou(c: Card): boolean {
@@ -113,6 +113,7 @@ export function CardView({ c, store, i, kind, tag }: { c: Card; store: Store; i:
         <span class="ml">
           {ptag}
           {agent}
+          <OriginMark origin={c.origin} raw={c.origin_raw} />
           {c.remote_url && <RemoteMark />}
           <LooseMark n={c.loose} />
           <NightMark n={c.night} />

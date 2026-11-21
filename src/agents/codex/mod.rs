@@ -200,6 +200,12 @@ impl Agent for Codex {
         usage::read_msgs(path)
     }
 
+    fn origin_raw(&self, path: &Path) -> Option<String> {
+        let name = path.file_name()?.to_str()?;
+        let (_, thread) = files::parse_file_name(name)?;
+        files::head(path, &thread)?.origin
+    }
+
     fn owns_transcript(&self, path: &Path) -> bool {
         [files::SESSIONS_DIR, files::ARCHIVED_DIR]
             .iter()

@@ -18,6 +18,8 @@ pub mod command_label;
 pub mod hooks_file;
 /// OpenCode.
 pub mod opencode;
+/// Where a session was started, mapped to a few words.
+pub mod origin;
 /// Finding Jira keys, pull requests and commits in transcript text, the same for every agent.
 pub mod outputs;
 /// Telling a reply that asks the user something from one that does not.
@@ -78,6 +80,11 @@ pub trait Agent: Send + Sync + std::fmt::Debug {
     /// read before eye kept it). `path` exists. The default knows no usage.
     fn usage_msgs(&self, _path: &Path) -> Result<Vec<UsageMsg>> {
         Ok(vec![])
+    }
+    /// What the transcript at `path` says about where its session was started (the raw value
+    /// `Delta::origin_raw` carries), read from its first lines only. The default knows none.
+    fn origin_raw(&self, _path: &Path) -> Option<String> {
+        None
     }
     /// True for a path that is one of the agent's transcripts (restoring an archived copy only
     /// writes there).

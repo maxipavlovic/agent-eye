@@ -134,6 +134,17 @@ function demoStates(board: Board, details: Record<string, CardDetail>, ideas: Id
     if (r) Object.assign(c, { remind_at: r[1], remind_note: r[2], remind_due: false });
     if (codex.some((id) => c.id.startsWith(id))) Object.assign(c, { agent: CODEX.id, agent_name: CODEX.short, next: c.next?.replace(/^Claude:/, 'Codex:') ?? c.next });
   }
+  // where a few sessions were started; the others are terminal sessions and show nothing
+  const sessionIds = board.columns.flatMap((c) => c.cards).filter((c) => !c.id.startsWith('idea:')).map((c) => c.id);
+  const origins: Array<[string | undefined, Card['origin'], string]> = [
+    [sessionIds[1], 'app', 'sdk-ts'],
+    [sessionIds[4], 'ide', 'claude-vscode'],
+    [sessionIds[6], 'night', 'sdk-cli'],
+  ];
+  for (const c of cards) {
+    const o = origins.find(([id]) => id === c.id);
+    if (o) Object.assign(c, { origin: o[1], origin_raw: o[2] });
+  }
   for (const i of ideas) {
     const r = remind.find(([id]) => id === `idea:${i.id}`);
     if (r) Object.assign(i, { remind_at: r[1], remind_note: r[2] });

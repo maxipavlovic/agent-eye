@@ -113,6 +113,18 @@ INTO` or the backup API, then compress it. `tests/support/folder_agent.rs` does 
 - **Hooks.** `hooks.json` has the shape of Claude's `settings.json`, so both adapters use `hooks_file.rs` with their own events and command. Codex runs a hook only after the user trusts it once; eye can say so and cannot see it. `PostToolUse` runs after every tool call and carries its output, so its queue line keeps only the session id.
 - **Summaries.** `ask` runs `codex exec` with the flags that keep it from leaving a session behind or running the user's own hooks, checks once with `--help` that this version has them, and hands over the schema in the strict form Codex wants (`additionalProperties: false`, every property required).
 
+## Where a session was started
+
+Each session has an `origin` (schema 17): `terminal`, `headless`, `app`, `desktop`, `ide`, `web`, `night`, or none when unknown, and the `origin_raw` it came from. The board shows a chip for everything but `terminal`, the picker preview says "started from: an app (sdk-ts)", and `eye ls --origin app` filters. `Delta::origin_raw` carries the raw value from the first line that has it, `Agent::origin_raw(path)` reads it from the first lines of a transcript (the backfill for sessions indexed before), and `agents/origin.rs` maps raw values to words in one place. A session whose folder is under `<eye home>/night/` is `night`, whatever it wrote. Summaries run with `--no-session-persistence`, so they leave no session behind to label.
+
+| Agent | What it writes | Maps to |
+|---|---|---|
+| Claude Code | `entrypoint` on its lines | `cli` terminal; `sdk-cli`, `claude-code-github-action` headless; `sdk-ts`, `sdk-py`, `mcp` app; `claude-desktop`, `claude-desktop-3p`, `local-agent`, `claude-coworker*` desktop; `claude-vscode` ide; `remote*`, `ssh-remote`, `claude-in-slack`, `claude-in-teams` web |
+| Codex | `originator` and `source` of `session_meta`, joined as `originator/source` | the source first: `vscode` ide, `exec` headless, `mcp` app, `custom:atlas` and `custom:chatgpt` desktop; else the originator: `codex_cli_rs`, `codex-tui` terminal, `codex_exec` headless, `codex_vscode` ide, `codex_atlas`, `codex_chatgpt_desktop` and `Codex …` desktop |
+| agy, OpenCode | nothing | none |
+
+The Claude Code values are the ones its 2.1.311 binary knows (`CLAUDE_CODE_ENTRYPOINT`); the docs do not list them. The Codex ones are from its `default_client.rs` and from rollouts. A value that is not in the table is stored raw and maps to none.
+
 ## Antigravity CLI and OpenCode
 
 What works for each (a dash is "not offered"):

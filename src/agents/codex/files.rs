@@ -114,6 +114,7 @@ pub enum Role {
 #[derive(Debug, Clone)]
 pub struct Head {
     pub cwd: Option<String>,
+    pub origin: Option<String>,
     pub role: Role,
 }
 
@@ -207,6 +208,7 @@ fn read_head(path: &Path, thread_id: &str) -> Option<Head> {
     let meta = first?;
     Some(Head {
         cwd: str_at(&meta, &["cwd"]).map(String::from),
+        origin: super::rollout::origin_of_meta(&meta),
         role: role_of(&meta),
     })
 }

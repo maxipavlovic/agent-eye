@@ -101,6 +101,8 @@ fn session_json(s: &Session, col: Column, user: &UserCfg, agents: &Agents) -> Va
         "folder": s.cwd,
         "repo": s.repo_root,
         "branch": s.git_branch,
+        "origin": s.origin,
+        "origin_raw": s.origin_raw,
         "column": col.as_str(),
         "kind": s.kind,
         "started_at": s.started_at,
@@ -190,10 +192,11 @@ pub fn run() -> Result<()> {
         } => show::find(&g, &words, limit, all, json),
         Cmd::Ls {
             column,
+            origin,
             all,
             limit,
             json,
-        } => show::ls(&g, column.as_deref(), all, limit, json),
+        } => show::ls(&g, column.as_deref(), origin.as_deref(), all, limit, json),
         Cmd::Hide { id } => show::hide(&g, &id, true),
         Cmd::Unhide { id } => show::hide(&g, &id, false),
         Cmd::Show {

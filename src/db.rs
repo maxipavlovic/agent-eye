@@ -5,7 +5,7 @@ use rusqlite::{params, Connection, OptionalExtension, Row, TransactionBehavior};
 use std::path::Path;
 
 /// The schema version this build writes; older databases are migrated on open.
-pub const SCHEMA_VERSION: i64 = 16;
+pub const SCHEMA_VERSION: i64 = 17;
 
 const SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS session(id TEXT PRIMARY KEY, agent TEXT NOT NULL DEFAULT 'claude', project_dir TEXT, cwd TEXT, repo_root TEXT, title TEXT, title_source TEXT,
@@ -61,6 +61,9 @@ CREATE VIRTUAL TABLE IF NOT EXISTS session_fts_vocab USING fts5vocab(session_fts
 /// The SQLite database of sessions, streams, outputs, ideas, events and read cursors.
 pub struct Db {
     pub conn: Connection,
+    /// `<eye home>/night`, as the path the database was opened by names it: a session whose folder
+    /// is under it is a night run. None for a database in memory.
+    pub night_dir: Option<std::path::PathBuf>,
 }
 
 /// How far something was read: the marker the adapter gave back, and the stamp it had then.
@@ -89,7 +92,10 @@ impl Db {
         crate::files::make_private(path);
         let conn = Connection::open(path).with_context(|| format!("opening {}", path.display()))?;
         let _upgrading = crate::backup::before_upgrade(&conn, path, SCHEMA_VERSION);
-        Self::init(conn)
+        let night = path.parent().map(|p| p.join("night"));
+        let mut db = Self::init(conn)?;
+        db.night_dir = night;
+        Ok(db)
     }
 
     /// An empty database in memory (tests).
@@ -101,7 +107,10 @@ impl Db {
         conn.busy_timeout(std::time::Duration::from_secs(5))?;
         conn.pragma_update(None, "journal_mode", "WAL")?;
         conn.pragma_update(None, "synchronous", "NORMAL")?;
-        let db = Db { conn };
+        let db = Db {
+            conn,
+            night_dir: None,
+        };
         db.migrate()?;
         Ok(db)
     }
@@ -236,6 +245,18 @@ impl Db {
         // `usage::backfill`, from the token fields of their transcripts only.
         // v16: `night_run` (planned and finished night-shift runs) is created with the schema above;
         // it starts empty and nothing is read again.
+        // v17: where a session was started. Both columns are NULL until `scan::origin` has looked
+        // at the session (it reads the first lines of its transcript, nothing else); `origin_raw`
+        // is '' once looked at and nothing was found.
+        for col in ["origin", "origin_raw"] {
+            let has = self
+                .conn
+                .prepare("SELECT 1 FROM pragma_table_info('session') WHERE name=?1")?
+                .exists([col])?;
+            if !has {
+                self.add_column("session", &format!("{col} TEXT"))?;
+            }
+        }
         if cur == 1 || (cur > 0 && cur < 4) {
             // v2 keeps pending tool_use ids and Jira candidates, v4 token counts: re-read every
             // transcript once.
@@ -602,6 +623,10 @@ pub fn session_from_row(r: &Row) -> rusqlite::Result<Session> {
         transcript_state: r.get("transcript_state")?,
         archive_path: r.get("archive_path")?,
         git_branch: r.get("git_branch")?,
+        origin: r.get("origin")?,
+        origin_raw: r
+            .get::<_, Option<String>>("origin_raw")?
+            .filter(|o| !o.is_empty()),
         prompt_count: r.get::<_, Option<i64>>("prompt_count")?.unwrap_or(0),
         reply_count: r.get::<_, Option<i64>>("reply_count")?.unwrap_or(0),
         last_user_text: r.get("last_user_text")?,

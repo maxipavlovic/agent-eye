@@ -84,6 +84,9 @@ pub struct Delta {
     pub session_id: Option<String>,
     pub cwd: Option<String>,
     pub branch: Option<String>,
+    /// What the agent wrote about where the session was started (Claude Code's `entrypoint`,
+    /// Codex's `originator/source`), from the first line that has it. Mapped in `agents::origin`.
+    pub origin_raw: Option<String>,
     pub first_ts: Option<i64>,
     pub last_ts: Option<i64>,
     pub prompts_text: String,

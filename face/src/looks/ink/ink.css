@@ -443,6 +443,7 @@ a.mk:hover { background: var(--ink); color: var(--paper); }
 .dh .meta .mk { font-size: 14px; }
 /* What a session left behind: a calm chip in neutral ink (the accent stays for what needs you), and the panel's list. */
 .mk.loose { background: transparent; border-style: dashed; }
+.mk.origin { background: transparent; }
 .dloose { list-style: none; margin: 0 0 14px; padding: 0; }
 .dloose li { margin: 0 0 12px; display: flex; flex-direction: column; gap: 8px; }
 .dloose .ll { font: 400 17px/1.4 var(--f-body); overflow-wrap: anywhere; }

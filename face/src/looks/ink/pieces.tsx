@@ -35,6 +35,27 @@ export function AgentTag({ name }: { name: string }) {
   return <span class="mk agent-tag" title={`${name} session`}>{name}</span>;
 }
 
+const ORIGIN_CHIP: Record<string, [string, string]> = {
+  headless: ['Headless', 'a headless run (claude -p, codex exec)'],
+  app: ['App', 'started from an app that drives the agent'],
+  desktop: ['Desktop', 'started from the desktop app'],
+  ide: ['IDE', 'started from an editor'],
+  web: ['Web', 'started from the web or a remote'],
+  night: ['Night', "one of eye's own night runs"],
+};
+
+/** The chip text of an origin; the terminal is the normal case and has none. */
+export function originChip(origin: string | null | undefined): string | null {
+  return origin ? ORIGIN_CHIP[origin]?.[0] ?? null : null;
+}
+
+/** Where a session was started, when it was not the terminal: the same chip on a card and in its panel. */
+export function OriginMark({ origin, raw }: { origin: string | null | undefined; raw?: string | null }) {
+  const info = origin ? ORIGIN_CHIP[origin] : undefined;
+  if (!info) return null;
+  return <span class="mk origin" data-origin={origin} title={`${info[1]}${raw ? ` (${raw})` : ''}`}>{info[0]}</span>;
+}
+
 /** Remote Control is on for a session. A plain chip on a card; with `url`, the panel's link to it, opened in a new tab. */
 export function RemoteMark({ url }: { url?: string }) {
   const body = <><Pix rows={SIGNAL} pal={INK_CC} scale={2} /><span>Remote</span></>;

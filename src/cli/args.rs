@@ -312,6 +312,9 @@ pub enum Cmd {
     Ls {
         #[arg(long)]
         column: Option<String>,
+        /// Only sessions started from here: terminal, headless, app, desktop, ide, web or night
+        #[arg(long)]
+        origin: Option<String>,
         /// Include hidden (trivial) sessions
         #[arg(long)]
         all: bool,

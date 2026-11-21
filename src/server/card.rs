@@ -167,6 +167,8 @@ pub fn card_json(
         "folder": s.cwd.as_deref().map(home_rel),
         "repo": s.repo_root.as_deref().map(home_rel),
         "branch": clean_branch(&s.git_branch),
+        "origin": s.origin,
+        "origin_raw": s.origin_raw,
         "column": column.as_str(),
         "auto_column": auto_column.as_str(),
         "manual": effective_manual(s).is_some(),

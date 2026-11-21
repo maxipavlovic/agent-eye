@@ -13,7 +13,7 @@ import { Next } from './Card';
 import { LeftBehind } from './Loose';
 import { ContinueTonight, NightRunSection, TonightIdea } from './Night';
 import { RemindPanel } from './Remind';
-import { AgentTag, RemoteMark, Sigil } from './pieces';
+import { AgentTag, OriginMark, RemoteMark, Sigil } from './pieces';
 import { Kids, Outputs, Running, Sec, TokenSec, Topics, Where } from './Sections';
 import { costText, tokensText } from './usageText';
 import type { Walk } from './walk';
@@ -116,6 +116,7 @@ export function Detail({ store, walk }: { store: Store; walk: Walk }) {
               {isBusy(d) && <span class="tag live">LIVE</span>}
               {d.manual && <span class="tag">PINNED</span>}
               {store.agents.value.length > 1 && <AgentTag name={d.agent_name} />}
+              <OriginMark origin={d.origin} raw={d.origin_raw} />
               {d.remote_url && <RemoteMark url={d.remote_url} />}
               <span>{ago(d.last_activity_at)}</span>
               <span>{d.kind.replace('_', ' ')}</span>

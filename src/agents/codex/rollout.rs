@@ -142,6 +142,8 @@ pub enum Event {
         id: Option<String>,
         cwd: Option<String>,
         branch: Option<String>,
+        /// `originator/source` of the thread.
+        origin: Option<String>,
     },
     /// A turn begins in this folder.
     Turn {
@@ -398,12 +400,32 @@ fn response_item(p: &Value) -> Event {
     }
 }
 
+/// Where a thread was started, from its `session_meta` payload: `originator/source`, either part
+/// alone when the other is missing (`codex-tui/vscode`, `codex_exec/exec`, `x/custom:atlas`).
+pub fn origin_of_meta(p: &Value) -> Option<String> {
+    let originator = non_empty(p.get("originator").and_then(Value::as_str));
+    let source = match p.get("source") {
+        Some(Value::String(s)) => non_empty(Some(s)),
+        Some(o @ Value::Object(_)) => {
+            non_empty(o.get("custom").and_then(Value::as_str)).map(|c| format!("custom:{c}"))
+        }
+        _ => None,
+    };
+    match (originator, source) {
+        (Some(o), Some(s)) => Some(format!("{o}/{s}")),
+        (Some(o), None) => Some(o),
+        (None, Some(s)) => Some(format!("/{s}")),
+        (None, None) => None,
+    }
+}
+
 /// Read one line of a rollout, whichever dialect it is in.
 pub fn decode(v: &Value) -> Event {
     let null = Value::Null;
     let p = v.get("payload").unwrap_or(&null);
     match v.get("type").and_then(Value::as_str) {
         Some("session_meta") => Event::Meta {
+            origin: origin_of_meta(p),
             id: non_empty(p.get("id").and_then(Value::as_str)).map(|i| i.to_ascii_lowercase()),
             cwd: non_empty(p.get("cwd").and_then(Value::as_str)),
             branch: non_empty(p.pointer("/git/branch").and_then(Value::as_str))
@@ -601,7 +623,12 @@ impl<'a> Reader<'a> {
             self.d.limits = Some(l);
         }
         match event {
-            Event::Meta { id, cwd, branch } => self.meta(id, cwd, branch),
+            Event::Meta {
+                id,
+                cwd,
+                branch,
+                origin,
+            } => self.meta(id, cwd, branch, origin),
             Event::Turn { cwd: Some(c) } => {
                 if self.resumed && self.cwd.as_deref().is_some_and(|x| x != c) {
                     self.restart = true;
@@ -622,11 +649,18 @@ impl<'a> Reader<'a> {
     }
 
     /// The session's own meta line (a legacy fork can carry its parent's too).
-    fn meta(&mut self, id: Option<String>, cwd: Option<String>, branch: Option<String>) {
+    fn meta(
+        &mut self,
+        id: Option<String>,
+        cwd: Option<String>,
+        branch: Option<String>,
+        origin: Option<String>,
+    ) {
         if self.meta_seen || id.is_some_and(|i| i != self.session_id) {
             return;
         }
         self.meta_seen = true;
+        self.d.origin_raw = origin;
         if self.cwd.is_none() {
             self.cwd = cwd;
         }

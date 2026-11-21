@@ -48,6 +48,15 @@ pub(super) fn preview_lines<'a>(app: &App, r: &Row, pal: &Pal) -> Vec<Line<'a>> 
     }
     match (&r.session, &r.idea) {
         (Some(s), _) => {
+            if let Some(o) = s.origin.as_deref().filter(|o| *o != "terminal") {
+                v.push(Line::styled(
+                    format!(
+                        "started from: {}",
+                        crate::agents::origin::phrase(o, s.origin_raw.as_deref())
+                    ),
+                    pal.dim(),
+                ));
+            }
             if s.live_status.is_some() {
                 v.push(Line::styled(
                     "Open now in another terminal",

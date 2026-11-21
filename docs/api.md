@@ -95,7 +95,7 @@ commands = ["exit", "quit", "resume", "usage", "clear", "cd", "help"]
 {id, agent, agent_name, title, folder, repo, branch, column, auto_column, manual, last_activity_at, started_at,
  state, state_source, next, ai_status, recap, live_status, kind, streams, outputs, output_counts,
  topics, topics_more, resume_cmd, resumable, parent_id, child_count, child_done, prompt_count, tokens,
- remind_at, remind_note, remind_due, activity, background, loops, remote_url, loose, night}
+ remind_at, remind_note, remind_due, activity, background, loops, remote_url, loose, night, origin, origin_raw}
 ```
 
 - `agent`: the id of the agent that ran the session (`claude`); `agent_name`: its short name for sentences (`Claude`; the id when the agent is switched off). Ideas carry the agent they start in, or null for the default agent.
@@ -107,6 +107,7 @@ commands = ["exit", "quit", "resume", "usage", "clear", "cd", "help"]
 - When the live status says the session waits on a prompt (`permission prompt`, `input needed`, ...), the card is in Needs you and `next` says `You: Permission prompt`. A `dialog open` the user started is not an ask.
 - `blocked`: true while a prompt in the open session (a permission, a question dialog, a plan to approve) stops the agent mid-task until you answer it; the board makes its YOU chip blink. A finished reply that ends in a question waits on you but is not blocked.
 - `state_source`: `summary` (the written summary, whichever agent wrote it), `recap` (the agent's own recap, first 220 chars, used until a summary exists), `idea` (notes) or `none`.
+- `origin` is where the session was started: `terminal`, `headless` (`claude -p`, `codex exec`), `app` (an app that drives the agent through its SDK, such as T3 Code or Conductor), `desktop`, `ide`, `web` (a remote or web session), `night` (one of eye's own night runs) or null when unknown. `origin_raw` is what the agent wrote (`sdk-ts`, `codex-tui/vscode`). `eye ls --json` has both fields too, and `eye ls --origin <word>` filters by them.
 - `folder`, `repo` have `~` for the home directory. `branch` is null for detached HEAD.
 - `kind`: `interactive`, `bg`, `history_only`, or `idea`. `resumable` is false for history-only sessions and ideas.
 - `child_count`, `child_done`: sub-agents and background children. Board cards do not list them.

@@ -205,6 +205,10 @@ impl Agent for Claude {
         transcript::usage_msgs(path)
     }
 
+    fn origin_raw(&self, path: &Path) -> Option<String> {
+        transcript::head_origin(path)
+    }
+
     fn owns_transcript(&self, path: &Path) -> bool {
         path.starts_with(self.dir.join("projects"))
     }

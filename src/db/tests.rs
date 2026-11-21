@@ -508,10 +508,40 @@ fn migration_16_adds_night_run_from_15_and_keeps_every_row() {
         db.meta_get("schema_version").unwrap(),
         Some(SCHEMA_VERSION.to_string())
     );
-    assert_eq!(SCHEMA_VERSION, 16);
+    // the migration to 16 ran: this test only asks that a later schema keeps its table
     // the table is there and empty, and nothing else moved
     assert_eq!(count_rows(&db, "night_run"), 0);
     assert_eq!(count_rows(&db, "session"), 1);
     assert!(crate::night::list(&db, false).unwrap().is_empty());
     assert_eq!(crate::night::planned_count(&db).unwrap(), 0);
+}
+
+#[test]
+fn migration_17_adds_origin_from_16_and_keeps_every_row() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join("old.db");
+    {
+        let db = Db::open(&path).unwrap();
+        db.conn
+            .execute_batch("ALTER TABLE session DROP COLUMN origin; ALTER TABLE session DROP COLUMN origin_raw;")
+            .unwrap();
+        db.meta_set("schema_version", "16").unwrap();
+        db.conn
+            .execute("INSERT INTO session(id, tok_in) VALUES('s1', 5)", [])
+            .unwrap();
+    }
+    let db = Db::open(&path).unwrap();
+    assert_eq!(
+        db.meta_get("schema_version").unwrap(),
+        Some(SCHEMA_VERSION.to_string())
+    );
+    assert_eq!(SCHEMA_VERSION, 17);
+    // the columns are there and empty (the scan fills them), and nothing else moved
+    let s = db.session_by_id("s1").unwrap().unwrap();
+    assert_eq!((s.origin, s.origin_raw), (None, None));
+    assert_eq!(s.tokens.unwrap().input, 5);
+    assert_eq!(count_rows(&db, "session"), 1);
+    // the night folder sits next to the database
+    assert_eq!(db.night_dir, Some(tmp.path().join("night")));
+    assert_eq!(Db::open_memory().unwrap().night_dir, None);
 }

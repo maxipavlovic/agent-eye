@@ -207,6 +207,21 @@ fn preview_shows_the_token_line() {
 }
 
 #[test]
+fn preview_says_where_a_session_started_unless_it_was_the_terminal() {
+    let mut a = app("");
+    {
+        let s = a.idx.rows[0].session.as_mut().unwrap();
+        s.origin = Some("app".into());
+        s.origin_raw = Some("sdk-ts".into());
+    }
+    let t = render_text(&mut a, 120, 40).unwrap();
+    assert!(t.contains("started from: an app (sdk-ts)"), "{t}");
+    a.idx.rows[0].session.as_mut().unwrap().origin = Some("terminal".into());
+    let t = render_text(&mut a, 120, 40).unwrap();
+    assert!(!t.contains("started from"), "{t}");
+}
+
+#[test]
 fn wrap_breaks_at_spaces_and_drops_control_characters() {
     assert_eq!(wrap("aaa bbb ccc", 7), ["aaa bbb", "ccc"]);
     assert_eq!(wrap("abcdefghij", 4), ["abcd", "efgh", "ij"]);
