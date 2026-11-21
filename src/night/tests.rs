@@ -1011,7 +1011,8 @@ fn continue_tonight_forks_the_session_for_claude_and_codex() {
     assert_eq!(c.args[..2], ["exec".to_string(), "fork".to_string()]);
     assert!(c.args.contains(&"sess-1".to_string()));
     assert!(c.args.iter().any(|a| a.contains("workspace-write")));
-    assert_eq!(c.args.last().unwrap(), "make it better");
+    let told = c.args.last().unwrap();
+    assert!(told.ends_with("make it better") && told.contains("change nothing in"), "{told}");
 }
 
 #[test]

@@ -75,8 +75,20 @@ pub fn claude_project_dir(cwd: &Path) -> String {
 
 /// The command of a run. `new_id` names the run's own session (Claude only).
 pub fn build(cfg: &Config, run: &Run, exe: &str, cwd: &Path, new_id: Option<&str>) -> Spec {
-    let prompt = safe_prompt(&run.prompt);
     let cont = run.kind == "session";
+    // A continued session remembers the paths of the original folder: say where the work goes.
+    let prompt = if cont {
+        format!(
+            "Night run: you are continuing this session in an isolated copy of the project at {cwd}. \
+             The earlier conversation mentions paths in the original folder ({orig}); use the same files \
+             under {cwd} instead and change nothing in {orig}. Do not push anything.\n\n{p}",
+            cwd = cwd.display(),
+            orig = run.folder,
+            p = run.prompt
+        )
+    } else {
+        safe_prompt(&run.prompt)
+    };
     let mut args: Vec<String> = vec![];
     let mut session_id = None;
     if run.agent == LEGACY_ID {

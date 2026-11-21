@@ -147,6 +147,21 @@ fn child_of(meta: &Value) -> Option<Role> {
     })
 }
 
+/// Is this the folder of a night-shift run (`<eye home>/night/<n>/wt` or `/work`)? Those are the
+/// only `codex exec` rollouts that are sessions: eye started them for the person.
+fn night_cwd(cwd: Option<&str>) -> bool {
+    let parts: Vec<_> = Path::new(cwd.unwrap_or_default())
+        .components()
+        .map(|c| c.as_os_str().to_string_lossy().into_owned())
+        .collect();
+    parts.windows(3).any(|w| {
+        w[0] == "night"
+            && !w[1].is_empty()
+            && w[1].bytes().all(|b| b.is_ascii_digit())
+            && matches!(w[2].as_str(), "wt" | "work")
+    })
+}
+
 /// Which rollouts are sessions: the sources Codex's own resume picker lists (`cli`, `vscode`, and
 /// the `atlas` and `chatgpt` clients; no source means `vscode`), minus helper threads.
 fn role_of(meta: &Value) -> Role {
@@ -163,6 +178,9 @@ fn role_of(meta: &Value) -> Role {
     match meta.get("source") {
         None | Some(Value::Null) => Role::Session,
         Some(Value::String(s)) if matches!(s.as_str(), "cli" | "vscode") => Role::Session,
+        Some(Value::String(s)) if s == "exec" && night_cwd(str_at(meta, &["cwd"])) => {
+            Role::Session
+        }
         Some(Value::Object(o)) if o.contains_key("subagent") => {
             child_of(meta).unwrap_or(Role::Hidden)
         }
@@ -350,6 +368,17 @@ pub fn scan(dir: &Path) -> (Vec<Transcript>, Index) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_night_run_is_a_session_and_other_exec_runs_are_not() {
+        let night = "/h/.agent-eye/night/12/wt/sub";
+        let meta = |cwd: &str| json!({"source": "exec", "cwd": cwd});
+        assert!(matches!(role_of(&meta(night)), Role::Session));
+        assert!(matches!(role_of(&meta("/h/.agent-eye/night/3/work")), Role::Session));
+        for other in ["/h/proj", "/h/night/x/wt", "/h/night/1/other", "/h/.agent-eye/work"] {
+            assert!(matches!(role_of(&meta(other)), Role::Hidden), "{other}");
+        }
+    }
     use serde_json::json;
 
     #[test]
