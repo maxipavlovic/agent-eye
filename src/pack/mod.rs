@@ -247,6 +247,11 @@ fn safe_name(p: &Path) -> Option<String> {
     (!parts.is_empty()).then(|| parts.join("/"))
 }
 
+/// `n` plus 1%.
+fn over_one_percent(n: u64) -> u64 {
+    n.saturating_add(n / 100)
+}
+
 /// Read the pack into `dir` (which must be empty), checking it as it goes: the format, every
 /// file's checksum and size against the manifest, and that nothing is missing or extra. Nothing
 /// outside `dir` is touched.
@@ -273,6 +278,7 @@ pub fn read(pack: &Path, dir: &Path) -> Result<Unpacked> {
     let mut archive = tar::Archive::new(zstd::stream::read::Decoder::new(f)?);
     let mut manifest: Option<Manifest> = None;
     let mut seen: BTreeMap<String, Sum> = BTreeMap::new();
+    let mut unpacked = 0u64;
     for entry in archive.entries().context("reading the pack")? {
         let mut entry = entry.context("reading the pack")?;
         if !entry.header().entry_type().is_file() {
@@ -303,6 +309,15 @@ pub fn read(pack: &Path, dir: &Path) -> Result<Unpacked> {
                     crate::db::SCHEMA_VERSION
                 );
             }
+            // a decompression-bomb guard: the files the manifest lists must add up to the bytes it
+            // claims, give or take 1%, before anything is unpacked
+            let listed: u64 = m.files.values().map(|s| s.bytes).sum();
+            if listed > over_one_percent(m.counts.bytes) {
+                bail!(
+                    "the manifest lists {listed} bytes of files but says the pack holds {}; refusing it",
+                    m.counts.bytes
+                );
+            }
             manifest = Some(m);
             continue;
         }
@@ -313,6 +328,14 @@ pub fn read(pack: &Path, dir: &Path) -> Result<Unpacked> {
             .files
             .get(&name)
             .with_context(|| format!("{name} is in the pack but not in its manifest"))?;
+        if entry.size() != want.bytes {
+            bail!(
+                "{name} is {} bytes in the pack but {} in its manifest; refusing it",
+                entry.size(),
+                want.bytes
+            );
+        }
+        let limit = over_one_percent(m.counts.bytes);
         let dest = dir.join(&name);
         std::fs::DirBuilder::new()
             .recursive(true)
@@ -335,6 +358,13 @@ pub fn read(pack: &Path, dir: &Path) -> Result<Unpacked> {
             h.update(&buf[..got]);
             out.write_all(&buf[..got])?;
             total += got as u64;
+            unpacked += got as u64;
+            if total > want.bytes || unpacked > limit {
+                bail!(
+                    "{name} unpacks to more than the manifest says ({} bytes in all); refusing it",
+                    m.counts.bytes
+                );
+            }
         }
         let sha = crate::util::hex(&h.finalize());
         if sha != want.sha256 || total != want.bytes {

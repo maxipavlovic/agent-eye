@@ -357,7 +357,9 @@ pub fn plan(paths: &Paths, pack: &Path) -> Result<Plan> {
         };
         let dest = root.join(rel);
         let newer = match std::fs::metadata(&dest) {
-            Ok(md) => super::mtime_secs(&md) < sum.mtime,
+            // an older copy that holds the same bytes needs no copying
+            Ok(md) if super::mtime_secs(&md) < sum.mtime => !same_file(&dest, md.len(), sum),
+            Ok(_) => false,
             Err(_) => true,
         };
         if newer {
@@ -381,6 +383,14 @@ pub fn plan(paths: &Paths, pack: &Path) -> Result<Plan> {
         staged_db,
         copies,
     })
+}
+
+/// Does the file at `path` (`len` bytes) have the sha256 and size the pack lists?
+fn same_file(path: &Path, len: u64, sum: &super::Sum) -> bool {
+    len == sum.bytes
+        && std::fs::File::open(path)
+            .and_then(super::hash_reader)
+            .is_ok_and(|(h, _)| h == sum.sha256)
 }
 
 /// Copy a file into place (0600, folders 0700), keeping its modification time.
@@ -425,6 +435,13 @@ pub fn apply(o: &Opts, cfg: &Config, plan: Plan) -> Result<Done> {
     let paths = Paths {
         home: o.eye_home.clone(),
     };
+    // The snapshot comes before the first file is copied, so a copy that fails leaves the old
+    // database kept. (A fresh machine has an empty database: `replace_with` snapshots it.)
+    let pre = if plan.fresh {
+        None
+    } else {
+        backup::pre_restore_copy(&paths, cfg, &paths.db_path(), &Reason::PreImport)?
+    };
     let mut files_copied = 0;
     for (src, dest, mtime) in &plan.copies {
         put(src, dest, *mtime)?;
@@ -442,7 +459,6 @@ pub fn apply(o: &Opts, cfg: &Config, plan: Plan) -> Result<Done> {
             ideas_added: plan.manifest.counts.ideas as usize,
         });
     }
-    let pre = backup::pre_restore_copy(&paths, cfg, &paths.db_path(), &Reason::PreImport)?;
     let take: Vec<&String> = plan
         .new_sessions
         .iter()
