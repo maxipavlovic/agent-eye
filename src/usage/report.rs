@@ -18,7 +18,10 @@ pub const TREND_WEEKS: i64 = 4;
 /// What rows are grouped by.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum By {
+    /// The project names the board's project bar shows; temp folders and tiny rows fold into "other (N)".
     Project,
+    /// The raw folders, one row each.
+    Folder,
     Agent,
     Model,
     Session,
@@ -28,6 +31,7 @@ impl By {
     pub fn parse(s: &str) -> Option<By> {
         match s {
             "project" => Some(By::Project),
+            "folder" => Some(By::Folder),
             "agent" => Some(By::Agent),
             "model" => Some(By::Model),
             "session" => Some(By::Session),
@@ -37,6 +41,7 @@ impl By {
     pub fn name(self) -> &'static str {
         match self {
             By::Project => "project",
+            By::Folder => "folder",
             By::Agent => "agent",
             By::Model => "model",
             By::Session => "session",
@@ -203,7 +208,12 @@ fn group(cells: &[&Cell], by: By, cfg: &UsageCfg) -> Vec<Row> {
     let mut map: BTreeMap<String, Row> = BTreeMap::new();
     for c in cells {
         let (key, name) = match by {
-            By::Project => (project_name(&c.project), project_name(&c.project)),
+            By::Project => match project_label(&c.project) {
+                Some(l) => (l.clone(), l),
+                // each temp or folder-less group stays its own, so "other (N)" can count them
+                None => (format!("\0{}", c.project), OTHER.to_string()),
+            },
+            By::Folder => (project_name(&c.project), project_name(&c.project)),
             By::Agent => (c.agent.clone(), c.agent.clone()),
             By::Model => {
                 let m = if c.model.is_empty() {
@@ -224,14 +234,92 @@ fn group(cells: &[&Cell], by: By, cfg: &UsageCfg) -> Vec<Row> {
         row.sum.add(c.t, &c.model, cfg);
     }
     let mut rows: Vec<Row> = map.into_values().collect();
-    rows.sort_by(|a, b| {
-        b.sum
-            .cost
-            .total_cmp(&a.sum.cost)
-            .then(b.sum.total().cmp(&a.sum.total()))
-            .then(a.name.cmp(&b.name))
-    });
+    rows.sort_by(by_cost);
+    if by == By::Project {
+        rows = fold_small(rows);
+    }
     rows
+}
+
+fn by_cost(a: &Row, b: &Row) -> std::cmp::Ordering {
+    b.sum
+        .cost
+        .total_cmp(&a.sum.cost)
+        .then(b.sum.total().cmp(&a.sum.total()))
+        .then(a.name.cmp(&b.name))
+}
+
+/// The row that collects temp and scratch folders, sessions with no folder and the small projects.
+const OTHER: &str = "\0other";
+
+/// Rows under 1% of the total (or under $0.10 when anything is priced) and the `other` row are
+/// folded into one "other (N)" row at the end; N counts the groups folded in.
+fn fold_small(rows: Vec<Row>) -> Vec<Row> {
+    let cost: f64 = rows.iter().map(|r| r.sum.cost).sum();
+    let tokens: i64 = rows.iter().map(|r| r.sum.total()).sum();
+    let small = |r: &Row| {
+        if r.name == OTHER {
+            return true;
+        }
+        if cost > 0.0 {
+            r.sum.cost < cost * 0.01 || r.sum.cost < 0.10
+        } else {
+            (r.sum.total() as f64) < tokens as f64 * 0.01
+        }
+    };
+    let (folded, mut keep): (Vec<Row>, Vec<Row>) = rows.into_iter().partition(small);
+    if folded.is_empty() {
+        return keep;
+    }
+    let mut other = Row {
+        name: format!("other ({})", folded.len()),
+        ..Default::default()
+    };
+    for r in &folded {
+        for (a, b) in other.sum.t.iter_mut().zip(r.sum.t) {
+            *a += b;
+        }
+        other.sum.cost += r.sum.cost;
+        other.sum.unpriced += r.sum.unpriced;
+    }
+    keep.push(other);
+    keep
+}
+
+/// The system's temp and scratch folders: nothing worth a row of its own.
+fn is_temp(p: &str) -> bool {
+    let t = std::env::temp_dir();
+    let t = t.to_string_lossy();
+    let t = t.trim_end_matches('/');
+    let under = |root: &str| !root.is_empty() && (p == root || p.starts_with(&format!("{root}/")));
+    [
+        "/tmp",
+        "/private/tmp",
+        "/var/tmp",
+        "/private/var/tmp",
+        "/var/folders",
+        "/private/var/folders",
+    ]
+    .iter()
+    .any(|r| under(r))
+        || under(t)
+        || under(t.strip_prefix("/private").unwrap_or(t))
+}
+
+/// The name the board's project bar gives a folder: its last segment, `home` for the home folder.
+/// None for a session with no folder and for temp folders (they count as "other").
+fn project_label(p: &str) -> Option<String> {
+    let p = p.trim_end_matches('/');
+    if p.is_empty() || is_temp(p) {
+        return None;
+    }
+    if home_rel(p) == "~" {
+        return Some("home".to_string());
+    }
+    p.rsplit('/')
+        .next()
+        .filter(|x| !x.is_empty())
+        .map(str::to_string)
 }
 
 /// Build the report for the last `days` local days ending today (`now`). The offset is the time
@@ -453,7 +541,7 @@ mod tests {
         put(&db, "b", today, "gpt-6-luna", [2_000_000, 0, 0, 0]);
         let r = report(&db, 7, By::Project);
         assert_eq!(r.totals.t[0], 4_000_000);
-        assert_eq!(r.rows[0].name, "/p/one");
+        assert_eq!(r.rows[0].name, "one");
         assert!((r.rows[0].sum.cost - 8.0).abs() < 1e-9);
         assert_eq!(r.by_agent.len(), 2);
         assert_eq!(report(&db, 30, By::Agent).totals.t[0], 5_000_000);
@@ -527,5 +615,39 @@ mod tests {
         assert!(r.rows.is_empty());
         assert_eq!(r.totals.total(), 0);
         assert_eq!(r.json(NOW)["rows"], json!([]));
+    }
+
+    #[test]
+    fn projects_use_the_boards_names_and_the_small_ones_fold_into_other() {
+        let db = Db::open_memory().unwrap();
+        let today = NOW / DAY_MS;
+        let m = "claude-opus-5-5";
+        session(&db, "a", "claude", "/h/code/big");
+        session(&db, "b", "claude", "/h/other/big");
+        session(&db, "c", "claude", "/h/code/mid");
+        session(&db, "d", "claude", "/private/tmp/claude-501/x/work");
+        session(&db, "e", "claude", "/tmp/scratch");
+        session(&db, "f", "claude", "/h/code/tiny");
+        session(&db, "g", "claude", "");
+        put(&db, "a", today, m, [10_000_000, 0, 0, 0]);
+        put(&db, "b", today, m, [10_000_000, 0, 0, 0]);
+        put(&db, "c", today, m, [10_000_000, 0, 0, 0]);
+        put(&db, "d", today, m, [10_000_000, 0, 0, 0]);
+        put(&db, "e", today, m, [10_000_000, 0, 0, 0]);
+        put(&db, "f", today, m, [1_000, 0, 0, 0]);
+        put(&db, "g", today, m, [1_000_000, 0, 0, 0]);
+        let r = report(&db, 7, By::Project);
+        let names: Vec<&str> = r.rows.iter().map(|x| x.name.as_str()).collect();
+        // two folders called "big" are one project; temp, no folder and tiny fold; other is last
+        assert_eq!(names, ["big", "mid", "other (4)"]);
+        assert_eq!(r.by_project.len(), 3);
+        assert_eq!(r.rows[0].sum.t[0], 20_000_000);
+        assert_eq!(r.rows[2].sum.t[0], 21_001_000);
+        // the raw folders stay available
+        let f = report(&db, 7, By::Folder);
+        assert!(f
+            .rows
+            .iter()
+            .any(|x| x.name == "/private/tmp/claude-501/x/work"));
     }
 }
