@@ -68,7 +68,11 @@ fn ranking_quality() {
             missing += 1;
         }
         let top: Vec<f64> = got.iter().take(5).map(|s| gain(label_of(s))).collect();
-        let mut ideal: Vec<f64> = ranks.values().filter_map(|v| v.as_str()).map(gain).collect();
+        let mut ideal: Vec<f64> = ranks
+            .values()
+            .filter_map(|v| v.as_str())
+            .map(gain)
+            .collect();
         ideal.sort_by(|a, b| b.total_cmp(a));
         ideal.truncate(5);
         let best = dcg(&ideal);

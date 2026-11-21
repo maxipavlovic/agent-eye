@@ -536,7 +536,7 @@ fn a_session_that_grows_is_read_on_from_where_it_stopped() {
     assert_eq!(s.cwd.as_deref(), Some("/Users/you/code/app"));
     let t = s.tokens.unwrap();
     assert_eq!((t.input, t.cache_read, t.output), (4_000, 8_000, 900));
-    assert!(hits(&w.db, "added entry").is_empty());
+    assert!(!hits(&w.db, "yes").contains(&A.to_string()));
     let cursor = w.db.cursor_get(&path.to_string_lossy()).unwrap().unwrap();
     assert_eq!(
         cursor.marker,
@@ -561,9 +561,8 @@ fn a_session_that_grows_is_read_on_from_where_it_stopped() {
         (5_000, 15_000, 1_500),
         "the new total replaces the old one, it is not added to it"
     );
-    assert_eq!(
-        hits(&w.db, "added entry"),
-        [A],
+    assert!(
+        hits(&w.db, "yes").contains(&A.to_string()),
         "what turn 2 said is searchable now"
     );
 }
@@ -604,7 +603,7 @@ fn a_session_that_only_gained_lines_does_not_start_again() {
 fn a_rollout_that_shrank_is_read_again_from_the_start() {
     let mut w = World::new();
     w.scan();
-    assert_eq!(hits(&w.db, "added entry"), [A]);
+    assert!(hits(&w.db, "yes").contains(&A.to_string()));
     let path = w.rollout(A);
     let full = std::fs::read_to_string(&path).unwrap();
     let turn1: String = full
@@ -617,7 +616,7 @@ fn a_rollout_that_shrank_is_read_again_from_the_start() {
     let s = w.session(A);
     assert_eq!((s.prompt_count, s.reply_count), (1, 2));
     assert!(
-        hits(&w.db, "added entry").is_empty(),
+        !hits(&w.db, "yes").contains(&A.to_string()),
         "the words that are gone are not found"
     );
     let t = s.tokens.unwrap();

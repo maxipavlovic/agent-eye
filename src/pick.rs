@@ -11,15 +11,12 @@ use crate::ideas;
 use crate::model::{Column, Idea, Output, Session, Stream};
 use crate::paths::Paths;
 use crate::remind::{self, Remind};
-use crate::search::{rank_key, RankKey};
+use crate::search::{self, Rank, Scored};
 use crate::util::{head_chars, printable, shell_quote, short_id};
 use anyhow::{Context, Result};
 use nucleo_matcher::pattern::{AtomKind, CaseMatching, Normalization, Pattern};
 use nucleo_matcher::{Config as MatcherConfig, Matcher, Utf32Str};
-use std::collections::HashMap;
 use std::path::PathBuf;
-
-const FTS_LIMIT: i64 = 400;
 
 /// A picker row is a session or an idea.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -89,10 +86,14 @@ fn project_of(cwd: &str) -> String {
 
 /// The title of a session on one line.
 pub fn session_title(s: &Session) -> String {
-    let t = s
-        .title
-        .clone()
-        .or_else(|| s.first_prompt.as_deref().map(|p| head_chars(p, 80)))
+    title_line(s.title.as_deref(), s.first_prompt.as_deref())
+}
+
+/// A title on one line: the title, else the start of the first prompt, else "(untitled)".
+pub fn title_line(title: Option<&str>, first_prompt: Option<&str>) -> String {
+    let t = title
+        .map(String::from)
+        .or_else(|| first_prompt.map(|p| head_chars(p, 80)))
         .unwrap_or_else(|| "(untitled)".into());
     let t = one_line(&t);
     if t.is_empty() {
@@ -176,18 +177,18 @@ impl Index {
         Ok(Index { rows })
     }
 
-    /// Rows for a query, best first. `fts` is the FTS hit ids in rank order.
-    pub fn rank(&self, query: &str, all: bool, fts: &[String], now: i64) -> Vec<usize> {
+    /// Rows for a query, best first (empty query: board order). `scored` is what the search index
+    /// found for the query; ideas are scored here the same way. Rows nothing matched are tried
+    /// with a fuzzy match on the title, and come after every scored row.
+    pub fn rank(&self, query: &str, all: bool, scored: &Scored) -> Vec<usize> {
         let words: Vec<String> = query.split_whitespace().map(|w| w.to_lowercase()).collect();
-        let id_q = crate::search::id_query(&words);
         if words.is_empty() {
             return self.board_order(all);
         }
-        let fts_pos: HashMap<&str, usize> = fts
-            .iter()
-            .enumerate()
-            .map(|(i, s)| (s.as_str(), i))
-            .collect();
+        if scored.is_blank() {
+            return vec![];
+        }
+        let id_q = crate::search::id_query(&words);
         // Fuzzy only for words long enough not to match everything.
         let fuzzy = words.iter().all(|w| w.chars().count() >= 3).then(|| {
             Pattern::new(
@@ -199,45 +200,42 @@ impl Index {
         });
         let mut matcher = Matcher::new(MatcherConfig::DEFAULT);
         let mut buf = vec![];
-        let q_len = words.join(" ").chars().count() as i64;
-        // Archive last, then the match group (title, body, fuzzy); inside a group freshness,
-        // status, then relevance (extra title length, FTS position or fuzzy score), newest first.
-        let mut keyed: Vec<(RankKey, usize)> = vec![];
+        let mut keyed: Vec<(Rank, usize)> = vec![];
         for (i, r) in self.rows.iter().enumerate() {
             if r.hidden && !all {
                 continue;
             }
+            let archived = r.session.as_ref().is_some_and(|s| s.archived);
+            let mut rank = Rank {
+                id_hit: false,
+                archived,
+                group: 0,
+                score: 0.0,
+                extra: search::extra_words(&r.title_lc, scored.words),
+                last: r.last,
+            };
             if id_q
                 .as_deref()
                 .is_some_and(|p| r.kind == Kind::Session && r.id.starts_with(p))
             {
-                keyed.push((crate::search::ID_HIT, i));
-                continue;
-            }
-            let title_all = words.iter().all(|w| r.title_lc.contains(w.as_str()));
-            let fpos = fts_pos.get(r.id.as_str()).copied();
-            let notes_all = !r.notes_lc.is_empty()
-                && words
-                    .iter()
-                    .all(|w| r.title_lc.contains(w.as_str()) || r.notes_lc.contains(w.as_str()));
-            let (group, rel) = if title_all {
-                (0, (r.title_lc.chars().count() as i64 - q_len).max(0))
-            } else if let Some(p) = fpos {
-                (1, p as i64)
-            } else if notes_all {
-                (1, i64::MAX)
+                rank.id_hit = true;
+            } else if let Some(sc) = match r.kind {
+                Kind::Session => scored.by_id.get(&r.id).map(|m| m.score),
+                Kind::Idea => scored.idea(&r.title_lc, &r.notes_lc),
+            } {
+                rank.score = sc;
             } else if let Some(sc) = fuzzy
                 .as_ref()
                 .and_then(|p| p.score(Utf32Str::new(&r.title, &mut buf), &mut matcher))
             {
-                (2, -(sc as i64))
+                rank.group = 1;
+                rank.score = sc as f64;
             } else {
                 continue;
-            };
-            let key = rank_key(r.column, group, rel, r.last, now);
-            keyed.push((key, i));
+            }
+            keyed.push((rank, i));
         }
-        keyed.sort_by_key(|(k, _)| *k);
+        keyed.sort_by(|a, b| a.0.order(&b.0));
         keyed.into_iter().map(|(_, i)| i).collect()
     }
 
@@ -266,36 +264,16 @@ impl Index {
     }
 }
 
-/// Ids of sessions matching every word as an FTS prefix, best first.
-pub fn fts_ids(db: &Db, query: &str) -> Vec<String> {
-    let words: Vec<String> = query
-        .split_whitespace()
-        .filter(|w| w.chars().filter(|c| c.is_alphanumeric()).count() >= 2)
-        .map(String::from)
-        .collect();
-    let Some(q) = crate::search::build_query(&words, " ") else {
-        return vec![];
-    };
-    let run = || -> rusqlite::Result<Vec<String>> {
-        let mut st = db.conn.prepare_cached(
-            "SELECT s.id FROM session_fts JOIN session s ON s.rowid = session_fts.rowid
-             WHERE session_fts MATCH ?1
-             ORDER BY bm25(session_fts, 0.0, 10.0, 3.0, 1.0, 5.0) LIMIT ?2",
-        )?;
-        let rows = st.query_map(rusqlite::params![q, FTS_LIMIT], |r| r.get::<_, String>(0))?;
-        rows.collect()
-    };
-    run().unwrap_or_default()
-}
-
 /// Rows for a query, best first (empty query: board order).
-pub fn search(db: &Db, idx: &Index, query: &str, all: bool, now: i64) -> Vec<usize> {
-    let fts = if query.trim().is_empty() {
-        vec![]
+/// (`_now` is kept so callers need not change; no age moves a row any more.)
+pub fn search(db: &Db, idx: &Index, query: &str, all: bool, _now: i64) -> Vec<usize> {
+    let scored = if query.trim().is_empty() {
+        Scored::default()
     } else {
-        fts_ids(db, query)
+        let words: Vec<String> = query.split_whitespace().map(String::from).collect();
+        search::score_words(db, &words).unwrap_or_default()
     };
-    idx.rank(query, all, &fts, now)
+    idx.rank(query, all, &scored)
 }
 
 /// What the preview needs beyond the row.
@@ -666,36 +644,54 @@ mod tests {
         v.into_iter().map(|n| i.rows[n].id.clone()).collect()
     }
 
+    /// A database whose sessions are the rows of `i`, `body` being each one's prompt text.
+    fn db_for(i: &Index, body: &[(&str, &str)]) -> Db {
+        let db = Db::open_memory().unwrap();
+        for r in i.rows.iter().filter(|r| r.kind == Kind::Session) {
+            db.conn
+                .execute(
+                    "INSERT INTO session(id,title,archived) VALUES(?1,?2,?3)",
+                    rusqlite::params![r.id, r.title, r.column == Column::Archive],
+                )
+                .unwrap();
+            let text = body.iter().find(|(id, _)| *id == r.id).map_or("", |b| b.1);
+            crate::db::fts_write(&db.conn, &r.id, text, "", true, 10_000, 10_000).unwrap();
+        }
+        db
+    }
+
+    fn ranked(i: &Index, db: &Db, q: &str, all: bool) -> Vec<String> {
+        ids(i, search(db, i, q, all, NOW))
+    }
+
     #[test]
     fn empty_query_is_board_order() {
         let i = idx();
+        let none = Scored::default();
+        assert_eq!(ids(&i, i.rank("", false, &none)), ["b", "c", "f", "a", "d"]);
         assert_eq!(
-            ids(&i, i.rank("", false, &[], NOW)),
-            ["b", "c", "f", "a", "d"]
-        );
-        assert_eq!(
-            ids(&i, i.rank("  ", true, &[], NOW)),
+            ids(&i, i.rank("  ", true, &none)),
             ["b", "c", "f", "a", "d", "e"]
         );
     }
 
     #[test]
-    fn title_hits_first_then_fts_then_fuzzy() {
+    fn title_hits_then_body_hits_then_fuzzy() {
         let i = idx();
-        // "d" only matches through FTS (prompt text), "a" by title
-        let r = ids(&i, i.rank("catalog", false, &["d".into(), "a".into()], NOW));
-        assert_eq!(r, ["f", "a", "d"]); // closer title first
-                                        // title AND with out-of-order words
-        assert_eq!(ids(&i, i.rank("migration cat", false, &[], NOW)), ["a"]);
-        // fuzzy catches a typo-ish subsequence
-        assert_eq!(ids(&i, i.rank("blng", false, &[], NOW)), ["b"]);
-        assert_eq!(ids(&i, i.rank("bilfix", false, &[], NOW)), ["b"]);
-        // nothing matches
-        assert!(i.rank("zzzz", false, &[], NOW).is_empty());
+        let db = db_for(&i, &[("d", "the catalog is large")]);
+        // "d" matches by prompt text only, "a" and "f" by title; the title with all the words first
+        assert_eq!(ranked(&i, &db, "catalog", false), ["f", "a", "d"]);
+        // out-of-order words: the title with both comes first, half the words are enough for the rest
+        assert_eq!(ranked(&i, &db, "migration cat", false), ["a", "f", "d"]);
+        // fuzzy catches a subsequence the index cannot
+        assert_eq!(ranked(&i, &db, "blng", false), ["b"]);
+        assert_eq!(ranked(&i, &db, "bilfix", false), ["b"]);
+        assert!(ranked(&i, &db, "zzzz", false).is_empty());
+        assert!(ranked(&i, &db, "!!", false).is_empty());
     }
 
     #[test]
-    fn closest_title_then_status_then_recency() {
+    fn closest_title_then_newest_and_status_does_not_matter() {
         let i = Index {
             rows: vec![
                 row("long", "catalog migration session search", Column::Done, 99),
@@ -704,69 +700,56 @@ mod tests {
                 row("same2", "Catalog Migration", Column::Paused, 60),
             ],
         };
-        // FTS even prefers the long one; the title closeness still wins
-        let r = ids(
-            &i,
-            i.rank(
-                "catalog migration",
-                false,
-                &["long".into(), "real".into()],
-                NOW,
-            ),
+        let db = db_for(&i, &[]);
+        assert_eq!(
+            ranked(&i, &db, "catalog migration", false),
+            ["same2", "same1", "real", "long"]
         );
-        assert_eq!(r, ["real", "same2", "same1", "long"]);
     }
 
     #[test]
-    fn recent_body_hit_beats_older_one_with_better_fts_position() {
+    fn an_old_title_match_beats_a_fresh_body_match() {
         let i = Index {
             rows: vec![
-                row("old", "Alpha", Column::Paused, NOW - 40 * DAY),
-                row("new", "Beta", Column::Paused, NOW - DAY),
+                row("old", "Catalog", Column::Done, NOW - 300 * DAY),
+                row("fresh", "Alpha", Column::NeedsYou, NOW),
             ],
         };
-        let r = ids(
-            &i,
-            i.rank("zebra", false, &["old".into(), "new".into()], NOW),
-        );
-        assert_eq!(r, ["new", "old"]);
+        let db = db_for(&i, &[("fresh", "catalog catalog catalog")]);
+        assert_eq!(ranked(&i, &db, "catalog", false), ["old", "fresh"]);
     }
 
     #[test]
-    fn fresh_paused_beats_stale_done_with_closer_title() {
-        let i = Index {
-            rows: vec![
-                row("closer", "Catalog", Column::Done, NOW - 60 * DAY),
-                row(
-                    "fresh",
-                    "Catalog migration plan",
-                    Column::Paused,
-                    NOW - 2 * DAY,
-                ),
-                row(
-                    "month",
-                    "Catalog migration plan",
-                    Column::Paused,
-                    NOW - 20 * DAY,
-                ),
-                row("body", "Alpha", Column::NeedsYou, NOW),
-            ],
-        };
-        let r = ids(&i, i.rank("catalog", false, &["body".into()], NOW));
-        assert_eq!(r, ["fresh", "month", "closer", "body"]);
-    }
-
-    #[test]
-    fn archive_last_and_hidden_filtered() {
+    fn archived_last_and_hidden_filtered() {
         let mut i = idx();
         i.rows[2].hidden = true;
-        assert!(!ids(&i, i.rank("weekly", false, &[], NOW)).contains(&"c".to_string()));
-        assert_eq!(ids(&i, i.rank("weekly", true, &[], NOW)), ["c"]);
-        // an archive session with a title hit still ranks after the others
-        i.rows[4].title = "Catalog archived".into();
-        i.rows[4].title_lc = "catalog archived".into();
-        let r = ids(&i, i.rank("catalog", false, &[], NOW));
-        assert_eq!(r.last().unwrap(), "e");
+        let db = db_for(&i, &[]);
+        assert!(!ranked(&i, &db, "weekly", false).contains(&"c".to_string()));
+        assert_eq!(ranked(&i, &db, "weekly", true), ["c"]);
+        // an archived session with a better title still ranks after the others
+        i.rows[4].title = "Catalog".into();
+        i.rows[4].title_lc = "catalog".into();
+        i.rows[4].session = Some(Session {
+            archived: true,
+            ..Default::default()
+        });
+        let db = db_for(&i, &[]);
+        let r = ranked(&i, &db, "catalog", false);
+        assert_eq!(r, ["f", "a", "e"]);
+    }
+
+    #[test]
+    fn ideas_are_scored_like_sessions() {
+        let mut i = idx();
+        let mut idea = row("idea:1", "Catalog", Column::Ideas, 1);
+        idea.kind = Kind::Idea;
+        idea.notes_lc = "park the quokka".into();
+        i.rows.push(idea);
+        let db = db_for(&i, &[]);
+        // the idea's title matches like a session's; notes count for less than a title
+        assert_eq!(ranked(&i, &db, "catalog", false), ["idea:1", "f", "a"]);
+        assert_eq!(ranked(&i, &db, "quokka", false), ["idea:1"]);
+        assert_eq!(ranked(&i, &db, "catalog quokka", false)[0], "idea:1");
     }
 
     #[test]

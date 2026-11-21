@@ -278,7 +278,7 @@ pub(super) async fn api_search(State(st): State<Shared>, Query(q): Query<SearchQ
             .split_whitespace()
             .map(String::from)
             .collect();
-    if search::build_query(&words, " ").is_none() {
+    if !search::has_terms(&words) {
         return Ok(Json(json!({"results": []})));
     }
     let now = now_ms();
