@@ -1,0 +1,95 @@
+# Night shift
+
+Park work during the day, let it run at night inside the plan you already pay for, and find results to review in the morning. It is **off until you switch it on**.
+
+## The idea
+
+- You plan a run for tonight: an **idea** (it needs a folder and a prompt) or a **session to continue** (it needs a prompt: what it should do tonight).
+- Inside the window (01:00-07:00 by default) the daemon starts planned runs, headless, when no session you work in is live.
+- Every run works in its own git worktree on a new branch, or in a copy of a plain folder. It never runs in your folder and never pushes.
+- When a run ends, its session is a **Needs you** card with the next step "review the night run": status, report, what it changed, and its loose ends.
+
+## Plan, from the command line
+
+```
+eye night on | off
+eye night add idea:<n> [--limit 30%|2M|90m] [--agent claude|codex] [--switch]
+eye night add <session> --prompt "what it should do tonight" [--limit ...]
+eye night ls                      # the default
+eye night cancel <run>
+eye night log <run>
+eye night window 01:00-07:00      # local time; 23:00-05:00 crosses midnight
+eye night parallel 2
+eye night run-now <run> --yes [--wait]
+eye night discard <run> [--yes] [--lose-changes]
+```
+
+Planning after the window closes means tonight; planning inside the window means the night that is going on. A run planned for a night that has passed (the daemon was off) starts in the next window.
+
+`run-now` starts a planned run at once, ignoring the window and the quiet rule, to try it out. Without `--wait` the daemon finishes it; with `--wait` eye stays, watches it and prints the report, so it works without a daemon.
+
+On the board: a **TONIGHT** button on idea cards and a TONIGHT box in the idea form (with the optional limit, agent and switch), **CONTINUE TONIGHT** in a session's panel (prompt and optional limit), and a calm **Tonight: 2** chip in the header while runs are planned. The chip opens a list: switch on or off, window, how many at once, and for each run CHANGE LIMIT and CANCEL RUN. A finished run's session has a **night** chip, and its panel a **NIGHT RUN** section: status, start, end, time taken, tokens, the limit and whether it stopped the run, the report, the diff stat, the branch or folder, and RESUME (interactive, in the worktree), OPEN FOLDER and DISCARD (asks first in the page). In the picker the row says `night` and the preview has the status line and the first line of the report.
+
+## When a run starts
+
+All of these, checked once a minute:
+
+1. `[night] enabled = true` and the run is planned.
+2. The clock is inside the window, and the run's night has come.
+3. **Quiet:** no live interactive session that is not itself a night run has been busy or touched for `[night] quiet_minutes` (20). A headless run (`claude -p`, `codex exec`) does not count as a session you work in; neither does anything working inside eye's night folder.
+4. Fewer than `[night] parallel` (2) runs are going. Planned runs never block each other: two planned for tonight both run, in parallel, each in its own worktree. A third starts when one ends.
+
+A run that is going at the end of the window may finish; no new one starts.
+
+## Limits
+
+No budget cap by default. Each planned run can set **one** optional limit:
+
+| Limit | Looks like | Stops the run when |
+|---|---|---|
+| weekly plan | `30%` | the agent's weekly window is above that (from `eye usage` limit data, `limits:<agent>`; a window that has reset since is ignored) |
+| tokens | `2M`, `500k` | the run's session used that many input, output and cache-write tokens, sub-agents included (cache reads are not counted) |
+| time | `90m`, `2h` | that long since it started |
+
+A limit that eye cannot check is **refused when you plan it**, with the reason: a weekly limit for Claude needs `eye statusline` to be set up (see `usage.md`), and one for Codex needs a Codex session to have reported its limits.
+
+When a limit is passed the run gets SIGTERM to its process group (after the same pid and start time check `eye loose` makes, never SIGKILL) and is marked `stopped` with why, for example `weekly limit 80% reached (81% used)`. It is finished as soon as its process is gone.
+
+### Switching agents
+
+With `--switch` an idea run starts again on the other enabled agent, with the same prompt in a fresh worktree, when its agent's plan is out: a limit window at 100% when it is about to start, or the CLI exits with a rate-limit message. Not for continued sessions, which stay on their agent. A weekly limit is dropped when the run moves, because it was about the other plan.
+
+## How runs are made
+
+Each run has a folder `<eye home>/night/<run id>/` with `log` (stdout and stderr) and `exit` (the exit code), and the worktree or copy inside it.
+
+- **Repo:** `git worktree add <run dir>/wt -b night/<YYYYMMDD>-<slug> HEAD`. The base is the current HEAD and is recorded. A second run with the same slug gets `-<run id>`. A run planned for a sub-folder starts in the same sub-folder of its worktree.
+- **Plain folder:** copied into `<run dir>/work`, leaving out `node_modules`, `.git`, `target`, `.venv`, `dist` and symlinks. Over 100 MB (not counting those) is refused when you plan it.
+- **Detached:** every run is started as `sh -c '"$@"; echo $? > exit'` in its own session, so the daemon finds it again by pid and start time after a restart or an upgrade of its own binary.
+
+### Claude Code
+
+`claude -p <prompt> --session-id <uuid> --permission-mode auto --disallowedTools ...`, in the worktree. The transcript is kept, so it is a normal session that eye indexes. Headless permission modes the installed CLI offers (`claude --help`): `acceptEdits`, `auto`, `bypassPermissions`, `manual`, `dontAsk`, `plan`. eye uses `auto`. Set `[night] claude_permission = "acceptEdits"` to use that instead; eye then also passes `--allowedTools` for git status/diff/log/add/commit and build and test commands (cargo, npm, npx, node, python, pytest, go, make, ls). `bypassPermissions` is never chosen by eye.
+
+Always denied, in either mode: `git push`, `git -C ... push`, `git remote`, `gh pr create`, `gh pr merge`, `gh release`.
+
+### Codex
+
+`codex exec --sandbox workspace-write --cd <worktree> --skip-git-repo-check <prompt>`. The sandbox has no network by default, so nothing can be pushed. Its rollout is picked up like any other session: eye treats a `codex exec` rollout as a session only when it ran in a night run's folder (`<eye home>/night/<n>/wt` or `work`); every other `exec` rollout stays hidden.
+
+### Continue a session tonight
+
+- **Claude:** eye copies the session's transcript (restoring it from the archive when Claude deleted it) into the project folder Claude uses for the worktree, then runs `claude -p <prompt> --resume <id> --fork-session --session-id <new uuid>`. `--session-id` names the fork, so the new session is known at once. The original session is untouched.
+- **Codex:** `codex exec fork <id> <prompt>` (the installed CLI has it) with `-c sandbox_mode="workspace-write"`, started in the worktree.
+
+The prompt of a continued run starts with a note: it works in a copy at `<worktree>`, the earlier conversation mentions paths of the original folder, use the same files under the worktree and change nothing in the original. The agent can still write outside its folder if it ignores that (Claude's `auto` mode is the only guard); see `security.md`.
+
+## What a run leaves
+
+When its process ends, eye stores the report (the run's last assistant message, secrets masked, at most 6000 characters), the diff stat (`git diff --stat <base>` plus the files git does not know yet; for a copy the list of changed and new files) and the loose ends of its session (`loose.md` is part of `eye loose`), marks its session **Needs you** with the next step "review the night run", and shows a desktop notice ("Night shift: 2 runs finished") when notices are on (`[remind] notify`). Status is `done` (exit 0), `failed` (anything else, with the last line of the log), `stopped` (a limit) or `skipped` (cancelled).
+
+**DISCARD** removes the worktree and its branch (or the copy) after a confirm. It refuses while the worktree has uncommitted changes unless the confirm says they will be lost. It never passes `--force` to git: it deletes the folder, runs `git worktree prune` and `git branch -D`. Commits that exist only on that branch are lost with it, and the confirm says so.
+
+## Settings
+
+See `config.md` (`[night]`). `window`, `parallel` and `enabled` can be changed from the CLI and the board; both write `config.toml`, and the daemon reads it again every minute.
