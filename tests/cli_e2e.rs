@@ -245,17 +245,23 @@ fn usage_groups_by_project_agent_model_and_session() {
         "{project}"
     );
     // the folders are long temporary paths, so the names are read from the JSON
-    let names: Vec<String> = w.json(&["usage", "--json", "--by", "project"])["rows"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|r| r["name"].as_str().unwrap().to_string())
-        .collect();
+    let names = |by: &str| -> Vec<String> {
+        w.json(&["usage", "--json", "--by", by])["rows"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| r["name"].as_str().unwrap().to_string())
+            .collect()
+    };
+    // by folder: one row per folder, as it was
+    let folders = names("folder");
     assert!(
-        names.iter().any(|n| n.ends_with("web-shop"))
-            && names.iter().any(|n| n.ends_with("billing")),
-        "{names:?}"
+        folders.iter().any(|n| n.ends_with("web-shop"))
+            && folders.iter().any(|n| n.ends_with("billing")),
+        "{folders:?}"
     );
+    // by project: folders under the temp dir are not projects, so they fold into one row
+    assert_eq!(names("project"), vec!["other (2)".to_string()]);
     let agent = by("agent");
     assert!(
         agent.contains("claude") && agent.contains("codex"),
@@ -317,7 +323,7 @@ fn usage_refuses_a_bad_group_a_bad_day_count_and_clashing_flags() {
     let w = World::new();
     assert!(w
         .err(&["usage", "--by", "colour"])
-        .contains("project, agent, model or session"));
+        .contains("project, folder, agent, model or session"));
     assert!(w.err(&["usage", "--days", "0"]).contains("from 1"));
     assert!(w
         .err(&["usage", "--week", "--month"])
