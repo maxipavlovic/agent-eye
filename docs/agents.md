@@ -2,9 +2,10 @@
 
 eye follows coding agents through adapters. An adapter is one Rust type that implements the `Agent`
 trait in `src/agents/mod.rs`. Everything else (the scanner, database, picker, board, daemon, archive
-and search) talks to that trait and knows nothing about a particular agent. Claude Code (the default)
-and Codex CLI are the two real adapters; `src/agents/claude/` and `src/agents/codex/` are the worked
-examples.
+and search) talks to that trait and knows nothing about a particular agent. Claude Code (the default),
+Codex CLI, Antigravity CLI (`agy`) and OpenCode are the real adapters; `src/agents/claude/` and
+`src/agents/codex/` are the worked examples, `src/agents/agy/` and `src/agents/opencode/` show a session
+that is a folder with a database and one that is a row in a shared database.
 
 ## What an adapter provides
 
@@ -22,7 +23,7 @@ are the ones for a session that is one text file which only grows (see "Storage 
 | Hooks | `queue_line`, `wait_effect` | Optional. `queue_line` turns a hook payload into one short stored line; `wait_effect` says whether that event makes a session wait on you, and what it asks. A `Wait` with `only_if_prompt` set changes the wait only while it is a prompt (an event that shows a prompt was answered). |
 | Text | `display_prompt`, `clean_recap` | Optional. `display_prompt` says how a stored prompt line is shown, or that it is not a prompt (a built-in command, a paste tag with nothing in it); the default only trims. `clean_recap` takes out what the agent adds to every recap; the scanner stores recaps through it. |
 | Reading | `read_conversation`, `conversation_tail`, `ask`, `default_summary_model` | Conversation for the board and picker, the tail of a transcript for the summary excerpt, and a one-shot structured question to the agent (summaries). The first two get a path that exists: the session itself, or a temporary copy eye made from the archive. Without `ask` the agent cannot write summaries. `default_summary_model` is the model `ask` gets when `[summary] model` is empty. |
-| Archive | `transcript_stamp`, `archive_name`, `archive`, `unarchive` | Optional. How a session is copied to eye's archive and put back; see below. The defaults make one zstd file per session. |
+| Archive | `transcript_stamp`, `transcript_exists`, `archive_name`, `archive`, `unarchive` | Optional. How a session is copied to eye's archive and put back; see below. The defaults make one zstd file per session. `transcript_exists` says whether the transcript path is there to read; the default asks the file system, an agent whose path names a session inside a database answers itself. |
 | Commands | `executable`, `resume`, `fork`, `start`, `background_job_id` | Return an `Invocation` (program and arguments). eye adds the folder, quotes every argument and decides how to run it. `fork` is optional. `start` may return no session id when the agent cannot choose one; eye then links the idea to the first session of that agent that begins in its folder. |
 | Setup | `preflight`, `install`, `uninstall`, `doctor`, `daemon_env`, `executable_dir` | Install hooks and a skill (or whatever the agent has), remove them again, and check that the agent's files still look as eye expects. `install` and `uninstall` return a `Report`: one row for the agent (`hooks added (6 events) to ~/.codex/hooks.json, skill added`), the file diff as that row's detail, and a `next` line when the user has to do something (Codex's `/hooks` trust). `install` must leave other tools' entries alone and must not create files for an agent that is not there. |
 
@@ -111,11 +112,54 @@ INTO` or the backup API, then compress it. `tests/support/folder_agent.rs` does 
 - **Hooks.** `hooks.json` has the shape of Claude's `settings.json`, so both adapters use `hooks_file.rs` with their own events and command. Codex runs a hook only after the user trusts it once; eye can say so and cannot see it. `PostToolUse` runs after every tool call and carries its output, so its queue line keeps only the session id.
 - **Summaries.** `ask` runs `codex exec` with the flags that keep it from leaving a session behind or running the user's own hooks, checks once with `--help` that this version has them, and hands over the schema in the strict form Codex wants (`additionalProperties: false`, every property required).
 
+## Antigravity CLI and OpenCode
+
+What works for each (a dash is "not offered"):
+
+| | Claude Code | Codex CLI | Antigravity CLI (`agy`) | OpenCode |
+|---|---|---|---|---|
+| Sessions on the board, picker, search, usage | yes | yes | yes | yes |
+| Read incrementally | byte offset | byte offset | byte offset of the JSON log | no: a session is read whole when its stamp moves |
+| Prompt history of deleted sessions | yes | none | `history.jsonl` | none |
+| Conversation, summary tail | yes | yes | yes | yes |
+| Resume | `claude --resume` | `codex resume` | `agy --conversation <id>` | `opencode --session <id>` |
+| Fork | yes | yes | no | no |
+| Start an idea | yes | yes (no session id up front) | `agy -i <prompt>` (no id up front) | `opencode --prompt <text>` (no id up front) |
+| Tokens and usage by model | yes | yes | yes (model from the database) | yes |
+| Live status | status files | writer lock + hooks | none | none |
+| Hooks installed | yes | yes | none | none |
+| Summaries (`ask`) | `claude -p` | `codex exec` | `agy -p --output-format json --json-schema` | none |
+| Archive | one file | one file | folder: database snapshot + the conversation's folder | one JSON export; never restored |
+
+**Antigravity CLI.** Built on a real install (agy 1.5.1). A conversation is `conversations/<id>.db`, a SQLite file of
+protobuf blobs, with a folder `brain/<id>/` beside it. eye reads the plain JSON log agy keeps there
+(`.system_generated/logs/transcript_full.jsonl`: one line per step, with the prompt, reply, tool calls and the
+tokens of each model call), the model of each call from the database (the one protobuf field eye decodes), titles
+and folders from `conversation_summaries.db` and prompts from `history.jsonl`. The session is the folder
+`brain/<id>/`; its stamp folds in the database, its write-ahead log and the summaries row, so a title that agy
+writes later is noticed. Conversations without a log, sub-agent conversations and the ones eye starts for summaries
+(a folder named `eye-ask-<uuid>`; agy has no flag to leave nothing behind) are not sessions. agy does have hooks, but
+only in a workspace's `.agents/hooks.json` or a plugin, and a hook that prints no decision can block a tool, so eye
+installs none: status comes from the files changing. There is no live status (whether agy holds `presence/<id>.lock`
+only while a conversation is open was not verified). The archive copy is a folder (`eye-conversation.db.zst`, a
+`VACUUM INTO` snapshot, and every file of `brain/<id>/` compressed under `files/`, without `scratch/` and files over
+8 MiB); restoring makes the folder again with the snapshot inside it, which lets eye read the conversation but not
+agy resume it. Not read: commits and folders as outputs, background tasks and sub-agents. Notes: `notes/v0.3/agy-spec.md`.
+
+**OpenCode: built from the source, not tried on a real install.** The adapter follows the structs of
+sst/opencode v2.3.2 (and v1.1.1 for the older files) exactly and is tested on synthetic data in all three
+layouts: the `session_v2` tables, the older `session`/`message`/`part` tables (both in `opencode.db`, found in
+`$XDG_DATA_HOME/opencode` or `~/.local/share/opencode`) and the JSON files of v1.0 and v1.1
+(`storage/session|message|part`). A session of a database is no file, so its transcript path is `<db>#<id>` and
+`transcript_exists` asks the database. OpenCode's extensions are JavaScript plugins, so there are no hooks, and
+`opencode run` cannot answer with a schema, so it cannot write summaries (set `[summary] agent` to another agent).
+Sub-agent sessions (with a parent) are left out. Notes: `notes/v0.3/opencode-spec.md`.
+
 ## Adding an agent
 
 1. Make `src/agents/<id>/mod.rs` with a type that implements `Agent`. Start with the required
    methods and a `build(&AgentCfg) -> AgentRef` function that reads `[agents.<id>] dir`.
-2. Add the id to `factory()` and `registered_ids()` in `src/agents/mod.rs`, next to `claude` and `codex`.
+2. Add the id to `factory()` and `registered_ids()` in `src/agents/mod.rs`, next to `claude`, `codex`, `agy` and `opencode`.
 3. Turn it on in `config.toml`: `[agents] enabled = ["claude", "<id>"]` and, if its files are not in
    the usual place, `[agents.<id>] dir = "..."`. `eye install` does the first part for an agent
    whose `detect` finds it.

@@ -9,8 +9,8 @@ they start: after a change, `eye board off && eye board on` or restart the daemo
 
 | Key | Default | Meaning |
 |---|---|---|
-| `enabled` | `["claude"]`; `eye install` sets it to the agents it finds | The agents eye follows, in order: `"claude"` (Claude Code), `"codex"` (Codex CLI). The first is the default agent (new ideas start in it, summaries are written by it). A config that has no `enabled` key means Claude Code only, so older files keep working; `install` fills the key in from what is on the machine, and mentions an agent it finds that the key leaves out. `[]` turns every agent off: eye still runs, with an empty board. An id nobody registered is reported by `eye doctor`. |
-| `[agents.<id>] dir` | the agent's usual folder | Where that agent keeps its files, for example `[agents.claude] dir = "/Volumes/work/claude"`. A leading `~` is your home folder. For Claude Code the environment variable `EYE_CLAUDE_DIR` beats this key. For Codex CLI this key beats `CODEX_HOME`, which beats `~/.codex`. |
+| `enabled` | `["claude"]`; `eye install` sets it to the agents it finds | The agents eye follows, in order: `"claude"` (Claude Code), `"codex"` (Codex CLI), `"agy"` (Antigravity CLI), `"opencode"` (OpenCode). The first is the default agent (new ideas start in it, summaries are written by it). A config that has no `enabled` key means Claude Code only, so older files keep working; `install` fills the key in from what is on the machine, and mentions an agent it finds that the key leaves out. `[]` turns every agent off: eye still runs, with an empty board. An id nobody registered is reported by `eye doctor`. |
+| `[agents.<id>] dir` | the agent's usual folder | Where that agent keeps its files, for example `[agents.claude] dir = "/Volumes/work/claude"`. A leading `~` is your home folder. For Claude Code the environment variable `EYE_CLAUDE_DIR` beats this key. For Codex CLI this key beats `CODEX_HOME`, which beats `~/.codex`. For Antigravity CLI the folder is `~/.gemini/antigravity-cli`. For OpenCode this key beats `$XDG_DATA_HOME/opencode`, which beats `~/.local/share/opencode`. |
 
 Sessions and ideas of an agent that is not enabled are left out of every list. They stay in the
 database and come back when the agent is enabled again.
@@ -103,6 +103,7 @@ The cost estimate (see `usage.md`). Every key is optional.
 | `EYE_CLAUDE_BIN` | The program to run instead of `claude` (used by tests). |
 | `CODEX_HOME` | Codex CLI's folder (default `~/.codex`), as Codex itself reads it. |
 | `EYE_CODEX_BIN` | The program to run instead of `codex` (used by tests). |
+| `EYE_AGY_BIN`, `EYE_OPENCODE_BIN` | The program to run instead of `agy` or `opencode` (used by tests). |
 | `EYE_FACE_DIR` | Serve the board's web files from this folder (development). |
 | `NO_COLOR` | Turn colours off in the picker. |
 | `EYE_PICK_TIMING` | Show the search time in the picker's corner. |

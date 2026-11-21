@@ -6,6 +6,7 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ### Added
 
+- Antigravity CLI (`agy`) and OpenCode as agents (`[agents] enabled = ["agy", "opencode"]`; `eye install` turns on the ones it finds). agy: read from its JSON log, with titles, tokens by model, history, archive and summaries; no hooks or live status. OpenCode: built from its source and not yet tried on a real install, in the database and file layouts; no hooks, summaries or live status. New `Agent::transcript_exists` for sessions that live inside a database.
 - `eye usage [--days N | --week | --month] [--by project|agent|model|session] [--json]`: tokens and an API-equivalent cost estimate (not your bill) per day, project, agent, model or session, with plan limits on top. Prices live in one file with their sources; `[usage.prices]` adds or overrides a model, and a model without a price shows tokens and no cost. Sessions from before are counted in the background.
 - A USAGE panel on the board (this week by project and by agent, the top 10 sessions, four weeks, the limit lines) and `GET /api/usage`; tokens and cost on the session panel, in `eye show` and in the picker preview.
 - Codex plan limits, kept as the newest seen. For Claude Code, an opt-in `eye statusline [--wrap '<cmd>']` status line command stores the limits Claude Code hands to its status line; `eye install` does not turn it on (see `docs/usage.md`).
