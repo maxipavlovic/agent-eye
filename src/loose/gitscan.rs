@@ -141,6 +141,52 @@ pub(super) fn find(idx: &Index, probe: &dyn Probe, now: i64) -> Vec<LooseEnd> {
         .collect()
 }
 
+/// The item for commits on no remote, only where the repo has a remote at all.
+fn unpushed_item(
+    probe: &dyn Probe,
+    at: &Path,
+    g: &Group,
+    repo: &str,
+    sid: &str,
+) -> Option<LooseEnd> {
+    probe
+        .git(at, &["remote"])
+        .filter(|t| !t.trim().is_empty())?;
+    let log = probe.git(
+        at,
+        &[
+            "log",
+            "--branches",
+            "--not",
+            "--remotes",
+            "--format=%h%x09%ct%x09%s",
+        ],
+    )?;
+    let commits = parse_unpushed(&log);
+    let (newest, _, _) = commits.first()?;
+    let n = commits.len();
+    let oldest = commits.iter().map(|c| c.1).min().unwrap_or(0) * 1000;
+    let mut detail = format!("{} in {repo}", plural(n, "commit", "commits"));
+    for (sha, _, subject) in commits.iter().take(SHOWN) {
+        detail.push_str(&format!("\n{sha} {}", crate::util::head_chars(subject, 80)));
+    }
+    if n > SHOWN {
+        detail.push_str(&format!("\n+{} more", n - SHOWN));
+    }
+    Some(LooseEnd {
+        key: format!("unpushed:{}:{newest}", g.main.display()),
+        session_id: sid.to_string(),
+        kind: Kind::Unpushed,
+        line: format!(
+            "{} in {repo} {} on no remote",
+            plural(n, "commit", "commits"),
+            if n == 1 { "is" } else { "are" }
+        ),
+        detail,
+        since_ms: oldest,
+    })
+}
+
 fn group_items(idx: &Index, probe: &dyn Probe, g: &Group) -> Vec<LooseEnd> {
     let sessions = &idx.input.sessions;
     // the most recently active session of the repo owns what is left, while it is not open
@@ -198,55 +244,19 @@ fn group_items(idx: &Index, probe: &dyn Probe, g: &Group) -> Vec<LooseEnd> {
         }
     };
 
-    // commits on no remote, only where the repo has a remote at all
-    let has_remote = probe
-        .git(at, &["remote"])
-        .is_some_and(|t| !t.trim().is_empty());
-    if has_remote {
-        if let Some(log) = probe.git(
-            at,
-            &[
-                "log",
-                "--branches",
-                "--not",
-                "--remotes",
-                "--format=%h%x09%ct%x09%s",
-            ],
-        ) {
-            let commits = parse_unpushed(&log);
-            if let Some((newest, _, _)) = commits.first() {
-                let n = commits.len();
-                let oldest = commits.iter().map(|c| c.1).min().unwrap_or(0) * 1000;
-                let mut detail = format!("{} in {repo}", plural(n, "commit", "commits"));
-                for (sha, _, subject) in commits.iter().take(SHOWN) {
-                    detail.push_str(&format!("\n{sha} {}", crate::util::head_chars(subject, 80)));
-                }
-                if n > SHOWN {
-                    detail.push_str(&format!("\n+{} more", n - SHOWN));
-                }
-                out.push(LooseEnd {
-                    key: format!("unpushed:{}:{newest}", g.main.display()),
-                    session_id: sid.clone(),
-                    kind: Kind::Unpushed,
-                    line: format!(
-                        "{} in {repo} {} on no remote",
-                        plural(n, "commit", "commits"),
-                        if n == 1 { "is" } else { "are" }
-                    ),
-                    detail,
-                    since_ms: oldest,
-                });
-            }
-        }
-    }
-
+    // the log of commits and the status of each folder run side by side
     // modified tracked files, per folder the sessions used
     let dirs: Vec<&PathBuf> = g.paths.keys().collect();
-    let statuses = par_map(&dirs, |d| {
-        probe
-            .git(d, &["status", "--porcelain"])
-            .map(|t| parse_modified(&t))
+    let (unpushed, statuses) = std::thread::scope(|sc| {
+        let log = sc.spawn(|| unpushed_item(probe, at, g, &repo, sid));
+        let statuses = par_map(&dirs, |d| {
+            probe
+                .git(d, &["status", "--porcelain"])
+                .map(|t| parse_modified(&t))
+        });
+        (log.join().ok().flatten(), statuses)
     });
+    out.extend(unpushed);
     for (dir, files) in dirs.iter().zip(statuses) {
         let Some(files) = files.filter(|f| !f.is_empty()) else {
             continue;

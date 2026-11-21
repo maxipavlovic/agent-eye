@@ -94,6 +94,7 @@ fn input(sessions: Vec<Sess>, hours: &[(&str, i64, i64)]) -> Input {
             .map(|(s, h, n)| ((s.to_string(), *h), *n))
             .collect(),
         home: Some(PathBuf::from("/Users/zed")),
+        ..Input::default()
     }
 }
 
@@ -676,4 +677,36 @@ fn a_process_of_our_own_is_found_and_stopped_only_on_a_matching_start() {
             std::panic::resume_unwind(panic);
         }
     }
+}
+
+#[test]
+fn a_command_that_just_started_and_listens_on_no_port_is_not_a_leftover_yet() {
+    let dir = "/Users/zed/code/a";
+    let start = NOW / 1000 - 30;
+    let hour = worked::hour_of(start * 1000);
+    let fake = Fake {
+        procs: vec![
+            proc(1, start, "ugrep -r thing .", dir, &[]),
+            proc(2, start, "node server.js", dir, &[3000]),
+            proc(3, NOW / 1000 - 600, "tail -f log", dir, &[]),
+        ],
+        ..Fake::default()
+    };
+    let mut inp = input(
+        vec![sess("s1", dir, NOW)],
+        &[("s1", hour, 3), ("s1", worked::hour_of(NOW - 600_000), 3)],
+    );
+    inp.quiet_min_age_s = 120;
+    let keys: Vec<String> = find(&inp, &fake, NOW).into_iter().map(|f| f.key).collect();
+    assert_eq!(keys.len(), 2, "{keys:?}");
+    assert!(
+        keys.iter().any(|k| k.starts_with("proc:2:"))
+            && keys.iter().any(|k| k.starts_with("proc:3:"))
+    );
+    let line = &find(&inp, &fake, NOW)
+        .into_iter()
+        .find(|f| f.key.starts_with("proc:2:"))
+        .unwrap()
+        .line;
+    assert!(line.ends_with("started just now"), "{line}");
 }

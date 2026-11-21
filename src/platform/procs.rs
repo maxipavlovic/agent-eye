@@ -199,27 +199,33 @@ fn list_macos(want: &dyn Fn(&str) -> bool) -> Vec<Proc> {
     if procs.is_empty() {
         return procs;
     }
-    let listen = run(
-        lsof_path(),
-        &[
-            "-nP",
-            "-iTCP",
-            "-sTCP:LISTEN",
-            "-Fpn",
-            "-a",
-            "-u",
-            &me.to_string(),
-        ],
-    )
-    .map(|t| parse_lsof_listen(&t))
-    .unwrap_or_default();
+    // the listening sockets and the working folders are asked at the same time
     let pids: Vec<String> = procs.iter().map(|p| p.pid.to_string()).collect();
-    let cwds = run(
-        lsof_path(),
-        &["-a", "-d", "cwd", "-Fpn", "-p", &pids.join(",")],
-    )
-    .map(|t| parse_lsof_cwd(&t))
-    .unwrap_or_default();
+    let (listen, cwds) = std::thread::scope(|sc| {
+        let listen = sc.spawn(|| {
+            run(
+                lsof_path(),
+                &[
+                    "-nP",
+                    "-iTCP",
+                    "-sTCP:LISTEN",
+                    "-Fpn",
+                    "-a",
+                    "-u",
+                    &me.to_string(),
+                ],
+            )
+            .map(|t| parse_lsof_listen(&t))
+            .unwrap_or_default()
+        });
+        let cwds = run(
+            lsof_path(),
+            &["-a", "-d", "cwd", "-Fpn", "-p", &pids.join(",")],
+        )
+        .map(|t| parse_lsof_cwd(&t))
+        .unwrap_or_default();
+        (listen.join().unwrap_or_default(), cwds)
+    });
     for p in &mut procs {
         p.cwd = cwds.get(&p.pid).cloned();
         p.ports = listen.get(&p.pid).cloned().unwrap_or_default();

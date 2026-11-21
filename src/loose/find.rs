@@ -12,6 +12,9 @@ use anyhow::Result;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+/// How long a process with no port must have run to be a leftover.
+const QUIET_MIN_AGE_S: i64 = 120;
+
 /// A session as a scan needs it.
 #[derive(Debug, Clone, Default)]
 pub struct Sess {
@@ -30,6 +33,9 @@ pub struct Input {
     /// Events per (session, UTC hour) from `worked_hour`.
     pub events: HashMap<(String, i64), i64>,
     pub home: Option<PathBuf>,
+    /// A process that listens on no port counts only after it ran this long (seconds): a command
+    /// a live session is running right now is not a leftover. 0 in tests.
+    pub quiet_min_age_s: i64,
 }
 
 /// Read the sessions active in the last `[loose] days` and their hours.
@@ -69,6 +75,7 @@ pub fn load(db: &Db, cfg: &Config, _agents: &Agents, now: i64) -> Result<Input> 
         sessions,
         events,
         home: crate::platform::account_home(),
+        quiet_min_age_s: QUIET_MIN_AGE_S,
     })
 }
 
@@ -296,15 +303,15 @@ fn process_item(p: &Proc, sid: &str, now: i64) -> LooseEnd {
     } else {
         format!("{name} (pid {}, {ports})", p.pid)
     };
-    let started = ago(now, p.start * 1000);
+    let started = match ago(now, p.start * 1000) {
+        a if a == "now" => "just now".to_string(),
+        a => format!("{a} ago"),
+    };
     let line = if ports.is_empty() {
-        format!(
-            "{name} (pid {}) is still running, started {started} ago",
-            p.pid
-        )
+        format!("{name} (pid {}) is still running, started {started}", p.pid)
     } else {
         format!(
-            "{name} (pid {}) is still serving {ports}, started {started} ago",
+            "{name} (pid {}) is still serving {ports}, started {started}",
             p.pid
         )
     };
@@ -348,10 +355,19 @@ pub fn find(input: &Input, probe: &dyn Probe, now: i64) -> Vec<LooseEnd> {
     let idx = Index::new(input, &roots);
     let mut out: Vec<LooseEnd> = vec![];
     if !input.sessions.is_empty() {
-        // processes
+        // processes (listed in a thread of their own: ps and lsof take a moment, git runs meanwhile)
         let want = |cmd: &str| !ignored_program(cmd, true);
-        for p in probe.processes(&want) {
+        let procs = std::thread::scope(|sc| {
+            let h = sc.spawn(|| (probe.processes(&want), probe.docker()));
+            out.extend(gitscan::find(&idx, probe, now));
+            h.join().unwrap_or_default()
+        });
+        let (procs, boxes) = procs;
+        for p in procs {
             if ignored_program(&p.command, !p.ports.is_empty()) {
+                continue;
+            }
+            if p.ports.is_empty() && now / 1000 - p.start < input.quiet_min_age_s {
                 continue;
             }
             let Some(cwd) = p.cwd.as_deref() else {
@@ -362,7 +378,7 @@ pub fn find(input: &Input, probe: &dyn Probe, now: i64) -> Vec<LooseEnd> {
             }
         }
         // containers
-        for c in probe.docker() {
+        for c in boxes {
             let hit = c
                 .workdir
                 .iter()
@@ -372,7 +388,6 @@ pub fn find(input: &Input, probe: &dyn Probe, now: i64) -> Vec<LooseEnd> {
                 out.push(container_item(&c, &input.sessions[i].id, now));
             }
         }
-        out.extend(gitscan::find(&idx, probe, now));
     }
     out.sort_by(|a, b| {
         (&a.session_id, a.kind, std::cmp::Reverse(a.since_ms), &a.key).cmp(&(
