@@ -23,6 +23,8 @@ pub enum Reason {
     /// Before the schema was upgraded to this version.
     PreUpgrade(i64),
     PreRestore,
+    /// Before `eye import` changes the database.
+    PreImport,
 }
 
 impl Reason {
@@ -32,6 +34,7 @@ impl Reason {
             Reason::Manual => "manual".into(),
             Reason::PreUpgrade(v) => format!("pre-v{v}"),
             Reason::PreRestore => "pre-restore".into(),
+            Reason::PreImport => "pre-import".into(),
         }
     }
 
@@ -40,6 +43,7 @@ impl Reason {
             "daily" => Some(Reason::Daily),
             "manual" => Some(Reason::Manual),
             "pre-restore" => Some(Reason::PreRestore),
+            "pre-import" => Some(Reason::PreImport),
             _ => s
                 .strip_prefix("pre-v")
                 .and_then(|v| v.parse().ok())
@@ -117,7 +121,7 @@ impl Entry {
 
 /// The names the keep rules leave, from the snapshots newest first: the newest `keep_daily`
 /// dailies; the newest daily of each of the newest `keep_weekly` ISO weeks that have one; the last
-/// 3 `pre-v*`, the last 3 `pre-restore` and the last 5 `manual`.
+/// 3 `pre-v*`, the last 3 `pre-restore`, the last 3 `pre-import` and the last 5 `manual`.
 pub fn keep(all: &[Entry], cfg: &BackupCfg) -> HashSet<String> {
     let of = |want: fn(&Reason) -> bool| all.iter().filter(move |e| want(&e.reason));
     let mut keep: HashSet<String> = HashSet::new();
@@ -139,6 +143,11 @@ pub fn keep(all: &[Entry], cfg: &BackupCfg) -> HashSet<String> {
     );
     keep.extend(
         of(|r| matches!(r, Reason::PreRestore))
+            .take(3)
+            .map(|e| e.name.clone()),
+    );
+    keep.extend(
+        of(|r| matches!(r, Reason::PreImport))
             .take(3)
             .map(|e| e.name.clone()),
     );

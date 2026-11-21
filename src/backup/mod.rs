@@ -10,7 +10,10 @@ mod restore;
 
 pub use check::checks;
 pub use names::{Entry, Reason};
-pub use restore::{apply, find, prepare, Applied, Prepared};
+pub use restore::{
+    apply, find, pre_restore_copy, prepare, quick_check, replace_with, schema_of, while_stopped,
+    Applied, Prepared,
+};
 
 use crate::archive::compress_file;
 use crate::config::{BackupCfg, Config};

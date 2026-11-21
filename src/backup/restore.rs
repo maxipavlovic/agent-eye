@@ -136,31 +136,58 @@ fn lock(paths: &Paths) -> Result<Lock> {
 /// daemon (when it runs: through the service, and a daemon started by hand stops the restore),
 /// replace the files while holding the daemon's lock, start the daemon again.
 pub fn apply(o: &Opts, cfg: &Config, prepared: &Prepared) -> Result<Applied> {
+    replace_with(o, cfg, &prepared.file, &Reason::PreRestore)
+}
+
+/// Replace the database with the checked file `new` (it is moved, not copied), after a copy of the
+/// current one made for `reason`. The same steps as [`apply`].
+pub fn replace_with(o: &Opts, cfg: &Config, new: &Path, reason: &Reason) -> Result<Applied> {
     let paths = Paths {
         home: o.eye_home.clone(),
     };
     let db = paths.db_path();
-    let pre_restore = pre_restore_copy(&paths, cfg, &db)?;
+    let pre_restore = pre_restore_copy(&paths, cfg, &db, reason)?;
+    let ((), applied) = while_stopped(o, || swap(&db, new))?;
+    Ok(Applied {
+        pre_restore,
+        ..applied
+    })
+}
+
+/// Run `f` with the daemon stopped and its lock held, then start the daemon again. A daemon that
+/// runs but is not the service's stops the whole thing before `f` is called.
+pub fn while_stopped<T>(o: &Opts, f: impl FnOnce() -> Result<T>) -> Result<(T, Applied)> {
+    let paths = Paths {
+        home: o.eye_home.clone(),
+    };
     let stopped = pause_daemon(o).map_err(anyhow::Error::msg)?;
-    let swapped = lock(&paths).and_then(|_lock| swap(&db, &prepared.file));
+    let done = lock(&paths).and_then(|_lock| f());
     let (daemon_restarted, restart_failed) = if stopped {
         let said = resume_daemon(o);
         (said.ok, (!said.ok).then_some(said.text))
     } else {
         (false, None)
     };
-    swapped?;
-    Ok(Applied {
-        pre_restore,
-        daemon_restarted,
-        restart_failed,
-    })
+    let value = done?;
+    Ok((
+        value,
+        Applied {
+            pre_restore: None,
+            daemon_restarted,
+            restart_failed,
+        },
+    ))
 }
 
-/// Snapshot the database as it is now, as `pre-restore`. A database that is missing or fails its
+/// Snapshot the database as it is now, for `reason`. A database that is missing or fails its
 /// check is not worth a copy (that is often why a person restores); one that is sound but cannot
 /// be copied stops the restore, since nothing would be left to go back to.
-fn pre_restore_copy(paths: &Paths, cfg: &Config, db: &Path) -> Result<Option<PathBuf>> {
+pub fn pre_restore_copy(
+    paths: &Paths,
+    cfg: &Config,
+    db: &Path,
+    reason: &Reason,
+) -> Result<Option<PathBuf>> {
     if !db.exists() {
         return Ok(None);
     }
@@ -171,7 +198,7 @@ fn pre_restore_copy(paths: &Paths, cfg: &Config, db: &Path) -> Result<Option<Pat
     if quick_check(&conn).is_some() {
         return Ok(None);
     }
-    let snap = super::take(&conn, paths, &cfg.backup, &Reason::PreRestore)
+    let snap = super::take(&conn, paths, &cfg.backup, reason)
         .context("could not keep a copy of the current database, so nothing was changed")?;
     Ok(Some(snap.path))
 }
