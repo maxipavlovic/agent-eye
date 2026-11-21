@@ -13,12 +13,17 @@ const KEY = Symbol.for("agent-eye.opencode.plugin")
 // before it was asked
 let chain = Promise.resolve()
 function send(event, payload) {
+  if (!EYE.startsWith("/")) return
   chain = chain
     .then(
       () =>
         new Promise((resolve) => {
           try {
-            const child = spawn(EYE, ["hook", event, "--agent", "opencode"], { stdio: ["pipe", "ignore", "ignore"] })
+            // EYE is the absolute path install wrote in; the hook needs nothing from PATH, so it gets a fixed one
+            const child = spawn(EYE, ["hook", event, "--agent", "opencode"], {
+              stdio: ["pipe", "ignore", "ignore"],
+              env: { ...process.env, PATH: "/usr/bin:/bin" },
+            })
             const timer = setTimeout(() => {
               try {
                 child.kill()
@@ -101,7 +106,7 @@ export default {
           } catch {}
         }
       } catch {}
-    })()
+    })().catch(() => {})
     return () => {
       stopped = true
       globalThis[KEY] = false
