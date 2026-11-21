@@ -20,7 +20,7 @@ use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
-fn open(path: &Path) -> Option<Connection> {
+pub(super) fn open(path: &Path) -> Option<Connection> {
     let c = Connection::open_with_flags(
         path,
         OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
@@ -28,6 +28,15 @@ fn open(path: &Path) -> Option<Connection> {
     .ok()?;
     c.busy_timeout(std::time::Duration::from_millis(300)).ok()?;
     Some(c)
+}
+
+pub(super) fn has_column(c: &Connection, table: &str, column: &str) -> bool {
+    c.query_row(
+        "SELECT 1 FROM pragma_table_info(?1) WHERE name=?2",
+        [table, column],
+        |_| Ok(()),
+    )
+    .is_ok()
 }
 
 fn has_table(c: &Connection, name: &str) -> bool {
@@ -52,7 +61,7 @@ pub fn split_db_path(p: &Path) -> Option<(PathBuf, String)> {
 }
 
 /// The databases of a data folder.
-fn databases(dir: &Path) -> Vec<PathBuf> {
+pub(super) fn databases(dir: &Path) -> Vec<PathBuf> {
     let mut out: Vec<PathBuf> = std::fs::read_dir(dir)
         .into_iter()
         .flatten()
@@ -83,8 +92,15 @@ struct Row {
 }
 
 fn list_table(c: &Connection, table: &str, msgs: &str) -> Vec<Row> {
+    // a session created archived (`opencode run --archived`: scripts, eye's own summaries) is out
+    // of OpenCode's lists, so it is out of eye's too
+    let live = if has_column(c, table, "time_archived") {
+        " WHERE s.time_archived IS NULL"
+    } else {
+        ""
+    };
     let q = format!(
-        "SELECT s.id, s.directory, s.parent_id, s.time_updated, (SELECT count(*) FROM {msgs} m WHERE m.session_id = s.id) FROM {table} s"
+        "SELECT s.id, s.directory, s.parent_id, s.time_updated, (SELECT count(*) FROM {msgs} m WHERE m.session_id = s.id) FROM {table} s{live}"
     );
     let Ok(mut st) = c.prepare(&q) else {
         return vec![];
@@ -253,6 +269,7 @@ pub fn delete(dir: &Path, path: &Path, id: &str) -> Result<Vec<String>> {
                 .collect::<rusqlite::Result<_>>()?;
             for sid in ids {
                 for (table, col) in [
+                    (Some("session_inbox"), "session_id"),
                     (parts, "session_id"),
                     (Some(msgs), "session_id"),
                     (Some(sessions), "id"),
@@ -435,6 +452,7 @@ fn load_files(session_file: &Path) -> Result<Loaded> {
             .to_string(),
         title: info.get("title").and_then(Value::as_str).map(String::from),
         events: from_v1(&msgs, &parts),
+        native: None,
     })
 }
 

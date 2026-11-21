@@ -164,6 +164,14 @@ pub trait Agent: Send + Sync + std::fmt::Debug {
         crate::archive::decompress_file(copy, dest)
     }
 
+    /// Put a copy made by `archive` back into the agent itself, for an agent whose transcript is
+    /// not a file eye can write (a session inside the agent's database, put back by the agent's
+    /// own import). `dest` is the transcript path the session had. `None` is the default and means
+    /// the copy is restored as a file with `unarchive`; `Some` is the whole restore.
+    fn restore_archived(&self, _copy: &Path, _dest: &Path) -> Option<Result<()>> {
+        None
+    }
+
     /// Remove the agent's own copy of session `session_id`, whose transcript is `path` (`eye forget
     /// --transcript`). Returns what was removed, as lines for people (empty when nothing was left
     /// to remove). `Ok(None)` is the default and means this adapter does not delete sessions. An

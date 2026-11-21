@@ -1,0 +1,5 @@
+{"ts":1795299083191,"event":"SessionStart","session_id":"ses_demo1","cwd":"/work/demo","agent":"opencode"}
+{"ts":1795299083245,"event":"UserPromptSubmit","session_id":"ses_demo1","agent":"opencode"}
+{"ts":1795299085023,"event":"PermissionRequest","session_id":"ses_demo1","tool_name":"shell","tool_detail":"echo hi13 > out13.txt","agent":"opencode"}
+{"ts":1795299091096,"event":"PermissionReplied","session_id":"ses_demo1","reply":"once","agent":"opencode"}
+{"ts":1795299093128,"event":"Stop","session_id":"ses_demo1","reason":"succeeded","last_message_tail":"done","agent":"opencode"}

@@ -1076,6 +1076,90 @@ fn the_codex_command_is_sandboxed_to_the_worktree_without_network() {
 }
 
 #[test]
+fn the_opencode_command_carries_its_permission_rules_in_the_environment() {
+    let cfg = Config::parse("[night]\nopencode_model = \"opencode/x-free\"\n").unwrap();
+    let c = launch::build(
+        &cfg,
+        &run_of("opencode", "idea"),
+        "/bin/opencode",
+        Path::new("/w/x"),
+        None,
+        None,
+    );
+    assert_eq!(c.program, "env");
+    assert!(c.args[0].starts_with("OPENCODE_CONFIG_CONTENT="));
+    assert_eq!(
+        &c.args[1..5],
+        ["/bin/opencode", "run", "--standalone", "--auto"]
+    );
+    assert_eq!(after(&c.args, "-m"), "opencode/x-free");
+    assert_eq!(c.cwd, Path::new("/w/x"));
+    let rules: serde_json::Value =
+        serde_json::from_str(c.args[0].trim_start_matches("OPENCODE_CONFIG_CONTENT=")).unwrap();
+    let bash = &rules["permission"]["bash"];
+    assert_eq!(bash["*"], "allow");
+    for d in [
+        "git push*",
+        "gh*",
+        "ssh*",
+        "npm publish*",
+        "docker push*",
+        "cargo publish*",
+    ] {
+        assert_eq!(bash[d], "deny", "{d}");
+    }
+    assert_eq!(rules["permission"]["external_directory"], "deny");
+    // the allow-all rule comes first: the last matching rule wins in OpenCode
+    assert_eq!(bash.as_object().unwrap().keys().next().unwrap(), "*");
+    assert_eq!(c.args.last().unwrap(), &run_of("opencode", "idea").prompt);
+}
+
+#[test]
+fn an_opencode_run_is_refused_in_the_plan_unless_allow_unsandboxed_says_so() {
+    let no = Config::parse("[night]\nenabled = true\n").unwrap();
+    let e = barrier::gate_unsandboxed(&no).unwrap_err().to_string();
+    assert!(
+        e.contains("no sandbox") && e.contains("allow_unsandboxed = true"),
+        "{e}"
+    );
+    let yes = Config::parse("[night]\nenabled = true\nallow_unsandboxed = true\n").unwrap();
+    assert!(barrier::gate_unsandboxed(&yes).is_ok());
+}
+
+#[test]
+fn a_started_opencode_run_reaches_the_program_with_its_rules() {
+    let tmp = tempfile::tempdir().unwrap();
+    let fake = tmp.path().join("opencode");
+    std::fs::write(
+        &fake,
+        "#!/bin/sh\nprintf '%s\\n' \"$@\" > args.txt\nprintf '%s' \"$OPENCODE_CONFIG_CONTENT\" > rules.json\n",
+    )
+    .unwrap();
+    std::fs::set_permissions(&fake, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+    let work = tmp.path().join("w");
+    std::fs::create_dir_all(&work).unwrap();
+    let c = launch::build(
+        &Config::default(),
+        &run_of("opencode", "idea"),
+        fake.to_str().unwrap(),
+        &work,
+        None,
+        None,
+    );
+    launch::spawn(&c, &tmp.path().join("log"), &tmp.path().join("exit")).unwrap();
+    for _ in 0..100 {
+        if tmp.path().join("exit").exists() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    let args = std::fs::read_to_string(work.join("args.txt")).unwrap();
+    assert!(args.starts_with("run\n--standalone\n--auto\n"), "{args}");
+    let rules = std::fs::read_to_string(work.join("rules.json")).unwrap();
+    assert!(rules.contains("\"git push*\":\"deny\""), "{rules}");
+}
+
+#[test]
 fn the_claude_project_folder_name_replaces_every_odd_character() {
     let tmp = tempfile::tempdir().unwrap();
     let d = tmp.path().join("a b.c");

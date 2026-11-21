@@ -63,9 +63,10 @@ Runs that start by themselves inside a time window. Off until you switch it on. 
 | `claude_permission` | `"auto"` | Claude's permission mode for night runs: `auto`, or `acceptEdits` (then only the build and test commands in `night.md` are allowed). |
 | `claude_model` | `""` | A model for Claude night runs (an alias such as `haiku`); empty is Claude's default. |
 | `codex_model` | `""` | A model for Codex night runs; empty is Codex's default. |
+| `opencode_model` | `""` | A model (`provider/model`) for OpenCode night runs; empty is OpenCode's default. |
 | `network` | the package registries | The only hosts a sandboxed Claude night run may reach from Bash: `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`, `crates.io`, `index.crates.io`, `static.crates.io`, `proxy.golang.org`. Setting it replaces the list. `github.com`, `gitlab.com` and `bitbucket.org` are always refused. Not applied without the sandbox. |
 | `agy_model` | `""` | A model for Antigravity (agy) night runs; empty is agy's default. |
-| `allow_unsandboxed` | `false` | Antigravity night runs are not started without it: eye could not verify that `agy --sandbox` keeps a run in its folder (see `night.md`). Claude night runs need Claude Code's sandbox (built in on macOS; `bubblewrap` and `socat` on Linux) and refuse to start without it. `true` starts them anyway; the deny rules stay, Bash is then not confined. See `night.md`. |
+| `allow_unsandboxed` | `false` | Antigravity and OpenCode night runs are not started without it: eye could not verify that `agy --sandbox` keeps a run in its folder, and OpenCode has no sandbox (see `night.md`). Claude night runs need Claude Code's sandbox (built in on macOS; `bubblewrap` and `socat` on Linux) and refuse to start without it. `true` starts them anyway; the deny rules stay, Bash is then not confined. See `night.md`. |
 
 ## `[loose]`
 

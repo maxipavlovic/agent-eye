@@ -108,6 +108,20 @@ Every Claude run also gets `--settings '<json>'` (made per run, see `src/night/b
 
 **An agy run does not start by default.** `--sandbox` is agy's "terminal sandbox": commands run confined, and a command that would leave it needs approval. eye could not show that this keeps a run's writes inside its own folder (the only headless run with `--sandbox` was denied every command, so nothing was written anywhere), so it does not use it as a barrier. Planning an agy run says so and stops; `[night] allow_unsandboxed = true` plans and starts it anyway, with the worktree or copy as the only protection (the deny rules are advisory). agy cannot fork a conversation, so "continue tonight" is refused for it; only ideas run.
 
+### OpenCode
+
+`opencode run --standalone --auto` in the run's folder, started through `env` with `OPENCODE_CONFIG_CONTENT`, a permission
+config for this run only: `bash` is allowed except `git push`, `git -C * push`, `git remote`, `gh`, `ssh`, `scp`, `npm publish`,
+`cargo publish`, `twine upload`, `gem push` and `docker push`; edits are allowed and `external_directory` is denied. `--standalone`
+makes the server that applies the config a private one (OpenCode's background service ignores a client's environment). The
+session is found the way an idea's session is: by the run's folder. `[night] opencode_model` (`provider/model`) picks the model.
+
+OpenCode has no OS sandbox, and its rules match the text of a call: a shell command such as `echo x > /elsewhere` is not stopped
+(checked on a real run). So eye **refuses to plan or start an OpenCode night run** unless `[night] allow_unsandboxed = true`, and
+says why. With it, a run still works in its own worktree or copy and cannot push by rule, but it is not confined. OpenCode reports no
+plan limits, so a weekly limit is refused; use a token limit. "Continue tonight" for an OpenCode session needs a fork, which its
+terminal UI does not have, so only ideas run on OpenCode.
+
 ### Continue a session tonight
 
 - **Claude:** eye copies the session's transcript (restoring it from the archive when Claude deleted it) into the project folder Claude uses for the worktree or the copy, then runs `claude -p <prompt> --resume <id> --fork-session --session-id <new uuid>`. `--session-id` names the fork, so the new session is known at once. The original session is untouched.

@@ -3,7 +3,7 @@ import { card, done, expect, lane, problems, sid, test } from '../support';
 
 test.describe('board', () => {
   test('loads with every lane and no console problems', async ({ board }) => {
-    for (const [name, n] of [['ideas', 3], ['running', 2], ['needs you', 3], ['waiting', 3], ['paused', 2]] as const) {
+    for (const [name, n] of [['ideas', 3], ['running', 2], ['needs you', 4], ['waiting', 3], ['paused', 2]] as const) {
       await expect(lane(board, new RegExp(`^${name}`, 'i')).locator('[data-id]')).toHaveCount(n);
     }
     // Done starts folded to a rail that says how many it holds

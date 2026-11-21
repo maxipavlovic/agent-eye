@@ -111,9 +111,11 @@ fn gemini_key(m: &str) -> String {
     }
 }
 
-/// `claude-opus-4-5-20251101` as `claude-opus-4-5`: lower case, no `[1m]` tag, no date.
+/// `claude-opus-4-5-20251101` as `claude-opus-4-5`: lower case, no `[1m]` tag, no date, and no
+/// `provider/` in front (OpenCode and OpenRouter name a model `anthropic/claude-opus-4-5`).
 fn normalize(model: &str) -> String {
     let m = model.trim().to_ascii_lowercase();
+    let m = m.rsplit('/').next().unwrap_or("");
     let m = m.split('[').next().unwrap_or("").trim_end_matches('-');
     let dated = m
         .rsplit_once('-')
@@ -137,6 +139,9 @@ pub fn lookup(model: &str, cfg: &UsageCfg) -> Option<Price> {
     {
         return Some(p);
     }
+    if is_free(&norm) {
+        return Some(p(0.0, 0.0, 0.0, 0.0));
+    }
     let key = if norm.starts_with("gemini ") {
         gemini_key(&norm)
     } else {
@@ -148,6 +153,11 @@ pub fn lookup(model: &str, cfg: &UsageCfg) -> Option<Price> {
         .chain(GOOGLE.iter())
         .find(|(id, _)| *id == key)
         .map(|(_, p)| *p)
+}
+
+/// A model its provider gives away (`opencode/…-free`, OpenRouter's `…:free`): it costs nothing.
+fn is_free(norm: &str) -> bool {
+    norm.ends_with("-free") || norm.ends_with(":free")
 }
 
 /// What `[input, output, cache write, cache read]` tokens cost at `price`, in USD.
@@ -188,6 +198,29 @@ mod tests {
             lookup("claude-sonnet-5-5", &cfg)
         );
         assert!(lookup("claude-opus-4-5", &cfg).is_some());
+    }
+
+    #[test]
+    fn a_free_model_costs_nothing_and_a_provider_prefix_is_ignored() {
+        let cfg = UsageCfg::default();
+        for m in [
+            "deepseek-v4.1-flash-free",
+            "opencode/iceman-free",
+            "x/y:free",
+        ] {
+            assert_eq!(
+                cost_of(m, [1_000_000, 1_000_000, 0, 5], &cfg),
+                Some(0.0),
+                "{m}"
+            );
+        }
+        assert_eq!(
+            lookup("anthropic/claude-opus-4-5", &cfg),
+            lookup("claude-opus-4-5", &cfg)
+        );
+        assert!(lookup("openai/gpt-5", &cfg).is_some());
+        assert!(lookup("google/gemini-unlisted", &cfg).is_none(), "no guess");
+        assert!(lookup("opencode/freeish", &cfg).is_none());
     }
 
     #[test]

@@ -245,6 +245,23 @@ const SESSIONS: &[S] = &[
     },
 ];
 
+/// OpenCode's session, kept apart from `SESSIONS` (its ids start at 100). It waits on a permission
+/// prompt, which only OpenCode's plugin can tell eye about.
+const OPENCODE_SESSIONS: &[S] = &[S {
+    title: "Draft the release notes",
+    project: "ops-notes",
+    branch: "main",
+    agent: "opencode",
+    age: 14,
+    ai: "",
+    state: "Notes drafted from the merged pull requests; the changelog script waits",
+    next: "You: allow the changelog script",
+    live: "waiting",
+    origin: "",
+    prompt: "Draft the release notes from the pull requests merged this week.",
+    reply: "Drafted them; I need to run the changelog script to fill in the dates.",
+}];
+
 fn sid(n: usize) -> String {
     format!("e2e00000-0000-4000-8000-{:012}", n + 1)
 }
@@ -280,6 +297,13 @@ fn main() -> Result<()> {
     let claude = dir.join("claude");
     for (n, s) in SESSIONS.iter().enumerate() {
         insert_session(&db, demo, &claude, n, s)?;
+    }
+    // OpenCode's session and its entry in `[agents] enabled`, added after the others
+    let conf = std::fs::read_to_string(paths.config_path())?;
+    let conf = conf.replacen("\"]\n", "\", \"opencode\"]\n", 1);
+    std::fs::write(paths.config_path(), conf)?;
+    for (n, s) in OPENCODE_SESSIONS.iter().enumerate() {
+        insert_session(&db, demo, &claude, 100 + n, s)?;
     }
     ideas(&db, demo)?;
     reminders(&db)?;
