@@ -4,6 +4,13 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## Unreleased
 
+### Added
+
+- `eye usage [--days N | --week | --month] [--by project|agent|model|session] [--json]`: tokens and an API-equivalent cost estimate (not your bill) per day, project, agent, model or session, with plan limits on top. Prices live in one file with their sources; `[usage.prices]` adds or overrides a model, and a model without a price shows tokens and no cost. Sessions from before are counted in the background.
+- A USAGE panel on the board (this week by project and by agent, the top 10 sessions, four weeks, the limit lines) and `GET /api/usage`; tokens and cost on the session panel, in `eye show` and in the picker preview.
+- Codex plan limits, kept as the newest seen. For Claude Code, an opt-in `eye statusline [--wrap '<cmd>']` status line command stores the limits Claude Code hands to its status line; `eye install` does not turn it on (see `docs/usage.md`).
+- Database schema 15 (`usage_day`, `usage_state`).
+
 ### Changed
 
 - Search is one engine for the picker, the board and `eye find`. Word forms match (`tokens` finds `token`), a mistyped word is fixed from your own sessions, and half of the words are enough. A pasted link finds the session that made it. Titles and rare words count most; status and age no longer lift a session, so old sessions are not pushed to the bottom. Archived sessions still come last.
