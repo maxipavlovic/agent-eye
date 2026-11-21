@@ -11,8 +11,8 @@ import { ideaForm } from './IdeaForm';
 import { MoveMenu, QuickMove } from './Move';
 import { Next } from './Card';
 import { RemindPanel } from './Remind';
-import { Sigil } from './pieces';
-import { Kids, Outputs, Remote, Running, Sec, TokenSec, Topics, Where } from './Sections';
+import { AgentTag, RemoteMark, Sigil } from './pieces';
+import { Kids, Outputs, Running, Sec, TokenSec, Topics, Where } from './Sections';
 import type { Walk } from './walk';
 
 /** The torn-edge outline of the resume receipt. */
@@ -110,7 +110,8 @@ export function Detail({ store, walk }: { store: Store; walk: Walk }) {
               {!session && <span class={`tag${need ? ' hot' : ''}`}>{LANE_LABEL[colId]?.name ?? colId}</span>}
               {isBusy(d) && <span class="tag live">LIVE</span>}
               {d.manual && <span class="tag">PINNED</span>}
-              {store.agents.value.length > 1 && <span class="tag agent-tag">{d.agent_name}</span>}
+              {store.agents.value.length > 1 && <AgentTag name={d.agent_name} />}
+              {d.remote_url && <RemoteMark url={d.remote_url} />}
               <span>{ago(d.last_activity_at)}</span>
               <span>{d.kind.replace('_', ' ')}</span>
             </p>
@@ -121,7 +122,6 @@ export function Detail({ store, walk }: { store: Store; walk: Walk }) {
         {session && d.state && <p class="lead"><Hl s={d.state} /></p>}
         <Next c={d} hot={need} />
         <Running d={d} />
-        <Remote d={d} />
         {d.kind === 'idea' && d.idea_id != null && <IdeaBody d={d} store={store} />}
         {d.recap && <Sec t="RECAP"><p class="recap"><Hl s={d.recap} /></p></Sec>}
         {d.idea?.notes && <Sec t="IDEA NOTES"><p class="notes"><Hl s={d.idea.notes} /></p></Sec>}
