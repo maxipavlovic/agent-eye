@@ -81,6 +81,8 @@ export interface Store {
   /** Removes the run's worktree and branch (or copy); the page asked first. */
   nightDiscard(id: number, loseChanges: boolean): Promise<boolean>;
   nightOpen(id: number): Promise<boolean>;
+  /** Puts a repo copy's night branch into the original repo; the page asked first. */
+  nightBring(id: number): Promise<boolean>;
   /** Reads the desktop notice setting into `notice`; an engine without it leaves `notice` null, quietly. */
   loadNotice(): void;
   /** Turns the desktop notice for every reminder on or off; a toast says why when it cannot. */
@@ -405,6 +407,7 @@ export function createStore(src: Source, { defaultTheme = 'auto' }: { defaultThe
   const nightCancel = (id: number) => nightCall(() => src.nightCancel(id), 'Cancelled', (s) => s);
   const nightLimit = (id: number, limit: string) => nightCall(() => src.nightLimit(id, limit), limit.trim() ? 'Limit changed' : 'Limit removed', (s) => s);
   const nightDiscard = (id: number, lose: boolean) => nightCall(() => src.nightDiscard(id, lose), 'Discarded');
+  const nightBring = (id: number) => nightCall(() => src.nightBring(id), 'Branch brought into your repo');
   const nightOpen = (id: number) => nightCall(() => src.nightOpen(id), 'Opening the folder');
 
   function loadNotice() {
@@ -431,7 +434,7 @@ export function createStore(src: Source, { defaultTheme = 'auto' }: { defaultThe
   return {
     source: src.name,
     board, selected, detail, query, results, searching, connection, themePref, accent, theme, toasts, agents, notice, night, needsYou, error,
-    open, close, search, move, setHidden, resume, usage, conversation, addIdea, editIdea, startIdea, folderCheck: (path) => src.folderCheck(path), remind, looseAct, looseSend, loadNotice, setNotice, loadNight, nightSettings, nightPlan, nightCancel, nightLimit, nightDiscard, nightOpen,
+    open, close, search, move, setHidden, resume, usage, conversation, addIdea, editIdea, startIdea, folderCheck: (path) => src.folderCheck(path), remind, looseAct, looseSend, loadNotice, setNotice, loadNight, nightSettings, nightPlan, nightCancel, nightLimit, nightDiscard, nightOpen, nightBring,
     archive: (offset, limit = 50) => src.archive(offset, limit),
     setTheme, setAccent, toast, dismissToast, refresh,
   };

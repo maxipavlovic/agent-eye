@@ -40,6 +40,7 @@ fn state_json(st: &super::AppState, db: &crate::db::Db) -> Result<Value, ApiErro
         "enabled": cfg.night.enabled,
         "window": w.text(),
         "parallel": cfg.night.parallel,
+        "isolation": cfg.night.isolation,
         "quiet_minutes": cfg.night.quiet_minutes,
         "in_window": clock::in_window(&w, now, &clock::local_offset),
         "planned": night::planned_count(db)?,
@@ -93,6 +94,7 @@ pub(super) struct PlanBody {
     limit: Option<String>,
     agent: Option<String>,
     switch: bool,
+    isolation: Option<String>,
 }
 
 pub(super) async fn api_night_plan(State(st): State<Shared>, Json(b): Json<PlanBody>) -> ApiResult {
@@ -105,6 +107,7 @@ pub(super) async fn api_night_plan(State(st): State<Shared>, Json(b): Json<PlanB
         limit,
         switch: b.switch,
         prompt: b.prompt.clone(),
+        isolation: b.isolation.clone(),
     };
     let run = {
         let st = st.clone();
@@ -185,6 +188,34 @@ pub(super) async fn api_night_discard(
             [id],
         )?;
         Ok(said)
+    })
+    .await?;
+    Ok(Json(json!({"ok": true, "note": said})))
+}
+
+#[derive(Deserialize, Default)]
+#[serde(default)]
+pub(super) struct BringBody {
+    /// The page asked and the person said yes.
+    confirm: bool,
+}
+
+/// `POST /api/night/:id/bring`: fetch a repo copy's night branch into the original repo.
+pub(super) async fn api_night_bring(
+    State(st): State<Shared>,
+    Path(id): Path<i64>,
+    Json(b): Json<BringBody>,
+) -> ApiResult {
+    if !b.confirm {
+        return Err(ApiError::bad(
+            "bringing a branch into your repo needs the person's confirmation (confirm: true)",
+        ));
+    }
+    let said = blocking(move || {
+        let db = open_db(&st)?;
+        let run = night::get(&db, id)?.ok_or_else(|| ApiError::not_found("no such run"))?;
+        night::iso::bring(&crate::loose::System::new(), &run)
+            .map_err(|e| ApiError::conflict("not_done", format!("{e:#}")))
     })
     .await?;
     Ok(Json(json!({"ok": true, "note": said})))
@@ -423,5 +454,93 @@ mod tests {
         )
         .await;
         assert_eq!(st, StatusCode::CONFLICT, "{v}");
+    }
+    fn git(dir: &std::path::Path, args: &[&str]) -> String {
+        let o = std::process::Command::new("git")
+            .args(["-c", "user.email=t@example.com", "-c", "user.name=t"])
+            .args(args)
+            .current_dir(dir)
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .output()
+            .unwrap();
+        assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+        String::from_utf8_lossy(&o.stdout).trim().to_string()
+    }
+
+    #[tokio::test]
+    async fn the_plan_takes_an_isolation_and_bring_needs_a_yes_and_lands_the_branch() {
+        let e = env();
+        let orig = e._tmp.path().join("proj");
+        std::fs::create_dir_all(&orig).unwrap();
+        git(&orig, &["init", "-q", "-b", "main"]);
+        std::fs::write(orig.join("a.txt"), "one\n").unwrap();
+        git(&orig, &["add", "."]);
+        git(&orig, &["commit", "-qm", "first"]);
+        let id = crate::ideas::add(
+            &e.db,
+            &crate::ideas::NewIdea {
+                title: "t",
+                prompt: Some("p"),
+                folder: orig.to_str(),
+                ..Default::default()
+            },
+        )
+        .unwrap()
+        .id;
+        let (_, st) = call(&e, req("GET", "/api/night", None)).await;
+        assert_eq!(st["isolation"], "worktree");
+        let (s, v) = call(
+            &e,
+            req(
+                "POST",
+                "/api/night/plan",
+                Some(json!({"idea_id": id, "isolation": "copy"})),
+            ),
+        )
+        .await;
+        assert_eq!(s, StatusCode::OK, "{v}");
+        assert_eq!(v["isolation"], "copy");
+        let (_, v) = call(
+            &e,
+            req("POST", "/api/night/plan", Some(json!({"idea_id": id}))),
+        )
+        .await;
+        assert_eq!(v["isolation"], "worktree");
+        // a finished repo copy
+        let i = crate::night::iso::prepare(
+            &crate::loose::System::new(),
+            &e._tmp.path().join("eye/night/1"),
+            &orig,
+            "2026-11-21",
+            "x",
+            1,
+            crate::night::Mode::Copy,
+        )
+        .unwrap();
+        git(&i.root, &["commit", "-q", "--allow-empty", "-m", "night"]);
+        let b = i.branch.clone().unwrap();
+        e.db.conn
+            .execute(
+                "UPDATE night_run SET status='done', isolation='copy', worktree=?2, branch=?3, base_ref=?4 WHERE id=?1",
+                rusqlite::params![1, i.root.to_string_lossy(), b, i.base_ref],
+            )
+            .unwrap();
+        let (s, _) = call(&e, req("POST", "/api/night/1/bring", Some(json!({})))).await;
+        assert_eq!(s, StatusCode::BAD_REQUEST);
+        assert!(git(&orig, &["branch", "--list", &b]).is_empty());
+        let (s, v) = call(
+            &e,
+            req("POST", "/api/night/1/bring", Some(json!({"confirm": true}))),
+        )
+        .await;
+        assert_eq!(s, StatusCode::OK, "{v}");
+        assert!(!git(&orig, &["branch", "--list", &b]).is_empty());
+        // the branch is in the original now: a second bring is refused
+        let (s, _) = call(
+            &e,
+            req("POST", "/api/night/1/bring", Some(json!({"confirm": true}))),
+        )
+        .await;
+        assert_eq!(s, StatusCode::CONFLICT);
     }
 }

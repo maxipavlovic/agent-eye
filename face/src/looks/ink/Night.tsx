@@ -1,7 +1,7 @@
 import { useEffect } from 'preact/hooks';
 import { signal, useSignal } from '@preact/signals';
 import type { Store } from '../../store';
-import type { CardDetail, NightRun } from '../../api/types';
+import type { CardDetail, NightIsolation, NightRun } from '../../api/types';
 import { ago } from '../../format';
 import { Sec } from './Sections';
 import { tokensText } from './usageText';
@@ -11,6 +11,11 @@ export const nightPanel = signal(false);
 
 /** The card whose TONIGHT form is open in the panel (an idea card's TONIGHT button sets it). */
 export const nightAsk = signal<string | null>(null);
+
+export const ISOLATION_HELP: Record<NightIsolation, string> = {
+  worktree: 'A worktree of your repo, on a new branch. Fast and small. A command that builds a path in an unusual way could still add a new file at the top of your repo folder.',
+  copy: 'A separate copy of your repo. Your own folder is fully locked: nothing in it can change. Bring the branch into your repo in the morning.',
+};
 
 export const LIMIT_HELP = '30% of the weekly plan, 2M or 500k tokens, 90m or 2h of time. One at most; empty: no limit.';
 
@@ -57,13 +62,15 @@ export function NightPlanForm({ store, d, onDone }: { store: Store; d: CardDetai
   const limit = useSignal('');
   const agent = useSignal('');
   const sw = useSignal(false);
+  const iso = useSignal<NightIsolation | ''>('');
   const busy = useSignal(false);
   const agents = store.agents.value;
+  const chosen: NightIsolation = iso.value || store.night.value?.isolation || 'worktree';
   const go = async (e: Event) => {
     e.preventDefault();
     if (busy.value) return;
     busy.value = true;
-    const base = { limit: limit.value.trim() || undefined };
+    const base = { limit: limit.value.trim() || undefined, isolation: chosen };
     const ok = await store.nightPlan(session
       ? { ...base, session_id: d.id, prompt: prompt.value }
       : { ...base, idea_id: d.idea_id!, agent: agent.value || undefined, switch: sw.value });
@@ -93,7 +100,15 @@ export function NightPlanForm({ store, d, onDone }: { store: Store; d: CardDetai
       {!session && agents.length > 1 && (
         <label class="chk"><input type="checkbox" checked={sw.value} onChange={(e) => { sw.value = e.currentTarget.checked; }} /> If this plan runs out, start again on the other agent</label>
       )}
-      <p class="hint">Runs in its own worktree on a new branch. Nothing is pushed.</p>
+      <fieldset class="nightpick">
+        <legend>WORK IN</legend>
+        <div class="fchips">
+          <button type="button" aria-pressed={chosen === 'worktree'} title={ISOLATION_HELP.worktree} onClick={() => { iso.value = 'worktree'; }}>A worktree of your repo (default)</button>
+          <button type="button" aria-pressed={chosen === 'copy'} title={ISOLATION_HELP.copy} onClick={() => { iso.value = 'copy'; }}>A separate copy (your folder fully locked)</button>
+        </div>
+        <span class="hint">{ISOLATION_HELP[chosen]}</span>
+      </fieldset>
+      <p class="hint">Runs on a new branch. Nothing is pushed.</p>
       <div class="acts">
         <button type="submit" class="btn" disabled={busy.value}>{session ? 'CONTINUE TONIGHT' : 'PLAN FOR TONIGHT'}</button>
       </div>
@@ -131,13 +146,15 @@ export function ContinueTonight({ d, store }: { d: CardDetail; store: Store }) {
 
 /** The question before discarding: what goes, and that uncommitted work would be lost. */
 export function discardText(r: NightRun): string {
-  const what = r.branch ? `the worktree and the branch ${r.branch}` : 'the copy of the folder';
-  return `Remove ${what}? ${r.branch ? 'Commits that are only on that branch are lost. ' : ''}${r.uncommitted ? 'It has uncommitted changes that will be lost too.' : ''}`.trim();
+  const copy = r.isolation === 'copy';
+  const what = r.branch ? (copy ? `the copy and its branch ${r.branch}` : `the worktree and the branch ${r.branch}`) : 'the copy of the folder';
+  return `Remove ${what}? ${r.branch ? (copy ? 'Commits that are only in the copy are lost unless you brought the branch into your repo. ' : 'Commits that are only on that branch are lost. ') : ''}${r.uncommitted ? 'It has uncommitted changes that will be lost too.' : ''}`.trim();
 }
 
 /** NIGHT RUN: how the run went, what it said, what it changed, and what to do with it. */
 export function NightRunSection({ d, store }: { d: CardDetail; store: Store }) {
   const ask = useSignal(false);
+  const askBring = useSignal(false);
   const busy = useSignal(false);
   const r = d.night_run;
   if (!r) return null;
@@ -149,6 +166,13 @@ export function NightRunSection({ d, store }: { d: CardDetail; store: Store }) {
     busy.value = false;
     ask.value = false;
   };
+  const bring = async () => {
+    busy.value = true;
+    await store.nightBring(r.id);
+    busy.value = false;
+    askBring.value = false;
+  };
+  const repoCopy = r.isolation === 'copy' && !!r.branch && !!folder;
   return (
     <Sec t="NIGHT RUN" n={runStatus(r)}>
       <dl class="nrun">
@@ -157,13 +181,20 @@ export function NightRunSection({ d, store }: { d: CardDetail; store: Store }) {
         {r.ended_at != null && <><dt>Ended</dt><dd>{clock(r.ended_at)}</dd></>}
         {r.duration_ms != null && <><dt>Took</dt><dd>{durationText(r.duration_ms)}</dd></>}
         {r.tokens != null && <><dt>Tokens</dt><dd>{tokensText({ total: r.tokens } as never)}</dd></>}
+        <dt>Worked in</dt><dd>{r.isolation === 'copy' ? 'A separate copy (your folder was fully locked)' : 'A worktree of your repo'}</dd>
         <dt>Limit</dt><dd>{r.limit ? `${r.limit.text}${stoppedByLimit ? ': it stopped the run' : r.status === 'done' ? ': not reached' : ''}` : 'none'}</dd>
       </dl>
       {r.report && <><h4 class="nhead">REPORT</h4><pre class="nreport">{r.report}</pre></>}
       {r.diff_stat && <><h4 class="nhead">WHAT IT CHANGED</h4><pre class="nreport">{r.diff_stat}</pre></>}
       {folder && <p class="nwhere">{r.branch ? <>Branch <b>{r.branch}</b> in </> : <>Copy in </>}<code>{folder}</code></p>}
       {!folder && <p class="dim">Discarded: its worktree and branch are gone.</p>}
-      {ask.value ? (
+      {askBring.value ? (
+        <div class="lask" role="alertdialog" aria-label="Bring the branch into your repo">
+          <p>Fetch the branch {r.branch} from the copy into your repo? It is added as a new branch; nothing you have checked out changes.</p>
+          <button class="btn sm" disabled={busy.value} onClick={() => void bring()}>YES</button>
+          <button class="btn sm ghost" disabled={busy.value} onClick={() => { askBring.value = false; }}>CANCEL</button>
+        </div>
+      ) : ask.value ? (
         <div class="lask" role="alertdialog" aria-label={discardText(r)}>
           <p>{discardText(r)}</p>
           <button class="btn sm" disabled={busy.value} onClick={() => void discard()}>YES</button>
@@ -172,6 +203,7 @@ export function NightRunSection({ d, store }: { d: CardDetail; store: Store }) {
       ) : (
         <div class="acts">
           {d.resumable && <button class="btn" title="Open the session in its worktree" onClick={() => void store.resume(d.id)}>RESUME</button>}
+          {repoCopy && r.status !== 'running' && <button class="btn" title="Fetch the night branch from the copy into your repo" onClick={() => { askBring.value = true; }}>BRING INTO MY REPO</button>}
           {folder && <button class="btn" onClick={() => void store.nightOpen(r.id)}>OPEN FOLDER</button>}
           {folder && r.status !== 'running' && <button class="btn ghost" onClick={() => { ask.value = true; }}>DISCARD</button>}
         </div>

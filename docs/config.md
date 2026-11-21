@@ -22,6 +22,7 @@ database and come back when the agent is enabled again.
 | `enabled` | `true` | Write the state and next step of quiet sessions. `false` turns summaries off completely; nothing is sent anywhere. |
 | `agent` | `""` | The agent that writes summaries, for example `"codex"`. Empty: the first enabled agent. It must be enabled. The summaries count against that agent's plan. |
 | `model` | `""` | The model name handed to that agent. Empty: the agent's own cheap model, `haiku` for Claude Code and `gpt-6-luna` for Codex CLI. Model names belong to an agent, so change this when you change `agent`; an account that has no `gpt-6-luna` needs a model it has here. |
+| `isolation` | `"worktree"` | How a run keeps your folder safe: `"worktree"` (a git worktree of the repo; fast; a command that builds a path in an unusual way can add a new top-level file in your folder) or `"copy"` (a separate local clone; your folder is locked completely). `eye night add --isolation` and the board's **Work in** choice override it per run. A plain folder is always a copy. See `night.md`. |
 | `quiet_minutes` | `10` | A session is summarized after this many minutes without activity (or when it ended). |
 | `concurrency` | `2` | How many summaries run at the same time. |
 | `auto_days` | `3` | The daemon only summarizes sessions that were active within this many days (`eye summarize` can do older ones). |

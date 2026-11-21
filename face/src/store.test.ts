@@ -47,6 +47,7 @@ function source(over: Partial<Source> = {}): Source {
     nightLimit: async () => { throw new Error('no night'); },
     nightDiscard: async () => ({ ok: true }),
     nightOpen: async () => ({ ok: true }),
+    nightBring: async () => ({ ok: true }),
     remindSettings: async () => ({ notify: false, available: true }),
     setRemindSettings: async ({ notify }) => ({ notify, available: true }),
     subscribe: () => () => {},

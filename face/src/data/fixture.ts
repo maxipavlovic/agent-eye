@@ -263,12 +263,12 @@ export function fixtureSource(demo = false): Source {
   };
 
   /** The night shift: off, nothing planned; the demo has one finished run on a card. */
-  const nightState: NightState = { enabled: false, window: '01:00-07:00', parallel: 2, quiet_minutes: 20, in_window: false, planned: 0, open: [], recent: [] };
+  const nightState: NightState = { enabled: false, window: '01:00-07:00', parallel: 2, isolation: 'worktree', quiet_minutes: 20, in_window: false, planned: 0, open: [], recent: [] };
   let nightSeq = 0;
   const nightRun = (o: Partial<NightRun>): NightRun => ({
     id: ++nightSeq, kind: 'idea', idea_id: null, session_id: null, agent: 'claude', switch: false, folder: '~/code/demo', prompt: 'Add a README line saying hello',
     night: new Date().toISOString().slice(0, 10), status: 'planned', why: null, limit: null, run_session_id: null, worktree: null, branch: null, base_ref: null,
-    started_at: null, ended_at: null, duration_ms: null, report: null, diff_stat: null, created_at: Date.now(), ...o,
+    started_at: null, ended_at: null, duration_ms: null, report: null, diff_stat: null, created_at: Date.now(), isolation: 'worktree', ...o,
   });
   const nightLimit = (text: string): NightRun['limit'] => {
     const t = text.trim();
@@ -468,7 +468,7 @@ export function fixtureSource(demo = false): Source {
       if (input.limit?.trim().endsWith('%')) return Promise.reject(new Error('eye has no weekly plan data for Claude Code, so a weekly limit cannot be checked. Run `eye install` so Claude Code reports its limits, then plan again.'));
       const run = nightRun({
         kind: input.session_id ? 'session' : 'idea', idea_id: input.idea_id ?? null, session_id: input.session_id ?? null, agent: input.agent ?? 'claude',
-        switch: !!input.switch, prompt: (input.prompt ?? idea?.prompt ?? '').trim(), folder: idea?.folder ?? '~/code/demo', limit: nightLimit(input.limit ?? ''),
+        switch: !!input.switch, prompt: (input.prompt ?? idea?.prompt ?? '').trim(), folder: idea?.folder ?? '~/code/demo', limit: nightLimit(input.limit ?? ''), isolation: input.isolation ?? nightState.isolation,
       });
       nightState.open.push(run);
       nightCount();
@@ -490,6 +490,11 @@ export function fixtureSource(demo = false): Source {
       for (const d of Object.values(details)) if (d.night_run?.id === id) { d.night_run.worktree = null; d.night_run.branch = null; }
       changed();
       return delay({ ok: true, note: 'removed (fixture)' });
+    },
+    nightBring: (id) => {
+      const r = [...nightState.open, ...nightState.recent].find((x) => x.id === id);
+      if (!r || r.isolation !== 'copy' || !r.branch) return Promise.reject(new Error('only the copy of a git repo has a branch to bring into your repo'));
+      return delay({ ok: true, note: `branch ${r.branch} is now in ${r.folder} (fixture)` });
     },
     nightOpen: () => delay({ ok: true }),
     remindSettings: () => delay({ ...notice }),

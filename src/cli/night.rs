@@ -16,7 +16,8 @@ pub fn run(g: &Global, sub: Option<NightCmd>) -> Result<()> {
             limit,
             agent,
             switch,
-        } => add(g, &target, prompt, limit, agent, switch),
+            isolation,
+        } => add(g, &target, prompt, limit, agent, switch, isolation),
         NightCmd::Ls { json } => ls(g, json),
         NightCmd::Cancel { run } => {
             let env = g.open()?;
@@ -62,6 +63,7 @@ pub fn run(g: &Global, sub: Option<NightCmd>) -> Result<()> {
             );
             Ok(())
         }
+        NightCmd::Bring { run, yes } => bring(g, run, yes),
         NightCmd::Discard {
             run,
             yes,
@@ -95,6 +97,7 @@ fn add(
     limit: Option<String>,
     agent: Option<String>,
     switch: bool,
+    isolation: Option<String>,
 ) -> Result<()> {
     let env = g.open()?;
     let opts = PlanOpts {
@@ -102,6 +105,7 @@ fn add(
         limit: limit.as_deref().map(Limit::parse).transpose()?,
         switch,
         prompt,
+        isolation,
     };
     let r = match target.strip_prefix("idea:") {
         Some(n) => {
@@ -114,8 +118,14 @@ fn add(
         None => night::plan_session(&env.db, &env.cfg, &env.agents, target, &opts)?,
     };
     println!(
-        "planned run {} for the night of {} ({})",
-        r.id, r.night, r.agent
+        "planned run {} for the night of {} ({}, {})",
+        r.id,
+        r.night,
+        r.agent,
+        match r.mode() {
+            night::Mode::Worktree => "in a worktree of your repo",
+            night::Mode::Copy => "in a separate copy",
+        }
     );
     if !env.cfg.night.enabled {
         println!("The night shift is off: `eye night on` lets it start.");
@@ -178,6 +188,12 @@ fn ls(g: &Global, json: bool) -> Result<()> {
         } else if let Some(wt) = &r.worktree {
             println!("       copy in {}", crate::util::home_rel(wt));
         }
+        if r.is_repo_copy() {
+            println!(
+                "       a separate copy: `eye night bring {}` puts its branch in your repo",
+                r.id
+            );
+        }
         if let Some(t) = r.ended_at {
             println!("       ended {}", fmt_ts(t));
         }
@@ -235,6 +251,28 @@ fn run_now(g: &Global, id: i64, yes: bool, wait: bool) -> Result<()> {
             return Ok(());
         }
     }
+}
+
+fn bring(g: &Global, id: i64, yes: bool) -> Result<()> {
+    let env = g.open()?;
+    let r = night::get(&env.db, id)?.context("no such run")?;
+    anyhow::ensure!(
+        r.is_repo_copy(),
+        "run {id} is not the copy of a git repo: there is no branch to bring"
+    );
+    if !yes {
+        let q = format!(
+            "Fetch the branch {} from the copy into {}?",
+            r.branch.as_deref().unwrap_or("?"),
+            r.folder
+        );
+        if !super::ask::confirm(&q, super::ask::From::Terminal("go on without asking"))? {
+            println!("left as it is");
+            return Ok(());
+        }
+    }
+    println!("{}", night::iso::bring(&crate::loose::System::new(), &r)?);
+    Ok(())
 }
 
 fn discard(g: &Global, id: i64, yes: bool, lose: bool) -> Result<()> {

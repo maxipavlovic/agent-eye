@@ -66,6 +66,7 @@ export function liveSource(): Source {
     nightCancel: (id) => call<NightState>(`/api/night/${id}/cancel`, { method: 'POST', body: {} }),
     nightLimit: (id, limit) => call<NightState>(`/api/night/${id}/limit`, { method: 'POST', body: { limit } }),
     nightDiscard: (id, loseChanges) => call<{ ok: boolean; note?: string }>(`/api/night/${id}/discard`, { method: 'POST', body: { confirm: true, lose_changes: loseChanges } }),
+    nightBring: (id) => call<{ ok: boolean; note?: string }>(`/api/night/${id}/bring`, { method: 'POST', body: { confirm: true } }),
     nightOpen: (id) => call<{ ok: boolean }>(`/api/night/${id}/open`, { method: 'POST', body: {} }),
     remindSettings: () => call<RemindSettings>('/api/remind/settings'),
     setRemindSettings: (input) => call<RemindSettings>('/api/remind/settings', { method: 'POST', body: input }),

@@ -138,6 +138,7 @@ pub fn router(state: Shared) -> Router {
             post(night_routes::api_night_discard),
         )
         .route("/api/night/{id}/open", post(night_routes::api_night_open))
+        .route("/api/night/{id}/bring", post(night_routes::api_night_bring))
         .route("/api/events", get(run::api_events))
         .fallback(get(face::face_asset))
         .layer(axum::extract::DefaultBodyLimit::max(64 * 1024))

@@ -148,6 +148,9 @@ pub enum NightCmd {
         /// Start again on the other agent when this one's plan runs out (ideas only)
         #[arg(long)]
         switch: bool,
+        /// worktree (a git worktree of the repo, the default) or copy (a separate copy: your folder is fully locked)
+        #[arg(long)]
+        isolation: Option<String>,
     },
     /// Planned and finished runs (the default)
     Ls {
@@ -175,6 +178,13 @@ pub enum NightCmd {
     /// One pass of the scheduler, as the daemon does it every minute (to try it out)
     #[command(hide = true)]
     Tick,
+    /// Bring the night branch of a repo copy into your repo after asking
+    Bring {
+        run: i64,
+        /// Do not ask first
+        #[arg(long)]
+        yes: bool,
+    },
     /// Remove a finished run's worktree and branch (or copy) after asking
     Discard {
         run: i64,

@@ -281,6 +281,8 @@ export interface LooseEnd {
 
 export type LooseAct = 'stop' | 'remove' | 'ignore';
 
+export type NightIsolation = 'worktree' | 'copy';
+
 /** One night-shift run (GET /api/night, a card's `night`). The report is untrusted output: render it as text. */
 export interface NightRun {
   id: number;
@@ -306,6 +308,8 @@ export interface NightRun {
   report: string | null;
   diff_stat: string | null;
   created_at: number;
+  /** How the run keeps the folder safe: a git worktree of the repo, or a separate copy (the original fully locked). */
+  isolation: NightIsolation;
   /** Detail cards only: tokens the run's session used, and whether its worktree has uncommitted changes. */
   tokens?: number;
   uncommitted?: boolean;
@@ -316,6 +320,8 @@ export interface NightState {
   enabled: boolean;
   window: string;
   parallel: number;
+  /** `[night] isolation`: what a new plan starts with. */
+  isolation: NightIsolation;
   quiet_minutes: number;
   in_window: boolean;
   planned: number;
@@ -332,6 +338,7 @@ export interface NightPlanInput {
   limit?: string;
   agent?: string;
   switch?: boolean;
+  isolation?: NightIsolation;
 }
 
 export interface CardDetail extends Card {
@@ -511,6 +518,8 @@ export interface Source {
   /** Removes a run's worktree and branch, or its copy; the page asked first. */
   nightDiscard(id: number, loseChanges: boolean): Promise<{ ok: boolean; note?: string }>;
   nightOpen(id: number): Promise<{ ok: boolean }>;
+  /** Fetches a repo copy's night branch into the original repo (POST /api/night/:id/bring); the page asked first. */
+  nightBring(id: number): Promise<{ ok: boolean; note?: string }>;
   /** Calls onChange when the data changed; reports connection state. Returns unsubscribe. */
   subscribe(onChange: () => void, onState: (s: Connection) => void): () => void;
 }

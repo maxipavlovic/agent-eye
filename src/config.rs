@@ -414,6 +414,9 @@ pub struct NightCfg {
     pub allow_unsandboxed: bool,
     /// The hosts a sandboxed Claude run may reach (package registries); empty = the built-in list.
     pub network: Vec<String>,
+    /// `worktree` (a git worktree of the repo, the default) or `copy` (a separate local copy, the
+    /// original folder fully locked). A run can choose its own.
+    pub isolation: String,
 }
 impl NightCfg {
     /// The hosts to allow: the configured list, or the built-in package registries.
@@ -440,6 +443,7 @@ impl Default for NightCfg {
             codex_model: String::new(),
             allow_unsandboxed: false,
             network: vec![],
+            isolation: "worktree".into(),
         }
     }
 }

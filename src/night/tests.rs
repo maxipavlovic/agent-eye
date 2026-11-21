@@ -740,7 +740,16 @@ fn a_repo_run_gets_a_worktree_on_a_new_branch_from_head() {
     let head = git(&orig, &["rev-parse", "HEAD"]);
     let night = tmp.path().join("eye/night");
     let p = System::new();
-    let i = iso::prepare(&p, &night.join("1"), &orig, "2026-11-21", "add-readme", 1).unwrap();
+    let i = iso::prepare(
+        &p,
+        &night.join("1"),
+        &orig,
+        "2026-11-21",
+        "add-readme",
+        1,
+        Mode::Worktree,
+    )
+    .unwrap();
     assert_eq!(i.branch.as_deref(), Some("night/20261121-add-readme"));
     assert_eq!(i.base_ref.as_deref(), Some(head.as_str()));
     assert!(i.root.join("a.txt").is_file());
@@ -752,7 +761,16 @@ fn a_repo_run_gets_a_worktree_on_a_new_branch_from_head() {
     // the original folder is untouched and stays on its branch
     assert_eq!(git(&orig, &["rev-parse", "--abbrev-ref", "HEAD"]), "main");
     // a second run with the same slug the same night gets its own branch
-    let j = iso::prepare(&p, &night.join("2"), &orig, "2026-11-21", "add-readme", 2).unwrap();
+    let j = iso::prepare(
+        &p,
+        &night.join("2"),
+        &orig,
+        "2026-11-21",
+        "add-readme",
+        2,
+        Mode::Worktree,
+    )
+    .unwrap();
     assert_eq!(j.branch.as_deref(), Some("night/20261121-add-readme-2"));
     // a run started in a sub-folder starts in the same sub-folder of its worktree
     let k = iso::prepare(
@@ -762,6 +780,7 @@ fn a_repo_run_gets_a_worktree_on_a_new_branch_from_head() {
         "2026-11-21",
         "sub",
         3,
+        Mode::Worktree,
     )
     .unwrap();
     assert_eq!(k.cwd, k.root.join("sub"));
@@ -780,6 +799,7 @@ fn the_diff_stat_lists_commits_edits_and_new_files() {
         "2026-11-21",
         "x",
         1,
+        Mode::Worktree,
     )
     .unwrap();
     std::fs::write(i.root.join("a.txt"), "one\ntwo\n").unwrap();
@@ -800,7 +820,16 @@ fn discard_removes_worktree_and_branch_and_protects_uncommitted_work() {
     repo(&orig);
     let night = tmp.path().join("eye/night");
     let p = System::new();
-    let i = iso::prepare(&p, &night.join("1"), &orig, "2026-11-21", "x", 1).unwrap();
+    let i = iso::prepare(
+        &p,
+        &night.join("1"),
+        &orig,
+        "2026-11-21",
+        "x",
+        1,
+        Mode::Worktree,
+    )
+    .unwrap();
     let run = run_in(tmp.path(), 1, &orig, &i);
     std::fs::write(i.root.join("scratch.txt"), "unsaved\n").unwrap();
     let e = iso::discard(&p, &night, &run, false).unwrap_err();
@@ -849,7 +878,7 @@ fn a_plain_folder_is_copied_without_the_skip_list_and_symlinks() {
     std::os::unix::fs::symlink("/etc/hosts", orig.join("link")).unwrap();
     let p = System::new();
     let dir = tmp.path().join("eye/night/1");
-    let i = iso::prepare(&p, &dir, &orig, "2026-11-21", "x", 1).unwrap();
+    let i = iso::prepare(&p, &dir, &orig, "2026-11-21", "x", 1, Mode::Worktree).unwrap();
     assert_eq!(i.root, dir.join("work"));
     assert!(i.branch.is_none() && i.base_ref.is_none());
     assert!(i.root.join("keep.txt").is_file() && i.root.join("src/f.txt").is_file());
@@ -1216,7 +1245,7 @@ fn a_worktree_run_may_write_its_own_folder_and_its_git_but_not_the_original() {
         &orig,
         &["worktree", "add", &wt.to_string_lossy(), "-b", "night/x"],
     );
-    let b = barrier::plan(&wt, std::slice::from_ref(&orig));
+    let b = barrier::plan(&wt, std::slice::from_ref(&orig), false);
     let has = |v: &[PathBuf], p: PathBuf| v.contains(&p);
     assert!(has(&b.allow_write, wt.clone()));
     assert!(has(&b.allow_write, orig.join(".git/objects")));
@@ -1240,7 +1269,7 @@ fn a_worktree_run_may_write_its_own_folder_and_its_git_but_not_the_original() {
         .contains(&format!("Edit(/{})", orig.join("a.txt").to_string_lossy())));
     assert_eq!(b.guard, vec![orig.clone()]);
     // a run that started in a sub-folder protects the whole repo
-    let sub_only = barrier::plan(&wt, &[orig.join("sub")]);
+    let sub_only = barrier::plan(&wt, &[orig.join("sub")], false);
     assert!(sub_only.guard.contains(&orig));
     // the commit a run makes works with exactly what it may write? git itself decides; here only
     // that the pointer file was read: the worktree's own git folder is allowed
@@ -1261,7 +1290,7 @@ fn a_plain_folder_is_denied_whole() {
     std::fs::write(orig.join("a.txt"), "x").unwrap();
     let work = tmp.path().join("run/work");
     std::fs::create_dir_all(&work).unwrap();
-    let b = barrier::plan(&work, std::slice::from_ref(&orig));
+    let b = barrier::plan(&work, std::slice::from_ref(&orig), false);
     assert!(b.deny_write.contains(&orig));
     assert!(b
         .deny_edit
@@ -1508,4 +1537,281 @@ fn a_run_without_a_process_start_time_is_lost_and_never_signalled() {
     sys.alive.borrow_mut().insert(r.pid.unwrap());
     sched::tick(&mut db, &sys, &cfg_with("")).unwrap();
     assert!(sys.terminated.borrow().is_empty());
+}
+
+// ---------- the two isolation modes ----------
+
+#[test]
+fn planning_takes_the_config_isolation_and_a_per_run_choice_and_stores_it() {
+    let db = Db::open_memory().unwrap();
+    let agents = crate::agents::enabled(&Config::default());
+    let tmp = tempfile::tempdir().unwrap();
+    let orig = tmp.path().join("proj");
+    repo(&orig);
+    let id = idea(&db, orig.to_str(), Some("p"));
+    let mut cfg = Config::default();
+    assert_eq!(cfg.night.isolation, "worktree");
+    let r = plan_idea(&db, &cfg, &agents, id, &PlanOpts::default()).unwrap();
+    assert_eq!(r.isolation.as_deref(), Some("worktree"));
+    assert_eq!(r.to_json(0)["isolation"], "worktree");
+    // the config default
+    cfg.night.isolation = "copy".into();
+    let r = plan_idea(&db, &cfg, &agents, id, &PlanOpts::default()).unwrap();
+    assert_eq!(
+        get(&db, r.id).unwrap().unwrap().isolation.as_deref(),
+        Some("copy")
+    );
+    // the per-run choice wins
+    let o = PlanOpts {
+        isolation: Some("worktree".into()),
+        ..PlanOpts::default()
+    };
+    let r = plan_idea(&db, &cfg, &agents, id, &o).unwrap();
+    assert_eq!(r.mode(), Mode::Worktree);
+    let o = PlanOpts {
+        isolation: Some("moat".into()),
+        ..PlanOpts::default()
+    };
+    let e = plan_idea(&db, &cfg, &agents, id, &o).unwrap_err();
+    assert!(format!("{e}").contains("worktree or copy"), "{e}");
+    // a plain folder is a copy whatever was asked
+    let plain = tmp.path().join("plain");
+    std::fs::create_dir_all(&plain).unwrap();
+    let pid = idea(&db, plain.to_str(), Some("p"));
+    cfg.night.isolation = "worktree".into();
+    let r = plan_idea(&db, &cfg, &agents, pid, &PlanOpts::default()).unwrap();
+    assert_eq!(r.mode(), Mode::Copy);
+    // a run planned before the column is a worktree
+    assert_eq!(Run::default().mode(), Mode::Worktree);
+}
+
+#[test]
+fn an_old_night_run_table_gets_the_isolation_column() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("eye.db");
+    {
+        let c = rusqlite::Connection::open(&path).unwrap();
+        c.execute_batch(
+            "CREATE TABLE night_run(id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, idea_id INTEGER, session_id TEXT,
+  agent TEXT NOT NULL, switch_ok INTEGER NOT NULL DEFAULT 0, folder TEXT NOT NULL, prompt TEXT NOT NULL, night TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'planned', why TEXT, limit_kind TEXT, limit_value INTEGER, run_session_id TEXT, pid INTEGER,
+  pid_start INTEGER, worktree TEXT, branch TEXT, base_ref TEXT, started_at INTEGER, ended_at INTEGER, report TEXT,
+  diff_stat TEXT, created_at INTEGER NOT NULL);
+INSERT INTO night_run(kind, agent, folder, prompt, night, created_at) VALUES('idea','claude','/x','p','2026-11-21',1);",
+        )
+        .unwrap();
+    }
+    let db = Db::open(&path).unwrap();
+    let r = get(&db, 1).unwrap().unwrap();
+    assert_eq!(r.isolation, None);
+    assert_eq!(r.mode(), Mode::Worktree);
+}
+
+fn copy_run(orig: &Path, i: &iso::Isolation) -> Run {
+    Run {
+        isolation: Some("copy".into()),
+        ..run_in(orig, 1, orig, i)
+    }
+}
+
+#[test]
+fn a_copy_run_clones_the_repo_on_the_night_branch_with_no_way_back() {
+    let tmp = tempfile::tempdir().unwrap();
+    let orig = tmp.path().join("proj");
+    repo(&orig);
+    let head = git(&orig, &["rev-parse", "HEAD"]);
+    let p = System::new();
+    let night = tmp.path().join("eye/night");
+    let i = iso::prepare(
+        &p,
+        &night.join("1"),
+        &orig,
+        "2026-11-21",
+        "x",
+        1,
+        Mode::Copy,
+    )
+    .unwrap();
+    assert_eq!(i.root, night.join("1/work"));
+    assert_eq!(i.branch.as_deref(), Some("night/20261121-x"));
+    assert_eq!(i.base_ref.as_deref(), Some(head.as_str()));
+    assert!(i.root.join("a.txt").is_file());
+    assert!(i.root.join(".git").is_dir(), "a clone, not a worktree");
+    assert_eq!(git(&i.root, &["rev-parse", "HEAD"]), head);
+    assert_eq!(
+        git(&i.root, &["rev-parse", "--abbrev-ref", "HEAD"]),
+        "night/20261121-x"
+    );
+    assert_eq!(git(&i.root, &["remote"]), "", "no origin points back");
+    // the original knows nothing about the copy
+    assert_eq!(
+        git(&orig, &["worktree", "list", "--porcelain"])
+            .matches("worktree ")
+            .count(),
+        1
+    );
+    assert!(git(&orig, &["branch", "--list", "night/*"]).is_empty());
+    // a run started in a sub-folder starts in the same sub-folder of the copy
+    let k = iso::prepare(
+        &p,
+        &night.join("2"),
+        &orig.join("sub"),
+        "2026-11-21",
+        "s",
+        2,
+        Mode::Copy,
+    )
+    .unwrap();
+    assert_eq!(k.cwd, k.root.join("sub"));
+}
+
+#[test]
+fn a_copy_run_locks_the_whole_original_including_its_git_folder() {
+    let tmp = tempfile::tempdir().unwrap();
+    let orig = tmp.path().canonicalize().unwrap().join("orig");
+    repo(&orig);
+    let p = System::new();
+    let i = iso::prepare(
+        &p,
+        &tmp.path().join("eye/night/1"),
+        &orig,
+        "2026-11-21",
+        "x",
+        1,
+        Mode::Copy,
+    )
+    .unwrap();
+    let b = barrier::plan(&i.root, &[orig.clone(), orig.join("sub")], true);
+    assert!(b.deny_write.contains(&orig), "{:?}", b.deny_write);
+    assert!(b
+        .deny_edit
+        .contains(&format!("Edit(/{}/**)", orig.to_string_lossy())));
+    assert!(b.allow_write.iter().all(|a| !a.starts_with(&orig)));
+    assert!(b.allow_write.contains(&i.root));
+    let v: serde_json::Value = serde_json::from_str(&barrier::settings(
+        &b,
+        &launch::DENY,
+        &Config::default().night.network_list(),
+        true,
+    ))
+    .unwrap();
+    let deny: Vec<&str> = v["permissions"]["deny"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|d| d.as_str())
+        .collect();
+    assert!(deny
+        .iter()
+        .any(|d| d.starts_with("Edit(//") && d.ends_with("/orig/**)")));
+    assert!(v["sandbox"]["filesystem"]["denyWrite"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|d| d.as_str() == Some(orig.to_str().unwrap())));
+    // a worktree run still has to keep the original .git writable
+    let w = barrier::plan(&i.root, std::slice::from_ref(&orig), false);
+    assert!(!w.deny_write.contains(&orig));
+}
+
+#[test]
+fn bring_puts_the_copy_branch_in_the_original_and_refuses_a_second_time() {
+    let tmp = tempfile::tempdir().unwrap();
+    let orig = tmp.path().join("proj");
+    repo(&orig);
+    let p = System::new();
+    let i = iso::prepare(
+        &p,
+        &tmp.path().join("eye/night/1"),
+        &orig,
+        "2026-11-21",
+        "x",
+        1,
+        Mode::Copy,
+    )
+    .unwrap();
+    std::fs::write(i.root.join("new.txt"), "n\n").unwrap();
+    git(&i.root, &["add", "."]);
+    git(&i.root, &["commit", "-qm", "night work"]);
+    let run = copy_run(&orig, &i);
+    assert!(run.is_repo_copy());
+    let said = iso::bring(&p, &run).unwrap();
+    assert!(said.contains("night/20261121-x"), "{said}");
+    let b = "night/20261121-x";
+    assert_eq!(
+        git(&orig, &["branch", "--list", b]).trim_start_matches(['*', ' ']),
+        b
+    );
+    assert_eq!(git(&orig, &["show", &format!("{b}:new.txt")]), "n");
+    // the checked out branch and the files of the original are as they were
+    assert_eq!(git(&orig, &["rev-parse", "--abbrev-ref", "HEAD"]), "main");
+    assert!(!orig.join("new.txt").exists());
+    // the branch is there now: a second bring refuses and changes nothing
+    let e = iso::bring(&p, &run).unwrap_err();
+    assert!(format!("{e}").contains("already has a branch"), "{e}");
+    // a worktree run has nothing to bring
+    let w = Run {
+        isolation: Some("worktree".into()),
+        ..run.clone()
+    };
+    assert!(iso::bring(&p, &w).is_err());
+}
+
+#[test]
+fn discard_removes_a_copy_without_touching_the_original_and_a_worktree_with_its_branch() {
+    let tmp = tempfile::tempdir().unwrap();
+    let orig = tmp.path().join("proj");
+    repo(&orig);
+    let p = System::new();
+    let night = tmp.path().join("eye/night");
+    let i = iso::prepare(
+        &p,
+        &night.join("1"),
+        &orig,
+        "2026-11-21",
+        "x",
+        1,
+        Mode::Copy,
+    )
+    .unwrap();
+    let run = copy_run(&orig, &i);
+    // committed work in the copy is only a file there: discarding it asks about uncommitted work
+    std::fs::write(i.root.join("loose.txt"), "l\n").unwrap();
+    assert!(iso::discard(&p, &night, &run, false).is_err());
+    let said = iso::discard(&p, &night, &run, true).unwrap();
+    assert!(!i.root.exists() && !night.join("1").exists(), "{said}");
+    assert!(orig.join("a.txt").is_file());
+    // a brought branch stays in the original when the copy is discarded
+    let j = iso::prepare(
+        &p,
+        &night.join("2"),
+        &orig,
+        "2026-11-21",
+        "y",
+        2,
+        Mode::Copy,
+    )
+    .unwrap();
+    let r2 = Run {
+        id: 2,
+        ..copy_run(&orig, &j)
+    };
+    iso::bring(&p, &r2).unwrap();
+    iso::discard(&p, &night, &r2, false).unwrap();
+    assert!(!git(&orig, &["branch", "--list", "night/20261121-y"]).is_empty());
+    // a worktree run: folder and branch go
+    let w = iso::prepare(
+        &p,
+        &night.join("3"),
+        &orig,
+        "2026-11-21",
+        "z",
+        3,
+        Mode::Worktree,
+    )
+    .unwrap();
+    let r3 = run_in(&orig, 3, &orig, &w);
+    iso::discard(&p, &night, &r3, false).unwrap();
+    assert!(!w.root.exists());
+    assert!(git(&orig, &["branch", "--list", "night/20261121-z"]).is_empty());
 }

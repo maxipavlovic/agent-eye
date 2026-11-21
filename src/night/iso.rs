@@ -1,6 +1,7 @@
-//! Where a run works: a git worktree on a new branch for a repo, a copy for a plain folder. Never
-//! the original folder. Also: what the run changed, and removing it all again on DISCARD.
+//! Where a run works: a git worktree on a new branch for a repo (mode `worktree`), a local clone on
+//! a new branch (mode `copy`), a copy for a plain folder. Never the original folder. Also: what the run changed, and removing it all again on DISCARD.
 
+use super::Mode;
 use crate::loose::{Probe, System};
 use anyhow::{bail, Context, Result};
 use std::path::{Path, PathBuf};
@@ -105,6 +106,7 @@ pub fn prepare(
     night: &str,
     slug: &str,
     run_id: i64,
+    mode: Mode,
 ) -> Result<Isolation> {
     std::fs::create_dir_all(run_dir)?;
     if let Some(repo) = repo_root(p, folder) {
@@ -119,6 +121,41 @@ pub fn prepare(
         if !branch_free(p, &repo, &branch) {
             branch = format!("{branch}-{run_id}");
         }
+        // a run started in a sub-folder of the repo starts in the same sub-folder of its folder
+        let rel = folder
+            .canonicalize()
+            .ok()
+            .zip(repo.canonicalize().ok())
+            .and_then(|(f, r)| f.strip_prefix(r).ok().map(Path::to_path_buf))
+            .unwrap_or_default();
+        if mode == Mode::Copy {
+            // hardlinked objects: fast and small; the base is what the repo's HEAD was at planning
+            let work = run_dir.join("work");
+            p.git_act(
+                run_dir,
+                &[
+                    "clone",
+                    "--local",
+                    "--no-checkout",
+                    &repo.to_string_lossy(),
+                    &work.to_string_lossy(),
+                ],
+            )
+            .map_err(|e| anyhow::anyhow!("git clone failed: {e}"))?;
+            let made = p
+                .git_act(&work, &["checkout", "-q", "-b", &branch, &base])
+                .and_then(|_| p.git_act(&work, &["remote", "remove", "origin"]));
+            if let Err(e) = made {
+                let _ = std::fs::remove_dir_all(&work);
+                bail!("preparing the copy failed: {e}");
+            }
+            return Ok(Isolation {
+                cwd: work.join(rel),
+                root: work,
+                branch: Some(branch),
+                base_ref: Some(base),
+            });
+        }
         let wt = run_dir.join("wt");
         p.git_act(
             &repo,
@@ -132,13 +169,6 @@ pub fn prepare(
             ],
         )
         .map_err(|e| anyhow::anyhow!("git worktree add failed: {e}"))?;
-        // a run started in a sub-folder of the repo starts in the same sub-folder of the worktree
-        let rel = folder
-            .canonicalize()
-            .ok()
-            .zip(repo.canonicalize().ok())
-            .and_then(|(f, r)| f.strip_prefix(r).ok().map(Path::to_path_buf))
-            .unwrap_or_default();
         return Ok(Isolation {
             cwd: wt.join(rel),
             root: wt,
@@ -265,7 +295,8 @@ pub fn discard(
         std::fs::remove_dir_all(&wt).with_context(|| format!("removing {}", wt.display()))?;
     }
     let mut said = format!("removed {}", wt.display());
-    if let Some(b) = &run.branch {
+    // a copy has its own repo, gone with its folder; the branch is only in the original for a worktree
+    if let Some(b) = run.branch.as_ref().filter(|_| run.mode() == Mode::Worktree) {
         let repo = Path::new(&run.folder);
         let _ = p.git_act(repo, &["worktree", "prune"]);
         match p.git_act(repo, &["branch", "-D", b]) {
@@ -282,4 +313,26 @@ pub fn discard(
         let _ = std::fs::remove_dir(dir);
     }
     Ok(said)
+}
+
+/// Bring a repo copy's night branch into the original repo (`git fetch <copy> b:b`). Refuses a copy
+/// that is not a repo copy, a copy that is gone, and a branch the original already has.
+pub fn bring(p: &dyn Probe, run: &super::Run) -> Result<String> {
+    anyhow::ensure!(
+        run.is_repo_copy(),
+        "only the copy of a git repo has a branch to bring into your repo"
+    );
+    let (Some(copy), Some(b)) = (run.worktree.as_deref(), run.branch.as_deref()) else {
+        bail!("this run has no copy any more");
+    };
+    anyhow::ensure!(Path::new(copy).is_dir(), "the copy {copy} is gone");
+    let repo = Path::new(&run.folder);
+    let root = repo_root(p, repo).context("the original folder is not a git repo any more")?;
+    anyhow::ensure!(
+        branch_free(p, &root, b),
+        "your repo already has a branch called {b}; rename or delete it first"
+    );
+    p.git_act(&root, &["fetch", "--no-tags", copy, &format!("{b}:{b}")])
+        .map_err(|e| anyhow::anyhow!("git fetch failed: {e}"))?;
+    Ok(format!("branch {b} is now in {}", root.display()))
 }

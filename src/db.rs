@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS night_run(id INTEGER PRIMARY KEY AUTOINCREMENT, kind 
   agent TEXT NOT NULL, switch_ok INTEGER NOT NULL DEFAULT 0, folder TEXT NOT NULL, prompt TEXT NOT NULL, night TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'planned', why TEXT, limit_kind TEXT, limit_value INTEGER, run_session_id TEXT, pid INTEGER,
   pid_start INTEGER, worktree TEXT, branch TEXT, base_ref TEXT, started_at INTEGER, ended_at INTEGER, report TEXT,
-  diff_stat TEXT, created_at INTEGER NOT NULL);
+  diff_stat TEXT, created_at INTEGER NOT NULL, isolation TEXT);
 CREATE INDEX IF NOT EXISTS idx_night_status ON night_run(status);
 CREATE INDEX IF NOT EXISTS idx_night_session ON night_run(run_session_id);
 CREATE TABLE IF NOT EXISTS usage_day(session_id TEXT NOT NULL, day TEXT NOT NULL, model TEXT NOT NULL,
@@ -236,6 +236,16 @@ impl Db {
         // `usage::backfill`, from the token fields of their transcripts only.
         // v16: `night_run` (planned and finished night-shift runs) is created with the schema above;
         // it starts empty and nothing is read again.
+        // v17 also gives `night_run` its `isolation` column (`worktree` or `copy`; NULL = worktree).
+        // `night_run` is new in this release, so the column joins schema 17 instead of a new
+        // version; a table made before it was added gets the column here.
+        let has_iso = self
+            .conn
+            .prepare("SELECT 1 FROM pragma_table_info('night_run') WHERE name='isolation'")?
+            .exists([])?;
+        if !has_iso {
+            self.add_column("night_run", "isolation TEXT")?;
+        }
         // v17: where a session was started. Both columns are NULL until `scan::origin` has looked
         // at the session (it reads the first lines of its transcript, nothing else); `origin_raw`
         // is '' once looked at and nothing was found.

@@ -22,8 +22,9 @@ afterEach(() => {
 });
 
 /** The demo board, with the night calls recorded. */
-async function mount() {
+async function mount(opts: { copyRun?: boolean; configIsolation?: 'copy' } = {}) {
   const base = fixtureSource(true);
+  const brings: number[] = [];
   const plans: NightPlanInput[] = [];
   const discards: Array<[number, boolean]> = [];
   const settings: unknown[] = [];
@@ -32,6 +33,12 @@ async function mount() {
     nightPlan: (i) => { plans.push(i); return base.nightPlan(i); },
     nightDiscard: (id, lose) => { discards.push([id, lose]); return base.nightDiscard(id, lose); },
     nightSettings: (i) => { settings.push(i); return base.nightSettings(i); },
+    nightBring: (id) => { brings.push(id); return base.nightBring(id); },
+    night: async () => ({ ...(await base.night()), ...(opts.configIsolation ? { isolation: opts.configIsolation } : {}) }),
+    card: async (id) => {
+      const c = await base.card(id);
+      return opts.copyRun && c.night_run ? { ...c, night_run: { ...c.night_run, isolation: 'copy' } } : c;
+    },
   };
   const store = createStore(src);
   const root = document.createElement('div');
@@ -42,7 +49,7 @@ async function mount() {
   await vi.waitFor(() => expect(store.night.value).not.toBeNull());
   const $ = <T extends Element = HTMLElement>(sel: string) => root.querySelector<T>(sel);
   const $$ = <T extends Element = HTMLElement>(sel: string) => [...root.querySelectorAll<T>(sel)];
-  return { store, root, plans, discards, settings, $, $$ };
+  return { store, root, plans, discards, settings, brings, $, $$ };
 }
 
 const text = (e: Element | null) => e?.textContent ?? '';
@@ -72,6 +79,7 @@ describe('the words', () => {
     expect(discardText(base)).toBe('Remove the worktree and the branch night/20261121-x? Commits that are only on that branch are lost.');
     expect(discardText({ ...(base as object), uncommitted: true } as never)).toContain('uncommitted changes that will be lost too');
     expect(discardText({ branch: null, uncommitted: false } as never)).toBe('Remove the copy of the folder?');
+    expect(discardText({ ...(base as object), isolation: 'copy' } as never)).toContain('Remove the copy and its branch night/20261121-x?');
   });
 });
 
@@ -89,7 +97,7 @@ describe('the Tonight chip and list', () => {
     expect(text(m.$('.nplan'))).toContain('Nothing is pushed');
     type(m.$<HTMLInputElement>('.nplan input:not([type=checkbox])'), '2M');
     button(m.root, 'PLAN FOR TONIGHT')!.click();
-    await vi.waitFor(() => expect(m.plans).toEqual([{ idea_id: idea.idea_id, limit: '2M', agent: undefined, switch: false }]));
+    await vi.waitFor(() => expect(m.plans).toEqual([{ idea_id: idea.idea_id, limit: '2M', agent: undefined, switch: false, isolation: 'worktree' }]));
     await vi.waitFor(() => expect(text(m.$('.hd .tonight'))).toBe('Tonight: 1'));
     // the panel now says it is planned
     await vi.waitFor(() => expect(text(m.$('.page'))).toContain('Planned for tonight, limit 2M'));
@@ -241,5 +249,63 @@ describe('the morning card and the NIGHT RUN section', () => {
     button(m.$('.lask')!, 'YES')!.click();
     await vi.waitFor(() => expect(m.discards).toEqual([[1, false]]));
     await vi.waitFor(() => expect(text(m.$('.page'))).toContain('Discarded'));
+  });
+});
+
+describe('the two ways to keep your folder safe', () => {
+  it('the form offers both, starts on the config value and sends the choice', async () => {
+    const m = await mount();
+    const idea = await addIdea(m);
+    m.$$('.card.idea').find((c) => text(c).includes('Night idea'))!.querySelector<HTMLButtonElement>('.btn.ghost')!.click();
+    await vi.waitFor(() => expect(m.$('.nplan')).not.toBeNull());
+    const choices = [...m.$('.nplan')!.querySelectorAll<HTMLButtonElement>('fieldset.nightpick button')].filter((b) => /worktree|copy/.test(text(b)));
+    expect(choices.map(text)).toEqual(['A worktree of your repo (default)', 'A separate copy (your folder fully locked)']);
+    expect(choices.map((b) => b.getAttribute('aria-pressed'))).toEqual(['true', 'false']);
+    choices[1]!.click();
+    await vi.waitFor(() => expect(choices[1]!.getAttribute('aria-pressed')).toBe('true'));
+    button(m.root, 'PLAN FOR TONIGHT')!.click();
+    await vi.waitFor(() => expect(m.plans.at(-1)).toMatchObject({ idea_id: idea.idea_id, isolation: 'copy' }));
+    await vi.waitFor(() => expect(m.store.night.value?.open[0]?.isolation).toBe('copy'));
+  });
+
+  it('the config value is the starting choice', async () => {
+    const m = await mount({ configIsolation: 'copy' });
+    await addIdea(m);
+    m.$$('.card.idea').find((c) => text(c).includes('Night idea'))!.querySelector<HTMLButtonElement>('.btn.ghost')!.click();
+    await vi.waitFor(() => expect(m.$('.nplan')).not.toBeNull());
+    const pressed = [...m.$('.nplan')!.querySelectorAll<HTMLButtonElement>('fieldset.nightpick button[aria-pressed=true]')].map(text);
+    expect(pressed).toContain('A separate copy (your folder fully locked)');
+    button(m.root, 'PLAN FOR TONIGHT')!.click();
+    await vi.waitFor(() => expect(m.plans.at(-1)).toMatchObject({ isolation: 'copy' }));
+  });
+
+  async function openRun(m: M) {
+    m.$$('.card').find((c) => c.querySelector('.mk.night'))!.click();
+    await vi.waitFor(() => expect(m.$('.nrun')).not.toBeNull());
+  }
+
+  it('the NIGHT RUN section says which one a run used; a worktree run has no BRING button', async () => {
+    const m = await mount();
+    await openRun(m);
+    expect(text(m.$('.nrun'))).toContain('Worked in');
+    expect(text(m.$('.nrun'))).toContain('A worktree of your repo');
+    expect(button(m.$('.page')!, 'BRING INTO MY REPO')).toBeUndefined();
+  });
+
+  it('BRING INTO MY REPO asks in the page first, and a yes calls the route', async () => {
+    const m = await mount({ copyRun: true });
+    await openRun(m);
+    expect(text(m.$('.nrun'))).toContain('A separate copy (your folder was fully locked)');
+    button(m.$('.page')!, 'BRING INTO MY REPO')!.click();
+    await vi.waitFor(() => expect(m.$('.lask')).not.toBeNull());
+    expect(text(m.$('.lask p'))).toContain('night/20261121-add-a-readme-line');
+    expect(m.brings).toEqual([]);
+    button(m.$('.lask')!, 'CANCEL')!.click();
+    await vi.waitFor(() => expect(m.$('.lask')).toBeNull());
+    expect(m.brings).toEqual([]);
+    button(m.$('.page')!, 'BRING INTO MY REPO')!.click();
+    await vi.waitFor(() => expect(m.$('.lask')).not.toBeNull());
+    button(m.$('.lask')!, 'YES')!.click();
+    await vi.waitFor(() => expect(m.brings).toEqual([1]));
   });
 });

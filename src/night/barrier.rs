@@ -15,9 +15,11 @@
 //!   user's own settings that opens it (an `Edit(//Users/me/code/**)` allow, an `allowWrite`, an
 //!   `additionalDirectories`) cannot win: deny is checked before allow in every scope.
 //!
-//! Reads are not blocked. In a repo the original `.git` has to stay writable for the worktree's
-//! commits, so that folder is denied entry by entry, `.git` aside from `hooks`, `config`, `HEAD`
-//! and `index`; a plain folder is denied whole.
+//! Reads are not blocked. In a worktree run the original `.git` has to stay writable for the
+//! worktree's commits, so that folder is denied entry by entry, `.git` aside from `hooks`, `config`,
+//! `HEAD` and `index` (a Bash command that builds a path some other way can still make a new
+//! top-level file there: Claude auto-allows a worktree's main checkout). In a copy run, and for a
+//! plain folder, the original is denied whole.
 
 use crate::config::Config;
 use anyhow::{bail, Result};
@@ -64,7 +66,10 @@ fn ensure(dir: &Path) -> bool {
 
 /// Work out the barrier of a run working in `root` (a worktree or a copy) and protecting
 /// `protect` (the planned folder and, for a continued session, its original working folder).
-pub fn plan(root: &Path, protect: &[PathBuf]) -> Barrier {
+///
+/// `whole`: the run works in a separate copy, so every protected folder is locked completely, a
+/// repo's `.git` too. Otherwise (a worktree) a repo's `.git` has to stay writable for its commits.
+pub fn plan(root: &Path, protect: &[PathBuf], whole: bool) -> Barrier {
     let mut b = Barrier::default();
     for r in spellings(root) {
         b.allow_write.push(r);
@@ -104,16 +109,16 @@ pub fn plan(root: &Path, protect: &[PathBuf]) -> Barrier {
             if p.starts_with(root) {
                 continue;
             }
-            protect_folder(&mut b, &p);
+            protect_folder(&mut b, &p, whole);
         }
     }
     b
 }
 
-fn protect_folder(b: &mut Barrier, p: &Path) {
+fn protect_folder(b: &mut Barrier, p: &Path, whole: bool) {
     b.guard.push(p.to_path_buf());
     let git = p.join(".git");
-    if !git.is_dir() {
+    if whole || !git.is_dir() {
         b.deny_write.push(p.to_path_buf());
         b.deny_edit.push(edit_rule(p, true));
         return;

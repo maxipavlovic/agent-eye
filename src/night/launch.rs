@@ -314,6 +314,7 @@ pub fn start(
         &run.night,
         &slug,
         run.id,
+        run.mode(),
     )?;
     let new_id = if run.agent == LEGACY_ID {
         Some(new_uuid().context("choosing a session id")?)
@@ -330,7 +331,14 @@ pub fn start(
             if let Some(c) = original_cwd(db, run) {
                 protect.push(c);
             }
-            let b = barrier::plan(&iso.root, &protect);
+            let copy = run.mode() == super::Mode::Copy;
+            if copy {
+                // a copy locks the whole repo, also when the run began in a sub-folder of it
+                if let Some(top) = iso::repo_root(probe, Path::new(&run.folder)) {
+                    protect.push(top);
+                }
+            }
+            let b = barrier::plan(&iso.root, &protect, copy);
             barrier::settings(&b, &DENY, &cfg.night.network_list(), sandboxed)
         });
         let spec = build(

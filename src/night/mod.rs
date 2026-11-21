@@ -150,9 +150,49 @@ pub struct Run {
     pub report: Option<String>,
     pub diff_stat: Option<String>,
     pub created_at: i64,
+    /// `worktree` or `copy`; None (a run planned before the column) is a worktree.
+    pub isolation: Option<String>,
+}
+
+/// How a run keeps the user's folder safe.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Mode {
+    /// A git worktree of the repo on a `night/...` branch.
+    Worktree,
+    /// A separate local copy: the original folder can be locked completely.
+    Copy,
+}
+
+impl Mode {
+    pub fn parse(s: &str) -> Result<Mode> {
+        match s.trim() {
+            "worktree" => Ok(Mode::Worktree),
+            "copy" => Ok(Mode::Copy),
+            o => bail!("'{o}' is not an isolation: write worktree or copy"),
+        }
+    }
+
+    pub fn text(self) -> &'static str {
+        match self {
+            Mode::Worktree => "worktree",
+            Mode::Copy => "copy",
+        }
+    }
 }
 
 impl Run {
+    pub fn mode(&self) -> Mode {
+        self.isolation
+            .as_deref()
+            .and_then(|s| Mode::parse(s).ok())
+            .unwrap_or(Mode::Worktree)
+    }
+
+    /// A copy of a git repo (has a night branch): the one BRING INTO MY REPO is for.
+    pub fn is_repo_copy(&self) -> bool {
+        self.mode() == Mode::Copy && self.branch.is_some() && self.worktree.is_some()
+    }
+
     pub fn limit(&self) -> Option<Limit> {
         Limit::from_parts(self.limit_kind.as_deref(), self.limit_value)
     }
@@ -181,6 +221,7 @@ impl Run {
             "duration_ms": self.started_at.map(|s| (end - s).max(0)),
             "report": self.report, "diff_stat": self.diff_stat,
             "created_at": self.created_at,
+            "isolation": self.mode().text(),
         })
     }
 }
@@ -211,6 +252,7 @@ fn from_row(r: &rusqlite::Row) -> rusqlite::Result<Run> {
         report: r.get("report")?,
         diff_stat: r.get("diff_stat")?,
         created_at: r.get("created_at")?,
+        isolation: r.get("isolation")?,
     })
 }
 
@@ -276,6 +318,20 @@ pub struct PlanOpts {
     pub switch: bool,
     /// For a continued session: what it should do tonight.
     pub prompt: Option<String>,
+    /// `worktree` or `copy`; None takes `[night] isolation`.
+    pub isolation: Option<String>,
+}
+
+/// The mode a plan asks for: the per-run choice, else the config. A plain folder is always a copy.
+fn pick_mode(cfg: &Config, o: &PlanOpts, folder: &str) -> Result<Mode> {
+    let want = match clean(o.isolation.as_deref()) {
+        Some(m) => Mode::parse(m)?,
+        None => Mode::parse(&cfg.night.isolation).context("[night] isolation in config.toml")?,
+    };
+    if iso::repo_root(&crate::loose::System::new(), std::path::Path::new(folder)).is_none() {
+        return Ok(Mode::Copy);
+    }
+    Ok(want)
 }
 
 fn clean(s: Option<&str>) -> Option<&str> {
@@ -310,8 +366,8 @@ pub fn is_weekly(w: &crate::usage::LimitWindow) -> bool {
 fn insert(db: &Db, r: &Run) -> Result<Run> {
     db.conn.execute(
         "INSERT INTO night_run(kind, idea_id, session_id, agent, switch_ok, folder, prompt, night, status,
-                               limit_kind, limit_value, created_at)
-         VALUES(?1,?2,?3,?4,?5,?6,?7,?8,'planned',?9,?10,?11)",
+                               limit_kind, limit_value, created_at, isolation)
+         VALUES(?1,?2,?3,?4,?5,?6,?7,?8,'planned',?9,?10,?11,?12)",
         params![
             r.kind,
             r.idea_id,
@@ -323,7 +379,8 @@ fn insert(db: &Db, r: &Run) -> Result<Run> {
             r.night,
             r.limit_kind,
             r.limit_value,
-            r.created_at
+            r.created_at,
+            r.isolation
         ],
     )?;
     get(db, db.conn.last_insert_rowid())?.context("run vanished")
@@ -361,6 +418,7 @@ pub fn plan_idea(
         None => crate::ideas::agent_of(agents, &idea)?,
     };
     iso::check_plain_size(std::path::Path::new(folder))?;
+    let mode = pick_mode(cfg, o, folder)?;
     if let Some(l) = o.limit {
         check_limit(db, &agent, l)?;
     }
@@ -383,6 +441,7 @@ pub fn plan_idea(
             limit_kind: o.limit.map(|l| l.kind().into()),
             limit_value: o.limit.map(|l| l.value()),
             created_at: now_ms(),
+            isolation: Some(mode.text().into()),
             ..Run::default()
         },
     )
@@ -420,6 +479,7 @@ pub fn plan_session(
         "the folder {cwd} no longer exists"
     );
     iso::check_plain_size(std::path::Path::new(cwd))?;
+    let mode = pick_mode(cfg, o, cwd)?;
     if let Some(l) = o.limit {
         check_limit(db, agent, l)?;
     }
@@ -435,6 +495,7 @@ pub fn plan_session(
             limit_kind: o.limit.map(|l| l.kind().into()),
             limit_value: o.limit.map(|l| l.value()),
             created_at: now_ms(),
+            isolation: Some(mode.text().into()),
             ..Run::default()
         },
     )
