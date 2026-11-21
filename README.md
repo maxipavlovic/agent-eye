@@ -60,6 +60,8 @@ eye board on --open       # the board
 
 <p align="center"><a href="assets/board-demo.gif"><img src="assets/board-light.png" alt="The board: Needs you, Running, Waiting on others, Paused, Done and Ideas" width="860"></a></p>
 
+Moving to another machine, or keeping a copy: `eye export` writes one file, `eye import <file>` reads it back, paths rewritten ([docs/backups.md](docs/backups.md)).
+
 ## Privacy
 
 Everything stays on your machine. Summaries run your agent's own CLI on a short excerpt (secrets masked) and count against your plan; turn them off in `~/.agent-eye/config.toml`. `agent-eye uninstall` reverts every change. Details: [docs/security.md](docs/security.md).

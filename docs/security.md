@@ -60,6 +60,14 @@ folder is tightened on the next run):
 - `backups/`: compressed snapshots of `eye.db` (see [backups.md](backups.md)), the same data as the database, kept as long as the rotation says. Delete the folder to remove them; `[backup] enabled = false` stops new ones.
 - `queue/` (the same hook lines, rotated at 1 MB; one older file is kept), `logs/`, `config.toml`, `board.token`, `ui.json` (board theme, accent colour and layout), `daemon.lock`, `work/`, an empty folder the summary runs in, and `tmp/`, where a copy of an archived session is made while its conversation is read and removed right after.
 
+**A pack** (`eye export`, a `.eyepack` file) holds the database, the whole archive and a copy of
+every transcript that was not archived yet: everything above except `board.token`, the queue and
+the logs. It is written 0600 where you ask (the current folder by default) and leaves the machine
+only when you move it. It is **not encrypted** and the transcripts in it are not masked, so keep
+it where only you can read it. `eye import` checks every file's sha256 before it changes anything
+and refuses a pack from a newer eye. The readable page of one session (`eye export <session>`,
+EXPORT on the board) masks secrets the way summaries do, which is best effort.
+
 **A mirror folder** (`[backup] mirror`) is a copy outside `~/.agent-eye`. eye itself makes no network
 call, but if that folder is synced (Dropbox, iCloud Drive, a network share) your sync tool carries
 the snapshots off the machine, and with `mirror_archive` the transcripts too, which can contain

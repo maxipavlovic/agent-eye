@@ -208,6 +208,18 @@ pub(super) fn preview_lines<'a>(app: &App, r: &Row, pal: &Pal) -> Vec<Line<'a>> 
                 }
                 None => {}
             }
+            if let Some(cwd) = s
+                .cwd
+                .as_deref()
+                .filter(|c| !c.is_empty() && !std::path::Path::new(c).is_dir())
+                .filter(|_| s.kind.as_deref() != Some("history_only"))
+            {
+                // an imported session, or a folder that was moved or deleted
+                v.push(Line::styled(
+                    format!("folder not on this machine: {cwd} (resume needs it)"),
+                    pal.dim(),
+                ));
+            }
             if s.kind.as_deref() == Some("history_only") {
                 v.push(Line::styled(
                     "no transcript any more: this session cannot be resumed",

@@ -265,6 +265,55 @@ pub(super) async fn api_conversation(
 }
 
 #[derive(Deserialize)]
+pub(super) struct ExportQ {
+    format: Option<String>,
+}
+
+/// One session as a download: a self-contained HTML page (or Markdown with `format=md`), secrets
+/// masked, made from the archive copy when the agent deleted the transcript.
+pub(super) async fn api_export(
+    State(st): State<Shared>,
+    Path(id): Path<String>,
+    Query(q): Query<ExportQ>,
+) -> Result<axum::response::Response, ApiError> {
+    use crate::pack::{export_session, Format};
+    use axum::http::header;
+    use axum::response::IntoResponse;
+    let (format, mime) = match q.format.as_deref().unwrap_or("html") {
+        "html" => (Format::Html, "text/html; charset=utf-8"),
+        "md" => (Format::Markdown, "text/markdown; charset=utf-8"),
+        other => {
+            return Err(ApiError::bad(format!(
+                "unknown format '{other}' (html or md)"
+            )))
+        }
+    };
+    let db = open_db(&st)?;
+    if id.starts_with("idea:") {
+        return Err(ApiError::bad("ideas have no conversation to export"));
+    }
+    let id = resolve(&db, &id)?;
+    let (name, text) = export_session(&db, &st.paths, &st.agents, &id, format)?;
+    Ok((
+        [
+            (header::CONTENT_TYPE, mime.to_string()),
+            (
+                header::CONTENT_DISPOSITION,
+                format!("attachment; filename=\"{name}\""),
+            ),
+            (header::CACHE_CONTROL, "no-store".to_string()),
+            (header::X_CONTENT_TYPE_OPTIONS, "nosniff".to_string()),
+            (
+                header::CONTENT_SECURITY_POLICY,
+                "default-src 'none'; style-src 'unsafe-inline'; sandbox".to_string(),
+            ),
+        ],
+        text,
+    )
+        .into_response())
+}
+
+#[derive(Deserialize)]
 pub(super) struct SearchQ {
     q: Option<String>,
     limit: Option<usize>,
@@ -521,6 +570,82 @@ mod tests {
         assert_eq!(st, StatusCode::NOT_FOUND);
         assert!(v["error"].as_str().unwrap().contains("no transcript"));
         let mut r = get("/api/cards/aaaaaaaa-1/conversation");
+        r.headers_mut().remove("x-eye-token");
+        assert_eq!(call(&e, r).await.0, StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn export_downloads_one_page_even_when_the_agent_deleted_the_transcript() {
+        use crate::paths::Paths;
+        use crate::server::test_support::raw;
+        let e = env();
+        add_session(&e.db, "aaaaaaaa-1", "Fix the thing", None, 1, now_ms());
+        let secret = "ghp_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+        let t = e._tmp.path().join("aaaaaaaa-1.jsonl");
+        std::fs::write(
+            &t,
+            format!("{{\"type\":\"user\",\"timestamp\":\"2026-11-08T10:00:00.000Z\",\"message\":{{\"content\":\"token {secret} please\"}}}}\n{{\"type\":\"assistant\",\"timestamp\":\"2026-11-08T10:00:05.000Z\",\"message\":{{\"content\":[{{\"type\":\"text\",\"text\":\"all done\"}}]}}}}\n"),
+        )
+        .unwrap();
+        e.db.conn
+            .execute(
+                "UPDATE session SET transcript_path=?1, project_dir='-tmp-demo' WHERE id='aaaaaaaa-1'",
+                [t.to_string_lossy()],
+            )
+            .unwrap();
+        // archived, then deleted by the agent: the page is made from the archive copy
+        let paths = Paths {
+            home: e._tmp.path().join("home"),
+        };
+        let cfg = crate::config::Config::with_claude_dir(&e._tmp.path().join("claude"));
+        crate::archive::archive_session(&e.db, &paths, &crate::agents::enabled(&cfg), "aaaaaaaa-1")
+            .unwrap();
+        std::fs::remove_file(&t).unwrap();
+        let (st, h, body) = raw(
+            &e,
+            req("GET", "/api/sessions/aaaaaaaa/export?format=html", None),
+        )
+        .await;
+        assert_eq!(st, StatusCode::OK, "{body}");
+        assert!(h["content-type"].to_str().unwrap().starts_with("text/html"));
+        let cd = h["content-disposition"].to_str().unwrap();
+        assert!(
+            cd.starts_with("attachment; filename=\"eye-aaaaaaaa-fix-the-thing.html"),
+            "{cd}"
+        );
+        assert!(
+            body.contains("all done") && body.contains("[masked]"),
+            "{body}"
+        );
+        assert!(!body.contains(secret));
+        let (st, h, body) = raw(
+            &e,
+            req("GET", "/api/sessions/aaaaaaaa-1/export?format=md", None),
+        )
+        .await;
+        assert_eq!(st, StatusCode::OK);
+        assert!(h["content-type"]
+            .to_str()
+            .unwrap()
+            .starts_with("text/markdown"));
+        assert!(body.starts_with("# Fix the thing"));
+        // errors: unknown session, idea, bad format, no token
+        let get = |u: &str| req("GET", u, None);
+        assert_eq!(
+            call(&e, get("/api/sessions/zzzzzzzz/export")).await.0,
+            StatusCode::NOT_FOUND
+        );
+        assert_eq!(
+            call(&e, get("/api/sessions/idea:1/export")).await.0,
+            StatusCode::BAD_REQUEST
+        );
+        assert_eq!(
+            call(&e, get("/api/sessions/aaaaaaaa-1/export?format=pdf"))
+                .await
+                .0,
+            StatusCode::BAD_REQUEST
+        );
+        let mut r = get("/api/sessions/aaaaaaaa-1/export");
         r.headers_mut().remove("x-eye-token");
         assert_eq!(call(&e, r).await.0, StatusCode::UNAUTHORIZED);
     }

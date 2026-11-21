@@ -74,6 +74,7 @@ function Actions({ d, store }: { d: CardDetail; store: Store }) {
       {d.resumable && <button class="btn big" onClick={() => void store.resume(d.id)}>RESUME</button>}
       {d.resumable && d.resume_cmd && <button class="btn" title="Resume as a new session branched from this one" onClick={() => void store.resume(d.id, true)}>FORK</button>}
       {d.resume_cmd && <button class="btn" onClick={() => copy(d.resume_cmd!, store)}>COPY</button>}
+      {d.kind !== 'idea' && <a class="btn" href={`/api/sessions/${encodeURIComponent(d.id)}/export?format=html`} download title="Save this session as one readable page; secrets are masked">EXPORT</a>}
       {d.kind !== 'idea' ? <MoveMenu d={d} store={store} /> : <button class="btn ghost" onClick={() => { void store.move(d.id, 'archive').then(() => store.close()); }}>ARCHIVE</button>}
     </div>
   );

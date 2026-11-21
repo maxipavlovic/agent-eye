@@ -172,11 +172,7 @@ fn a_pack_moves_everything_to_an_empty_home_with_another_path() {
     assert!(plan.contains("dry run"), "{plan}");
     // a dry run changed nothing
     assert_eq!(session_ids(&b).len(), 0);
-    assert!(!b
-        .eye_home()
-        .join("backups")
-        .read_dir()
-        .map_or(false, |mut d| d.next().is_some()));
+    assert!(backup::list(&backup::dir(&Paths { home: b.eye_home() })).is_empty());
     assert!(!b.eye_home().join("archive").exists());
 
     let done = b.ok(&["import", &pack_file.to_string_lossy(), "--yes"]);
@@ -308,8 +304,7 @@ fn export_to(l: &Local, db: &Db, file: &Path) {
 }
 
 fn import_in(l: &Local, file: &Path) -> pack::Plan {
-    let plan = pack::plan(&l.paths, file).unwrap();
-    plan
+    pack::plan(&l.paths, file).unwrap()
 }
 
 fn count(db: &Db, sql: &str) -> i64 {

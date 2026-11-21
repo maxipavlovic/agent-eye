@@ -53,6 +53,7 @@ Ctrl-G then opens the picker with the current command line as the start query. T
 - `eye idea start <id>` on an idea whose folder does not exist asks `Folder <path> does not exist. Create it? [y/N]` in a terminal; `--create-folder` makes it without asking (for scripts), and without a terminal and without the flag it stops with a message that names the flag. `--dry-run` creates nothing.
 - `eye remind <id> <when> [--note TEXT]` sets a reminder on a session (an id or its first 6 characters) or an idea (`idea:<n>`), `eye remind <id> --clear` removes it and `eye remind ls` lists them, due ones first, `eye remind notify [on|off]` shows or switches the desktop notice for due reminders (off by default). `<when>` is as for Ctrl-R above. `eye show` and `eye ls --json` carry it.
 - `eye idea add` and `eye idea edit` take `--agent <id>` to start an idea in a particular agent (default: the first enabled one).
+- `eye export [--to <folder or file>]` writes `agent-eye-<host>-<date>-<time>.eyepack` (database, archive, transcripts not archived yet); `eye import <file> [--dry-run] [--yes]` reads one back, on this machine or another (see [backups.md](backups.md)). `eye export <session> [--html|--md] [--to …]` writes one session as a readable page.
 - Without a terminal, `eye` prints the list like `eye ls`.
 
 ## Config and environment

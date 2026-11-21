@@ -99,6 +99,7 @@ pub fn router(state: Shared) -> Router {
         )
         .route("/api/cards/:id/resume", post(cards::api_resume))
         .route("/api/cards/:id/conversation", get(cards::api_conversation))
+        .route("/api/sessions/:id/export", get(cards::api_export))
         .route("/api/search", get(cards::api_search))
         .route("/api/agents", get(agent_routes::api_agents))
         .route(

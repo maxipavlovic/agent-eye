@@ -107,17 +107,17 @@ fn has_col(conn: &Connection, table: &str, col: &str) -> bool {
 /// Where a file of the pack goes inside `archive/`, project folder names rewritten. `live/<agent>/…`
 /// goes where that agent's archive copies are (`@<agent>/…`, none for the first agent).
 fn archive_rel(name: &str, remap: &Remap) -> Option<PathBuf> {
-    let rel = if let Some(r) = name.strip_prefix("archive/") {
-        r.to_string()
-    } else if let Some(r) = name.strip_prefix("live/") {
-        let (agent, rest) = r.split_once('/')?;
-        if agent == LEGACY_ID {
-            rest.to_string()
-        } else {
-            format!("@{agent}/{rest}")
+    let rel = match (name.strip_prefix("archive/"), name.strip_prefix("live/")) {
+        (Some(r), _) => r.to_string(),
+        (None, Some(r)) => {
+            let (agent, rest) = r.split_once('/')?;
+            if agent == LEGACY_ID {
+                rest.to_string()
+            } else {
+                format!("@{agent}/{rest}")
+            }
         }
-    } else {
-        return None;
+        _ => return None,
     };
     let mut parts: Vec<String> = rel.split('/').map(str::to_string).collect();
     let at = usize::from(parts.first().is_some_and(|p| p.starts_with('@')));

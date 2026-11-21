@@ -4,6 +4,12 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## Unreleased
 
+### Added
+
+- `eye export` writes one `.eyepack` file with everything eye knows (database, transcript archive, and copies of transcripts the agent still has), and `eye import <file>` reads it on this machine or another one: a fresh install takes the pack's database, an existing one gets the missing sessions and ideas merged in (the newer row wins). Home folders are rewritten for the new machine (`/Users/max` to `/home/max`, also in Claude's `-Users-max-…` folder names). Import shows the plan first, asks `[y/N]` (`--yes`, `--dry-run`), and keeps a `pre-import` snapshot. The board's token is never in a pack.
+- `eye export <session> [--html|--md]` writes one session as a readable, self-contained page (secrets masked, tool calls folded to a line), from the archive when the agent deleted the transcript. The board's session panel has an EXPORT button (`GET /api/sessions/:id/export`).
+- The terminal preview says when a session's folder does not exist on this machine.
+
 ### Changed
 
 - Search is one engine for the picker, the board and `eye find`. Word forms match (`tokens` finds `token`), a mistyped word is fixed from your own sessions, and half of the words are enough. A pasted link finds the session that made it. Titles and rare words count most; status and age no longer lift a session, so old sessions are not pushed to the bottom. Archived sessions still come last.
