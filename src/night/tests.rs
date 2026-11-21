@@ -934,6 +934,7 @@ fn the_claude_command_denies_every_way_out_and_names_its_session() {
         "claude",
         Path::new("/w"),
         Some("uuid-1"),
+        None,
     );
     assert_eq!(
         s.args[..2],
@@ -971,6 +972,7 @@ fn accept_edits_mode_adds_an_allow_list_and_a_model_when_set() {
         "claude",
         Path::new("/w"),
         Some("u"),
+        None,
     );
     assert_eq!(after(&s.args, "--permission-mode"), "acceptEdits");
     assert!(after(&s.args, "--allowedTools").contains("Bash(cargo *)"));
@@ -983,7 +985,7 @@ fn a_prompt_that_starts_with_a_dash_is_not_read_as_a_flag() {
     let cfg = Config::default();
     let mut r = run_of("claude", "idea");
     r.prompt = "--dangerously-skip-permissions".into();
-    let s = launch::build(&cfg, &r, "claude", Path::new("/w"), Some("u"));
+    let s = launch::build(&cfg, &r, "claude", Path::new("/w"), Some("u"), None);
     assert_eq!(s.args[1], "Task: --dangerously-skip-permissions");
 }
 
@@ -996,6 +998,7 @@ fn continue_tonight_forks_the_session_for_claude_and_codex() {
         "claude",
         Path::new("/w"),
         Some("new-1"),
+        None,
     );
     let i = s.args.iter().position(|a| a == "--resume").unwrap();
     assert_eq!(s.args[i + 1], "sess-1");
@@ -1006,6 +1009,7 @@ fn continue_tonight_forks_the_session_for_claude_and_codex() {
         &run_of("codex", "session"),
         "codex",
         Path::new("/w"),
+        None,
         None,
     );
     assert_eq!(c.args[..2], ["exec".to_string(), "fork".to_string()]);
@@ -1026,6 +1030,7 @@ fn the_codex_command_is_sandboxed_to_the_worktree_without_network() {
         &run_of("codex", "idea"),
         "codex",
         Path::new("/w/x"),
+        None,
         None,
     );
     assert_eq!(c.args[0], "exec");
@@ -1124,4 +1129,230 @@ fn a_spawned_run_leads_its_own_group_logs_and_leaves_an_exit_code() {
         "{text}"
     );
     assert!(pid > 1);
+}
+
+// ---------- the barrier between a Claude run and the user's folders ----------
+
+use super::barrier;
+
+/// Run the hook command of the barrier on one tool call, as Claude Code does: JSON on stdin.
+fn hook_says(cmd: &str, input: &str) -> i32 {
+    use std::io::Write;
+    let mut c = Command::new("sh")
+        .args(["-c", cmd])
+        .stdin(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .unwrap();
+    c.stdin.take().unwrap().write_all(input.as_bytes()).unwrap();
+    c.wait().unwrap().code().unwrap()
+}
+
+fn call(key: &str, value: &str) -> String {
+    serde_json::json!({ "tool_input": { key: value, "other": "x" }, "cwd": "/w" }).to_string()
+}
+
+#[test]
+fn the_hook_blocks_the_file_tools_and_bash_in_a_guarded_folder_only() {
+    let guard = vec![
+        PathBuf::from("/Users/me/my code"),
+        PathBuf::from("/Users/me/app"),
+    ];
+    let files = barrier::hook_command(&guard, false).unwrap();
+    let bash = barrier::hook_command(&guard, true).unwrap();
+    for p in [
+        "/Users/me/app/src/a.rs",
+        "/Users/me/my code/new.txt",
+        "/run/wt/../../Users/me/app/x",
+        "../app/x",
+    ] {
+        assert_eq!(hook_says(&files, &call("file_path", p)), 2, "{p}");
+    }
+    assert_eq!(
+        hook_says(&files, &call("notebook_path", "/Users/me/app/n.ipynb")),
+        2
+    );
+    for p in [
+        "/run/wt/a.rs",
+        "/Users/me/app2/a.rs",
+        "/Users/me/application",
+    ] {
+        assert_eq!(hook_says(&files, &call("file_path", p)), 0, "{p}");
+    }
+    for c in [
+        "touch /Users/me/app/x",
+        "cd /Users/me/app && ls",
+        "echo z > '/Users/me/my code/x'",
+        "ls /Users/me/app; ls",
+        "(cd /Users/me/app)",
+    ] {
+        assert_eq!(hook_says(&bash, &call("command", c)), 2, "{c}");
+    }
+    for c in [
+        "ls",
+        "git add -A && git commit -m x",
+        "touch /Users/me/app2/x",
+        "cat /run/wt/app/x",
+    ] {
+        assert_eq!(hook_says(&bash, &call("command", c)), 0, "{c}");
+    }
+    // a name the hook cannot quote safely is left to the rules, and with nothing left there is no hook
+    assert!(barrier::hook_command(&[PathBuf::from("/a'b")], true).is_none());
+}
+
+#[test]
+fn a_worktree_run_may_write_its_own_folder_and_its_git_but_not_the_original() {
+    let tmp = tempfile::tempdir().unwrap();
+    let orig = tmp.path().join("orig").canonicalize().unwrap_or_else(|_| {
+        std::fs::create_dir_all(tmp.path().join("orig")).unwrap();
+        tmp.path().join("orig").canonicalize().unwrap()
+    });
+    repo(&orig);
+    let wt = tmp.path().canonicalize().unwrap().join("run/wt");
+    std::fs::create_dir_all(wt.parent().unwrap()).unwrap();
+    git(
+        &orig,
+        &["worktree", "add", &wt.to_string_lossy(), "-b", "night/x"],
+    );
+    let b = barrier::plan(&wt, std::slice::from_ref(&orig));
+    let has = |v: &[PathBuf], p: PathBuf| v.contains(&p);
+    assert!(has(&b.allow_write, wt.clone()));
+    assert!(has(&b.allow_write, orig.join(".git/objects")));
+    assert!(has(&b.allow_write, orig.join(".git/refs/heads/night")));
+    assert!(b
+        .allow_write
+        .iter()
+        .any(|p| p.starts_with(orig.join(".git/worktrees"))));
+    // every entry but .git, and the parts of .git that change behaviour
+    assert!(has(&b.deny_write, orig.join("a.txt")));
+    assert!(has(&b.deny_write, orig.join("sub")));
+    assert!(has(&b.deny_write, orig.join(".git/hooks")));
+    assert!(has(&b.deny_write, orig.join(".git/config")));
+    assert!(!has(&b.deny_write, orig.join(".git")));
+    assert!(!has(&b.deny_write, orig.clone()));
+    assert!(b
+        .deny_edit
+        .contains(&format!("Edit(/{}/**)", orig.join("sub").to_string_lossy())));
+    assert!(b
+        .deny_edit
+        .contains(&format!("Edit(/{})", orig.join("a.txt").to_string_lossy())));
+    assert_eq!(b.guard, vec![orig.clone()]);
+    // a run that started in a sub-folder protects the whole repo
+    let sub_only = barrier::plan(&wt, &[orig.join("sub")]);
+    assert!(sub_only.guard.contains(&orig));
+    // the commit a run makes works with exactly what it may write? git itself decides; here only
+    // that the pointer file was read: the worktree's own git folder is allowed
+    let gitdir = std::fs::read_to_string(wt.join(".git")).unwrap();
+    let gd = gitdir
+        .trim()
+        .trim_start_matches("gitdir:")
+        .trim()
+        .to_string();
+    assert!(b.allow_write.iter().any(|p| p.to_string_lossy() == gd));
+}
+
+#[test]
+fn a_plain_folder_is_denied_whole() {
+    let tmp = tempfile::tempdir().unwrap();
+    let orig = tmp.path().join("plain");
+    std::fs::create_dir_all(&orig).unwrap();
+    std::fs::write(orig.join("a.txt"), "x").unwrap();
+    let work = tmp.path().join("run/work");
+    std::fs::create_dir_all(&work).unwrap();
+    let b = barrier::plan(&work, std::slice::from_ref(&orig));
+    assert!(b.deny_write.contains(&orig));
+    assert!(b
+        .deny_edit
+        .contains(&format!("Edit(/{}/**)", orig.to_string_lossy())));
+    assert!(b.allow_write.contains(&work));
+}
+
+#[test]
+fn the_settings_of_a_run_turn_the_sandbox_on_and_keep_the_push_deny_list() {
+    let b = barrier::Barrier {
+        allow_write: vec![PathBuf::from("/run/wt")],
+        deny_write: vec![PathBuf::from("/orig/a.txt")],
+        deny_edit: vec!["Edit(//orig/a.txt)".into()],
+        guard: vec![PathBuf::from("/orig")],
+    };
+    let v: serde_json::Value =
+        serde_json::from_str(&barrier::settings(&b, &launch::DENY, true)).unwrap();
+    let sb = &v["sandbox"];
+    assert!(sb["enabled"].as_bool().unwrap());
+    assert!(sb["failIfUnavailable"].as_bool().unwrap());
+    assert!(!sb["allowUnsandboxedCommands"].as_bool().unwrap());
+    assert_eq!(sb["filesystem"]["allowWrite"][0], "/run/wt");
+    assert_eq!(sb["filesystem"]["denyWrite"][0], "/orig/a.txt");
+    let deny = v["permissions"]["deny"].as_array().unwrap();
+    assert!(deny.iter().any(|d| d == "Bash(git push*)"));
+    assert!(deny.iter().any(|d| d == "Edit(//orig/a.txt)"));
+    let hooks = v["hooks"]["PreToolUse"].as_array().unwrap();
+    assert_eq!(hooks.len(), 2);
+    // without a sandbox the rules and the hooks stay, the sandbox section goes
+    let v: serde_json::Value =
+        serde_json::from_str(&barrier::settings(&b, &launch::DENY, false)).unwrap();
+    assert!(v.get("sandbox").is_none() && v["permissions"]["deny"].is_array());
+}
+
+#[test]
+fn a_run_without_a_sandbox_is_refused_unless_the_user_allows_it() {
+    let no = cfg_with("");
+    let yes = cfg_with("allow_unsandboxed = true");
+    assert!(!Config::default().night.allow_unsandboxed);
+    assert!(barrier::gate_with(&no, Ok(())).unwrap());
+    let why = barrier::gate_with(&no, Err("it needs bwrap".into()))
+        .unwrap_err()
+        .to_string();
+    assert!(
+        why.contains("it needs bwrap") && why.contains("allow_unsandboxed"),
+        "{why}"
+    );
+    assert!(!barrier::gate_with(&yes, Err("it needs bwrap".into())).unwrap());
+    assert!(barrier::gate_with(&yes, Ok(())).unwrap());
+}
+
+#[test]
+fn the_claude_command_carries_the_barrier_settings_and_codex_does_not() {
+    let cfg = Config::default();
+    let s = launch::build(
+        &cfg,
+        &run_of("claude", "session"),
+        "claude",
+        Path::new("/w"),
+        Some("n"),
+        Some("{\"sandbox\":{}}"),
+    );
+    assert_eq!(after(&s.args, "--settings"), "{\"sandbox\":{}}");
+    assert!(after(&s.args, "--disallowedTools").contains("git push"));
+    let c = launch::build(
+        &cfg,
+        &run_of("codex", "session"),
+        "codex",
+        Path::new("/w"),
+        None,
+        Some("{}"),
+    );
+    assert!(!c.args.contains(&"--settings".to_string()));
+}
+
+#[test]
+fn git_acts_do_not_wait_for_the_repos_hooks_and_never_page() {
+    use crate::loose::Probe;
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path().join("r");
+    repo(&dir);
+    git(&dir, &["branch", "night/gone"]);
+    // a hook that stalls (an earlier DISCARD printed "git did not answer in time")
+    let hook = dir.join(".git/hooks/reference-transaction");
+    std::fs::write(&hook, "#!/bin/sh\nsleep 20\n").unwrap();
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    let t = std::time::Instant::now();
+    let out = System::new().git_act(&dir, &["branch", "-D", "night/gone"]);
+    assert!(out.is_ok(), "{out:?}");
+    assert!(t.elapsed().as_secs() < 10, "took {:?}", t.elapsed());
+    let branches = git(&dir, &["branch", "--list", "night/*"]);
+    assert!(branches.is_empty(), "{branches}");
 }

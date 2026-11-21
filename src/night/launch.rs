@@ -4,7 +4,7 @@
 //! stdout and stderr appended to `log`. The daemon finds it again by pid and start time, and reads
 //! `exit` when the process is gone, so a restart or an upgrade of the daemon does not lose a run.
 
-use super::{iso, Run};
+use super::{barrier, iso, Run};
 use crate::agents::{Agents, LEGACY_ID};
 use crate::config::Config;
 use crate::db::Db;
@@ -73,8 +73,16 @@ pub fn claude_project_dir(cwd: &Path) -> String {
         .collect()
 }
 
-/// The command of a run. `new_id` names the run's own session (Claude only).
-pub fn build(cfg: &Config, run: &Run, exe: &str, cwd: &Path, new_id: Option<&str>) -> Spec {
+/// The command of a run. `new_id` names the run's own session (Claude only); `guard` is the
+/// `--settings` JSON of its barrier (see `barrier`).
+pub fn build(
+    cfg: &Config,
+    run: &Run,
+    exe: &str,
+    cwd: &Path,
+    new_id: Option<&str>,
+    guard: Option<&str>,
+) -> Spec {
     let cont = run.kind == "session";
     // A continued session remembers the paths of the original folder: say where the work goes.
     let prompt = if cont {
@@ -110,6 +118,9 @@ pub fn build(cfg: &Config, run: &Run, exe: &str, cwd: &Path, new_id: Option<&str
             args.extend(["--allowedTools".into(), ALLOW.join(",")]);
         }
         args.extend(["--disallowedTools".into(), DENY.join(",")]);
+        if let Some(g) = guard {
+            args.extend(["--settings".into(), g.into()]);
+        }
         if !cfg.night.claude_model.trim().is_empty() {
             args.extend(["--model".into(), cfg.night.claude_model.trim().into()]);
         }
@@ -230,6 +241,12 @@ pub(super) fn stage_transcript(
     Ok(())
 }
 
+/// The folder the continued session was working in when it began.
+fn original_cwd(db: &Db, run: &Run) -> Option<PathBuf> {
+    let s = db.session_by_id(run.session_id.as_deref()?).ok()??;
+    s.cwd.or(s.project_dir).map(PathBuf::from)
+}
+
 /// Make the run's folder, build its command and start it. On failure nothing keeps running.
 pub fn start(
     probe: &dyn Probe,
@@ -242,6 +259,12 @@ pub fn start(
     let agent = agents
         .get(&run.agent)
         .with_context(|| format!("the agent '{}' is not enabled", run.agent))?;
+    // a Claude run needs its sandbox, or the user's say-so to go without, before anything is made
+    let sandboxed = if run.agent == LEGACY_ID {
+        barrier::gate(cfg)?
+    } else {
+        true
+    };
     let dir = super::run_dir(paths, run.id);
     let slug = super::slug(&run.prompt);
     let iso = iso::prepare(
@@ -261,7 +284,23 @@ pub fn start(
         if run.kind == "session" {
             stage_transcript(db, paths, agents, run, &iso.cwd)?;
         }
-        let spec = build(cfg, run, &agent.executable(), &iso.cwd, new_id.as_deref());
+        let guard = (run.agent == LEGACY_ID).then(|| {
+            // what the run must not touch: the planned folder and where the session began
+            let mut protect = vec![PathBuf::from(&run.folder)];
+            if let Some(c) = original_cwd(db, run) {
+                protect.push(c);
+            }
+            let b = barrier::plan(&iso.root, &protect);
+            barrier::settings(&b, &DENY, sandboxed)
+        });
+        let spec = build(
+            cfg,
+            run,
+            &agent.executable(),
+            &iso.cwd,
+            new_id.as_deref(),
+            guard.as_deref(),
+        );
         let pid = spawn(&spec, &dir.join("log"), &dir.join("exit"))?;
         Ok(Started {
             pid,
