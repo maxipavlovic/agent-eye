@@ -90,18 +90,18 @@ pub fn router(state: Shared) -> Router {
             get(prefs::api_prefs).post(prefs::api_prefs_set),
         )
         .route("/api/archive", get(board::api_archive))
-        .route("/api/cards/:id", get(cards::api_card))
-        .route("/api/cards/:id/column", post(cards::api_move))
-        .route("/api/cards/:id/hidden", post(cards::api_hidden))
-        .route("/api/cards/:id/remind", post(remind_routes::api_remind))
+        .route("/api/cards/{id}", get(cards::api_card))
+        .route("/api/cards/{id}/column", post(cards::api_move))
+        .route("/api/cards/{id}/hidden", post(cards::api_hidden))
+        .route("/api/cards/{id}/remind", post(remind_routes::api_remind))
         .route(
             "/api/remind/settings",
             get(remind_settings::api_remind_settings)
                 .post(remind_settings::api_remind_settings_set),
         )
-        .route("/api/cards/:id/resume", post(cards::api_resume))
-        .route("/api/cards/:id/conversation", get(cards::api_conversation))
-        .route("/api/sessions/:id/export", get(cards::api_export))
+        .route("/api/cards/{id}/resume", post(cards::api_resume))
+        .route("/api/cards/{id}/conversation", get(cards::api_conversation))
+        .route("/api/sessions/{id}/export", get(cards::api_export))
         .route("/api/search", get(cards::api_search))
         .route("/api/agents", get(agent_routes::api_agents))
         .route("/api/usage", get(usage_routes::api_usage))
@@ -109,8 +109,8 @@ pub fn router(state: Shared) -> Router {
             "/api/ideas",
             get(idea_routes::api_ideas).post(idea_routes::api_idea_add),
         )
-        .route("/api/ideas/:id", post(idea_routes::api_idea_edit))
-        .route("/api/ideas/:id/start", post(idea_routes::api_idea_start))
+        .route("/api/ideas/{id}", post(idea_routes::api_idea_edit))
+        .route("/api/ideas/{id}/start", post(idea_routes::api_idea_start))
         .route("/api/folder", get(idea_routes::api_folder))
         .route("/api/loose", get(loose_routes::api_loose))
         .route("/api/loose/stop", post(loose_routes::api_loose_stop))
