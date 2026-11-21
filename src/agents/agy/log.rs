@@ -30,6 +30,8 @@ pub struct Step {
     /// (name, arguments)
     pub tools: Vec<(String, Value)>,
     pub tokens: Option<Tokens>,
+    /// The model key agy 1.5.14 writes on a model call (`gemini-3.8-flash-low`); older logs have none.
+    pub model: Option<String>,
 }
 
 pub fn decode(line: &[u8]) -> Option<Step> {
@@ -73,6 +75,7 @@ pub fn decode(line: &[u8]) -> Option<Step> {
         error: v.get("error").and_then(Value::as_str).map(String::from),
         tools,
         tokens,
+        model: Some(s("model")).filter(|m| !m.is_empty()),
     })
 }
 
@@ -199,12 +202,18 @@ pub fn parse(
                     }
                 }
                 if let Some(t) = s.tokens {
-                    let models = models_cache.get_or_insert_with(models);
-                    let model = models
-                        .get(calls)
-                        .or(models.last())
-                        .cloned()
-                        .unwrap_or_default();
+                    // the log's own key, else the database's name for the call
+                    let model = match s.model.clone() {
+                        Some(m) => m,
+                        None => {
+                            let models = models_cache.get_or_insert_with(models);
+                            models
+                                .get(calls)
+                                .or(models.last())
+                                .cloned()
+                                .unwrap_or_default()
+                        }
+                    };
                     d.usage.input += t.input;
                     d.usage.output += t.output;
                     d.usage.cache_read += t.cache_read;
@@ -342,6 +351,28 @@ pub fn work_events(path: &Path) -> Result<Vec<WorkEvent>> {
 }
 
 /// The token use of every model call of the log.
+/// The text of the last model reply in the log at `path`, read from its end (a hook asks while agy
+/// is still running, so the file is not read whole).
+pub fn last_reply(path: &Path) -> Option<String> {
+    use std::io::{Read, Seek, SeekFrom};
+    let mut f = std::fs::File::open(path).ok()?;
+    let len = f.metadata().ok()?.len();
+    let start = len.saturating_sub(256 << 10);
+    f.seek(SeekFrom::Start(start)).ok()?;
+    let mut buf = Vec::new();
+    f.read_to_end(&mut buf).ok()?;
+    let text = String::from_utf8_lossy(&buf);
+    let mut lines = text.lines();
+    if start > 0 {
+        lines.next(); // a cut line
+    }
+    lines
+        .rev()
+        .filter_map(|l| decode(l.as_bytes()))
+        .find(|s| s.kind == "PLANNER_RESPONSE" && !s.content.trim().is_empty())
+        .map(|s| s.content.trim().to_string())
+}
+
 pub fn usage_msgs(path: &Path, models: &dyn Fn() -> Vec<String>) -> Result<Vec<UsageMsg>> {
     Ok(parse(path, 0, 0, models)?.delta.usage_msgs)
 }
@@ -376,6 +407,21 @@ mod tests {
         )
         .unwrap();
         assert!(g.tokens.is_none());
+    }
+
+    #[test]
+    fn a_model_call_names_its_model_when_the_log_does() {
+        let l = json!({"type":"PLANNER_RESPONSE","input_tokens":1,"output_tokens":1,"model":"gemini-3.8-flash-low","created_at":"2026-11-05T14:44:25Z"});
+        let t = tempfile::tempdir().unwrap();
+        let p = t.path().join("log.jsonl");
+        std::fs::write(&p, format!("{l}\n")).unwrap();
+        // the database list is not even asked for
+        let msgs = usage_msgs(&p, &|| panic!("the log names the model")).unwrap();
+        assert_eq!(msgs[0].model, "gemini-3.8-flash-low");
+        let old = json!({"type":"PLANNER_RESPONSE","input_tokens":1,"output_tokens":1});
+        std::fs::write(&p, format!("{old}\n")).unwrap();
+        let msgs = usage_msgs(&p, &|| vec!["Gemini 3.8 Flash (High)".into()]).unwrap();
+        assert_eq!(msgs[0].model, "Gemini 3.8 Flash (High)");
     }
 
     #[test]

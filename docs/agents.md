@@ -122,7 +122,8 @@ Each session has an `origin` (schema 17): `terminal`, `headless`, `app`, `deskto
 |---|---|---|
 | Claude Code | `entrypoint` on its lines | `cli` terminal; `sdk-cli`, `claude-code-github-action` headless; `sdk-ts`, `sdk-py`, `mcp` app; `claude-desktop`, `claude-desktop-3p`, `local-agent`, `claude-coworker*` desktop; `claude-vscode` ide; `remote*`, `ssh-remote`, `claude-in-slack`, `claude-in-teams` web |
 | Codex | `originator` and `source` of `session_meta`, joined as `originator/source` | the source first: `vscode` ide, `exec` headless, `mcp` app, `custom:atlas` and `custom:chatgpt` desktop; else the originator: `codex_cli_rs`, `codex-tui` terminal, `codex_exec` headless, `codex_vscode` ide, `codex_atlas`, `codex_chatgpt_desktop` and `Codex …` desktop |
-| agy, OpenCode | nothing | none |
+| agy | `source` of the summaries row (empty in every conversation seen on agy 1.5.14); and its own process log, `Print mode: conversation=<id>`, for a `-p` run, which eye stores as `print-mode` | `print-mode` headless; `CORTEX_TRAJECTORY_SOURCE_CLI` terminal, `_SDK`, `_PYTHON_SDK`, `_AGENT_API` app, `_VSCODE` ide, `_ASYNC_*` web (the enum of agy's binary; none of these was seen on disk); a terminal conversation has none |
+| OpenCode | nothing | none |
 
 The Claude Code values are the ones its 2.1.311 binary knows (`CLAUDE_CODE_ENTRYPOINT`); the docs do not list them. The Codex ones are from its `default_client.rs` and from rollouts. A value that is not in the table is stored raw and maps to none.
 
@@ -137,28 +138,39 @@ What works for each (a dash is "not offered"):
 | Prompt history of deleted sessions | yes | none | `history.jsonl` | none |
 | Conversation, summary tail | yes | yes | yes | yes |
 | Resume | `claude --resume` | `codex resume` | `agy --conversation <id>` | `opencode --session <id>` |
-| Fork | yes | yes | no | no |
+| Fork | yes | yes | not possible (agy has no fork flag or command outside its TUI) | no |
 | Start an idea | yes | yes (no session id up front) | `agy -i <prompt>` (no id up front) | `opencode --prompt <text>` (no id up front) |
 | Tokens and usage by model | yes | yes | yes (model from the database) | yes |
-| Live status | status files | writer lock + hooks | none | none |
-| Hooks installed | yes | yes | none | none |
+| Live status | status files | writer lock + hooks | presence lock + summaries row + database (busy, idle, waiting) | none |
+| Hooks installed | yes | yes | yes: a plugin of eye's (`SessionStart`, `Stop`) | none |
 | Summaries (`ask`) | `claude -p` | `codex exec` | `agy -p --output-format json --json-schema` | none |
-| Archive | one file | one file | folder: database snapshot + the conversation's folder | one JSON export; never restored |
+| Archive | one file | one file | folder: database snapshot + summaries row + the conversation's folder; a restore is resumable | one JSON export; never restored |
+| Sub-agents | child streams | child streams | child streams (`parent_conversation_id`) | no |
+| `/eye` skill | yes | yes | yes (`~/.gemini/config/skills/eye`) | no |
+| Plan limits | yes | yes | not possible: agy keeps none on disk | no |
+| Night shift | yes | yes | only with `allow_unsandboxed` (its `--sandbox` is unverified); no fork | no |
+| Cost estimate | yes | yes | yes (Gemini prices; GPT-OSS has none) | no |
+| Remote Control link | yes | no | yes, from agy's process log | no |
+| Forget `--transcript` | yes | yes | yes, also its history lines and cache entries | yes |
 
-**Antigravity CLI.** Built on a real install (agy 1.5.1). A conversation is `conversations/<id>.db`, a SQLite file of
+**Antigravity CLI.** Built on a real install (agy 1.5.1, rechecked on 1.5.14). A conversation is `conversations/<id>.db`, a SQLite file of
 protobuf blobs, with a folder `brain/<id>/` beside it. eye reads the plain JSON log agy keeps there
 (`.system_generated/logs/transcript_full.jsonl`: one line per step, with the prompt, reply, tool calls and the
-tokens of each model call), the model of each call from the database (the one protobuf field eye decodes), titles
+tokens and (from 1.5.14) the model of each model call), the model of older calls from the database (the one protobuf field eye decodes), titles
 and folders from `conversation_summaries.db` and prompts from `history.jsonl`. The session is the folder
 `brain/<id>/`; its stamp folds in the database, its write-ahead log and the summaries row, so a title that agy
-writes later is noticed. Conversations without a log, sub-agent conversations and the ones eye starts for summaries
-(a folder named `eye-ask-<uuid>`; agy has no flag to leave nothing behind) are not sessions. agy does have hooks, but
-only in a workspace's `.agents/hooks.json` or a plugin, and a hook that prints no decision can block a tool, so eye
-installs none: status comes from the files changing. There is no live status (whether agy holds `presence/<id>.lock`
-only while a conversation is open was not verified). The archive copy is a folder (`eye-conversation.db.zst`, a
-`VACUUM INTO` snapshot, and every file of `brain/<id>/` compressed under `files/`, without `scratch/` and files over
-8 MiB); restoring makes the folder again with the snapshot inside it, which lets eye read the conversation but not
-agy resume it. Not read: commits and folders as outputs, background tasks and sub-agents.
+writes later is noticed. agy's databases are in WAL mode and SQLite cannot open one read-only once agy has exited (no `-wal`, no `-shm`); eye then opens it as it is (`immutable=1`). Conversations without a log and the ones eye starts for summaries
+(a folder named `eye-ask-<uuid>`; agy has no flag to leave nothing behind) are not sessions.
+
+- **Live status** (`live.rs`). agy holds an exclusive `flock` on `presence/<id>.lock` while a conversation is open (held from the start, released on quit; the files stay behind, so a lock that can be taken means closed). The summaries row says `CASCADE_RUN_STATUS_RUNNING` while a turn runs and `..._IDLE` after: busy and idle. A tool call that waits for approval is the last row of the conversation's `steps` table with status 9 (`CORTEX_STEP_STATUS_WAITING`, 3 is done): `waiting`, "permission prompt". It is in the database only; the JSON log writes a step when it is done. A step waiting for something other than a tool approval is shown as "a question" (not seen, so not verified). Checked in a real session with `rm`, which agy asks to approve.
+- **Remote Control** (`--remote-control`, `/remote-control`). The link is not in the database or in presence. agy's process log (`log/cli-<time>.log`, one per `agy` process) has `[remote-control-<uuid>-v2] ... Connection status: Connected`, and the person is shown `https://antigravity.google.com/r/<uuid>-v2`; `Created conversation <id>` in the same log ties it to the conversation. eye sets `remote_url` while that connection is up. It is the process's link, so it covers every conversation that process opened. The same logs have `Print mode: conversation=<id>` for a `-p` run: that is how eye knows it was headless (a live `-p` run reports the entrypoint `sdk-cli`).
+- **Sub-agents.** agy's `invoke_subagent` makes a conversation of its own: a row with `parent_conversation_id`, `agent_name` (`self`) and `nesting_depth`, its own `brain/<id>/` log (and no presence lock), and `brain/<parent>/.system_generated/subagents/<id>.json` with the role the parent gave. eye shows them as child streams of the parent (title = role, detail = kind, finished when its turn is not running) and counts their tokens apart.
+- **Hooks.** agy reads `hooks.json` from a workspace's `.agents/` folder and from a plugin; there is no global hooks file, but a plugin in the global folder `~/.gemini/config/plugins/<name>/` is loaded in every conversation (checked: `agy plugin list` shows it and its hooks ran in a real session). `eye install` writes the plugin `agent-eye` there (`plugin.json`, `hooks.json` with `SessionStart` and `Stop`); nothing of another tool is touched, and `uninstall` removes only it. agy waits for each hook and a `PreToolUse` hook that prints no decision can block the tool, so eye listens to no tool event and every command ends in `echo '{}'`, an empty decision, whatever eye did. `Stop` hooks were not seen in a `-p` run; the file-based status does not need them. The hook payload is camelCase JSON with `conversationId`, `cwd` and `transcriptPath`; the queue line keeps the session, the folder and the end of the last reply (to tell a question from a finished job).
+- **The `/eye` skill** is `~/.gemini/config/skills/eye/SKILL.md` (`skill/SKILL.agy.md`, the Codex text with Antigravity's name; it says agy cannot fork). The daemon refreshes it after an upgrade like the others.
+- **Cost.** The log names the model of each call (`gemini-3.8-flash-low`) and the database a display name (`Gemini 3.8 Flash (High)`); both are priced (see `usage.md`).
+- **The archive copy** is a folder (`eye-conversation.db.zst`, a `VACUUM INTO` snapshot, `eye-summary.json.zst`, the conversation's row, and every file of `brain/<id>/` compressed under `files/`, without `scratch/` and files over 8 MiB). Restoring into agy's own folder puts the snapshot at `conversations/<id>.db` and the row back, so `agy --conversation <id>` opens the conversation after agy deleted it (checked on a real conversation: deleted, restored, resumed with `agy -p --conversation`). A copy read for the board keeps its snapshot beside it.
+- **Forgetting** (`eye forget --transcript`) removes the folder, the database and its `-wal`/`-shm`, the presence lock, `annotations/<id>.pbtxt`, the row (zeroed: `secure_delete`), the conversation's lines in `history.jsonl` (so nothing is left in agy's up-arrow history) and its entries in `cache/last_conversations.json` and `cache/conversation_metadata.json`. agy's process logs under `log/` name the id and are left alone.
+- **Not possible.** Fork: no flag or command outside the TUI. Plan limits: agy keeps none on disk. Origin of a terminal conversation: `source` is empty in every row seen. A `-p` night run is not confined by anything eye could verify (see `night.md`). Not read: commits and folders as outputs, background tasks.
 
 **OpenCode** (checked on a real OpenCode 2.3.2: a session is listed with its title, folder, conversation and
 tokens, a second message is picked up at the next scan, and `--session` / `--prompt` resume and start it). The

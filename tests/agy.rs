@@ -382,11 +382,15 @@ fn the_archive_keeps_a_snapshot_and_the_folder_without_scratch() {
     let s = w.session(A);
     let msgs = conversation::read(&s, &w.paths, agents.get("agy").unwrap().as_ref()).unwrap();
     assert_eq!(msgs.len(), 4);
-    // a restore puts the folder back, with the snapshot of the database and without scratch
+    // a restore puts the folder back without scratch, and the database where agy keeps it
     let dest = archive::restore(&w.db, &w.paths, &agents, A).unwrap();
     assert!(dest.join(".system_generated/steps/1/output.txt").is_file());
     assert!(!dest.join("scratch").exists());
-    let snap = Connection::open(dest.join("eye-conversation.db")).unwrap();
+    assert!(
+        !dest.join("eye-conversation.db").exists(),
+        "the snapshot moved to agy's own place and would shadow it"
+    );
+    let snap = Connection::open(w.agy.join("conversations").join(format!("{A}.db"))).unwrap();
     let n: i64 = snap
         .query_row("SELECT count(*) FROM gen_metadata", [], |r| r.get(0))
         .unwrap();
@@ -415,6 +419,11 @@ fn detection_looks_for_the_folder_and_the_program() {
         here.transcripts().is_empty(),
         "no conversations folder, no sessions"
     );
-    let hooks = here.queue_line("Stop", &Value::Null, 0);
-    assert!(hooks.is_none(), "agy has no hooks eye installs");
+    let line = here
+        .queue_line("Stop", &serde_json::json!({"conversationId": "c1"}), 5)
+        .unwrap();
+    assert_eq!(
+        (line["event"].as_str(), line["session_id"].as_str()),
+        (Some("Stop"), Some("c1"))
+    );
 }

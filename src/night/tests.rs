@@ -1815,3 +1815,92 @@ fn discard_removes_a_copy_without_touching_the_original_and_a_worktree_with_its_
     assert!(!w.root.exists());
     assert!(git(&orig, &["branch", "--list", "night/20261121-z"]).is_empty());
 }
+
+// ---------- agy ----------
+
+#[test]
+fn the_agy_command_runs_headless_with_accept_edits_the_sandbox_and_allow_rules() {
+    let cfg = Config::parse("[night]\nagy_model = \"gemini-3.8-flash-low\"\n").unwrap();
+    let c = launch::build(
+        &cfg,
+        &run_of("agy", "idea"),
+        "agy",
+        Path::new("/w/x"),
+        None,
+        None,
+    );
+    assert_eq!(c.args[0], "-p");
+    assert_eq!(c.args[1], "make it better");
+    assert_eq!(after(&c.args, "--mode"), "accept-edits");
+    assert!(c.args.iter().any(|a| a == "--sandbox"));
+    assert_eq!(after(&c.args, "--model"), "gemini-3.8-flash-low");
+    assert_eq!(c.cwd, Path::new("/w/x"));
+    assert!(c.session_id.is_none());
+    assert!(!c
+        .args
+        .iter()
+        .any(|a| a.contains("dangerously") || a == "--conversation"));
+    let s: serde_json::Value = serde_json::from_str(after(&c.args, "--settings")).unwrap();
+    let allow: Vec<&str> = s["permissions"]["allow"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_str().unwrap())
+        .collect();
+    assert!(allow.contains(&"command(cargo test)") && allow.contains(&"command(git status)"));
+    let deny = s["permissions"]["deny"].to_string();
+    assert!(
+        deny.contains("command(git push)") && !deny.contains("*)"),
+        "{deny}"
+    );
+    // no model flag when none is set; a prompt that is a flag is not one
+    let mut r = run_of("agy", "idea");
+    r.prompt = "--x".into();
+    let c = launch::build(&Config::default(), &r, "agy", Path::new("/w"), None, None);
+    assert!(!c.args.iter().any(|a| a == "--model"));
+    assert_eq!(c.args[1], "Task: --x");
+}
+
+#[test]
+fn an_agy_run_is_refused_unless_unsandboxed_runs_are_allowed_and_the_plan_says_why() {
+    let no = Config::default();
+    let why = barrier::agy_gate(&no).unwrap_err().to_string();
+    assert!(
+        why.contains("--sandbox") && why.contains("allow_unsandboxed"),
+        "{why}"
+    );
+    let yes = Config::parse("[night]\nallow_unsandboxed = true\n").unwrap();
+    assert!(!barrier::agy_gate(&yes).unwrap());
+
+    let db = Db::open_memory().unwrap();
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path().to_str().unwrap();
+    let id = idea(&db, Some(dir), Some("write a readme"));
+    let agents_cfg = |extra: &str| {
+        Config::parse(&format!(
+            "[agents]\nenabled = [\"agy\"]\n[night]\nenabled = true\n{extra}\n"
+        ))
+        .unwrap()
+    };
+    let cfg = agents_cfg("");
+    let e = plan_idea(
+        &db,
+        &cfg,
+        &crate::agents::enabled(&cfg),
+        id,
+        &PlanOpts::default(),
+    )
+    .unwrap_err();
+    assert!(format!("{e}").contains("allow_unsandboxed"), "{e}");
+    assert_eq!(planned_count(&db).unwrap(), 0);
+    let cfg = agents_cfg("allow_unsandboxed = true");
+    let r = plan_idea(
+        &db,
+        &cfg,
+        &crate::agents::enabled(&cfg),
+        id,
+        &PlanOpts::default(),
+    )
+    .unwrap();
+    assert_eq!(r.agent, "agy");
+}

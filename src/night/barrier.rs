@@ -286,6 +286,22 @@ pub fn gate(cfg: &Config) -> Result<bool> {
     gate_with(cfg, available())
 }
 
+/// Why an agy night run is not started by default. `agy --sandbox` runs commands in a "terminal
+/// sandbox" and asks before one that would leave it, and a headless run answers such a request with a
+/// denial; but whether the sandbox keeps writes inside the run's folder was not shown end to end, so
+/// it is not used as the barrier. `[night] allow_unsandboxed = true` starts the run anyway.
+pub const AGY_UNVERIFIED: &str = "agy's --sandbox is not known to keep a run inside its own folder (eye could not verify it), so an Antigravity night run could write outside it; set [night] allow_unsandboxed = true to run it anyway";
+
+/// Whether an agy night run may start. Returns whether it is confined, which is never known: the
+/// only way through is `allow_unsandboxed`.
+pub fn agy_gate(cfg: &Config) -> Result<bool> {
+    if cfg.night.allow_unsandboxed {
+        Ok(false)
+    } else {
+        bail!("{AGY_UNVERIFIED}")
+    }
+}
+
 pub fn gate_with(cfg: &Config, avail: Result<(), String>) -> Result<bool> {
     match avail {
         Ok(()) => Ok(true),
