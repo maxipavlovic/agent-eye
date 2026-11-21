@@ -229,6 +229,20 @@ const SESSIONS: &[S] = &[
         prompt: "Summarise the audit log export by actor.",
         reply: "Wrote the summary: three actors account for 80 percent of events.",
     },
+    S {
+        title: "Count the quokkas in the zoo census",
+        project: "zoo-census",
+        branch: "main",
+        agent: "agy",
+        age: 55,
+        ai: "waiting_on_others",
+        state: "Census CSV read; 212 quokkas counted",
+        next: "Antigravity: check the lakeside enclosure",
+        live: "",
+        origin: "headless",
+        prompt: "Count the quokkas in the census CSV.",
+        reply: "212 quokkas; the lakeside enclosure has the most.",
+    },
 ];
 
 fn sid(n: usize) -> String {
@@ -261,7 +275,7 @@ fn main() -> Result<()> {
     let demo = Path::new("/Users/demo");
     std::fs::write(
         paths.config_path(),
-        "[agents]\nenabled = [\"claude\", \"codex\"]\n\n[board]\ndone_days = 0\nresume = \"copy\"\n\n[summary]\nenabled = false\n\n[night]\nenabled = false\n\n[remind]\nnotify = false\n",
+        "[agents]\nenabled = [\"claude\", \"codex\", \"agy\"]\n\n[board]\ndone_days = 0\nresume = \"copy\"\n\n[summary]\nenabled = false\n\n[night]\nenabled = false\n\n[remind]\nnotify = false\n",
     )?;
     let claude = dir.join("claude");
     for (n, s) in SESSIONS.iter().enumerate() {

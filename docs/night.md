@@ -13,7 +13,7 @@ Park work during the day, let it run at night inside the plan you already pay fo
 
 ```
 eye night on | off
-eye night add idea:<n> [--limit 30%|2M|90m] [--agent claude|codex] [--switch] [--isolation worktree|copy]
+eye night add idea:<n> [--limit 30%|2M|90m] [--agent claude|codex|agy] [--switch] [--isolation worktree|copy]
 eye night add <session> --prompt "what it should do tonight" [--limit ...]
 eye night ls                      # the default
 eye night cancel <run>
@@ -102,9 +102,16 @@ Every Claude run also gets `--settings '<json>'` (made per run, see `src/night/b
 
 `codex exec --sandbox workspace-write --cd <worktree or copy> --skip-git-repo-check <prompt>`. The sandbox has no network by default, so nothing can be pushed. Its rollout is picked up like any other session: eye treats a `codex exec` rollout as a session only when it ran in a night run's folder (`<eye home>/night/<n>/wt` or `work`); every other `exec` rollout stays hidden.
 
+### Antigravity (agy)
+
+`agy -p <prompt> --mode accept-edits --sandbox --settings <json> [--model <m>]`, started in the worktree or copy. A headless agy answers every permission request with a denial (checked on agy 1.5.14: "a tool required the command permission that headless mode cannot prompt for, so it was auto-denied"), so `--settings` carries the build and test commands as `permissions.allow` rules (`command(cargo test)`, the same list as Claude's) and the push and publish commands as `permissions.deny`. `[night] agy_model` picks the model. The conversation is picked up like any other session, by its folder under `<eye home>/night/`.
+
+**An agy run does not start by default.** `--sandbox` is agy's "terminal sandbox": commands run confined, and a command that would leave it needs approval. eye could not show that this keeps a run's writes inside its own folder (the only headless run with `--sandbox` was denied every command, so nothing was written anywhere), so it does not use it as a barrier. Planning an agy run says so and stops; `[night] allow_unsandboxed = true` plans and starts it anyway, with the worktree or copy as the only protection (the deny rules are advisory). agy cannot fork a conversation, so "continue tonight" is refused for it; only ideas run.
+
 ### Continue a session tonight
 
 - **Claude:** eye copies the session's transcript (restoring it from the archive when Claude deleted it) into the project folder Claude uses for the worktree or the copy, then runs `claude -p <prompt> --resume <id> --fork-session --session-id <new uuid>`. `--session-id` names the fork, so the new session is known at once. The original session is untouched.
+- **agy:** not possible, agy has no fork.
 - **Codex:** `codex exec fork <id> <prompt>` (the installed CLI has it) with `-c sandbox_mode="workspace-write"`, started in the worktree or copy.
 
 The prompt of a continued run starts with a note: it works in a copy at `<worktree>`, the earlier conversation mentions paths of the original folder, use the same files under the worktree and change nothing in the original. The note is only advice; the barrier above is what holds. See `security.md`.

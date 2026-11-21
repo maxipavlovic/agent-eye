@@ -46,6 +46,7 @@ All prices are in `src/usage/prices.rs`, in USD per million tokens, with the dat
 
 - Claude: <https://platform.claude.com/docs/en/about-claude/pricing> (base input, output, 5-minute cache write, cache hit). Claude 5.5/5.1/5, Fable, Mythos, Opus 4.x, Sonnet 4.x and Haiku 4.5/5.5 are in the table. Haiku 5.5 is priced for prompts up to 100,000 tokens; a longer prompt costs more on the API and the daily totals cannot tell, so its cost is a floor.
 - OpenAI (Codex models): <https://developers.openai.com/api/docs/pricing> (standard tier, prompts up to 272K tokens). Codex counts cached input inside input; eye splits it, so cached input is priced at the cached rate.
+- Google (Antigravity models): <https://ai.google.dev/gemini-api/docs/pricing> (standard tier, no prompt-size tiers). Gemini 3.8 Flash is $0.75 in / $3.75 out / $0.075 cached through 2026-12-31 and twice that from 2027-01-01 (the table has today's price); agy's High, Medium and Low are reasoning levels of the same model, priced alike. Gemini 3.5 Flash-Lite ($0.30 / $2.50 / $0.03), 3.6 Flash, 3.1 Flash-Lite and 3 Flash preview are in the table. agy also offers Claude models (priced as Claude) and GPT-OSS 120B, which the Gemini page does not list: it shows `unknown` until you add it under `[usage.prices]`. agy's input excludes cached tokens, so cache reads are priced at the cached rate.
 
 A model with no price (a new one, a model not in the table) shows its tokens and `unknown` as the cost, or `$12.40 + unpriced` when only part of a group has no price. Eye never guesses. Add or fix a model in `config.toml`:
 
@@ -61,6 +62,7 @@ A model named there is priced from that table alone. See `config.md`.
 
 ## Plan limits
 
+- **Antigravity (agy)** keeps no plan limit or quota on disk (checked: none of its files, caches or logs hold one; it asks Google's servers when it needs it), so there is no `limits:agy`, and a weekly limit cannot be planned for an agy night run.
 - **Codex** writes `rate_limits` (`primary` and `secondary`: `used_percent`, `window_minutes`, `resets_at`) in each rollout's `token_count` events. The scanner keeps the newest one it has seen in `meta` as `limits:codex`, with the time of the event.
 - **Claude Code** gives limits to the status line command. The official status line page (<https://code.claude.com/docs/en/statusline>) says the JSON has `rate_limits.five_hour` and `rate_limits.seven_day`, each with `used_percentage` (0 to 100) and `resets_at` (Unix seconds); "`rate_limits`: appears only for claude.ai Pro, Max, and Ultra subscribers ... Even then, it appears only after the first API response in the session. Each window may be independently absent". There is nothing for API-key users. Transcripts do not carry limits, so eye can only see them through the status line.
 
