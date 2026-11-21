@@ -68,6 +68,87 @@ enabled = true         # list what a session left behind (servers still running,
 days = 30              # look at the folders of sessions active in the last this many days
 "#;
 
+/// The keys each section of `config.toml` has in this version. `agents` (its own tables per agent)
+/// and `usage` (`[usage.prices."<model>"]`) hold names the user chooses and are not listed.
+const KNOWN: &[(&str, &[&str])] = &[
+    (
+        "summary",
+        &[
+            "enabled",
+            "quiet_minutes",
+            "model",
+            "agent",
+            "concurrency",
+            "auto_days",
+        ],
+    ),
+    ("user", &["name"]),
+    ("board", &["enabled", "port", "resume", "done_days"]),
+    ("remind", &["notify"]),
+    ("exclude", &["paths"]),
+    ("outputs", &["jira_projects", "jira_url"]),
+    (
+        "hide",
+        &["trivial", "max_prompts", "max_reply_chars", "commands"],
+    ),
+    (
+        "backup",
+        &[
+            "enabled",
+            "keep_daily",
+            "keep_weekly",
+            "mirror",
+            "mirror_archive",
+        ],
+    ),
+    ("loose", &["enabled", "days"]),
+    (
+        "night",
+        &[
+            "enabled",
+            "window",
+            "quiet_minutes",
+            "parallel",
+            "claude_permission",
+            "claude_model",
+            "codex_model",
+            "allow_unsandboxed",
+            "network",
+        ],
+    ),
+];
+/// Sections whose keys are chosen by the user.
+const OPEN_SECTIONS: &[&str] = &["agents", "usage"];
+
+/// Names this version does not know, as `[section]` or `section.key`.
+fn unknown_keys(t: &toml::Table) -> Vec<String> {
+    let mut out = vec![];
+    for (name, v) in t {
+        if OPEN_SECTIONS.contains(&name.as_str()) {
+            if let (Some(a), "agents") = (v.as_table(), name.as_str()) {
+                out.extend(
+                    a.iter()
+                        .filter(|(k, v)| *k != "enabled" && !v.is_table())
+                        .map(|(k, _)| format!("agents.{k}")),
+                );
+            }
+            continue;
+        }
+        let Some((_, keys)) = KNOWN.iter().find(|(n, _)| n == name) else {
+            out.push(format!("[{name}]"));
+            continue;
+        };
+        if let Some(tab) = v.as_table() {
+            out.extend(
+                tab.keys()
+                    .filter(|k| !keys.contains(&k.as_str()))
+                    .map(|k| format!("{name}.{k}")),
+            );
+        }
+    }
+    out
+}
+
 /// The config written on first run.
 pub fn default_toml() -> String {
     DEFAULT_TOML_TEMPLATE.replace("{resume}", crate::platform::default_resume())
@@ -391,7 +472,22 @@ pub struct ExcludeCfg {
 impl Config {
     /// Parse the text of a `config.toml`.
     pub fn parse(s: &str) -> Result<Config> {
-        toml::from_str(s).context("parsing config.toml")
+        Ok(Self::parse_noting(s)?.0)
+    }
+
+    /// Parse the text, and list what this version does not know: sections, keys, and entries of
+    /// `[agents]` that are neither `enabled` nor a table. A file written by a newer eye must still
+    /// load, so those are left out and reported, never fatal. Text that is not TOML at all, or a
+    /// known key with the wrong type, is still an error.
+    pub fn parse_noting(s: &str) -> Result<(Config, Vec<String>)> {
+        let mut table: toml::Table = s.parse().context("parsing config.toml")?;
+        let mut unknown = unknown_keys(&table);
+        if let Some(toml::Value::Table(a)) = table.get_mut("agents") {
+            a.retain(|k, v| k == "enabled" || v.is_table());
+        }
+        let cfg = Config::deserialize(table).context("parsing config.toml")?;
+        unknown.sort();
+        Ok((cfg, unknown))
     }
 
     /// Load the config, writing the defaults first when the file is missing.
@@ -403,7 +499,18 @@ impl Config {
         crate::files::make_private(path);
         let s =
             std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
-        Config::parse(&s)
+        let (cfg, unknown) = Config::parse_noting(&s)?;
+        if !unknown.is_empty() {
+            static ONCE: std::sync::Once = std::sync::Once::new();
+            ONCE.call_once(|| {
+                eprintln!(
+                    "eye: {} has settings this version does not know ({}); they are ignored",
+                    path.display(),
+                    unknown.join(", ")
+                );
+            });
+        }
+        Ok(cfg)
     }
 
     /// The ids in `[agents] enabled`; Claude Code when the key is not set.
@@ -767,5 +874,48 @@ mod tests {
         assert_eq!(d.hide.commands, c.hide.commands);
         let c = Config::parse("[hide]\ntrivial=false").unwrap();
         assert!(!c.hide.trivial && c.hide.max_prompts == 1);
+    }
+
+    #[test]
+    fn a_newer_config_loads_and_what_is_unknown_is_listed() {
+        let t = format!(
+            "{}\n[future]\nx = 1\n[night]\nnew_key = true\n[agents]\nnew_scalar = 3\n",
+            "[board]\nport = 7500"
+        );
+        let (c, unknown) = Config::parse_noting(&t).unwrap();
+        assert_eq!(c.board.port, 7500);
+        assert_eq!(
+            unknown,
+            vec!["[future]", "agents.new_scalar", "night.new_key"]
+        );
+        // text that is not TOML is still refused
+        assert!(Config::parse("[board\nport =").is_err());
+    }
+
+    #[test]
+    fn the_default_file_has_no_unknown_names() {
+        let (_, unknown) = Config::parse_noting(&default_toml()).unwrap();
+        assert!(unknown.is_empty(), "{unknown:?}");
+        // every key of the default file is listed, so a new key is not reported as unknown
+        let t: toml::Table = default_toml().parse().unwrap();
+        for (sec, v) in &t {
+            if OPEN_SECTIONS.contains(&sec.as_str()) {
+                continue;
+            }
+            let keys = KNOWN.iter().find(|(n, _)| n == sec).unwrap().1;
+            for k in v.as_table().unwrap().keys() {
+                assert!(keys.contains(&k.as_str()), "{sec}.{k}");
+            }
+        }
+    }
+
+    #[test]
+    fn load_or_create_warns_and_goes_on_with_a_future_section() {
+        let tmp = tempfile::tempdir().unwrap();
+        let p = tmp.path().join("config.toml");
+        std::fs::write(&p, "[future]\nx = 1\n[board]\nport = 7501\n").unwrap();
+        assert_eq!(Config::load_or_create(&p).unwrap().board.port, 7501);
+        std::fs::write(&p, "this is = not [toml").unwrap();
+        assert!(Config::load_or_create(&p).is_err());
     }
 }
