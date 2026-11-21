@@ -623,3 +623,21 @@ a.mk:hover { background: var(--ink); color: var(--paper); }
 .fchips button { font: 400 14px/1 var(--f-body); background: var(--paper); color: var(--ink); border: 2px solid var(--ink); padding: 6px 9px; cursor: pointer; }
 .fchips button:hover, .fchips button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
 @media (max-width: 1200px), (pointer: coarse) { .fchips button { min-height: 40px; } }
+
+/* Usage panel: Inter 17px body, ink on paper, one accent only for a limit above 80%. */
+.usage .umeta, .usage .unote, .ucost + .umeta { font: 400 17px/1.5 var(--f-body); color: var(--ink); margin: 10px 0 0; max-width: 66ch; }
+.usage .state, .usage .uempty { font: 400 17px/1.5 var(--f-body); max-width: 66ch; margin: 18px 0 0; }
+.usage .acts { margin-top: 22px; }
+.ubars, .ulimits { list-style: none; margin: 0; padding: 0; font: 400 17px/1.5 var(--f-body); }
+.ubars li { display: grid; grid-template-columns: minmax(0, 11em) 1fr auto; gap: 14px; align-items: center; padding: 6px 0; }
+.ubars .uname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; font: inherit; color: var(--ink); background: none; border: 0; padding: 0; }
+.ubars button.uname { text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.ubars .utrack { display: block; height: 14px; border: 2px solid var(--ink); background: var(--paper); }
+.ubars .utrack i { display: block; height: 100%; background: var(--ink); }
+.ubars .uval { white-space: nowrap; }
+.ubars .uval small, .ulimits small { font: inherit; opacity: .85; margin-left: 6px; }
+.ulimits li { padding: 6px 0; }
+.ulimits li.hot { border-left: 6px solid var(--accent); padding-left: 10px; font-weight: 600; }
+.ucost { font: 400 17px/1.5 var(--f-body); margin: 0; }
+.ucost b { font-size: 24px; font-weight: 600; margin-right: 8px; }
+@media (max-width: 640px) { .ubars li { grid-template-columns: 1fr auto; } .ubars .utrack { grid-column: 1 / -1; order: 3; } }

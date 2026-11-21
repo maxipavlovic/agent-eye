@@ -1,3 +1,4 @@
+import { demoUsage, emptyUsage } from './usageSample';
 import type {
   Agent, ArchivePage, Board, Card, CardDetail, ColumnId, ConversationPage, FolderCheck, Idea, Message, SearchHit, Source, StartPlan, Tokens,
 } from '../api/types';
@@ -247,6 +248,7 @@ export function fixtureSource(demo = false): Source {
     },
     ideas: () => delay(structuredClone(ideas)),
     agents: () => delay({ agents: structuredClone(agents) }),
+    usage: (days) => delay(demo ? demoUsage(days) : emptyUsage(days)),
     move: (id, to) => {
       const c = find(id);
       if (!c) return Promise.reject(new Error(`No card ${id}`));

@@ -13,6 +13,7 @@ import { Next } from './Card';
 import { RemindPanel } from './Remind';
 import { AgentTag, RemoteMark, Sigil } from './pieces';
 import { Kids, Outputs, Running, Sec, TokenSec, Topics, Where } from './Sections';
+import { costText, tokensText } from './usageText';
 import type { Walk } from './walk';
 
 /** The torn-edge outline of the resume receipt. */
@@ -135,6 +136,12 @@ export function Detail({ store, walk }: { store: Store; walk: Walk }) {
         {d.first_prompt && <Sec t="FIRST PROMPT"><blockquote class="prompt first"><Hl s={d.first_prompt} /></blockquote></Sec>}
         {session && <Conversation store={store} id={d.id} agent={d.agent_name} fallback={prompts} />}
         {d.tokens && <TokenSec key={d.id} t={d.tokens} />}
+        {d.usage && d.usage.total > 0 && (
+          <Sec t="COST">
+            <p class="ucost"><b>{costText(d.usage)}</b> <span>{tokensText(d.usage)}</span></p>
+            <p class="umeta">{d.usage.estimate}</p>
+          </Sec>
+        )}
         <Where d={d} />
         <RemindPanel c={d} store={store} />
         <Receipt d={d} />

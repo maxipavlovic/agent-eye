@@ -175,7 +175,81 @@ export interface Worked {
   more_days: number;
 }
 
+/** Tokens and the estimated cost of a group of messages (API-equivalent, not a bill). */
+export interface UsageSum {
+  input: number;
+  output: number;
+  cache_write: number;
+  cache_read: number;
+  total: number;
+  /** null: no token of the group has a known price. */
+  cost_usd: number | null;
+  /** Tokens on a model without a price: counted in the totals, not in the cost. */
+  unpriced_tokens: number;
+}
+
+export interface UsageRow extends UsageSum {
+  name: string;
+  /** Session rows only. */
+  id?: string;
+  agent?: string;
+}
+
+export interface UsageWeek extends UsageSum {
+  from: string;
+  to: string;
+}
+
+export interface UsageLimitWindow {
+  label: string;
+  used_percent: number;
+  window_minutes: number | null;
+  /** Unix ms. */
+  resets_at: number | null;
+  /** The window has reset since it was seen. */
+  reset: boolean;
+}
+
+/** The plan limits one agent reported, as the newest seen. */
+export interface UsageLimits {
+  agent: string;
+  name: string;
+  /** Unix ms. */
+  seen_at: number;
+  plan: string | null;
+  windows: UsageLimitWindow[];
+  /** One sentence per window, with its age. */
+  lines: string[];
+}
+
+/** GET /api/usage. */
+export interface UsageReport {
+  /** "API-equivalent estimate, not your bill". */
+  estimate: string;
+  days: number;
+  from: string;
+  to: string;
+  by: 'project' | 'agent' | 'model' | 'session';
+  rows: UsageRow[];
+  totals: UsageSum;
+  by_project: UsageRow[];
+  by_agent: UsageRow[];
+  by_model: UsageRow[];
+  top_sessions: UsageRow[];
+  /** The last four weeks, oldest first. */
+  weeks: UsageWeek[];
+  limits: UsageLimits[];
+  /** Sessions whose usage is still being counted in the background. */
+  backfill_left: number;
+}
+
+/** A session's usage over its whole life (detail cards); null while it is not counted. */
+export interface CardUsage extends UsageSum {
+  estimate: string;
+}
+
 export interface CardDetail extends Card {
+  usage?: CardUsage | null;
   /** Up to the last 10 prompts, oldest first. */
   prompts: string[];
   first_prompt: string | null;
@@ -309,6 +383,8 @@ export interface Source {
   ideas(): Promise<{ ideas: Idea[] }>;
   /** The enabled agents (GET /api/agents). */
   agents(): Promise<{ agents: Agent[] }>;
+  /** Usage over the last `days` days (GET /api/usage); an older engine answers 404. */
+  usage(days: number): Promise<UsageReport>;
   move(id: string, column: MoveTarget): Promise<Card>;
   /** Manual hide / unhide of a session (POST /api/cards/:id/hidden). */
   setHidden(id: string, hidden: boolean): Promise<Card>;

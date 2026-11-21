@@ -1,6 +1,6 @@
 import type {
   Agent, ArchivePage, Board, Card, CardDetail, Connection, ConversationPage, Idea, IdeaInput, MoveTarget, RemindInput, ResumePlan,
-  FolderCheck, RemindSettings, SearchHit, Source, StartPlan,
+  FolderCheck, RemindSettings, SearchHit, Source, StartPlan, UsageReport,
 } from '../api/types';
 
 const UNAUTHORIZED = 'Not signed in: open the link that `eye board` prints.';
@@ -45,6 +45,7 @@ export function liveSource(): Source {
     search: (q) => call<{ results: SearchHit[] }>(`/api/search?q=${enc(q)}`),
     ideas: () => call<{ ideas: Idea[] }>('/api/ideas'),
     agents: () => call<{ agents: Agent[] }>('/api/agents'),
+    usage: (days) => call<UsageReport>(`/api/usage?days=${days}`),
     move: (id: string, column: MoveTarget) => call<Card>(`/api/cards/${enc(id)}/column`, { method: 'POST', body: { column } }),
     setHidden: (id, hidden) => call<Card>(`/api/cards/${enc(id)}/hidden`, { method: 'POST', body: { hidden } }),
     conversation: (id, limit, before) =>
