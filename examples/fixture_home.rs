@@ -47,19 +47,188 @@ struct S {
 }
 
 const SESSIONS: &[S] = &[
-    S { title: "Add dark mode to the settings page", project: "web-shop", branch: "feature/dark-mode", agent: "claude", age: 4, ai: "", state: "Theme switch and tokens are in; profile and address forms converted", next: "Claude: convert the billing form, then check contrast", live: "busy", origin: "", prompt: "Add a dark theme to the shop settings page. Use the existing design tokens.", reply: "The tokens already have dark values; I am wiring a data-theme switch." },
-    S { title: "Port the rating engine to Rust", project: "customer-billing-reconciliation-service-monorepo", branch: "feature/rating-engine-rust-port-phase-two", agent: "codex", age: 11, ai: "", state: "Tier maths ported; 31 of 40 golden files match", next: "Codex: fix the rounding on the graduated tiers", live: "busy", origin: "ide", prompt: "Port the tiered rating maths to Rust and keep the golden files green.", reply: "Ported the flat and volume tiers; graduated tiers round differently." },
-    S { title: "Retry failed webhook deliveries", project: "payments-api", branch: "fix/webhook-retries", agent: "claude", age: 38, ai: "needs_you", state: "Retry queue with backoff and a dead-letter table are in; 14 tests pass", next: "You: choose the max attempts, 5 or 8", live: "", origin: "terminal", prompt: "Webhook deliveries fail for a few minutes after a deploy and are never retried.", reply: "How many attempts should we allow before the dead-letter table: 5 or 8?" },
-    S { title: "Fix stale tokens in the account store", project: "auth-service", branch: "bugfix/stale-tokens", agent: "claude", age: 21, ai: "", state: "Soft-expire is written; one permission is waiting", next: "You: allow the test command", live: "waiting", origin: "terminal", prompt: "Stale tokens stay valid after a password change. Expire them softly.", reply: "I need to run the test suite to check the soft-expire path." },
-    S { title: "Write the Terraform module for queues", project: "infra", branch: "main", agent: "claude", age: 26 * 60, ai: "paused", state: "Module drafted with queue, dead-letter queue and alarms", next: "Claude: write the access policy", live: "", origin: "terminal", prompt: "We need a Terraform module for the job queues.", reply: "Drafted modules/queue; which service accounts may send and receive?" },
-    S { title: "Move invoices to the new queue", project: "payments-api", branch: "feature/invoice-queue", agent: "claude", age: 3 * 60, ai: "waiting_on_others", state: "PR 412 opened; invoice jobs run on the queue behind a flag", next: "Dana: review PR 412", live: "", origin: "app", prompt: "Invoice generation still runs inside the request. Move it to the job queue.", reply: "Opened PR 412 with the queue change and a rollout note." },
-    S { title: "Review the onboarding flow copy", project: "web-shop", branch: "docs/onboarding-copy", agent: "claude", age: 55, ai: "waiting_on_others", state: "Three screens reviewed; two need shorter words", next: "Claude: rewrite the welcome screen", live: "idle", origin: "web", prompt: "Review the onboarding copy and mark what is too long.", reply: "Reviewed three of five screens." },
-    S { title: "Fix the flaky checkout test", project: "web-shop", branch: "bugfix/flaky-checkout", agent: "claude", age: 5 * 60, ai: "paused", state: "Cause found: the coupon test uses the real clock; no fix written yet", next: "Claude: freeze the clock in the checkout fixture", live: "", origin: "terminal", prompt: "checkout.spec fails one run in ten on CI. Find out why.", reply: "It fails when the day rolls over during the test." },
-    S { title: "Upgrade the Postgres client to 17", project: "payments-api", branch: "chore/pg17-client", agent: "claude", age: 30 * 60, ai: "paused", state: "Client bumped; the migration tests still use the old driver", next: "Claude: update the migration test driver", live: "", origin: "terminal", prompt: "Upgrade the Postgres client library to version 17.", reply: "Bumped the client; the migration tests need the new driver." },
-    S { title: "Draft the Q4 incident review", project: "ops-notes", branch: "main", agent: "claude", age: 2 * 24 * 60, ai: "done", state: "Review written and shared with the on-call team", next: "", live: "", origin: "terminal", prompt: "Draft the incident review for the October outage.", reply: "Done. The review is in docs/incident-q4.md." },
-    S { title: "Add a CSV export to the reports page", project: "web-shop", branch: "feature/csv-export", agent: "claude", age: 3 * 24 * 60, ai: "done", state: "Export button, endpoint and tests are merged", next: "", live: "", origin: "desktop", prompt: "Add a CSV export to the reports page.", reply: "Merged. The export streams rows, so large reports stay fast." },
-    S { title: "Night run: tidy the lint warnings", project: "web-shop", branch: "night/tidy-lint", agent: "claude", age: 9 * 60, ai: "done", state: "Removed 41 lint warnings in 6 files", next: "", live: "", origin: "night", prompt: "Fix the lint warnings without changing behaviour.", reply: "Removed 41 warnings; the tests still pass." },
-    S { title: "Summarise the audit log export", project: "ops-notes", branch: "main", agent: "codex", age: 4 * 24 * 60, ai: "done", state: "Summary of 12k audit lines written", next: "", live: "", origin: "headless", prompt: "Summarise the audit log export by actor.", reply: "Wrote the summary: three actors account for 80 percent of events." },
+    S {
+        title: "Add dark mode to the settings page",
+        project: "web-shop",
+        branch: "feature/dark-mode",
+        agent: "claude",
+        age: 4,
+        ai: "",
+        state: "Theme switch and tokens are in; profile and address forms converted",
+        next: "Claude: convert the billing form, then check contrast",
+        live: "busy",
+        origin: "",
+        prompt: "Add a dark theme to the shop settings page. Use the existing design tokens.",
+        reply: "The tokens already have dark values; I am wiring a data-theme switch.",
+    },
+    S {
+        title: "Port the rating engine to Rust",
+        project: "customer-billing-reconciliation-service-monorepo",
+        branch: "feature/rating-engine-rust-port-phase-two",
+        agent: "codex",
+        age: 11,
+        ai: "",
+        state: "Tier maths ported; 31 of 40 golden files match",
+        next: "Codex: fix the rounding on the graduated tiers",
+        live: "busy",
+        origin: "ide",
+        prompt: "Port the tiered rating maths to Rust and keep the golden files green.",
+        reply: "Ported the flat and volume tiers; graduated tiers round differently.",
+    },
+    S {
+        title: "Retry failed webhook deliveries",
+        project: "payments-api",
+        branch: "fix/webhook-retries",
+        agent: "claude",
+        age: 38,
+        ai: "needs_you",
+        state: "Retry queue with backoff and a dead-letter table are in; 14 tests pass",
+        next: "You: choose the max attempts, 5 or 8",
+        live: "",
+        origin: "terminal",
+        prompt: "Webhook deliveries fail for a few minutes after a deploy and are never retried.",
+        reply: "How many attempts should we allow before the dead-letter table: 5 or 8?",
+    },
+    S {
+        title: "Fix stale tokens in the account store",
+        project: "auth-service",
+        branch: "bugfix/stale-tokens",
+        agent: "claude",
+        age: 21,
+        ai: "",
+        state: "Soft-expire is written; one permission is waiting",
+        next: "You: allow the test command",
+        live: "waiting",
+        origin: "terminal",
+        prompt: "Stale tokens stay valid after a password change. Expire them softly.",
+        reply: "I need to run the test suite to check the soft-expire path.",
+    },
+    S {
+        title: "Write the Terraform module for queues",
+        project: "infra",
+        branch: "main",
+        agent: "claude",
+        age: 26 * 60,
+        ai: "paused",
+        state: "Module drafted with queue, dead-letter queue and alarms",
+        next: "Claude: write the access policy",
+        live: "",
+        origin: "terminal",
+        prompt: "We need a Terraform module for the job queues.",
+        reply: "Drafted modules/queue; which service accounts may send and receive?",
+    },
+    S {
+        title: "Move invoices to the new queue",
+        project: "payments-api",
+        branch: "feature/invoice-queue",
+        agent: "claude",
+        age: 3 * 60,
+        ai: "waiting_on_others",
+        state: "PR 412 opened; invoice jobs run on the queue behind a flag",
+        next: "Dana: review PR 412",
+        live: "",
+        origin: "app",
+        prompt: "Invoice generation still runs inside the request. Move it to the job queue.",
+        reply: "Opened PR 412 with the queue change and a rollout note.",
+    },
+    S {
+        title: "Review the onboarding flow copy",
+        project: "web-shop",
+        branch: "docs/onboarding-copy",
+        agent: "claude",
+        age: 55,
+        ai: "waiting_on_others",
+        state: "Three screens reviewed; two need shorter words",
+        next: "Claude: rewrite the welcome screen",
+        live: "idle",
+        origin: "web",
+        prompt: "Review the onboarding copy and mark what is too long.",
+        reply: "Reviewed three of five screens.",
+    },
+    S {
+        title: "Fix the flaky checkout test",
+        project: "web-shop",
+        branch: "bugfix/flaky-checkout",
+        agent: "claude",
+        age: 5 * 60,
+        ai: "paused",
+        state: "Cause found: the coupon test uses the real clock; no fix written yet",
+        next: "Claude: freeze the clock in the checkout fixture",
+        live: "",
+        origin: "terminal",
+        prompt: "checkout.spec fails one run in ten on CI. Find out why.",
+        reply: "It fails when the day rolls over during the test.",
+    },
+    S {
+        title: "Upgrade the Postgres client to 17",
+        project: "payments-api",
+        branch: "chore/pg17-client",
+        agent: "claude",
+        age: 30 * 60,
+        ai: "paused",
+        state: "Client bumped; the migration tests still use the old driver",
+        next: "Claude: update the migration test driver",
+        live: "",
+        origin: "terminal",
+        prompt: "Upgrade the Postgres client library to version 17.",
+        reply: "Bumped the client; the migration tests need the new driver.",
+    },
+    S {
+        title: "Draft the Q4 incident review",
+        project: "ops-notes",
+        branch: "main",
+        agent: "claude",
+        age: 2 * 24 * 60,
+        ai: "done",
+        state: "Review written and shared with the on-call team",
+        next: "",
+        live: "",
+        origin: "terminal",
+        prompt: "Draft the incident review for the October outage.",
+        reply: "Done. The review is in docs/incident-q4.md.",
+    },
+    S {
+        title: "Add a CSV export to the reports page",
+        project: "web-shop",
+        branch: "feature/csv-export",
+        agent: "claude",
+        age: 3 * 24 * 60,
+        ai: "done",
+        state: "Export button, endpoint and tests are merged",
+        next: "",
+        live: "",
+        origin: "desktop",
+        prompt: "Add a CSV export to the reports page.",
+        reply: "Merged. The export streams rows, so large reports stay fast.",
+    },
+    S {
+        title: "Night run: tidy the lint warnings",
+        project: "web-shop",
+        branch: "night/tidy-lint",
+        agent: "claude",
+        age: 9 * 60,
+        ai: "done",
+        state: "Removed 41 lint warnings in 6 files",
+        next: "",
+        live: "",
+        origin: "night",
+        prompt: "Fix the lint warnings without changing behaviour.",
+        reply: "Removed 41 warnings; the tests still pass.",
+    },
+    S {
+        title: "Summarise the audit log export",
+        project: "ops-notes",
+        branch: "main",
+        agent: "codex",
+        age: 4 * 24 * 60,
+        ai: "done",
+        state: "Summary of 12k audit lines written",
+        next: "",
+        live: "",
+        origin: "headless",
+        prompt: "Summarise the audit log export by actor.",
+        reply: "Wrote the summary: three actors account for 80 percent of events.",
+    },
 ];
 
 fn sid(n: usize) -> String {
@@ -130,7 +299,7 @@ fn insert_session(db: &Db, home: &Path, claude: &Path, n: usize, s: &S) -> Resul
             s.prompt,
             last - 2 * HOUR,
             last,
-            transcript.as_ref().map(|p: &String| p.as_str()),
+            transcript.as_deref(),
             transcript.as_ref().map(|_| "present").unwrap_or("gone"),
             s.branch,
             (!s.origin.is_empty() && s.origin != "terminal").then_some(s.origin),
@@ -172,10 +341,26 @@ fn write_transcript(claude: &Path, cwd: &Path, id: &str, s: &S, last: i64) -> St
             .to_string()
     };
     let lines = [
-        line("user", last - 90 * MIN, serde_json::json!({"content": s.prompt})),
-        line("assistant", last - 89 * MIN, serde_json::json!({"content": [{"type": "text", "text": "Found it: tokens keep their expiry after a password change. Config used token ghp_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA for the test."}]})),
-        line("user", last - 30 * MIN, serde_json::json!({"content": "Good, expire them softly and keep old sessions alive for a day."})),
-        line("assistant", last - 21 * MIN, serde_json::json!({"content": [{"type": "text", "text": s.reply}]})),
+        line(
+            "user",
+            last - 90 * MIN,
+            serde_json::json!({"content": s.prompt}),
+        ),
+        line(
+            "assistant",
+            last - 89 * MIN,
+            serde_json::json!({"content": [{"type": "text", "text": "Found it: tokens keep their expiry after a password change. Config used token ghp_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA for the test."}]}),
+        ),
+        line(
+            "user",
+            last - 30 * MIN,
+            serde_json::json!({"content": "Good, expire them softly and keep old sessions alive for a day."}),
+        ),
+        line(
+            "assistant",
+            last - 21 * MIN,
+            serde_json::json!({"content": [{"type": "text", "text": s.reply}]}),
+        ),
     ];
     std::fs::write(&path, lines.join("\n") + "\n").unwrap();
     path.display().to_string()
@@ -183,9 +368,27 @@ fn write_transcript(claude: &Path, cwd: &Path, id: &str, s: &S, last: i64) -> St
 
 fn ideas(db: &Db, home: &Path) -> Result<()> {
     let rows: [(&str, &str, &str, Option<&str>, i64); 3] = [
-        ("Spike: replace polling with webhooks", "Check how much the nightly poll costs first.", "Sketch a webhook receiver for the order updates and list the open questions.", Some("code/payments-api"), 6 * HOUR),
-        ("Write a changelog generator", "Group commits by type; look at how the other repos do it.", "", None, 2 * DAY),
-        ("Evaluate pgvector for the search box", "", "Compare pgvector with the current full-text search on 10k rows.", Some("code/search-lab"), 5 * DAY),
+        (
+            "Spike: replace polling with webhooks",
+            "Check how much the nightly poll costs first.",
+            "Sketch a webhook receiver for the order updates and list the open questions.",
+            Some("code/payments-api"),
+            6 * HOUR,
+        ),
+        (
+            "Write a changelog generator",
+            "Group commits by type; look at how the other repos do it.",
+            "",
+            None,
+            2 * DAY,
+        ),
+        (
+            "Evaluate pgvector for the search box",
+            "",
+            "Compare pgvector with the current full-text search on 10k rows.",
+            Some("code/search-lab"),
+            5 * DAY,
+        ),
     ];
     for (i, (title, notes, prompt, folder, age)) in rows.iter().enumerate() {
         db.conn.execute(
@@ -213,16 +416,36 @@ fn reminders(db: &Db) -> Result<()> {
         )?;
         Ok(())
     };
-    set("session", &format!("id='{}'", sid(4)), NOW_MS - HOUR, "Ask Ana whether the access policy is ready")?;
-    set("session", &format!("id='{}'", sid(8)), NOW_MS + 3 * DAY, "Check that the new driver is released")?;
+    set(
+        "session",
+        &format!("id='{}'", sid(4)),
+        NOW_MS - HOUR,
+        "Ask Ana whether the access policy is ready",
+    )?;
+    set(
+        "session",
+        &format!("id='{}'", sid(8)),
+        NOW_MS + 3 * DAY,
+        "Check that the new driver is released",
+    )?;
     set("idea", "id=2", NOW_MS + 7 * DAY, "")?;
     Ok(())
 }
 
 fn outputs(db: &Db) -> Result<()> {
     for (n, kind, value, url) in [
-        (5, "pr", "https://github.com/acme/payments-api/pull/412", "https://github.com/acme/payments-api/pull/412"),
-        (10, "pr", "https://github.com/acme/web-shop/pull/388", "https://github.com/acme/web-shop/pull/388"),
+        (
+            5,
+            "pr",
+            "https://github.com/acme/payments-api/pull/412",
+            "https://github.com/acme/payments-api/pull/412",
+        ),
+        (
+            10,
+            "pr",
+            "https://github.com/acme/web-shop/pull/388",
+            "https://github.com/acme/web-shop/pull/388",
+        ),
     ] {
         db.conn.execute(
             "INSERT INTO output(session_id, kind, value, url, first_seen_at) VALUES(?1,?2,?3,?4,?5)",
@@ -260,7 +483,10 @@ fn usage(db: &Db) -> Result<()> {
         }
     }
     for (n, _) in &models {
-        db.conn.execute("INSERT OR IGNORE INTO usage_state(session_id, unreadable) VALUES(?1,0)", [sid(*n)])?;
+        db.conn.execute(
+            "INSERT OR IGNORE INTO usage_state(session_id, unreadable) VALUES(?1,0)",
+            [sid(*n)],
+        )?;
     }
     let w = |name: &str, used: f64, minutes: i64, resets: i64| LimitWindow {
         name: name.into(),
@@ -274,7 +500,10 @@ fn usage(db: &Db) -> Result<()> {
         &PlanLimits {
             seen_at: NOW_MS - 20 * MIN,
             plan: Some("Max".into()),
-            windows: vec![w("five_hour", 62.0, 300, 2 * HOUR), w("seven_day", 31.0, 10_080, 3 * DAY)],
+            windows: vec![
+                w("five_hour", 62.0, 300, 2 * HOUR),
+                w("seven_day", 31.0, 10_080, 3 * DAY),
+            ],
         },
     )?;
     Ok(())
@@ -284,10 +513,34 @@ fn usage(db: &Db) -> Result<()> {
 /// process item that can be stopped is added by `--proc`.
 fn loose(db: &Db) -> Result<()> {
     let items = [
-        (3, Kind::Unpushed, "unpushed:/work/auth-service:abc1234", "2 commits in auth-service are on no remote", "2 commits not pushed\nrepo /work/auth-service"),
-        (3, Kind::Uncommitted, "uncommitted:/work/auth-service", "3 modified files in auth-service are not committed", "3 modified files\nrepo /work/auth-service"),
-        (3, Kind::Process, "proc:999999:1795000000", "node server on port 4321 is still running", "node (pid 999999, port 4321)"),
-        (0, Kind::Unpushed, "unpushed:/work/web-shop:def5678", "1 commit in web-shop is on no remote", "1 commit not pushed\nrepo /work/web-shop"),
+        (
+            3,
+            Kind::Unpushed,
+            "unpushed:/work/auth-service:abc1234",
+            "2 commits in auth-service are on no remote",
+            "2 commits not pushed\nrepo /work/auth-service",
+        ),
+        (
+            3,
+            Kind::Uncommitted,
+            "uncommitted:/work/auth-service",
+            "3 modified files in auth-service are not committed",
+            "3 modified files\nrepo /work/auth-service",
+        ),
+        (
+            3,
+            Kind::Process,
+            "proc:999999:1795000000",
+            "node server on port 4321 is still running",
+            "node (pid 999999, port 4321)",
+        ),
+        (
+            0,
+            Kind::Unpushed,
+            "unpushed:/work/web-shop:def5678",
+            "1 commit in web-shop is on no remote",
+            "1 commit not pushed\nrepo /work/web-shop",
+        ),
     ];
     for (n, kind, key, line, detail) in items {
         db.conn.execute(
@@ -324,16 +577,95 @@ fn add_process(db: &Db, pid: u32) -> Result<()> {
 fn night(db: &Db, home: &Path) -> Result<()> {
     let folder = home.join("code/payments-api").display().to_string();
     // (kind, idea, session, status, why, run session, started, ended, report, diff)
-    type Row<'a> = (&'a str, Option<i64>, Option<usize>, &'a str, Option<&'a str>, Option<usize>, Option<i64>, Option<i64>, Option<&'a str>, Option<&'a str>);
+    type Row<'a> = (
+        &'a str,
+        Option<i64>,
+        Option<usize>,
+        &'a str,
+        Option<&'a str>,
+        Option<usize>,
+        Option<i64>,
+        Option<i64>,
+        Option<&'a str>,
+        Option<&'a str>,
+    );
     let rows: [Row; 6] = [
-        ("idea", Some(1), None, "planned", None, None, None, None, None, None),
-        ("session", None, Some(7), "planned", None, None, None, None, None, None),
-        ("session", None, Some(1), "running", None, None, Some(NOW_MS - 20 * MIN), None, None, None),
-        ("idea", Some(2), None, "done", None, Some(11), Some(NOW_MS - 11 * HOUR), Some(NOW_MS - 9 * HOUR - 30 * MIN), Some("Removed 41 lint warnings; tests pass."), Some(" 6 files changed, 22 insertions(+), 63 deletions(-)")),
-        ("idea", Some(3), None, "failed", Some("the agent exited with an error"), None, Some(NOW_MS - 12 * HOUR), Some(NOW_MS - 11 * HOUR - 50 * MIN), Some("Error: could not resolve the dependency graph."), None),
-        ("session", None, Some(9), "skipped", Some("a session you work in was busy"), None, None, Some(NOW_MS - 10 * HOUR), None, None),
+        (
+            "idea",
+            Some(1),
+            None,
+            "planned",
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        ),
+        (
+            "session",
+            None,
+            Some(7),
+            "planned",
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        ),
+        (
+            "session",
+            None,
+            Some(1),
+            "running",
+            None,
+            None,
+            Some(NOW_MS - 20 * MIN),
+            None,
+            None,
+            None,
+        ),
+        (
+            "idea",
+            Some(2),
+            None,
+            "done",
+            None,
+            Some(11),
+            Some(NOW_MS - 11 * HOUR),
+            Some(NOW_MS - 9 * HOUR - 30 * MIN),
+            Some("Removed 41 lint warnings; tests pass."),
+            Some(" 6 files changed, 22 insertions(+), 63 deletions(-)"),
+        ),
+        (
+            "idea",
+            Some(3),
+            None,
+            "failed",
+            Some("the agent exited with an error"),
+            None,
+            Some(NOW_MS - 12 * HOUR),
+            Some(NOW_MS - 11 * HOUR - 50 * MIN),
+            Some("Error: could not resolve the dependency graph."),
+            None,
+        ),
+        (
+            "session",
+            None,
+            Some(9),
+            "skipped",
+            Some("a session you work in was busy"),
+            None,
+            None,
+            Some(NOW_MS - 10 * HOUR),
+            None,
+            None,
+        ),
     ];
-    for (i, (kind, idea, session, status, why, run, started, ended, report, diff)) in rows.iter().enumerate() {
+    for (i, (kind, idea, session, status, why, run, started, ended, report, diff)) in
+        rows.iter().enumerate()
+    {
         db.conn.execute(
             "INSERT INTO night_run(kind, idea_id, session_id, agent, folder, prompt, night, status, why, run_session_id,
                started_at, ended_at, report, diff_stat, created_at, isolation, worktree, branch)
