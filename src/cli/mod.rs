@@ -7,6 +7,7 @@ mod board;
 mod data;
 mod ideas;
 mod loose;
+mod night;
 mod pack;
 mod pick;
 mod remind;
@@ -221,6 +222,7 @@ pub fn run() -> Result<()> {
         } => data::mark(&g, &args, current, next.as_deref()),
         Cmd::Remind { args, note, clear } => remind::run(&g, &args, note.as_deref(), clear),
         Cmd::Loose { sub, session, json } => loose::run(&g, sub, session.as_deref(), json),
+        Cmd::Night { sub } => night::run(&g, sub),
         Cmd::Daemon { port, no_board } => setup::daemon(&g, port, no_board),
         Cmd::Install { a, board } => setup::install(&g, &a, board),
         Cmd::Uninstall { a, purge } => setup::uninstall(&g, &a, purge),

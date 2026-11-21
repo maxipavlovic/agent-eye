@@ -477,7 +477,6 @@ fn migration_15_adds_the_usage_tables_from_13_and_from_14_and_keeps_every_row() 
             db.meta_get("schema_version").unwrap(),
             Some(SCHEMA_VERSION.to_string())
         );
-        assert_eq!(SCHEMA_VERSION, 15);
         assert_eq!(count_rows(&db, "usage_day"), 0);
         assert_eq!(count_rows(&db, "usage_state"), 0);
         assert_eq!(count_rows(&db, "session"), 1);
@@ -490,4 +489,29 @@ fn count_rows(db: &Db, table: &str) -> i64 {
     db.conn
         .query_row(&format!("SELECT count(*) FROM {table}"), [], |r| r.get(0))
         .unwrap()
+}
+
+#[test]
+fn migration_16_adds_night_run_from_15_and_keeps_every_row() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join("old.db");
+    {
+        let db = Db::open(&path).unwrap();
+        db.conn.execute_batch("DROP TABLE night_run;").unwrap();
+        db.meta_set("schema_version", "15").unwrap();
+        db.conn
+            .execute("INSERT INTO session(id, tok_in) VALUES('s1', 5)", [])
+            .unwrap();
+    }
+    let db = Db::init(Connection::open(&path).unwrap()).unwrap();
+    assert_eq!(
+        db.meta_get("schema_version").unwrap(),
+        Some(SCHEMA_VERSION.to_string())
+    );
+    assert_eq!(SCHEMA_VERSION, 16);
+    // the table is there and empty, and nothing else moved
+    assert_eq!(count_rows(&db, "night_run"), 0);
+    assert_eq!(count_rows(&db, "session"), 1);
+    assert!(crate::night::list(&db, false).unwrap().is_empty());
+    assert_eq!(crate::night::planned_count(&db).unwrap(), 0);
 }

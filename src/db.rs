@@ -5,7 +5,7 @@ use rusqlite::{params, Connection, OptionalExtension, Row, TransactionBehavior};
 use std::path::Path;
 
 /// The schema version this build writes; older databases are migrated on open.
-pub const SCHEMA_VERSION: i64 = 15;
+pub const SCHEMA_VERSION: i64 = 16;
 
 const SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS session(id TEXT PRIMARY KEY, agent TEXT NOT NULL DEFAULT 'claude', project_dir TEXT, cwd TEXT, repo_root TEXT, title TEXT, title_source TEXT,
@@ -38,6 +38,13 @@ CREATE TABLE IF NOT EXISTS worked_state(session_id TEXT PRIMARY KEY, last_ts INT
 CREATE TABLE IF NOT EXISTS loose(session_id TEXT, key TEXT PRIMARY KEY, kind TEXT, line TEXT, detail TEXT, since_ms INTEGER, found_at INTEGER);
 CREATE TABLE IF NOT EXISTS loose_ignore(key TEXT PRIMARY KEY, at INTEGER);
 CREATE INDEX IF NOT EXISTS idx_loose_session ON loose(session_id);
+CREATE TABLE IF NOT EXISTS night_run(id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, idea_id INTEGER, session_id TEXT,
+  agent TEXT NOT NULL, switch_ok INTEGER NOT NULL DEFAULT 0, folder TEXT NOT NULL, prompt TEXT NOT NULL, night TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'planned', why TEXT, limit_kind TEXT, limit_value INTEGER, run_session_id TEXT, pid INTEGER,
+  pid_start INTEGER, worktree TEXT, branch TEXT, base_ref TEXT, started_at INTEGER, ended_at INTEGER, report TEXT,
+  diff_stat TEXT, created_at INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_night_status ON night_run(status);
+CREATE INDEX IF NOT EXISTS idx_night_session ON night_run(run_session_id);
 CREATE TABLE IF NOT EXISTS usage_day(session_id TEXT NOT NULL, day TEXT NOT NULL, model TEXT NOT NULL,
   tok_in INTEGER NOT NULL DEFAULT 0, tok_out INTEGER NOT NULL DEFAULT 0, tok_cw INTEGER NOT NULL DEFAULT 0, tok_cr INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY(session_id, day, model)) WITHOUT ROWID;
@@ -227,6 +234,8 @@ impl Db {
         // v15: `usage_day` and `usage_state` (usage by day and model) are created with the schema
         // above. Nothing is read again for them: sessions without usage are counted by
         // `usage::backfill`, from the token fields of their transcripts only.
+        // v16: `night_run` (planned and finished night-shift runs) is created with the schema above;
+        // it starts empty and nothing is read again.
         if cur == 1 || (cur > 0 && cur < 4) {
             // v2 keeps pending tool_use ids and Jira candidates, v4 token counts: re-read every
             // transcript once.

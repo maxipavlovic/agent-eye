@@ -249,6 +249,9 @@ pub(super) fn load_card(db: &Db, s: &Session, now: i64, cx: CardCtx) -> Result<V
         cx,
     );
     card["loose"] = json!(crate::loose::list(db, Some(&s.id), false)?.len());
+    if let Some(n) = super::board::night_chips(db)?.get(&s.id) {
+        card["night"] = n.clone();
+    }
     Ok(card)
 }
 

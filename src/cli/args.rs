@@ -127,6 +127,67 @@ pub struct SetupArgs {
 }
 
 #[derive(Subcommand)]
+pub enum NightCmd {
+    /// Switch the night shift on (`[night] enabled = true`)
+    On,
+    /// Switch the night shift off
+    Off,
+    /// Plan a run for tonight: `idea:<n>` or a session to continue (with --prompt)
+    Add {
+        /// `idea:<n>`, or a session id (or its first 6 characters)
+        target: String,
+        /// What a continued session should do tonight (required for a session)
+        #[arg(long)]
+        prompt: Option<String>,
+        /// One optional limit: 30% (weekly plan), 2M or 500k (tokens), 90m or 2h (time)
+        #[arg(long)]
+        limit: Option<String>,
+        /// claude or codex (default: the idea's agent)
+        #[arg(long)]
+        agent: Option<String>,
+        /// Start again on the other agent when this one's plan runs out (ideas only)
+        #[arg(long)]
+        switch: bool,
+    },
+    /// Planned and finished runs (the default)
+    Ls {
+        #[arg(long)]
+        json: bool,
+    },
+    /// Cancel a planned run
+    Cancel { run: i64 },
+    /// Print the log of a run
+    Log { run: i64 },
+    /// Set the window, e.g. 01:00-07:00 (local time; 23:00-05:00 crosses midnight)
+    Window { window: String },
+    /// Set how many runs go at once
+    Parallel { n: u32 },
+    /// Start a planned run at once, ignoring the window and the quiet rule (to try it out)
+    RunNow {
+        run: i64,
+        /// Confirm: this starts an agent that edits files in a worktree
+        #[arg(long)]
+        yes: bool,
+        /// Stay until the run has ended and print what it did (without the daemon watching it)
+        #[arg(long)]
+        wait: bool,
+    },
+    /// One pass of the scheduler, as the daemon does it every minute (to try it out)
+    #[command(hide = true)]
+    Tick,
+    /// Remove a finished run's worktree and branch (or copy) after asking
+    Discard {
+        run: i64,
+        /// Do not ask first
+        #[arg(long)]
+        yes: bool,
+        /// Also discard uncommitted changes
+        #[arg(long)]
+        lose_changes: bool,
+    },
+}
+
+#[derive(Subcommand)]
 pub enum LooseCmd {
     /// Stop a server or a container (SIGTERM, or `docker stop`) after asking
     Stop {
@@ -363,6 +424,11 @@ pub enum Cmd {
         session: Option<String>,
         #[arg(long)]
         json: bool,
+    },
+    /// The night shift: runs that start by themselves inside a time window, in their own worktree
+    Night {
+        #[command(subcommand)]
+        sub: Option<NightCmd>,
     },
     /// Hook entry point (called by the agent, reads the event on stdin)
     Hook {
