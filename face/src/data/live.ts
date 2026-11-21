@@ -47,6 +47,7 @@ export function liveSource(): Source {
     agents: () => call<{ agents: Agent[] }>('/api/agents'),
     usage: (days) => call<UsageReport>(`/api/usage?days=${days}`),
     move: (id: string, column: MoveTarget) => call<Card>(`/api/cards/${enc(id)}/column`, { method: 'POST', body: { column } }),
+    forget: async (id, transcript) => { await call<unknown>(`/api/sessions/${enc(id)}/forget`, { method: 'POST', body: { confirm: true, transcript } }); },
     setHidden: (id, hidden) => call<Card>(`/api/cards/${enc(id)}/hidden`, { method: 'POST', body: { hidden } }),
     conversation: (id, limit, before) =>
       call<ConversationPage>(`/api/cards/${enc(id)}/conversation?limit=${limit}${before === null ? '' : `&before=${before}`}`),

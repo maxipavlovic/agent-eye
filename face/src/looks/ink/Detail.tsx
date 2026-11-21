@@ -6,6 +6,7 @@ import { LANE_LABEL } from './columns';
 import { copy } from './copy';
 import { folderMissing, startButton } from './folder';
 import { Conversation } from './Conversation';
+import { openForget } from './Forget';
 import { Hl, HlWords, hlPattern } from './highlight';
 import { ideaForm } from './IdeaForm';
 import { MoveMenu, QuickMove } from './Move';
@@ -79,6 +80,7 @@ function Actions({ d, store }: { d: CardDetail; store: Store }) {
       {d.resumable && d.resume_cmd && <button class="btn" title="Resume as a new session branched from this one" onClick={() => void store.resume(d.id, true)}>FORK</button>}
       {d.resume_cmd && <button class="btn" onClick={() => copy(d.resume_cmd!, store)}>COPY</button>}
       {d.kind !== 'idea' && <a class="btn" href={`/api/sessions/${encodeURIComponent(d.id)}/export?format=html`} download title="Save this session as one readable page; secrets are masked">EXPORT</a>}
+      {d.kind !== 'idea' && <button class="btn ghost" aria-keyshortcuts="X" title="Remove this session from eye, and optionally from its agent (X)" onClick={() => openForget(d)}>FORGET…</button>}
       {d.kind !== 'idea' ? <MoveMenu d={d} store={store} /> : <button class="btn ghost" onClick={() => { void store.move(d.id, 'archive').then(() => store.close()); }}>ARCHIVE</button>}
     </div>
   );

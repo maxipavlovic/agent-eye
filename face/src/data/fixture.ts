@@ -330,6 +330,13 @@ export function fixtureSource(demo = false): Source {
       changed();
       return delay(moved);
     },
+    forget: (id) => {
+      const col = board.columns.find((x) => x.cards.some((c) => c.id === id || c.id.startsWith(id)));
+      if (!col) return Promise.reject(new Error(`No card ${id}`));
+      col.cards = col.cards.filter((c) => !(c.id === id || c.id.startsWith(id)));
+      changed();
+      return delay(undefined);
+    },
     setHidden: (id, hide) => {
       const stashed = [...hidden.values()].find((h) => h.card.id === id || h.card.id.startsWith(id));
       if (hide) {

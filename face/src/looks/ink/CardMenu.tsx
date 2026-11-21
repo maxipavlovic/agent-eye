@@ -5,6 +5,7 @@ import type { Card, ColumnId, MoveTarget } from '../../api/types';
 import { copy } from './copy';
 import { startButton } from './folder';
 import { ideaForm } from './IdeaForm';
+import { openForget } from './Forget';
 import { openRemind, REMIND_PRESETS } from './Remind';
 
 interface Open {
@@ -127,6 +128,7 @@ function rows(c: Card, store: Store): Row[] {
       });
     }),
   });
+  out.push({ label: 'FORGET…', run: go(() => openForget(c)) });
   if (c.resume_cmd) out.push({ label: 'COPY RESUME COMMAND', run: go(() => copy(c.resume_cmd!, store)) });
   if (c.resume_cmd) out.push({ label: 'FORK', run: go(() => { void store.resume(c.id, true); }) });
   out.push(open);

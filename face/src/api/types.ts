@@ -485,6 +485,8 @@ export interface Source {
   move(id: string, column: MoveTarget): Promise<Card>;
   /** Manual hide / unhide of a session (POST /api/cards/:id/hidden). */
   setHidden(id: string, hidden: boolean): Promise<Card>;
+  /** Removes a session from eye, and with `transcript` the agent's own copy too (POST /api/sessions/:id/forget, `confirm: true`). Cannot be undone. */
+  forget(id: string, transcript: boolean): Promise<void>;
   /** The newest `limit` messages, or the `limit` before index `before`. */
   conversation(id: string, limit: number, before: number | null): Promise<ConversationPage>;
   /** `fork`: resume as a new session branched from this one. */

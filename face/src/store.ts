@@ -50,6 +50,8 @@ export interface Store {
   move(id: string, to: MoveTarget): Promise<void>;
   /** Hides (or shows again) a session; hidden ones are left out of the board and search. */
   setHidden(id: string, hidden: boolean): Promise<void>;
+  /** Removes a session from eye (and with `transcript` from its agent); true when it went, else a toast says why. */
+  forget(id: string, transcript: boolean): Promise<boolean>;
   /** Runs the resume plan for real on the live source (opens iTerm); returns the plan. */
   resume(id: string, fork?: boolean): Promise<ResumePlan | null>;
   /** Usage over the last `days` days; null (quietly) when the engine cannot say. */
@@ -277,6 +279,20 @@ export function createStore(src: Source, { defaultTheme = 'auto' }: { defaultThe
     }
   }
 
+  async function forget(id: string, transcript: boolean) {
+    try {
+      await src.forget(id, transcript);
+      if (selected.value === id) close();
+      toast(transcript ? 'Forgotten, with its transcript' : 'Forgotten');
+      await refresh();
+      return true;
+    } catch (e) {
+      fail(e);
+      await refresh();
+      return false;
+    }
+  }
+
   async function usage(days: number) {
     try {
       return await src.usage(days);
@@ -434,7 +450,7 @@ export function createStore(src: Source, { defaultTheme = 'auto' }: { defaultThe
   return {
     source: src.name,
     board, selected, detail, query, results, searching, connection, themePref, accent, theme, toasts, agents, notice, night, needsYou, error,
-    open, close, search, move, setHidden, resume, usage, conversation, addIdea, editIdea, startIdea, folderCheck: (path) => src.folderCheck(path), remind, looseAct, looseSend, loadNotice, setNotice, loadNight, nightSettings, nightPlan, nightCancel, nightLimit, nightDiscard, nightOpen, nightBring,
+    open, close, search, move, setHidden, forget, resume, usage, conversation, addIdea, editIdea, startIdea, folderCheck: (path) => src.folderCheck(path), remind, looseAct, looseSend, loadNotice, setNotice, loadNight, nightSettings, nightPlan, nightCancel, nightLimit, nightDiscard, nightOpen, nightBring,
     archive: (offset, limit = 50) => src.archive(offset, limit),
     setTheme, setAccent, toast, dismissToast, refresh,
   };

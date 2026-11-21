@@ -31,6 +31,7 @@ function source(over: Partial<Source> = {}): Source {
     usage: async () => { throw new Error('no usage'); },
     move: async (id) => card(id, 'done'),
     setHidden: async (id) => card(id, 'paused'),
+    forget: async () => {},
     conversation: async () => ({ messages: [], more: false, next_before: null }),
     resume: async () => ({ dry_run: false, mode: 'copy', command: 'x' }),
     addIdea: async () => card('idea:1', 'ideas'),

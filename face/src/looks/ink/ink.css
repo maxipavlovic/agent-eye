@@ -679,3 +679,11 @@ label.chk { flex-direction: row !important; align-items: center; gap: 8px !impor
 fieldset.nightpick { border: 0; margin: 0 0 10px; padding: 0; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 fieldset.nightpick legend { font: 600 16px/1.3 var(--f-body); padding: 0; margin-bottom: 6px; }
 fieldset.nightpick .fchips { margin: 4px 0 0; }
+
+/* ───────── FORGET…: what goes, and a box for the agent's own copy ───────── */
+.forget { width: min(520px, 92vw); }
+.forget .fname { margin: 0 0 12px; font: 600 17px/1.35 var(--f-body); overflow-wrap: anywhere; }
+.forget .ftext { margin: 0 0 16px; font: 500 17px/1.45 var(--f-body); }
+.forget .fcheck { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; font: 600 17px/1.3 var(--f-body); cursor: pointer; }
+.forget .fcheck input { display: inline-block; width: 20px; height: 20px; margin: 0; accent-color: var(--ink); }
+.forget .danger { background: var(--ink); color: var(--paper); }
