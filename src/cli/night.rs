@@ -5,7 +5,6 @@ use super::Global;
 use crate::night::{self, clock, sched, Limit, PlanOpts, Run};
 use crate::util::{fmt_ts, now_ms, printable};
 use anyhow::{bail, Context, Result};
-use std::io::{BufRead, IsTerminal, Write};
 
 pub fn run(g: &Global, sub: Option<NightCmd>) -> Result<()> {
     match sub.unwrap_or(NightCmd::Ls { json: false }) {
@@ -242,17 +241,11 @@ fn discard(g: &Global, id: i64, yes: bool, lose: bool) -> Result<()> {
     let env = g.open()?;
     let r = night::get(&env.db, id)?.context("no such run")?;
     if !yes {
-        if !std::io::stdin().is_terminal() {
-            bail!("not a terminal: add --yes to go on without asking");
-        }
-        print!(
-            "Remove {} and its branch? Commits only on that branch are lost. [y/N] ",
+        let q = format!(
+            "Remove {} and its branch? Commits only on that branch are lost.",
             r.worktree.as_deref().unwrap_or("the run's folder")
         );
-        std::io::stdout().flush()?;
-        let mut line = String::new();
-        std::io::stdin().lock().read_line(&mut line)?;
-        if !matches!(line.trim().to_lowercase().as_str(), "y" | "yes") {
+        if !super::ask::confirm(&q, super::ask::From::Terminal("go on without asking"))? {
             println!("left as it is");
             return Ok(());
         }

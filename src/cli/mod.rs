@@ -2,6 +2,7 @@
 //! subcommands.
 
 mod args;
+mod ask;
 mod backup;
 mod board;
 mod data;
