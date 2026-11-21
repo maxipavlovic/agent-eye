@@ -73,12 +73,19 @@ fn is_link(w: &str) -> bool {
     w.starts_with("http://") || w.starts_with("https://")
 }
 
-/// Parse the words of a search. Only the last unit is a prefix match, and only when its last
+/// The most units a search reads; the rest of a long paste is dropped.
+const MAX_UNITS: usize = 20;
+
+/// Parse the words of a search. At most the first 20 units are kept. Only the last unit is a prefix match, and only when its last
 /// token has 3+ characters; the rest match whole words (stemming covers word forms).
 pub fn parse(words: &[String]) -> Query {
     let mut units = vec![];
     let mut typed = 0;
+    let mut last_link = false;
     for w in words.iter().flat_map(|w| w.split_whitespace()) {
+        if units.len() >= MAX_UNITS {
+            break;
+        }
         if w.chars().any(char::is_alphanumeric) {
             typed += 1;
         }
@@ -93,6 +100,7 @@ pub fn parse(words: &[String]) -> Query {
                 continue;
             }
             let typo_ok = !link && parts.len() == 1 && parts[0].chars().count() >= 4;
+            last_link = link;
             units.push(Unit {
                 parts,
                 needle: text,
@@ -102,12 +110,8 @@ pub fn parse(words: &[String]) -> Query {
         }
     }
     // the last unit is still being typed, unless it came from a link
-    let last_is_link = words
-        .iter()
-        .flat_map(|w| w.split_whitespace())
-        .next_back()
-        .is_some_and(is_link);
-    if let (Some(u), false) = (units.last_mut(), last_is_link) {
+    units.truncate(MAX_UNITS);
+    if let (Some(u), false) = (units.last_mut(), last_link) {
         u.prefix = u.parts.last().is_some_and(|t| t.chars().count() >= 3);
     }
     Query {
