@@ -163,6 +163,11 @@ fn role_of(meta: &Value) -> Role {
     match meta.get("source") {
         None | Some(Value::Null) => Role::Session,
         Some(Value::String(s)) if matches!(s.as_str(), "cli" | "vscode") => Role::Session,
+        Some(Value::String(s))
+            if s == "exec" && crate::night::is_run_folder(str_at(meta, &["cwd"])) =>
+        {
+            Role::Session
+        }
         Some(Value::Object(o)) if o.contains_key("subagent") => {
             child_of(meta).unwrap_or(Role::Hidden)
         }
@@ -350,6 +355,25 @@ pub fn scan(dir: &Path) -> (Vec<Transcript>, Index) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_night_run_is_a_session_and_other_exec_runs_are_not() {
+        let night = "/h/.agent-eye/night/12/wt/sub";
+        let meta = |cwd: &str| json!({"source": "exec", "cwd": cwd});
+        assert!(matches!(role_of(&meta(night)), Role::Session));
+        assert!(matches!(
+            role_of(&meta("/h/.agent-eye/night/3/work")),
+            Role::Session
+        ));
+        for other in [
+            "/h/proj",
+            "/h/night/x/wt",
+            "/h/night/1/other",
+            "/h/.agent-eye/work",
+        ] {
+            assert!(matches!(role_of(&meta(other)), Role::Hidden), "{other}");
+        }
+    }
     use serde_json::json;
 
     #[test]

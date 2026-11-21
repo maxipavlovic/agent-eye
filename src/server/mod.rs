@@ -9,6 +9,7 @@ mod face;
 mod guard;
 mod idea_routes;
 mod loose_routes;
+mod night_routes;
 mod prefs;
 mod remind_routes;
 mod remind_settings;
@@ -117,6 +118,26 @@ pub fn router(state: Shared) -> Router {
         .route("/api/loose/remove", post(loose_routes::api_loose_remove))
         .route("/api/loose/ignore", post(loose_routes::api_loose_ignore))
         .route("/api/loose/send", post(loose_routes::api_loose_send))
+        .route("/api/night", get(night_routes::api_night))
+        .route(
+            "/api/night/settings",
+            post(night_routes::api_night_settings),
+        )
+        .route("/api/night/plan", post(night_routes::api_night_plan))
+        .route(
+            "/api/night/session/{id}",
+            get(night_routes::api_night_of_session),
+        )
+        .route(
+            "/api/night/{id}/cancel",
+            post(night_routes::api_night_cancel),
+        )
+        .route("/api/night/{id}/limit", post(night_routes::api_night_limit))
+        .route(
+            "/api/night/{id}/discard",
+            post(night_routes::api_night_discard),
+        )
+        .route("/api/night/{id}/open", post(night_routes::api_night_open))
         .route("/api/events", get(run::api_events))
         .fallback(get(face::face_asset))
         .layer(axum::extract::DefaultBodyLimit::max(64 * 1024))

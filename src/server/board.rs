@@ -62,6 +62,7 @@ pub fn board_json(db: &Db, cfg: &Config, agents: &Agents, now: i64, all: bool) -
     let hidden = hidden_set(db, cfg, all)?;
     // what each session left behind, not counting what was ignored
     let loose = crate::loose::counts(db)?;
+    let night = night_chips(db)?;
     for s in db.all_sessions()? {
         if hidden.contains(&s.id) {
             continue;
@@ -75,6 +76,9 @@ pub fn board_json(db: &Db, cfg: &Config, agents: &Agents, now: i64, all: bool) -
             cx,
         );
         card["loose"] = json!(loose.get(&s.id).copied().unwrap_or(0));
+        if let Some(n) = night.get(&s.id) {
+            card["night"] = n.clone();
+        }
         let col = card["column"].as_str().unwrap_or("paused");
         if col == "archive" || aged_out(col, s.last_activity_at.unwrap_or(0), now, cfg) {
             archive_count += 1;
@@ -177,6 +181,26 @@ pub(super) async fn api_archive(State(st): State<Shared>, Query(q): Query<Archiv
     Ok(Json(
         json!({"cards": cards, "total": total, "offset": offset}),
     ))
+}
+
+/// The runs that made sessions: `{id, status}` by session id, for the NIGHT chip on a card.
+pub(super) fn night_chips(db: &Db) -> anyhow::Result<HashMap<String, Value>> {
+    let mut st = db.conn.prepare(
+        "SELECT run_session_id, id, status FROM night_run WHERE run_session_id IS NOT NULL ORDER BY id",
+    )?;
+    let rows = st.query_map([], |r| {
+        Ok((
+            r.get::<_, String>(0)?,
+            r.get::<_, i64>(1)?,
+            r.get::<_, String>(2)?,
+        ))
+    })?;
+    let mut out = HashMap::new();
+    for row in rows {
+        let (sid, id, status) = row?;
+        out.insert(sid, json!({"id": id, "status": status}));
+    }
+    Ok(out)
 }
 
 #[cfg(test)]

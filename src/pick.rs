@@ -288,6 +288,8 @@ pub struct Detail {
     pub outputs: Vec<Output>,
     /// What the session left behind (see `loose`), ignored items left out.
     pub loose: Vec<crate::loose::LooseEnd>,
+    /// The night run that made the session, when one did.
+    pub night: Option<crate::night::Run>,
 }
 
 /// The streams and outputs the preview shows for a row.
@@ -299,6 +301,7 @@ pub fn detail(db: &Db, row: &Row) -> Detail {
         streams: db.streams_for(&row.id).unwrap_or_default(),
         outputs: db.outputs_for(&row.id).unwrap_or_default(),
         loose: crate::loose::list(db, Some(&row.id), false).unwrap_or_default(),
+        night: crate::night::of_session(db, &row.id).ok().flatten(),
     }
 }
 

@@ -1,6 +1,6 @@
 import type {
   Agent, ArchivePage, Board, Card, CardDetail, Connection, ConversationPage, Idea, IdeaInput, MoveTarget, RemindInput, ResumePlan,
-  FolderCheck, RemindSettings, SearchHit, Source, StartPlan, UsageReport,
+  FolderCheck, NightRun, NightState, RemindSettings, SearchHit, Source, StartPlan, UsageReport,
 } from '../api/types';
 
 const UNAUTHORIZED = 'Not signed in: open the link that `eye board` prints.';
@@ -60,6 +60,13 @@ export function liveSource(): Source {
     remind: (id, input: RemindInput) => call<Card>(`/api/cards/${enc(id)}/remind`, { method: 'POST', body: input }),
     looseAct: (action, key) => call<{ ok: boolean; note?: string }>(`/api/loose/${action}`, { method: 'POST', body: { key } }),
     looseSend: (session, dryRun) => call<ResumePlan>('/api/loose/send', { method: 'POST', body: { session, dry_run: dryRun } }),
+    night: () => call<NightState>('/api/night'),
+    nightSettings: (input) => call<NightState>('/api/night/settings', { method: 'POST', body: input }),
+    nightPlan: (input) => call<NightRun>('/api/night/plan', { method: 'POST', body: input }),
+    nightCancel: (id) => call<NightState>(`/api/night/${id}/cancel`, { method: 'POST', body: {} }),
+    nightLimit: (id, limit) => call<NightState>(`/api/night/${id}/limit`, { method: 'POST', body: { limit } }),
+    nightDiscard: (id, loseChanges) => call<{ ok: boolean; note?: string }>(`/api/night/${id}/discard`, { method: 'POST', body: { confirm: true, lose_changes: loseChanges } }),
+    nightOpen: (id) => call<{ ok: boolean }>(`/api/night/${id}/open`, { method: 'POST', body: {} }),
     remindSettings: () => call<RemindSettings>('/api/remind/settings'),
     setRemindSettings: (input) => call<RemindSettings>('/api/remind/settings', { method: 'POST', body: input }),
     subscribe(onChange, onState) {

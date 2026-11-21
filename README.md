@@ -38,6 +38,7 @@ Coding agents forget. Claude Code deletes transcripts after 30 days, you lose tr
 <tr><td><img src="assets/icon-status.svg" width="32" alt=""></td><td><b>See what a session left behind:</b> servers still running, commits on no remote. You stop, remove or copy, and eye asks first.</td></tr>
 <tr><td><img src="assets/icon-board.svg" width="32" alt=""></td><td><b>A board if you want one:</b> pixel-art, local, installable as an app, in one of eight accent colours.</td></tr>
 <tr><td><img src="assets/icon-status.svg" width="32" alt=""></td><td><b>Cost and limits:</b> tokens and an API-equivalent estimate per session, project and agent, plus plan limits (<a href="docs/usage.md">usage</a>).</td></tr>
+<tr><td><img src="assets/icon-status.svg" width="32" alt=""></td><td><b>Night shift:</b> plan an idea or a session for tonight; the daemon runs it in its own worktree while you are away, inside your plan, and never pushes. Off until you switch it on (<a href="docs/night.md">night</a>).</td></tr>
 <tr><td><img src="assets/icon-local.svg" width="32" alt=""></td><td><b>Local only:</b> no account, no telemetry.</td></tr>
 </table>
 
@@ -72,7 +73,7 @@ Works with Claude Code, Codex CLI, Antigravity CLI (`agy`) and OpenCode (built f
 
 ## Docs
 
-[Site](https://maxipavlovic.github.io/agent-eye/) · [Terminal](docs/terminal.md) · [Config](docs/config.md) · [Usage](docs/usage.md) · [Backups](docs/backups.md) · [Agents](docs/agents.md) · [API](docs/api.md) · [Changelog](CHANGELOG.md)
+[Site](https://maxipavlovic.github.io/agent-eye/) · [Terminal](docs/terminal.md) · [Config](docs/config.md) · [Usage](docs/usage.md) · [Night shift](docs/night.md) · [Backups](docs/backups.md) · [Agents](docs/agents.md) · [API](docs/api.md) · [Changelog](CHANGELOG.md)
 
 ## License
 

@@ -32,6 +32,8 @@ const BACKUP_EVERY: Duration = Duration::from_secs(600);
 const LOOSE_EVERY: Duration = Duration::from_secs(300);
 /// The least time between two scans when a session just ended or stopped.
 const LOOSE_MIN_GAP: Duration = Duration::from_secs(20);
+/// How often the night shift looks at its runs.
+const NIGHT_EVERY: Duration = Duration::from_secs(60);
 /// The longest an upgrade restart waits for a snapshot or a summary round to finish.
 const RESTART_WAIT: Duration = Duration::from_secs(60);
 const LOG_MAX: u64 = 10 << 20;
@@ -224,6 +226,35 @@ fn loose_round(paths: &Paths, cfg: &Config) {
         .and_then(|db| crate::loose::scan_and_store(&db, cfg, &agents::enabled(cfg), now_ms()));
     if let Err(e) = r {
         log(paths, &format!("loose ends: {e:#}"));
+    }
+}
+
+/// One pass of the night shift. The config is read again, so a switch made on the board or with
+/// `eye night on` counts at the next pass; a run that already goes is watched even when the shift
+/// was switched off since. Failures go to the log.
+fn night_round(paths: &Paths, cfg: &Config) {
+    let cfg = std::fs::read_to_string(paths.config_path())
+        .ok()
+        .and_then(|t| Config::parse(&t).ok())
+        .map(|mut c| {
+            c.folder_root = cfg.folder_root.clone();
+            c
+        })
+        .unwrap_or_else(|| cfg.clone());
+    let agents = agents::enabled(&cfg);
+    let sys = crate::night::sched::RealSys::new(paths, &cfg, &agents);
+    let r = Db::open(&paths.db_path())
+        .and_then(|mut db| crate::night::sched::tick(&mut db, &sys, &cfg));
+    match r {
+        Ok(p) if p.started.is_empty() && p.finished.is_empty() && p.stopped.is_empty() => {}
+        Ok(p) => log(
+            paths,
+            &format!(
+                "night: started {:?}, finished {:?}, stopped {:?}",
+                p.started, p.finished, p.stopped
+            ),
+        ),
+        Err(e) => log(paths, &format!("night: {e:#}")),
     }
 }
 
@@ -458,6 +489,8 @@ pub fn run(paths: Paths, cfg: Config, port: u16, board: bool) -> Result<()> {
             let mut last_backup: Option<Instant> = None;
             let mut last_loose: Option<Instant> = None;
             let loose_busy = Arc::new(AtomicBool::new(false));
+            let mut last_night: Option<Instant> = None;
+            let night_busy = Arc::new(AtomicBool::new(false));
             while !stop.load(Ordering::Relaxed) {
                 if let Err(e) = tick(&mut db, &paths, &cfg) {
                     log(&paths, &format!("tick failed: {e:#}"));
@@ -493,6 +526,16 @@ pub fn run(paths: Paths, cfg: Config, port: u16, board: bool) -> Result<()> {
                             busy.store(false, Ordering::SeqCst);
                         });
                     }
+                }
+                if last_night.is_none_or(|t| t.elapsed() >= NIGHT_EVERY)
+                    && !night_busy.swap(true, Ordering::SeqCst)
+                {
+                    last_night = Some(Instant::now());
+                    let (paths, cfg, busy) = (paths.clone(), cfg.clone(), night_busy.clone());
+                    std::thread::spawn(move || {
+                        night_round(&paths, &cfg);
+                        busy.store(false, Ordering::SeqCst);
+                    });
                 }
                 let due = last_worker.is_none_or(|t| t.elapsed() >= WORKER_EVERY);
                 if due && !busy.swap(true, Ordering::SeqCst) {

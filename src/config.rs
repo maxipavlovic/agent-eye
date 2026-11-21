@@ -52,6 +52,15 @@ keep_weekly = 4
 mirror = ""            # a folder that already exists (an external disk, a synced folder) to copy each snapshot into; empty = off
 mirror_archive = false # also copy the transcript archive into <mirror>/archive
 
+[night]
+enabled = false        # planned runs start by themselves inside the window below; off until you switch it on (`eye night on`)
+window = "01:00-07:00" # local time; a run starts only inside it (a window like 23:00-05:00 crosses midnight)
+quiet_minutes = 20     # start only when no session you work in has been busy or touched for this long
+parallel = 2           # runs going at once; planned runs never wait for each other
+claude_permission = "auto"  # `auto`, or `acceptEdits` (then only build and test commands are allowed)
+claude_model = ""      # a model for Claude night runs; empty = Claude's default
+codex_model = ""       # a model for Codex night runs; empty = Codex's default
+
 [loose]
 enabled = true         # list what a session left behind (servers still running, commits on no remote, ...); it only reads
 days = 30              # look at the folders of sessions active in the last this many days
@@ -77,6 +86,7 @@ pub struct Config {
     pub backup: BackupCfg,
     pub usage: UsageCfg,
     pub loose: LooseCfg,
+    pub night: NightCfg,
     /// The folder eye may create idea folders inside; not set: the account's home folder.
     #[serde(skip)]
     pub folder_root: Option<PathBuf>,
@@ -295,6 +305,35 @@ impl Default for BoardCfg {
     }
 }
 
+/// `[night]`: runs that start by themselves while you are away. See `docs/night.md`.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct NightCfg {
+    /// Off until switched on: nothing runs unless this is true and a run is planned.
+    pub enabled: bool,
+    /// `HH:MM-HH:MM` in local time.
+    pub window: String,
+    pub quiet_minutes: u32,
+    pub parallel: u32,
+    /// Claude's permission mode for headless runs.
+    pub claude_permission: String,
+    pub claude_model: String,
+    pub codex_model: String,
+}
+impl Default for NightCfg {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            window: "01:00-07:00".into(),
+            quiet_minutes: 20,
+            parallel: 2,
+            claude_permission: "auto".into(),
+            claude_model: String::new(),
+            codex_model: String::new(),
+        }
+    }
+}
+
 /// `[loose]`: finding what a session left behind.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
@@ -459,6 +498,11 @@ pub fn set_agents_enabled(text: &str, ids: &[String]) -> String {
         "enabled",
         &format!("[{}]", list.join(", ")),
     )
+}
+
+/// Write one `[night]` key into the config file (created from the defaults when missing).
+pub fn write_night(path: &Path, key: &str, value: &str) -> Result<()> {
+    crate::config_edit::rewrite(path, |t| set_key(t, "[night]", key, value))
 }
 
 /// Write `[board] enabled` into the config file (created from the defaults when missing).

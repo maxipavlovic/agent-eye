@@ -52,6 +52,7 @@ pub(super) async fn api_card(State(st): State<Shared>, Path(id): Path<String>) -
     v["topics_more"] = json!(0);
     let left = crate::loose::list(&db, Some(&id), false)?;
     v["loose"] = json!(left.len());
+    v["night_run"] = super::night_routes::run_of_session(&db, &id)?;
     v["loose_ends"] = json!(left
         .iter()
         .map(crate::loose::LooseEnd::to_json)

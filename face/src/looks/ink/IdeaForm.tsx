@@ -6,6 +6,7 @@ import type { Card, CardDetail, FolderCheck } from '../../api/types';
 import { homePath } from '../../format';
 import { ICONS, INK } from './art';
 import { folderHint } from './folder';
+import { LIMIT_HELP } from './Night';
 
 /** The idea form: a new idea, or the idea card `edit` (its detail is loaded first); `focus` picks the first field. */
 export const ideaForm = signal<{ edit?: string; focus?: 'prompt' } | null>(null);
@@ -38,6 +39,11 @@ function IdeaForm({ store, idea, focus, onClose }: { store: Store; idea?: CardDe
   const prompt = useRef<HTMLTextAreaElement>(null);
   const folder = useSignal(idea?.folder ?? '');
   const busy = useSignal(false);
+  // TONIGHT: plan the idea for the night shift as it is saved
+  const tonight = useSignal(false);
+  const limit = useSignal('');
+  const sw = useSignal(false);
+  const canNight = store.night.value !== null;
   // The agent picker shows only when there is a choice; the default agent stands in until one is picked.
   const agents = store.agents.value;
   const chosen = useSignal(idea?.agent ?? '');
@@ -67,9 +73,17 @@ function IdeaForm({ store, idea, focus, onClose }: { store: Store; idea?: CardDe
     if (!v('title')) { title.current?.focus(); return; }
     const input = { title: v('title'), notes: v('notes'), prompt: v('prompt'), folder: folder.value.trim(), agent: agents.length > 1 ? agent?.id : undefined };
     busy.value = true;
-    const ok = idea?.idea_id != null
-      ? await store.editIdea(idea.idea_id, input)
-      : await store.addIdea({ title: input.title, notes: input.notes || undefined, prompt: input.prompt || undefined, folder: input.folder || undefined, agent: input.agent });
+    let ideaId = idea?.idea_id ?? null;
+    let ok = false;
+    if (ideaId != null) {
+      ok = await store.editIdea(ideaId, input);
+    } else {
+      const card = await store.addIdea({ title: input.title, notes: input.notes || undefined, prompt: input.prompt || undefined, folder: input.folder || undefined, agent: input.agent });
+      ok = card !== null;
+      ideaId = card?.idea_id ?? null;
+    }
+    // the idea is saved either way; a refused plan says why in a toast and the idea stays parked
+    if (ok && tonight.value && ideaId != null) await store.nightPlan({ idea_id: ideaId, limit: limit.value.trim() || undefined, agent: agents.length > 1 ? agent?.id : undefined, switch: sw.value });
     busy.value = false;
     if (ok) onClose();
   };
@@ -97,6 +111,18 @@ function IdeaForm({ store, idea, focus, onClose }: { store: Store; idea?: CardDe
           <textarea ref={prompt} name="prompt" rows={3} defaultValue={idea?.prompt ?? ''} placeholder={`What should ${who} do first?`} />
         </label>
         <label>FOLDER<input name="folder" value={folder.value} onInput={(e) => { folder.value = e.currentTarget.value; }} placeholder="~/code/…" autocomplete="off" spellcheck={false} /></label>
+        {canNight && (
+          <fieldset class="nightpick">
+            <legend>TONIGHT</legend>
+            <label class="chk"><input type="checkbox" name="tonight" checked={tonight.value} onChange={(e) => { tonight.value = e.currentTarget.checked; }} /> Run it tonight, in its own worktree (needs a prompt and a folder)</label>
+            {tonight.value && (
+              <>
+                <label>LIMIT<span class="hint">{LIMIT_HELP}</span><input name="limit" value={limit.value} onInput={(e) => { limit.value = e.currentTarget.value; }} placeholder="none" autocomplete="off" spellcheck={false} /></label>
+                {agents.length > 1 && <label class="chk"><input type="checkbox" name="switch" checked={sw.value} onChange={(e) => { sw.value = e.currentTarget.checked; }} /> If this plan runs out, start again on the other agent</label>}
+              </>
+            )}
+          </fieldset>
+        )}
         {hint && <p class="fhint" role="status">{hint}</p>}
         {shown.length > 0 && (
           <div class="fchips" role="group" aria-label="Recent folders">

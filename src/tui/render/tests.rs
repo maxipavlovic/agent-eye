@@ -353,3 +353,32 @@ fn the_preview_names_what_the_session_left_behind_and_ctrl_l_lists_it() {
     let out = a.key(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::NONE));
     assert_eq!(out, Some(crate::tui::Outcome::SendBack(id)));
 }
+
+#[test]
+fn a_night_run_shows_a_plain_night_mark_in_the_row_and_its_report_line_in_the_preview() {
+    let mut a = app("");
+    let id = a.current().unwrap().id.clone();
+    let folder = "/home/x/.agent-eye/night/7/wt";
+    for r in a.idx.rows.iter_mut().filter(|r| r.id == id) {
+        r.session.as_mut().unwrap().cwd = Some(folder.into());
+    }
+    a.db.conn
+        .execute(
+            "INSERT INTO night_run(kind, agent, folder, prompt, night, status, run_session_id, branch, report, started_at, ended_at, created_at)
+             VALUES('idea','claude','/x','p','2026-11-21','done',?1,'night/20261121-x','Added the line.\nSecond line.',0,2460000,1)",
+            [&id],
+        )
+        .unwrap();
+    let d = crate::pick::detail(&a.db, a.current().unwrap());
+    a.detail = d;
+    let t = render_text(&mut a, 170, 30).unwrap();
+    assert!(
+        t.lines()
+            .any(|l| l.contains("night") && !l.contains("Night run")),
+        "{t}"
+    );
+    assert!(t.contains("Night run"), "{t}");
+    assert!(t.contains("done, 41 min, branch night/20261121-x"), "{t}");
+    assert!(t.contains("Added the line."), "{t}");
+    assert!(!t.contains("Second line."), "{t}");
+}

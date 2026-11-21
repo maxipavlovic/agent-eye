@@ -148,6 +148,17 @@ pub(super) fn row_line<'a>(
         .filter(|_| width >= 60)
         .map(|s| activity::marker(s, now))
         .unwrap_or_default();
+    // a session a night run made says so, in plain words
+    let marks = if r
+        .session
+        .as_ref()
+        .is_some_and(|s| crate::night::is_run_folder(s.cwd.as_deref()))
+        && width >= 60
+    {
+        format!("{marks} night").trim().to_string()
+    } else {
+        marks
+    };
     let marks_w = if marks.is_empty() {
         0
     } else {

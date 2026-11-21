@@ -136,6 +136,8 @@ export interface Card {
   remind_due?: boolean;
   /** What the session left behind (servers still running, commits on no remote, ...), not counting what was ignored. */
   loose?: number;
+  /** The session was made by a night-shift run. */
+  night?: { id: number; status: string };
   /** Idea cards with a folder: what the folder is now. Older engines leave all three out. */
   folder_state?: FolderState;
   /** Idea cards: a missing folder that Start may create. */
@@ -272,10 +274,65 @@ export interface LooseEnd {
 
 export type LooseAct = 'stop' | 'remove' | 'ignore';
 
+/** One night-shift run (GET /api/night, a card's `night`). The report is untrusted output: render it as text. */
+export interface NightRun {
+  id: number;
+  kind: 'idea' | 'session';
+  idea_id: number | null;
+  session_id: string | null;
+  agent: string;
+  switch: boolean;
+  folder: string;
+  prompt: string;
+  /** The local date (YYYY-MM-DD) of the night it is planned for. */
+  night: string;
+  status: 'planned' | 'running' | 'done' | 'failed' | 'stopped' | 'skipped';
+  why: string | null;
+  limit: { kind: 'weekly' | 'tokens' | 'minutes'; value: number; text: string } | null;
+  run_session_id: string | null;
+  worktree: string | null;
+  branch: string | null;
+  base_ref: string | null;
+  started_at: number | null;
+  ended_at: number | null;
+  duration_ms: number | null;
+  report: string | null;
+  diff_stat: string | null;
+  created_at: number;
+  /** Detail cards only: tokens the run's session used, and whether its worktree has uncommitted changes. */
+  tokens?: number;
+  uncommitted?: boolean;
+}
+
+/** GET /api/night: the switch, the window, and the runs. */
+export interface NightState {
+  enabled: boolean;
+  window: string;
+  parallel: number;
+  quiet_minutes: number;
+  in_window: boolean;
+  planned: number;
+  open: NightRun[];
+  recent: NightRun[];
+}
+
+/** POST /api/night/plan: an idea (`idea_id`) or a session to continue (`session_id`, with `prompt`). */
+export interface NightPlanInput {
+  idea_id?: number;
+  session_id?: string;
+  prompt?: string;
+  /** `30%`, `2M`, `500k`, `90m`, `2h`; empty: none. */
+  limit?: string;
+  agent?: string;
+  switch?: boolean;
+}
+
 export interface CardDetail extends Card {
   usage?: CardUsage | null;
   /** What the session left behind, ignored items left out. */
   loose_ends?: LooseEnd[];
+  /** The night run that made this session; null (or missing) for any other. */
+  night_run?: NightRun | null;
   /** Up to the last 10 prompts, oldest first. */
   prompts: string[];
   first_prompt: string | null;
@@ -435,6 +492,18 @@ export interface Source {
   remindSettings(): Promise<RemindSettings>;
   /** Turns the desktop notice on or off; it takes effect at once (POST /api/remind/settings). */
   setRemindSettings(input: { notify: boolean }): Promise<RemindSettings>;
+  /** The night shift: switch, window, planned and finished runs (GET /api/night); an older engine answers 404. */
+  night(): Promise<NightState>;
+  /** Changes the switch, the window or `parallel` (POST /api/night/settings). */
+  nightSettings(input: { enabled?: boolean; window?: string; parallel?: number }): Promise<NightState>;
+  /** Plans a run for tonight (POST /api/night/plan); the engine says why when it refuses. */
+  nightPlan(input: NightPlanInput): Promise<NightRun>;
+  nightCancel(id: number): Promise<NightState>;
+  /** Changes the limit of a planned run; empty removes it. */
+  nightLimit(id: number, limit: string): Promise<NightState>;
+  /** Removes a run's worktree and branch, or its copy; the page asked first. */
+  nightDiscard(id: number, loseChanges: boolean): Promise<{ ok: boolean; note?: string }>;
+  nightOpen(id: number): Promise<{ ok: boolean }>;
   /** Calls onChange when the data changed; reports connection state. Returns unsubscribe. */
   subscribe(onChange: () => void, onState: (s: Connection) => void): () => void;
 }

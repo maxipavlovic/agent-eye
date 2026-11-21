@@ -49,6 +49,20 @@ database and come back when the agent is enabled again.
 
 Why macOS once showed a notice without asking: `osascript` posts it as "Script Editor", an app macOS lets show notices without a permission prompt, so no prompt ever appeared for eye. To silence a notice you do not want, set `notify = false` here, or turn Script Editor off in System Settings > Notifications.
 
+## `[night]`
+
+Runs that start by themselves inside a time window. Off until you switch it on. See `night.md`.
+
+| Key | Default | Meaning |
+|---|---|---|
+| `enabled` | `false` | Nothing runs unless this is `true` and a run is planned. `eye night on\|off` and the Tonight list on the board change it. |
+| `window` | `"01:00-07:00"` | Local time, `HH:MM-HH:MM`. New runs start only inside it; one already going may finish. An end before the start crosses midnight (`23:00-05:00`). `eye night window` and the board change it. |
+| `quiet_minutes` | `20` | A run starts only when no session you work in (live, interactive, not a night run) has been busy or touched for this long. |
+| `parallel` | `2` | How many runs go at once (1 to 8). |
+| `claude_permission` | `"auto"` | Claude's permission mode for night runs: `auto`, or `acceptEdits` (then only build and test commands are allowed). |
+| `claude_model` | `""` | A model for Claude night runs (an alias such as `haiku`); empty is Claude's default. |
+| `codex_model` | `""` | A model for Codex night runs; empty is Codex's default. |
+
 ## `[loose]`
 
 | Key | Default | Meaning |

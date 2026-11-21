@@ -27,6 +27,22 @@ machine, and how to report a problem.
 
 eye never needs root and never runs `launchctl` or `systemctl` for anything but its own service.
 
+### Night shift
+
+Off until `[night] enabled = true` **and** a run is planned. A planned run is something you wrote: the prompt is yours. What comes back (the report, the diff stat, the log) is untrusted output and is shown as text, never as markup.
+
+A run starts an agent that edits files, unattended, so the guards are fixed in code and not settings:
+
+- It never runs in your folder: a git worktree on a new branch `night/<date>-<slug>` (created from HEAD) or a copy of a plain folder (at most 100 MB, without `node_modules`, `.git`, `target`, `.venv`, `dist` and symlinks).
+- It never pushes. Claude runs with `--disallowedTools` for `git push`, `git remote`, `gh pr create`, `gh pr merge` and `gh release`; Codex runs with `--sandbox workspace-write`, which has no network. eye never passes `--force` or a bypass-permissions mode to anything.
+- Claude's permission mode is `auto` (a classifier decides) or `acceptEdits` with an allow list of git status/diff/log/add/commit and build and test commands.
+- A continued session remembers the paths of its original folder. eye tells the agent to work only in the copy, but an agent that ignores that could still write there; that is why continuing is something you plan on purpose, and why the worktree and the original folder are both worth a look in the morning.
+- Runs are detached from the daemon (own session) and found again by pid and start time. A limit stops a run with SIGTERM to its process group, after checking pid and start time, and never with SIGKILL.
+- The only thing eye deletes is on DISCARD, after your confirm, and only inside `<eye home>/night`: it removes the run's folder, runs `git worktree prune` and `git branch -D` on its own `night/` branch. It refuses while there are uncommitted changes unless the confirm says they will be lost. Nothing is ever deleted by the daemon by itself.
+- Night runs are headless sessions in eye's night folder, so they do not count as a session you work in. They keep your usual agent settings and hooks, so eye sees them like any other session.
+
+The prompt, report and diff stat are kept in `night_run` in `eye.db`, as private as the rest of it. The report is masked like any summary.
+
 ### Loose ends
 
 `[loose]` (on by default, `enabled = false` turns it off) makes the daemon look, every 5 minutes and after a session stops, for what sessions left behind. Looking only reads: the process table of your own user (`ps` and `lsof` on macOS, `/proc` on Linux: pid, start time, command line, working folder and listening ports), `docker ps` when docker is installed, and in the repos of recent sessions `git worktree list`, `git remote`, `git log --branches --not --remotes` and `git status --porcelain`, each with `--no-optional-locks`, `core.fsmonitor=false` and a time limit. It writes nothing in any repo and starts nothing. The results (command lines and folder names included) are kept in `loose` in `eye.db`, which is as private as the rest of it, and shown on the board and in the picker like any other card text.

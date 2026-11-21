@@ -38,6 +38,8 @@ pub mod loose;
 pub mod mark;
 /// The data types: sessions, streams, outputs, ideas, columns.
 pub mod model;
+/// Planned runs that start by themselves inside a time window, each in its own worktree.
+pub mod night;
 /// Where eye keeps its data.
 /// One portable file with everything eye knows (`eye export`, `eye import`), and one session as a page.
 pub mod pack;

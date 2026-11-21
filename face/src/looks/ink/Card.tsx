@@ -8,6 +8,7 @@ import { ARROW, BANG, CLOCK, INK_CC } from './art';
 import { KIND, type BoardCtx, type Kind } from './columns';
 import { folderMissing, startButton } from './folder';
 import { Hl } from './highlight';
+import { NightMark, nightAsk } from './Night';
 import { AgentTag, LooseMark, RemoteMark, Sigil, Tok } from './pieces';
 
 /** The open session is stopped until you answer in it: a due reminder or a prompt you owe (the card's border pulses, the chip blinks in the panel). */
@@ -99,6 +100,7 @@ export function CardView({ c, store, i, kind, tag }: { c: Card; store: Store; i:
         <When c={c} />
         <div class="acts">
           <button class="btn sm" disabled={!!start.blocked} title={start.blocked ?? undefined} onClick={(e) => { e.stopPropagation(); void store.startIdea(c, false); }}>{start.label}</button>
+          {store.night.value && <button class="btn sm ghost" title="Run it while you sleep, in its own worktree" onClick={(e) => { e.stopPropagation(); nightAsk.value = c.id; store.open(c.id); }}>TONIGHT</button>}
         </div>
       </article>
     );
@@ -113,6 +115,7 @@ export function CardView({ c, store, i, kind, tag }: { c: Card; store: Store; i:
           {agent}
           {c.remote_url && <RemoteMark />}
           <LooseMark n={c.loose} />
+          <NightMark n={c.night} />
           {kind === 'run' && <span class="live"><i />LIVE</span>}
         </span>
         <span class="mr"><Tok t={c.tokens} /><span class="age">{age}</span></span>
