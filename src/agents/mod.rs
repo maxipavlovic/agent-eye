@@ -16,6 +16,8 @@ pub mod codex;
 pub mod command_label;
 /// Adding eye's hooks to an agent's JSON hooks file and taking them out again.
 pub mod hooks_file;
+/// OpenCode.
+pub mod opencode;
 /// Finding Jira keys, pull requests and commits in transcript text, the same for every agent.
 pub mod outputs;
 /// Telling a reply that asks the user something from one that does not.
@@ -80,6 +82,11 @@ pub trait Agent: Send + Sync + std::fmt::Debug {
     /// True for a path that is one of the agent's transcripts (restoring an archived copy only
     /// writes there).
     fn owns_transcript(&self, path: &Path) -> bool;
+    /// Is the transcript at `path` there to read? The default asks the file system; an agent whose
+    /// transcript path names a session inside a shared database says so itself.
+    fn transcript_exists(&self, path: &Path) -> bool {
+        path.exists()
+    }
     /// Folders that are the agent's own and never show up as a session's output.
     fn own_dirs(&self) -> Vec<String> {
         vec![]
@@ -277,6 +284,7 @@ fn factory(id: &str) -> Option<Factory> {
         claude::ID => Some(claude::build),
         codex::ID => Some(codex::build),
         agy::ID => Some(agy::build),
+        opencode::ID => Some(opencode::build),
         _ => None,
     }
 }
@@ -287,12 +295,13 @@ fn registered_ids() -> Vec<String> {
         claude::ID.to_string(),
         codex::ID.to_string(),
         agy::ID.to_string(),
+        opencode::ID.to_string(),
     ];
     ids.extend(
         extra
             .iter()
             .map(|(i, _)| i.clone())
-            .filter(|i| i != claude::ID && i != codex::ID && i != agy::ID),
+            .filter(|i| i != claude::ID && i != codex::ID && i != agy::ID && i != opencode::ID),
     );
     ids
 }

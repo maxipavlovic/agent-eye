@@ -85,7 +85,13 @@ mod tests {
     use super::*;
 
     fn bytes(num: u32, b: &[u8]) -> Vec<u8> {
-        let mut v = vec![(num << 3 | 2) as u8, b.len() as u8];
+        let key = num << 3 | 2;
+        let mut v = if key < 128 {
+            vec![key as u8]
+        } else {
+            vec![(key & 0x7f) as u8 | 0x80, (key >> 7) as u8]
+        };
+        v.push(b.len() as u8);
         v.extend_from_slice(b);
         v
     }
