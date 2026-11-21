@@ -330,6 +330,8 @@ fn forgetting_a_conversation_leaves_nothing_of_it_and_nothing_of_another() {
         .unwrap(),
     )
     .unwrap();
+    // a sub-agent of A goes with it
+    h.conversation(KID, "/work/zoo", false, 3, A);
     let a = h.agy();
     let gone = a
         .delete_transcript(&h.dir.join("brain").join(A), A)

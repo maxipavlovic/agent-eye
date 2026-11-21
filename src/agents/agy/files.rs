@@ -269,9 +269,19 @@ pub fn stamp(folder: &Path, extra: i64) -> Option<Stamp> {
     })
 }
 
-/// Remove conversation `id` (its folder is `folder`): the folder, the database and its `-shm` and
-/// `-wal` files, and its row in `conversation_summaries.db`.
+/// Remove conversation `id` (its folder is `folder`) and the sub-agent conversations below it: the
+/// folder, the database and its `-shm` and `-wal` files, the presence lock, the history lines, the
+/// cache entries and the row in `conversation_summaries.db`.
 pub fn delete(dir: &Path, folder: &Path, id: &str) -> anyhow::Result<Vec<String>> {
+    let kids = descendants(&summaries(dir), id);
+    let mut gone = delete_one(dir, folder, id)?;
+    for k in kids {
+        gone.extend(delete_one(dir, &dir.join(BRAIN).join(&k), &k)?);
+    }
+    Ok(gone)
+}
+
+fn delete_one(dir: &Path, folder: &Path, id: &str) -> anyhow::Result<Vec<String>> {
     anyhow::ensure!(
         crate::agents::is_inside(&dir.join(BRAIN), folder)
             && valid_session_id(id)
