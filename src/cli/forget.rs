@@ -109,10 +109,8 @@ fn line(s: &Session, env: &super::Env, transcript: bool) -> String {
     if forget::is_open(s) {
         l.push_str("  [open now: refused]");
     }
-    if transcript {
-        if env.agents.of_session(s).is_none() {
-            l.push_str("  [agent not enabled: its own copy stays]");
-        }
+    if transcript && env.agents.of_session(s).is_none() {
+        l.push_str("  [agent not enabled: its own copy stays]");
     }
     l
 }
