@@ -57,6 +57,7 @@ fn tokens(
         tokens: Tokens,
         last_id: Option<String>,
     }
+    let mut stale = false;
     let mut sum = 0i64;
     let mut any = false;
     for src in &sub.transcripts {
@@ -90,12 +91,22 @@ fn tokens(
             if read.replaces {
                 acc = Acc::default();
             }
+            // A sub-agent transcript that was read before and is read whole again (Codex does so at
+            // every change) no longer adds up to what is stored by day: the backfill redoes it.
+            if read.replaces && cursor.is_some() {
+                stale = true;
+            } else {
+                crate::usage::store::add(tx, sid, &read.msgs)?;
+            }
             acc.tokens.add(&read.tokens);
             acc.last_id = read.last_id;
             meta_set(tx, &mkey, &serde_json::to_string(&acc)?)?;
             cursor_set(tx, &key, src.stamp, &read.marker)?;
         }
         sum += acc.tokens.main_total();
+    }
+    if stale {
+        crate::usage::store::invalidate(tx, sid)?;
     }
     if any {
         tx.execute(

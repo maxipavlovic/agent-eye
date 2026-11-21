@@ -71,9 +71,29 @@ pub struct Config {
     pub outputs: OutputsCfg,
     pub hide: HideCfg,
     pub backup: BackupCfg,
+    pub usage: UsageCfg,
     /// The folder eye may create idea folders inside; not set: the account's home folder.
     #[serde(skip)]
     pub folder_root: Option<PathBuf>,
+}
+
+/// `[usage]`: the cost estimate.
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(default)]
+pub struct UsageCfg {
+    /// `[usage.prices."<model>"]`: USD per million tokens, to add a model or override a built-in
+    /// price. A model named here is priced from this table alone.
+    pub prices: BTreeMap<String, PriceCfg>,
+}
+
+/// USD per million tokens for one model.
+#[derive(Debug, Clone, Copy, Deserialize, Default, PartialEq)]
+#[serde(default)]
+pub struct PriceCfg {
+    pub input: f64,
+    pub output: f64,
+    pub cache_write: f64,
+    pub cache_read: f64,
 }
 
 /// Which coding agents eye follows, and where each keeps its files.

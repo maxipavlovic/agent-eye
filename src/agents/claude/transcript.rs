@@ -10,6 +10,7 @@ use super::super::{Delta, ParseOpts, PROMPTS_CAP, REPLIES_CAP};
 use super::signals::Tracker;
 use super::work::work_event;
 use crate::model::Tokens;
+use crate::usage::UsageMsg;
 use crate::util::{head_chars, iso_to_ms, tail_chars, trim_front_bytes};
 use anyhow::{Context, Result};
 use regex::Regex;
@@ -385,24 +386,35 @@ fn handle_result(
 
 /// Add the usage of an assistant line. Claude Code writes one line per content block of a
 /// message and repeats the same usage on each, so a message id counts once.
-pub fn add_usage(v: &Value, total: &mut Tokens, last_id: &mut Option<String>) {
-    let Some(m) = v.get("message") else {
-        return;
-    };
-    let Some(u) = m.get("usage") else {
-        return;
-    };
+/// Returns the message as usage by day, at `ts`; None for a line that counts nothing.
+pub fn add_usage(
+    v: &Value,
+    ts: i64,
+    total: &mut Tokens,
+    last_id: &mut Option<String>,
+) -> Option<UsageMsg> {
+    let m = v.get("message")?;
+    let u = m.get("usage")?;
     if let Some(id) = s(m, "id") {
         if last_id.as_deref() == Some(id) {
-            return;
+            return None;
         }
         *last_id = Some(id.to_string());
     }
     let n = |k: &str| u.get(k).and_then(Value::as_i64).unwrap_or(0).max(0);
-    total.input += n("input_tokens");
-    total.output += n("output_tokens");
-    total.cache_write += n("cache_creation_input_tokens");
-    total.cache_read += n("cache_read_input_tokens");
+    let msg = UsageMsg {
+        ts,
+        model: s(m, "model").unwrap_or("").to_string(),
+        input: n("input_tokens"),
+        output: n("output_tokens"),
+        cache_write: n("cache_creation_input_tokens"),
+        cache_read: n("cache_read_input_tokens"),
+    };
+    total.input += msg.input;
+    total.output += msg.output;
+    total.cache_write += msg.cache_write;
+    total.cache_read += msg.cache_read;
+    Some(msg)
 }
 
 /// Token use of a transcript from `from` on (sub-agent transcripts: nothing else is read).
@@ -411,8 +423,10 @@ pub fn parse_usage_file(
     path: &Path,
     from: u64,
     last_id: Option<String>,
-) -> Result<(Tokens, Option<String>, u64)> {
+) -> Result<(Tokens, Option<String>, u64, Vec<UsageMsg>)> {
     let (mut total, mut last) = (Tokens::default(), last_id);
+    let mut msgs = vec![];
+    let mut seen_ts = 0;
     let offset = for_each_line(path, from, |line| {
         if !line.windows(7).any(|w| w == b"\"usage\"") {
             return;
@@ -421,10 +435,39 @@ pub fn parse_usage_file(
             return;
         };
         if v.get("type").and_then(Value::as_str) == Some("assistant") {
-            add_usage(&v, &mut total, &mut last);
+            let ts = s(&v, "timestamp").and_then(iso_to_ms).unwrap_or(seen_ts);
+            seen_ts = ts;
+            msgs.extend(add_usage(&v, ts, &mut total, &mut last));
         }
     })?;
-    Ok((total, last, offset))
+    Ok((total, last, offset, msgs))
+}
+
+/// The token use of every message of a transcript, for usage by day. A sub-agent's transcript
+/// (a file under `subagents/`) marks its own lines as side chains, which count there; in a
+/// session's own transcript a side chain is not the session's own work and is left out.
+pub fn usage_msgs(path: &Path) -> Result<Vec<UsageMsg>> {
+    let sub = path.components().any(|c| c.as_os_str() == "subagents");
+    let (mut total, mut last) = (Tokens::default(), None);
+    let mut msgs = vec![];
+    let mut seen_ts = 0;
+    for_each_line(path, 0, |line| {
+        if !line.windows(7).any(|w| w == b"\"usage\"") {
+            return;
+        }
+        let Ok(v) = serde_json::from_slice::<Value>(line) else {
+            return;
+        };
+        if v.get("type").and_then(Value::as_str) != Some("assistant")
+            || (!sub && v.get("isSidechain").and_then(Value::as_bool) == Some(true))
+        {
+            return;
+        }
+        let ts = s(&v, "timestamp").and_then(iso_to_ms).unwrap_or(seen_ts);
+        seen_ts = ts;
+        msgs.extend(add_usage(&v, ts, &mut total, &mut last));
+    })?;
+    Ok(msgs)
 }
 
 fn process_assistant(
@@ -435,7 +478,9 @@ fn process_assistant(
     opts: &ParseOpts,
     ts: i64,
 ) {
-    add_usage(v, &mut d.usage, &mut d.last_msg_id);
+    let at = if ts > 0 { ts } else { d.last_ts.unwrap_or(0) };
+    d.usage_msgs
+        .extend(add_usage(v, at, &mut d.usage, &mut d.last_msg_id));
     let Some(Value::Array(blocks)) = v.get("message").and_then(|m| m.get("content")) else {
         return;
     };
@@ -741,5 +786,57 @@ mod tests {
                 "{other}"
             );
         }
+    }
+
+    fn assistant(id: &str, model: &str, ts: &str, side: bool) -> String {
+        format!(
+            r#"{{"type":"assistant","isSidechain":{side},"timestamp":"{ts}","message":{{"id":"{id}","model":"{model}","content":[],"usage":{{"input_tokens":10,"output_tokens":2,"cache_creation_input_tokens":3,"cache_read_input_tokens":100}}}}}}
+"#
+        )
+    }
+
+    #[test]
+    fn a_message_is_one_usage_entry_with_its_time_and_model() {
+        let text = assistant("m1", "claude-opus-5-5", "2026-11-01T10:00:00Z", false)
+            + &assistant("m1", "claude-opus-5-5", "2026-11-01T10:00:01Z", false)
+            + &assistant("m2", "claude-sonnet-5-5", "2026-11-02T10:00:00Z", false)
+            + &assistant("m3", "claude-haiku-5-5", "2026-11-02T11:00:00Z", true);
+        let d = parse(text.as_bytes());
+        // the main transcript leaves a side chain out, like its token columns
+        assert_eq!(d.usage_msgs.len(), 2);
+        assert_eq!(d.usage_msgs[0].model, "claude-opus-5-5");
+        assert_eq!(
+            d.usage_msgs[0].ts,
+            iso_to_ms("2026-11-01T10:00:00Z").unwrap()
+        );
+        assert_eq!(
+            (
+                d.usage_msgs[1].input,
+                d.usage_msgs[1].output,
+                d.usage_msgs[1].cache_write,
+                d.usage_msgs[1].cache_read
+            ),
+            (10, 2, 3, 100)
+        );
+        let sum: i64 = d
+            .usage_msgs
+            .iter()
+            .map(|m| m.input + m.output + m.cache_write + m.cache_read)
+            .sum();
+        assert_eq!(sum, d.usage.main_total());
+    }
+
+    #[test]
+    fn a_sub_agent_file_counts_its_side_chain_lines() {
+        let dir = tempfile::tempdir().unwrap();
+        let sub = dir.path().join("sid/subagents");
+        std::fs::create_dir_all(&sub).unwrap();
+        let text = assistant("s1", "claude-haiku-5-5", "2026-11-02T11:00:00Z", true)
+            + "not json\n"
+            + &assistant("s2", "claude-haiku-5-5", "2026-11-02T11:01:00Z", true);
+        std::fs::write(sub.join("agent.jsonl"), &text).unwrap();
+        std::fs::write(dir.path().join("main.jsonl"), &text).unwrap();
+        assert_eq!(usage_msgs(&sub.join("agent.jsonl")).unwrap().len(), 2);
+        assert_eq!(usage_msgs(&dir.path().join("main.jsonl")).unwrap().len(), 0);
     }
 }

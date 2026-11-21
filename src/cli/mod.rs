@@ -10,6 +10,7 @@ mod pick;
 mod remind;
 mod setup;
 mod show;
+mod usage;
 
 pub use args::{Cli, Cmd};
 
@@ -150,6 +151,25 @@ pub fn run() -> Result<()> {
             }
             Ok(())
         }
+        Cmd::Statusline { wrap } => {
+            // No config, no migration, no error: this runs on every status line refresh.
+            if let Ok(paths) = g.paths() {
+                let out = crate::usage::statusline::run(
+                    &paths.db_path(),
+                    wrap.as_deref(),
+                    std::io::stdin(),
+                );
+                let _ = std::io::Write::write_all(&mut std::io::stdout(), out.as_bytes());
+            }
+            Ok(())
+        }
+        Cmd::Usage {
+            days,
+            week: _,
+            month,
+            by,
+            json,
+        } => usage::run(&g, days.unwrap_or(if month { 30 } else { 7 }), &by, json),
         Cmd::Pick(a) => pick::run(&g, &a),
         Cmd::Init { shell, key } => {
             print!(

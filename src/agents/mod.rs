@@ -68,6 +68,13 @@ pub trait Agent: Send + Sync + std::fmt::Debug {
     fn work_events(&self, _path: &Path) -> Result<Vec<WorkEvent>> {
         Ok(vec![])
     }
+    /// The token use of every message of the transcript at `path` (a session's own, or a
+    /// sub-agent's), with its time and model: the same messages `parse_transcript` reports in
+    /// `Delta::usage_msgs`, read from the whole file and nothing else (usage by day of a session
+    /// read before eye kept it). `path` exists. The default knows no usage.
+    fn usage_msgs(&self, _path: &Path) -> Result<Vec<UsageMsg>> {
+        Ok(vec![])
+    }
     /// True for a path that is one of the agent's transcripts (restoring an archived copy only
     /// writes there).
     fn owns_transcript(&self, path: &Path) -> bool;

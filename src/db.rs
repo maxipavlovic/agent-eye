@@ -5,7 +5,7 @@ use rusqlite::{params, Connection, OptionalExtension, Row, TransactionBehavior};
 use std::path::Path;
 
 /// The schema version this build writes; older databases are migrated on open.
-pub const SCHEMA_VERSION: i64 = 13;
+pub const SCHEMA_VERSION: i64 = 15;
 
 const SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS session(id TEXT PRIMARY KEY, agent TEXT NOT NULL DEFAULT 'claude', project_dir TEXT, cwd TEXT, repo_root TEXT, title TEXT, title_source TEXT,
@@ -35,6 +35,11 @@ CREATE TABLE IF NOT EXISTS jira_evidence(prefix TEXT, kind TEXT, session_id TEXT
 CREATE TABLE IF NOT EXISTS worked_hour(session_id TEXT, hour INTEGER, prompts INTEGER, events INTEGER, active_ms INTEGER,
   PRIMARY KEY(session_id, hour)) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS worked_state(session_id TEXT PRIMARY KEY, last_ts INTEGER, unreadable INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS usage_day(session_id TEXT NOT NULL, day TEXT NOT NULL, model TEXT NOT NULL,
+  tok_in INTEGER NOT NULL DEFAULT 0, tok_out INTEGER NOT NULL DEFAULT 0, tok_cw INTEGER NOT NULL DEFAULT 0, tok_cr INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY(session_id, day, model)) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS idx_usage_day_day ON usage_day(day);
+CREATE TABLE IF NOT EXISTS usage_state(session_id TEXT PRIMARY KEY, unreadable INTEGER NOT NULL DEFAULT 0);
 CREATE INDEX IF NOT EXISTS idx_stream_session ON stream(session_id);
 CREATE INDEX IF NOT EXISTS idx_output_session ON output(session_id);
 CREATE INDEX IF NOT EXISTS idx_event_session ON event(session_id);
@@ -214,6 +219,10 @@ impl Db {
         // copied into the new one, row for row; nothing is read from a transcript again. The
         // `porter` tokenizer is part of SQLite, so 0.2.x still reads the result.
         self.stem_session_fts()?;
+        // v15: `usage_day` and `usage_state` (usage by day and model) are created with the schema
+        // above. Nothing is read again for them: sessions without usage are counted by
+        // `usage::backfill`, from the token fields of their transcripts only. (v14 is the other
+        // unit's.)
         if cur == 1 || (cur > 0 && cur < 4) {
             // v2 keeps pending tool_use ids and Jira candidates, v4 token counts: re-read every
             // transcript once.

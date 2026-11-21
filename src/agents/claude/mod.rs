@@ -201,6 +201,10 @@ impl Agent for Claude {
         work::read_events(path)
     }
 
+    fn usage_msgs(&self, path: &Path) -> Result<Vec<crate::usage::UsageMsg>> {
+        transcript::usage_msgs(path)
+    }
+
     fn owns_transcript(&self, path: &Path) -> bool {
         path.starts_with(self.dir.join("projects"))
     }
@@ -276,10 +280,11 @@ impl Agent for Claude {
     ) -> Result<UsageRead> {
         let from = append_only::resume_offset(since, source.stamp);
         let last_id = last_id.filter(|_| from.is_some());
-        let (tokens, last_id, end) =
+        let (tokens, last_id, end, msgs) =
             transcript::parse_usage_file(&source.path, from.unwrap_or(0), last_id)?;
         Ok(UsageRead {
             tokens,
+            msgs,
             last_id,
             marker: end.to_string(),
             replaces: from.is_none(),

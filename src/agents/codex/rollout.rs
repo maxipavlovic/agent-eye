@@ -15,6 +15,7 @@
 use super::background::Tracker;
 use super::results;
 use super::script::{self, Call};
+use super::usage::{limits_of, Steps};
 use super::work::work_event;
 use crate::agents::append_only::for_each_line;
 use crate::agents::outputs::{
@@ -102,7 +103,7 @@ impl Usage {
     }
 
     /// What was added since `before`; None when a count went down (the thread was rewound).
-    fn since(&self, before: &Usage) -> Option<Usage> {
+    pub(super) fn since(&self, before: &Usage) -> Option<Usage> {
         let up = self.input >= before.input
             && self.cached >= before.cached
             && self.cache_write >= before.cache_write
@@ -513,6 +514,9 @@ fn file_dirs(files: &[&str], cwd: Option<&str>) -> Vec<String> {
 struct Carry {
     cwd: Option<String>,
     total: Option<Usage>,
+    /// The model the last turn named, for usage by day.
+    #[serde(default)]
+    model: Option<String>,
     commits: Vec<(String, Option<String>)>,
     /// The state of the background shells (see `background`).
     #[serde(default)]
@@ -538,6 +542,7 @@ pub struct Reader<'a> {
     cwd: Option<String>,
     before: Option<Usage>,
     total: Option<Usage>,
+    steps: Steps,
     commits: HashMap<String, Option<String>>,
     order: Vec<String>,
     background: Tracker,
@@ -564,6 +569,7 @@ impl<'a> Reader<'a> {
             cwd: carry.cwd,
             before: carry.total,
             total: None,
+            steps: Steps::resume(carry.total, carry.model),
             order: carry.commits.iter().map(|(k, _)| k.clone()).collect(),
             commits: carry.commits.into_iter().collect(),
             background,
@@ -590,6 +596,10 @@ impl<'a> Reader<'a> {
         }
         let ts = ts.unwrap_or(0);
         self.background.line(&v);
+        self.steps.context(&v);
+        if let Some(l) = limits_of(&v, ts) {
+            self.d.limits = Some(l);
+        }
         match event {
             Event::Meta { id, cwd, branch } => self.meta(id, cwd, branch),
             Event::Turn { cwd: Some(c) } => {
@@ -603,7 +613,10 @@ impl<'a> Reader<'a> {
             Event::Call { id, tool } => self.call(id, tool, ts),
             Event::Output { call_id, text } => self.output(&call_id, &text, ts),
             Event::Done { tool, output, exit } => self.done(tool, &output, exit, ts),
-            Event::Total(u) => self.total = Some(u),
+            Event::Total(u) => {
+                self.total = Some(u);
+                self.d.usage_msgs.extend(self.steps.step(u, ts));
+            }
             Event::Turn { cwd: None } | Event::Compacted | Event::Other => {}
         }
     }
@@ -764,6 +777,7 @@ impl<'a> Reader<'a> {
             cwd: self.cwd.clone(),
             background: self.background.state(),
             total: self.total.or(self.before),
+            model: self.steps.model.clone(),
             commits: self
                 .order
                 .iter()
@@ -1294,6 +1308,7 @@ mod tests {
                 cache_write: 0,
                 output: 50,
             }),
+            model: None,
             commits: vec![],
             background: None,
         })
