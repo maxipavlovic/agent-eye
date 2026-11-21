@@ -20,7 +20,7 @@ type Waiting = (
 );
 
 /// Look at every session that has not been looked at. Returns how many were.
-pub fn backfill(db: &mut Db, agents: &Agents) -> Result<usize> {
+pub fn backfill(db: &mut Db, agents: &Agents, night: Option<&Path>) -> Result<usize> {
     let waiting: Vec<Waiting> = db
         .conn
         .prepare(
@@ -40,7 +40,6 @@ pub fn backfill(db: &mut Db, agents: &Agents) -> Result<usize> {
     if waiting.is_empty() {
         return Ok(0);
     }
-    let night = db.night_dir.clone();
     let tx = db
         .conn
         .transaction_with_behavior(TransactionBehavior::Immediate)?;
@@ -58,7 +57,7 @@ pub fn backfill(db: &mut Db, agents: &Agents) -> Result<usize> {
             (Some(p), Some("present")) if Path::new(p).exists() => agent.origin_raw(Path::new(p)),
             _ => None,
         };
-        let mapped = origin::of_session(agent_id, raw.as_deref(), cwd.as_deref(), night.as_deref());
+        let mapped = origin::of_session(agent_id, raw.as_deref(), cwd.as_deref(), night);
         tx.execute(
             "UPDATE session SET origin=?2, origin_raw=?3 WHERE id=?1 AND origin_raw IS NULL",
             params![id, mapped, raw.unwrap_or_default()],

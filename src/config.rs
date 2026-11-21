@@ -173,6 +173,10 @@ pub struct Config {
     /// The folder eye may create idea folders inside; not set: the account's home folder.
     #[serde(skip)]
     pub folder_root: Option<PathBuf>,
+    /// `<eye home>/night`: set when the file is loaded from an eye home. A session whose folder is
+    /// a run folder in it is a night run (see `night::is_night_folder`).
+    #[serde(skip)]
+    pub night_dir: Option<PathBuf>,
 }
 
 /// `[usage]`: the cost estimate.
@@ -215,6 +219,10 @@ pub struct AgentCfg {
     /// A folder given on the command line; it beats the environment and `dir`.
     #[serde(skip)]
     pub dir_override: Option<PathBuf>,
+    /// `<eye home>/night`, copied from the config: Codex shows a `codex exec` rollout only when it
+    /// ran in a night run's folder.
+    #[serde(skip)]
+    pub night_dir: Option<PathBuf>,
 }
 
 /// A leading `~` or `~/` is the home folder.
@@ -510,6 +518,8 @@ impl Config {
                 );
             });
         }
+        let mut cfg = cfg;
+        cfg.night_dir = path.parent().map(|p| p.join("night"));
         Ok(cfg)
     }
 
@@ -530,7 +540,9 @@ impl Config {
 
     /// The settings of one agent (the defaults when it has no table).
     pub fn agent_cfg(&self, id: &str) -> AgentCfg {
-        self.agents.each.get(id).cloned().unwrap_or_default()
+        let mut c = self.agents.each.get(id).cloned().unwrap_or_default();
+        c.night_dir.clone_from(&self.night_dir);
+        c
     }
 
     /// Point an agent at a folder for this run only (the `--claude-dir` flag).

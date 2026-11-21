@@ -85,10 +85,8 @@ pub fn of_session(
     cwd: Option<&str>,
     night_dir: Option<&Path>,
 ) -> Option<&'static str> {
-    if let (Some(c), Some(n)) = (cwd, night_dir) {
-        if Path::new(c).starts_with(n) {
-            return Some("night");
-        }
+    if crate::night::is_night_folder(night_dir, cwd) {
+        return Some("night");
     }
     raw.and_then(|r| classify(agent, r))
 }
@@ -163,7 +161,7 @@ mod tests {
         let got = of_session(
             "claude",
             Some("sdk-cli"),
-            Some("/home/x/.agent-eye/night/runs/3/wt"),
+            Some("/home/x/.agent-eye/night/3/wt"),
             Some(night),
         );
         assert_eq!(got, Some("night"));
@@ -172,6 +170,16 @@ mod tests {
         assert_eq!(
             of_session("claude", None, Some("/work/p"), Some(night)),
             None
+        );
+        // the user's own folder that looks like a run folder is not one
+        assert_eq!(
+            of_session(
+                "claude",
+                Some("sdk-cli"),
+                Some("/work/night/7/wt"),
+                Some(night)
+            ),
+            Some("headless")
         );
     }
 }

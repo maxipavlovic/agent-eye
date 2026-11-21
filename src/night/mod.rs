@@ -488,19 +488,41 @@ pub fn read_log(paths: &Paths, id: i64, max: usize) -> String {
     String::from_utf8_lossy(&b[from..]).into_owned()
 }
 
-/// Is this the folder of a night-shift run (`<eye home>/night/<n>/wt` or `/work`)? Used where only a
-/// session's folder is at hand: the picker's `night` mark and Codex's `exec` rollouts.
-pub fn is_run_folder(cwd: Option<&str>) -> bool {
-    let parts: Vec<_> = std::path::Path::new(cwd.unwrap_or_default())
-        .components()
-        .map(|c| c.as_os_str().to_string_lossy().into_owned())
-        .collect();
-    parts.windows(3).any(|w| {
-        w[0] == "night"
-            && !w[1].is_empty()
-            && w[1].bytes().all(|b| b.is_ascii_digit())
-            && matches!(w[2].as_str(), "wt" | "work")
-    })
+/// Is `cwd` the folder of a night run of THIS eye home: `<night_dir>/<run id>/wt` or `/work`, or
+/// below one? Both paths are canonicalized (a symlinked `EYE_HOME`, `/tmp` against `/private/tmp`),
+/// so the answer does not depend on how either was spelled. A folder called `night/7/wt` anywhere
+/// else is the user's own. `night_dir` is `<eye home>/night`; None (a database in memory) is never.
+pub fn is_night_folder(night_dir: Option<&std::path::Path>, cwd: Option<&str>) -> bool {
+    use std::path::{Path, PathBuf};
+    let (Some(night), Some(cwd)) = (night_dir, cwd.filter(|c| !c.is_empty())) else {
+        return false;
+    };
+    // the folder may be gone: canonicalize its nearest folder that is there, then add the rest
+    fn real(p: &Path) -> PathBuf {
+        let mut rest = vec![];
+        let mut cur = p;
+        loop {
+            if let Ok(c) = cur.canonicalize() {
+                return rest.iter().rev().fold(c, |acc, n| acc.join(n));
+            }
+            match (cur.parent(), cur.file_name()) {
+                (Some(par), Some(n)) => {
+                    rest.push(n.to_os_string());
+                    cur = par;
+                }
+                _ => return p.to_path_buf(),
+            }
+        }
+    }
+    let (night, cwd) = (real(night), real(Path::new(cwd)));
+    let Ok(rel) = cwd.strip_prefix(&night) else {
+        return false;
+    };
+    let mut parts = rel.components().map(|c| c.as_os_str().to_string_lossy());
+    let (Some(id), Some(dir)) = (parts.next(), parts.next()) else {
+        return false;
+    };
+    !id.is_empty() && id.bytes().all(|b| b.is_ascii_digit()) && matches!(&*dir, "wt" | "work")
 }
 
 /// The slug of a branch name from a prompt or title: lowercase words joined by `-`.

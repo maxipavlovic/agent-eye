@@ -72,7 +72,7 @@ pub fn scan(db: &mut Db, cfg: &Config, full: bool) -> Result<ScanStats> {
     for agent in agents.iter() {
         scan_agent(db, agent.as_ref(), cfg, full, &mut repo_cache, &mut stats)?;
     }
-    origin::backfill(db, &agents)?;
+    origin::backfill(db, &agents, cfg.night_dir.as_deref())?;
     let tx = db
         .conn
         .transaction_with_behavior(TransactionBehavior::Immediate)?;
@@ -125,7 +125,6 @@ fn scan_agent(
     stats: &mut ScanStats,
 ) -> Result<()> {
     clean_stored_recaps(db, agent)?;
-    let night_dir = db.night_dir.clone();
     let jobs = agent.jobs();
     let mut token_job: HashMap<String, usize> = HashMap::new();
     for (i, j) in jobs.iter().enumerate() {
@@ -199,17 +198,8 @@ fn scan_agent(
         let tx = db
             .conn
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
-        transcript::apply(
-            &tx,
-            agent,
-            f,
-            &d,
-            reset,
-            cfg,
-            repo_cache,
-            night_dir.as_deref(),
-        )
-        .with_context(|| format!("indexing {}", f.path.display()))?;
+        transcript::apply(&tx, agent, f, &d, reset, cfg, repo_cache)
+            .with_context(|| format!("indexing {}", f.path.display()))?;
         crate::worked::store::record(&tx, &f.session_id, &d.events, reset)?;
         // A read that starts over leaves the session to the usage backfill (its sub-agents are
         // counted there too); a read that goes on adds what is new.

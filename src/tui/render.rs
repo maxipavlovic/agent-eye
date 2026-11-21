@@ -152,7 +152,7 @@ pub(super) fn row_line<'a>(
     let marks = if r
         .session
         .as_ref()
-        .is_some_and(|s| crate::night::is_run_folder(s.cwd.as_deref()))
+        .is_some_and(|s| s.origin.as_deref() == Some("night"))
         && width >= 60
     {
         format!("{marks} night").trim().to_string()

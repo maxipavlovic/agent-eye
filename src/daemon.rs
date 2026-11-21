@@ -263,6 +263,7 @@ fn night_round(paths: &Paths, cfg: &Config) {
         .and_then(|t| Config::parse(&t).ok())
         .map(|mut c| {
             c.folder_root = cfg.folder_root.clone();
+            c.night_dir = cfg.night_dir.clone();
             c
         })
         .unwrap_or_else(|| cfg.clone());

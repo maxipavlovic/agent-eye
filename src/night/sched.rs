@@ -445,10 +445,7 @@ impl Sys for RealSys<'_> {
         self.agents.iter().flat_map(|a| a.live_sessions()).any(|s| {
             s.alive
                 && s.entrypoint.as_deref() != Some("sdk-cli")
-                && !s
-                    .cwd
-                    .as_deref()
-                    .is_some_and(|c| std::path::Path::new(c).starts_with(&night))
+                && !super::is_night_folder(Some(&night), s.cwd.as_deref())
                 && (s.status.as_deref() == Some("busy")
                     || s.updated_at.is_some_and(|u| now - u < quiet_ms))
         })
