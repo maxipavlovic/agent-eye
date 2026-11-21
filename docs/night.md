@@ -6,7 +6,7 @@ Park work during the day, let it run at night inside the plan you already pay fo
 
 - You plan a run for tonight: an **idea** (it needs a folder and a prompt) or a **session to continue** (it needs a prompt: what it should do tonight).
 - Inside the window (01:00-07:00 by default) the daemon starts planned runs, headless, when no session you work in is live.
-- Every run works in its own git worktree on a new branch, or in a copy of a plain folder. It never runs in your folder. A sandboxed Claude run cannot reach a git host (see "The barrier" below), and a Codex run has no network.
+- Every run works in its own git worktree on a new branch, or in a separate copy of your folder (`[night] isolation`, see "Two ways to keep your folder safe"). It never runs in your folder. A sandboxed Claude run cannot reach a git host (see "The barrier" below), and a Codex run has no network.
 - When a run ends, its session is a **Needs you** card with the next step "review the night run": status, report, what it changed, and its loose ends.
 
 ## Plan, from the command line
@@ -38,7 +38,7 @@ All of these, checked once a minute:
 1. `[night] enabled = true` and the run is planned.
 2. The clock is inside the window, and the run's night has come.
 3. **Quiet:** no live interactive session that is not itself a night run has been busy or touched for `[night] quiet_minutes` (20). A headless run (`claude -p`, `codex exec`) does not count as a session you work in; neither does anything working inside eye's night folder.
-4. Fewer than `[night] parallel` (2) runs are going. Planned runs never block each other: two planned for tonight both run, in parallel, each in its own worktree. A third starts when one ends.
+4. Fewer than `[night] parallel` (2) runs are going. Planned runs never block each other: two planned for tonight both run, in parallel, each in its own worktree or copy. A third starts when one ends.
 
 A run that is going at the end of the window may finish; no new one starts.
 
@@ -58,7 +58,7 @@ When a limit is passed the run gets SIGTERM to its process group (after the same
 
 ### Switching agents
 
-With `--switch` an idea run starts again on the other enabled agent, with the same prompt in a fresh worktree, when its agent's plan is out: a limit window at 100% when it is about to start, or the CLI exits with a rate-limit message. Not for continued sessions, which stay on their agent. A weekly limit is dropped when the run moves, because it was about the other plan.
+With `--switch` an idea run starts again on the other enabled agent, with the same prompt in a fresh worktree or copy, when its agent's plan is out: a limit window at 100% when it is about to start, or the CLI exits with a rate-limit message. Not for continued sessions, which stay on their agent. A weekly limit is dropped when the run moves, because it was about the other plan.
 
 ## Two ways to keep your folder safe
 
@@ -81,7 +81,7 @@ Each run has a folder `<eye home>/night/<run id>/` with `log` (stdout and stderr
 
 ### Claude Code
 
-`claude -p <prompt> --session-id <uuid> --permission-mode auto --disallowedTools ...`, in the worktree. The transcript is kept, so it is a normal session that eye indexes. Headless permission modes the installed CLI offers (`claude --help`): `acceptEdits`, `auto`, `bypassPermissions`, `manual`, `dontAsk`, `plan`. eye uses `auto`. Set `[night] claude_permission = "acceptEdits"` to use that instead; eye then also passes `--allowedTools` for git status/diff/log/add/commit and these commands only: `npm test`, `npm run`, `npm ci`, `npm install`, `cargo build|test|check|fmt|clippy`, `python -m pytest`, `pytest`, `go test|build`, `make test`, `node`, `ls`. No bare `npm *`, `cargo *`, `npx *` or `python*`. `bypassPermissions` is never chosen by eye.
+`claude -p <prompt> --session-id <uuid> --permission-mode auto --disallowedTools ...`, in the worktree or copy. The transcript is kept, so it is a normal session that eye indexes. Headless permission modes the installed CLI offers (`claude --help`): `acceptEdits`, `auto`, `bypassPermissions`, `manual`, `dontAsk`, `plan`. eye uses `auto`. Set `[night] claude_permission = "acceptEdits"` to use that instead; eye then also passes `--allowedTools` for git status/diff/log/add/commit and these commands only: `npm test`, `npm run`, `npm ci`, `npm install`, `cargo build|test|check|fmt|clippy`, `python -m pytest`, `pytest`, `go test|build`, `make test`, `node`, `ls`. No bare `npm *`, `cargo *`, `npx *` or `python*`. `bypassPermissions` is never chosen by eye.
 
 Always denied by rule, in either mode: `git push`, `git -C ... push`, `git remote`, `gh` (all), `ssh`, `scp`, `npm publish`, `cargo publish`, `twine upload`, `gem push`, `docker push`. A rule matches the text of the command, so `git -c x=y push` or `sh -c 'git push'` is not matched by it; the network allowlist below is what stops those.
 
@@ -100,12 +100,12 @@ Every Claude run also gets `--settings '<json>'` (made per run, see `src/night/b
 
 ### Codex
 
-`codex exec --sandbox workspace-write --cd <worktree> --skip-git-repo-check <prompt>`. The sandbox has no network by default, so nothing can be pushed. Its rollout is picked up like any other session: eye treats a `codex exec` rollout as a session only when it ran in a night run's folder (`<eye home>/night/<n>/wt` or `work`); every other `exec` rollout stays hidden.
+`codex exec --sandbox workspace-write --cd <worktree or copy> --skip-git-repo-check <prompt>`. The sandbox has no network by default, so nothing can be pushed. Its rollout is picked up like any other session: eye treats a `codex exec` rollout as a session only when it ran in a night run's folder (`<eye home>/night/<n>/wt` or `work`); every other `exec` rollout stays hidden.
 
 ### Continue a session tonight
 
 - **Claude:** eye copies the session's transcript (restoring it from the archive when Claude deleted it) into the project folder Claude uses for the worktree or the copy, then runs `claude -p <prompt> --resume <id> --fork-session --session-id <new uuid>`. `--session-id` names the fork, so the new session is known at once. The original session is untouched.
-- **Codex:** `codex exec fork <id> <prompt>` (the installed CLI has it) with `-c sandbox_mode="workspace-write"`, started in the worktree.
+- **Codex:** `codex exec fork <id> <prompt>` (the installed CLI has it) with `-c sandbox_mode="workspace-write"`, started in the worktree or copy.
 
 The prompt of a continued run starts with a note: it works in a copy at `<worktree>`, the earlier conversation mentions paths of the original folder, use the same files under the worktree and change nothing in the original. The note is only advice; the barrier above is what holds. See `security.md`.
 

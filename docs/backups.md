@@ -11,7 +11,7 @@ ideas, manual column moves, hidden flags and the summaries. The transcript archi
 |---|---|
 | `daily` | The daemon makes one when the newest daily snapshot is over 24 hours old. |
 | `pre-v<N>` | Before a new version of eye changes the database to schema `N`. If it cannot be made, eye says why on standard error and goes on. |
-| `manual` | `eye backup`. |
+| `manual` | `eye backup`, and `eye forget` before it removes anything. |
 | `pre-restore` | Before `eye backup restore` replaces the database. |
 | `pre-import` | Before `eye import` changes the database. |
 

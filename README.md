@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <b>Find, sort and resume your coding-agent sessions.</b><br>
+  <b>Find, sort, resume and finish your coding-agent sessions, even overnight.</b><br>
   A local index, a terminal picker and an optional pixel-art board. macOS and Linux.
 </p>
 
@@ -26,20 +26,19 @@
 
 ## Why
 
-Coding agents forget. Claude Code deletes transcripts after 30 days, you lose track of which session did what, and nothing tells you which one is waiting on you. agent-eye keeps an index of every session on your machine and puts you back in one with one key.
+Coding agents forget, and they leave things behind. Claude Code deletes transcripts after 30 days, you lose track of which session did what, nothing tells you which one is waiting on you, and finished work leaves servers running and commits on no remote. agent-eye keeps an index of every session on your machine, puts you back in one with one key, and shows what is left to finish.
 
 ## Features
 
 <table>
-<tr><td width="48"><img src="assets/icon-search.svg" width="32" alt=""></td><td><b>Search everything:</b> titles, prompts, replies, PR links, folders.</td></tr>
+<tr><td width="48"><img src="assets/icon-search.svg" width="32" alt=""></td><td><b>Search that understands you:</b> word forms, typos, and the PR and ticket links in a session.</td></tr>
 <tr><td><img src="assets/icon-key.svg" width="32" alt=""></td><td><b>Resume from your prompt:</b> Ctrl-G, a few words, Enter. Ctrl-F forks.</td></tr>
-<tr><td><img src="assets/icon-keep.svg" width="32" alt=""></td><td><b>Nothing lost:</b> a compressed copy of every transcript, restored on resume.</td></tr>
+<tr><td><img src="assets/icon-keep.svg" width="32" alt=""></td><td><b>Nothing lost:</b> a compressed copy of every transcript, and <code>eye export</code> to take it all to another machine.</td></tr>
 <tr><td><img src="assets/icon-status.svg" width="32" alt=""></td><td><b>Know what needs you:</b> each session's state, next step and owner.</td></tr>
-<tr><td><img src="assets/icon-status.svg" width="32" alt=""></td><td><b>See what a session left behind:</b> servers still running, commits on no remote. You stop, remove or copy, and eye asks first.</td></tr>
-<tr><td><img src="assets/icon-board.svg" width="32" alt=""></td><td><b>A board if you want one:</b> pixel-art, local, installable as an app, in one of eight accent colours.</td></tr>
-<tr><td><img src="assets/icon-status.svg" width="32" alt=""></td><td><b>Cost and limits:</b> tokens and an API-equivalent estimate per session, project and agent, plus plan limits (<a href="docs/usage.md">usage</a>).</td></tr>
-<tr><td><img src="assets/icon-status.svg" width="32" alt=""></td><td><b>Night shift:</b> plan an idea or a session for tonight; the daemon runs it in its own worktree while you are away, inside your plan, and never pushes. Off until you switch it on (<a href="docs/night.md">night</a>).</td></tr>
-<tr><td><img src="assets/icon-board.svg" width="32" alt=""></td><td><b>Works alongside</b> T3 Code, Conductor and <code>claude agents</code>: the sessions they run are indexed like any other, with a chip saying where they started.</td></tr>
+<tr><td><img src="assets/icon-tidy.svg" width="32" alt=""></td><td><b>Nothing left behind:</b> servers still running, commits on no remote. You stop, remove or copy, and eye asks first. <code>eye forget</code> removes a session for good.</td></tr>
+<tr><td><img src="assets/icon-night.svg" width="32" alt=""></td><td><b>Night shift:</b> planned work runs while you sleep, in its own worktree or copy, inside your plan, and never pushes. Off until you switch it on (<a href="docs/night.md">night</a>).</td></tr>
+<tr><td><img src="assets/icon-cost.svg" width="32" alt=""></td><td><b>What it costs:</b> tokens and an API-equivalent estimate per session, project and agent, plus plan limits (<a href="docs/usage.md">usage</a>).</td></tr>
+<tr><td><img src="assets/icon-board.svg" width="32" alt=""></td><td><b>Works with</b> Claude Code, Codex, Antigravity and OpenCode, and alongside T3 Code and <code>claude agents</code>.</td></tr>
 <tr><td><img src="assets/icon-local.svg" width="32" alt=""></td><td><b>Local only:</b> no account, no telemetry.</td></tr>
 </table>
 
@@ -60,11 +59,16 @@ Needs macOS 11+ or Linux (glibc 2.35+), and Claude Code, Codex CLI, Antigravity 
 eye                       # the picker: type to search, Enter resumes
 eval "$(eye init zsh)"    # in ~/.zshrc: Ctrl-G opens the picker from your prompt
 eye board on --open       # the board
+eye usage                 # tokens, cost and plan limits
+eye loose                 # what sessions left running or unpushed
+eye night                 # work planned for tonight
+eye export                # one file with everything, to move or keep
+eye forget <id>           # remove a session (--transcript: from its agent too)
 ```
 
 <p align="center"><a href="assets/board-demo.gif"><img src="assets/board-light.png" alt="The board: Needs you, Running, Waiting on others, Paused, Done and Ideas" width="860"></a></p>
 
-Moving to another machine, or keeping a copy: `eye export` writes one file, `eye import <file>` reads it back, paths rewritten ([docs/backups.md](docs/backups.md)).
+`eye import <file>` reads an export back on another machine, paths rewritten ([docs/backups.md](docs/backups.md)).
 
 ## Privacy
 

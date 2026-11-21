@@ -22,7 +22,6 @@ database and come back when the agent is enabled again.
 | `enabled` | `true` | Write the state and next step of quiet sessions. `false` turns summaries off completely; nothing is sent anywhere. |
 | `agent` | `""` | The agent that writes summaries, for example `"codex"`. Empty: the first enabled agent. It must be enabled. The summaries count against that agent's plan. |
 | `model` | `""` | The model name handed to that agent. Empty: the agent's own cheap model, `haiku` for Claude Code and `gpt-6-luna` for Codex CLI. Model names belong to an agent, so change this when you change `agent`; an account that has no `gpt-6-luna` needs a model it has here. |
-| `isolation` | `"worktree"` | How a run keeps your folder safe: `"worktree"` (a git worktree of the repo; fast; a command that builds a path in an unusual way can add a new top-level file in your folder) or `"copy"` (a separate local clone; your folder is locked completely). `eye night add --isolation` and the board's **Work in** choice override it per run. A plain folder is always a copy. See `night.md`. |
 | `quiet_minutes` | `10` | A session is summarized after this many minutes without activity (or when it ended). |
 | `concurrency` | `2` | How many summaries run at the same time. |
 | `auto_days` | `3` | The daemon only summarizes sessions that were active within this many days (`eye summarize` can do older ones). |
@@ -60,6 +59,7 @@ Runs that start by themselves inside a time window. Off until you switch it on. 
 | `window` | `"01:00-07:00"` | Local time, `HH:MM-HH:MM`. New runs start only inside it; one already going may finish. An end before the start crosses midnight (`23:00-05:00`). `eye night window` and the board change it. |
 | `quiet_minutes` | `20` | A run starts only when no session you work in (live, interactive, not a night run) has been busy or touched for this long. |
 | `parallel` | `2` | How many runs go at once (1 to 8). |
+| `isolation` | `"worktree"` | How a run keeps your folder safe: `"worktree"` (a git worktree of the repo; fast; a command that builds a path in an unusual way can add a new top-level file in your folder) or `"copy"` (a separate local clone; your folder is locked completely). `eye night add --isolation` and the board's **Work in** choice override it per run. A plain folder is always a copy. See `night.md`. |
 | `claude_permission` | `"auto"` | Claude's permission mode for night runs: `auto`, or `acceptEdits` (then only the build and test commands in `night.md` are allowed). |
 | `claude_model` | `""` | A model for Claude night runs (an alias such as `haiku`); empty is Claude's default. |
 | `codex_model` | `""` | A model for Codex night runs; empty is Codex's default. |

@@ -32,6 +32,8 @@ A window whose time has passed reads "window has reset since": the percentage is
 Each agent's adapter reports the token use of every assistant message with its time and model (`Agent::usage_msgs` for a whole transcript, `Delta::usage_msgs` as the scanner reads it). The core adds them into local days per model in `usage_day` (schema 15). A session's sub-agents count toward the session, like `tok_sub`.
 
 - **Claude Code:** `message.usage`, `message.model` and `timestamp` of each assistant line; a message written on several lines counts once; sub-agent transcripts (`<session>/subagents/*.jsonl`) are added.
+- **Antigravity CLI:** the token counts of each model call in the conversation's JSON log, on the model named in its database.
+- **OpenCode:** the `tokens` of each assistant message (input, output, cache read and write), on its `modelID`.
 - **Codex:** the growth of the thread total between `token_count` events, on the model of the last `turn_context`. A total that goes down (the thread was rewound) starts again and adds nothing.
 
 Sessions eye read before this existed are counted once in the background: the daemon does a few per tick (newest first), `eye scan` and `eye usage` do all of them. It reads the transcript, or eye's archive copy when the original is gone, and touches no read cursor. When it is done, `meta` has `usage_backfilled_at`. Until then the board says how many sessions are left. A rewritten transcript is counted again from the files. The sum by day equals the session's token columns plus `tok_sub`, which `eye usage` and the tests rely on.

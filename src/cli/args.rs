@@ -438,7 +438,7 @@ pub enum Cmd {
         #[arg(long)]
         json: bool,
     },
-    /// The night shift: runs that start by themselves inside a time window, in their own worktree
+    /// The night shift: runs that start by themselves inside a time window, in their own worktree or copy
     Night {
         #[command(subcommand)]
         sub: Option<NightCmd>,
