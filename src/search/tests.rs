@@ -94,7 +94,14 @@ fn a_typo_one_session_holds_still_finds_the_right_spelling() {
     let db = Db::open_memory().unwrap();
     // enough other sessions for word rarity to mean what it does on a real index
     for i in 0..40 {
-        put(&db, &format!("f{i}"), &format!("Unrelated work {i}"), "", "build and test", 9);
+        put(
+            &db,
+            &format!("f{i}"),
+            &format!("Unrelated work {i}"),
+            "",
+            "build and test",
+            9,
+        );
     }
     put(&db, "tw1", "Tradewind", "", "x", 5);
     put(&db, "tw2", "Tradewind account status", "", "x", 6);
