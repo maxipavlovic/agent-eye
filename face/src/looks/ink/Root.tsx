@@ -4,6 +4,7 @@ import { Pix } from '../../pixel/Pix';
 import type { Store } from '../../store';
 import type { Column } from '../../api/types';
 import { projects, tagOf } from './model';
+import { KeyHelpHost } from './KeyHelp';
 import { CardMenu } from './CardMenu';
 import { EMPTY, INK } from './art';
 import { ORDER, type BoardCtx } from './columns';
@@ -101,6 +102,7 @@ export function Root({ store }: { store: Store }) {
       <RemindFormHost store={store} />
       <UsageHost store={store} />
       <NightHost store={store} />
+      <KeyHelpHost />
       <CardMenu store={store} />
       <Toasts store={store} />
     </div>

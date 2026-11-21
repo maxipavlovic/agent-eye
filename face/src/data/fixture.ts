@@ -134,6 +134,19 @@ function demoStates(board: Board, details: Record<string, CardDetail>, ideas: Id
     if (r) Object.assign(c, { remind_at: r[1], remind_note: r[2], remind_due: false });
     if (codex.some((id) => c.id.startsWith(id))) Object.assign(c, { agent: CODEX.id, agent_name: CODEX.short, next: c.next?.replace(/^Claude:/, 'Codex:') ?? c.next });
   }
+  // long project names (two projects renamed) and a Remote chip on a few cards, so the meta row is seen under pressure
+  const rename: Array<[string, string]> = [['~/code/tasker', '~/code/agentic-layer-stack'], ['~/code/docs-site', '~/code/adobe-insights-multi-account']];
+  const remote = ['b38e7d98', '7f270753', '21743447'];
+  for (const c of cards) {
+    const r = rename.find(([from]) => c.folder === from || c.repo === from);
+    if (r) Object.assign(c, { folder: c.folder === r[0] ? r[1] : c.folder, repo: c.repo === r[0] ? r[1] : c.repo });
+    if (remote.some((id) => c.id.startsWith(id))) c.remote_url ??= 'https://claude.ai/code/session_01SampleSampleSample';
+    // what a session cost, in the panel's COST row
+    if (!('usage' in c) && c.kind !== 'idea') {
+      const total = 20_000_000 + (hash(c.id) % 160_000_000);
+      Object.assign(c, { usage: { input: 4_000, output: 300_000, cache_write: Math.round(total * 0.05), cache_read: Math.round(total * 0.95), total, cost_usd: Math.round(total / 2_500_000 * 100) / 100, unpriced_tokens: 0, estimate: 'API-equivalent estimate, not your bill' } });
+    }
+  }
   // where a few sessions were started; the others are terminal sessions and show nothing
   const sessionIds = board.columns.flatMap((c) => c.cards).filter((c) => !c.id.startsWith('idea:')).map((c) => c.id);
   const origins: Array<[string | undefined, Card['origin'], string]> = [

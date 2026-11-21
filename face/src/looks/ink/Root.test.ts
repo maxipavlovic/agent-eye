@@ -577,12 +577,12 @@ describe('long lists in the panel', () => {
 
 describe('the idea form', () => {
   it('names the agent in its labels and shows no picker for one agent', async () => {
-    const { $ } = await mount();
+    const { $, $$ } = await mount();
     $('.btn.plus')!.click();
     await vi.waitFor(() => expect($('form.modal')).not.toBeNull());
     expect($('form.modal')!.textContent).toContain('PROMPT FOR CLAUDE');
     expect($('form.modal .hint')!.textContent).toBe('For you. Never sent to Claude.');
-    expect($('.modal .pick')).toBeNull();
+    expect($$('.modal .pick legend').map((l) => l.textContent)).not.toContain('AGENT');
   });
 
   it('offers a picker for several agents and sends the chosen one', async () => {
@@ -590,9 +590,10 @@ describe('the idea form', () => {
     const src: Source = { ...fixtureSource(), agents: async () => ({ agents: [CLAUDE, CODEX] }), addIdea };
     const { $, $$ } = await mount(src);
     $('.btn.plus')!.click();
-    await vi.waitFor(() => expect($$('.modal .pick button')).toHaveLength(2));
-    expect($$('.modal .pick button').map((b) => b.getAttribute('aria-pressed'))).toEqual(['true', 'false']);
-    $$('.modal .pick button')[1]!.click();
+    const agentButtons = () => [...$$('.modal .pick')[0]!.querySelectorAll('button')];
+    await vi.waitFor(() => expect($$('.modal .pick legend')[0]?.textContent).toBe('AGENT'));
+    expect(agentButtons().map((b) => b.getAttribute('aria-pressed'))).toEqual(['true', 'false']);
+    agentButtons()[1]!.click();
     await vi.waitFor(() => expect($('form.modal')!.textContent).toContain('PROMPT FOR CODEX'));
     $<HTMLInputElement>('.modal input[name="title"]')!.value = 'Compare agents';
     $('form.modal')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));

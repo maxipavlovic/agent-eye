@@ -1,11 +1,15 @@
 import { useEffect, useRef } from 'preact/hooks';
 import type { Store } from '../../store';
+import { copy } from './copy';
 import { ideaForm } from './IdeaForm';
-import { QUICK, quickMove } from './Move';
-import { closeRemind, remindForm } from './Remind';
+import { keyHelp } from './KeyHelp';
+import { hideSession, QUICK, quickMove } from './Move';
+import { canContinueTonight, tonightOpen } from './Night';
+import { closeRemind, openRemind, remindForm } from './Remind';
 import type { Walk } from './walk';
 
-/** Board keys: / or ⌘K / Ctrl-K searches, N W P D move the open session, R resumes it, ← → walk the cards, Esc backs out one level. */
+/** Board keys: / or ⌘K / Ctrl-K searches, ← → walk the cards, Esc backs out one level, ? lists the keys. The open session's panel
+ *  takes R D W P Y M N F C H L E X (see KEY_LIST), and only while no field has the focus. */
 /** Back to the search box, with what is in it selected, so typing starts a new search. */
 export function focusSearch() {
   const q = document.getElementById('q') as HTMLInputElement | null;
@@ -23,11 +27,19 @@ export function useKeys(store: Store, step: Walk['step']) {
       const plain = !e.metaKey && !e.ctrlKey && !e.altKey;
       const d = store.detail.value;
       const quick = QUICK.find((m) => m.key === e.key.toLowerCase());
+      // the keys list takes Esc and ? while it is open
+      if (keyHelp.value) {
+        if (e.key === 'Escape' || e.key === '?') { e.preventDefault(); e.stopImmediatePropagation(); keyHelp.value = false; }
+        return;
+      }
       // the reminder form takes the keys while it is open; Esc closes it
       if (remindForm.value) {
         if (e.key === 'Escape') closeRemind();
         return;
       }
+      const panelKey = !typing && !ideaForm.value && !!store.selected.value && !!d && plain && !e.shiftKey ? e.key.toLowerCase() : '';
+      if (e.key === '?' && !typing && !ideaForm.value && plain) { e.preventDefault(); keyHelp.value = true; return; }
+      if (panelKey && d && panelAct(store, d, panelKey)) { e.preventDefault(); return; }
       const findKey = (e.key === '/' && !typing && !e.metaKey && !e.ctrlKey)
         || (e.key.toLowerCase() === 'k' && (e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && !ideaForm.value);
       if (findKey) { e.preventDefault(); focusSearch(); }
@@ -53,4 +65,49 @@ export function useKeys(store: Store, step: Walk['step']) {
     addEventListener('keydown', onKey);
     return () => removeEventListener('keydown', onKey);
   }, []);
+}
+
+/** The panel keys that are not moves: remind, continue tonight, fork, copy, hide, loose ends, export, forget.
+ *  True when the key was one of them and did something (or deliberately nothing); the buttons carry the same keys. */
+function panelAct(store: Store, d: NonNullable<Store['detail']['value']>, k: string): boolean {
+  const session = d.kind !== 'idea';
+  switch (k) {
+    case 'm': openRemind(d.id); return true;
+    case 'n':
+      if (!canContinueTonight(d, store)) return false;
+      tonightOpen.value = d.id;
+      return true;
+    case 'f':
+      if (!session || !d.resumable || !d.resume_cmd) return false;
+      void store.resume(d.id, true);
+      return true;
+    case 'c':
+      if (!d.resume_cmd) return false;
+      copy(d.resume_cmd, store);
+      return true;
+    case 'h':
+      if (!session) return false;
+      hideSession(store, d.id);
+      return true;
+    case 'l': {
+      const el = document.getElementById('left-behind');
+      if (!el) return false;
+      el.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      return true;
+    }
+    case 'e': {
+      const a = document.querySelector<HTMLAnchorElement>('.page a[href*="/export"]');
+      if (!a) return false;
+      a.click();
+      return true;
+    }
+    case 'x': {
+      // FORGET is its own button; the key presses it when the panel has one
+      const b = document.querySelector<HTMLButtonElement>('.page [data-key="x"]');
+      if (!b || b.disabled) return false;
+      b.click();
+      return true;
+    }
+    default: return false;
+  }
 }

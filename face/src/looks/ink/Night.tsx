@@ -1,4 +1,4 @@
-import { useEffect } from 'preact/hooks';
+import { useEffect, useRef } from 'preact/hooks';
 import { signal, useSignal } from '@preact/signals';
 import type { Store } from '../../store';
 import type { CardDetail, NightIsolation, NightRun } from '../../api/types';
@@ -77,8 +77,15 @@ export function NightPlanForm({ store, d, onDone }: { store: Store; d: CardDetai
     busy.value = false;
     if (ok) { prompt.value = ''; onDone?.(); }
   };
+  const ref = useRef<HTMLFormElement>(null);
+  // opened to be written in: the prompt (a session needs one) takes the focus
+  useEffect(() => {
+    ref.current?.scrollIntoView({ block: 'nearest' });
+    ref.current?.querySelector<HTMLElement>('textarea, input')?.focus({ preventScroll: true });
+  }, []);
+  const dflt = (a: { id: string; default?: boolean }) => (agent.value || d.agent) === a.id || (!agent.value && !d.agent && !!a.default);
   return (
-    <form class="nplan" onSubmit={go} aria-label={session ? 'Continue tonight' : 'Plan for tonight'}>
+    <form class="nplan" ref={ref} onSubmit={go} aria-label={session ? 'Continue tonight' : 'Plan for tonight'}>
       {session && (
         <label>WHAT SHOULD IT DO TONIGHT
           <textarea rows={3} value={prompt.value} onInput={(e) => { prompt.value = e.currentTarget.value; }} placeholder="Continue with the failing tests, then stop" />
@@ -88,19 +95,25 @@ export function NightPlanForm({ store, d, onDone }: { store: Store; d: CardDetai
         <input value={limit.value} onInput={(e) => { limit.value = e.currentTarget.value; }} placeholder="none" autocomplete="off" spellcheck={false} />
       </label>
       {!session && agents.length > 1 && (
-        <fieldset class="nightpick">
+        <fieldset class="pick">
           <legend>AGENT</legend>
           <div class="fchips">
             {agents.map((a) => (
-              <button type="button" key={a.id} title={a.name} aria-pressed={(agent.value || d.agent) === a.id || (!agent.value && !d.agent && !!a.default)} onClick={() => { agent.value = a.id; }}>{a.short}</button>
+              <button type="button" key={a.id} title={a.name} aria-pressed={dflt(a)} onClick={() => { agent.value = a.id; }}>{a.short}</button>
             ))}
           </div>
         </fieldset>
       )}
       {!session && agents.length > 1 && (
-        <label class="chk"><input type="checkbox" checked={sw.value} onChange={(e) => { sw.value = e.currentTarget.checked; }} /> If this plan runs out, start again on the other agent</label>
+        <fieldset class="pick">
+          <legend>WHEN THE PLAN RUNS OUT</legend>
+          <div class="fchips">
+            <button type="button" aria-pressed={!sw.value} onClick={() => { sw.value = false; }}>Stop</button>
+            <button type="button" aria-pressed={sw.value} onClick={() => { sw.value = true; }}>Start again on the other agent</button>
+          </div>
+        </fieldset>
       )}
-      <fieldset class="nightpick">
+      <fieldset class="pick">
         <legend>WORK IN</legend>
         <div class="fchips">
           <button type="button" aria-pressed={chosen === 'worktree'} title={ISOLATION_HELP.worktree} onClick={() => { iso.value = 'worktree'; }}>A worktree of your repo (default)</button>
@@ -109,8 +122,8 @@ export function NightPlanForm({ store, d, onDone }: { store: Store; d: CardDetai
         <span class="hint">{ISOLATION_HELP[chosen]}</span>
       </fieldset>
       <p class="hint">Runs on a new branch. Nothing is pushed.</p>
-      <div class="acts">
-        <button type="submit" class="btn" disabled={busy.value}>{session ? 'CONTINUE TONIGHT' : 'PLAN FOR TONIGHT'}</button>
+      <div class="acts end">
+        <button type="submit" class="btn big" disabled={busy.value}>{session ? 'CONTINUE TONIGHT' : 'PLAN FOR TONIGHT'}</button>
       </div>
     </form>
   );
@@ -131,15 +144,31 @@ export function TonightIdea({ d, store }: { d: CardDetail; store: Store }) {
   );
 }
 
-/** CONTINUE TONIGHT in a session's panel. */
+/** The session whose CONTINUE TONIGHT form is open in the panel (the button, N and the card menu set it). */
+export const tonightOpen = signal<string | null>(null);
+
+/** Can this session be continued tonight: a session eye can resume, on an engine with the night shift. */
+export function canContinueTonight(d: Pick<CardDetail, 'kind' | 'resumable'>, store: Store): boolean {
+  return d.kind !== 'idea' && !!d.resumable && store.night.value !== null;
+}
+
+/** CONTINUE TONIGHT… in the panel's action row; N does the same. */
+export function TonightButton({ d, store }: { d: CardDetail; store: Store }) {
+  if (!canContinueTonight(d, store)) return null;
+  const open = tonightOpen.value === d.id;
+  return (
+    <button class="btn" aria-expanded={open} aria-keyshortcuts="N" title="Fork this session tonight, in its own worktree, with a prompt you write now (N)" onClick={() => { tonightOpen.value = open ? null : d.id; }}>
+      CO<u>N</u>TINUE TONIGHT…
+    </button>
+  );
+}
+
+/** The CONTINUE TONIGHT form, in the panel, while it is open. */
 export function ContinueTonight({ d, store }: { d: CardDetail; store: Store }) {
-  const open = useSignal(false);
-  if (d.kind === 'idea' || !d.resumable || store.night.value === null) return null;
+  if (!canContinueTonight(d, store) || tonightOpen.value !== d.id) return null;
   return (
     <Sec t="CONTINUE TONIGHT">
-      {open.value
-        ? <NightPlanForm store={store} d={d} onDone={() => { open.value = false; }} />
-        : <button class="btn" onClick={() => { open.value = true; }} title="Fork this session tonight, in its own worktree, with a prompt you write now">CONTINUE TONIGHT</button>}
+      <NightPlanForm store={store} d={d} onDone={() => { tonightOpen.value = null; }} />
     </Sec>
   );
 }

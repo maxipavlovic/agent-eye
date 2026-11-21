@@ -6,12 +6,13 @@ import { folderGroup, OUTPUT_NAMES, outputLabel, tok } from '../../format';
 import { INK, MARKS, OUT_TAG } from './art';
 import { Hl } from './highlight';
 import { Mark } from './pieces';
+import { costText, tokensText } from './usageText';
 import { WorkedRows } from './WorkedRows';
 
 /** A titled block of the detail panel, with an optional count. */
-export function Sec({ t, n, children }: { t: string; n?: number | string; children: ComponentChildren }) {
+export function Sec({ t, n, id, children }: { t: string; n?: number | string; id?: string; children: ComponentChildren }) {
   return (
-    <section class="sec">
+    <section class="sec" id={id}>
       <h4>{t}{n !== undefined && <b>{n}</b>}</h4>
       {children}
     </section>
@@ -172,6 +173,7 @@ export function TokenSec({ t }: { t: Tokens }) {
 }
 
 export function Where({ d }: { d: CardDetail }) {
+  const u = d.usage && d.usage.total > 0 ? d.usage : null;
   return (
     <Sec t="WHERE">
       <dl class="where">
@@ -179,7 +181,9 @@ export function Where({ d }: { d: CardDetail }) {
         {d.branch && (<><dt>BRANCH</dt><dd>{d.branch}</dd></>)}
         {d.started_at && (<><dt>STARTED</dt><dd>{new Date(d.started_at).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}</dd></>)}
         <WorkedRows w={d.worked} />
+        {u && (<><dt>COST</dt><dd>{costText(u)} · {tokensText(u)}</dd></>)}
       </dl>
+      {u && <p class="rhint">{u.estimate}</p>}
     </Sec>
   );
 }

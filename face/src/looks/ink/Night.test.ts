@@ -153,9 +153,7 @@ describe('the TONIGHT switch in the idea form', () => {
     type(m.$<HTMLInputElement>('input[name=title]'), 'From the form');
     type(m.$<HTMLTextAreaElement>('textarea[name=prompt]'), 'Do the thing');
     type(m.$<HTMLInputElement>('input[name=folder]'), '~/code/demo');
-    const box = m.$<HTMLInputElement>('input[name=tonight]')!;
-    box.checked = true;
-    box.dispatchEvent(new Event('change', { bubbles: true }));
+    [...m.$$('form.modal .pick button')].find((b) => text(b) === 'Run it tonight')!.click();
     await vi.waitFor(() => expect(m.$('input[name=limit]')).not.toBeNull());
     type(m.$<HTMLInputElement>('input[name=limit]'), '45m');
     m.$<HTMLFormElement>('form.modal')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
@@ -170,13 +168,13 @@ describe('CONTINUE TONIGHT', () => {
     const card = m.$$('.card').find((c) => !c.classList.contains('idea') && !c.querySelector('.mk.night'))!;
     card.click();
     await vi.waitFor(() => expect(m.$('.page')).not.toBeNull());
-    await vi.waitFor(() => expect(button(m.root, 'CONTINUE TONIGHT')).toBeDefined());
+    await vi.waitFor(() => expect(button(m.root, 'CONTINUE TONIGHT…')).toBeDefined());
   }
 
   it('needs a prompt, then plans the session', async () => {
     const m = await mount();
     await openSession(m);
-    button(m.$('.page')!, 'CONTINUE TONIGHT')!.click();
+    button(m.$('.page')!, 'CONTINUE TONIGHT…')!.click();
     await vi.waitFor(() => expect(m.$('form.nplan textarea')).not.toBeNull());
     m.$<HTMLFormElement>('form.nplan')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     await vi.waitFor(() => expect(m.$$('.toast, [role=status]').map(text).join(' ')).toContain('needs a prompt'));
@@ -191,7 +189,7 @@ describe('CONTINUE TONIGHT', () => {
   it('a weekly limit eye cannot check is refused with the reason', async () => {
     const m = await mount();
     await openSession(m);
-    button(m.$('.page')!, 'CONTINUE TONIGHT')!.click();
+    button(m.$('.page')!, 'CONTINUE TONIGHT…')!.click();
     await vi.waitFor(() => expect(m.$('form.nplan textarea')).not.toBeNull());
     type(m.$<HTMLTextAreaElement>('form.nplan textarea'), 'go');
     type(m.$<HTMLInputElement>('form.nplan input:not([type=checkbox])'), '80%');
@@ -258,7 +256,7 @@ describe('the two ways to keep your folder safe', () => {
     const idea = await addIdea(m);
     m.$$('.card.idea').find((c) => text(c).includes('Night idea'))!.querySelector<HTMLButtonElement>('.btn.ghost')!.click();
     await vi.waitFor(() => expect(m.$('.nplan')).not.toBeNull());
-    const choices = [...m.$('.nplan')!.querySelectorAll<HTMLButtonElement>('fieldset.nightpick button')].filter((b) => /worktree|copy/.test(text(b)));
+    const choices = [...m.$('.nplan')!.querySelectorAll<HTMLButtonElement>('fieldset.pick button')].filter((b) => /worktree|copy/.test(text(b)));
     expect(choices.map(text)).toEqual(['A worktree of your repo (default)', 'A separate copy (your folder fully locked)']);
     expect(choices.map((b) => b.getAttribute('aria-pressed'))).toEqual(['true', 'false']);
     choices[1]!.click();
@@ -273,7 +271,7 @@ describe('the two ways to keep your folder safe', () => {
     await addIdea(m);
     m.$$('.card.idea').find((c) => text(c).includes('Night idea'))!.querySelector<HTMLButtonElement>('.btn.ghost')!.click();
     await vi.waitFor(() => expect(m.$('.nplan')).not.toBeNull());
-    const pressed = [...m.$('.nplan')!.querySelectorAll<HTMLButtonElement>('fieldset.nightpick button[aria-pressed=true]')].map(text);
+    const pressed = [...m.$('.nplan')!.querySelectorAll<HTMLButtonElement>('fieldset.pick button[aria-pressed=true]')].map(text);
     expect(pressed).toContain('A separate copy (your folder fully locked)');
     button(m.root, 'PLAN FOR TONIGHT')!.click();
     await vi.waitFor(() => expect(m.plans.at(-1)).toMatchObject({ isolation: 'copy' }));

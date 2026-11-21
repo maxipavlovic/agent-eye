@@ -40,7 +40,7 @@ export function LeftBehind({ d, store }: { d: CardDetail; store: Store }) {
     </div>
   );
   return (
-    <Sec t="LEFT BEHIND" n={items.length}>
+    <Sec t="LEFT BEHIND" n={items.length} id="left-behind">
       <ul class="dloose">
         {items.map((it) => (
           <li key={it.key} class={`k-${it.kind}`}>
