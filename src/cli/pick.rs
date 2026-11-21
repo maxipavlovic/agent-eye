@@ -76,6 +76,7 @@ pub fn run(g: &Global, a: &PickArgs) -> Result<()> {
     let mut app = tui::App::new(db, idx, &query, color, now);
     app.paths = Some(paths.clone());
     app.user = cfg.user.clone();
+    app.usage_cfg = cfg.usage.clone();
     app.agents = agents.clone();
     app.all = a.all;
     if a.all {

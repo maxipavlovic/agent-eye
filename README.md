@@ -36,6 +36,7 @@ Coding agents forget. Claude Code deletes transcripts after 30 days, you lose tr
 <tr><td><img src="assets/icon-keep.svg" width="32" alt=""></td><td><b>Nothing lost:</b> a compressed copy of every transcript, restored on resume.</td></tr>
 <tr><td><img src="assets/icon-status.svg" width="32" alt=""></td><td><b>Know what needs you:</b> each session's state, next step and owner.</td></tr>
 <tr><td><img src="assets/icon-board.svg" width="32" alt=""></td><td><b>A board if you want one:</b> pixel-art, local, installable as an app, in one of eight accent colours.</td></tr>
+<tr><td><img src="assets/icon-status.svg" width="32" alt=""></td><td><b>Cost and limits:</b> tokens and an API-equivalent estimate per session, project and agent, plus plan limits (<a href="docs/usage.md">usage</a>).</td></tr>
 <tr><td><img src="assets/icon-local.svg" width="32" alt=""></td><td><b>Local only:</b> no account, no telemetry.</td></tr>
 </table>
 
@@ -68,7 +69,7 @@ Works with Claude Code and Codex CLI. Unofficial: not affiliated with Anthropic 
 
 ## Docs
 
-[Site](https://maxipavlovic.github.io/agent-eye/) · [Terminal](docs/terminal.md) · [Config](docs/config.md) · [Backups](docs/backups.md) · [Agents](docs/agents.md) · [API](docs/api.md) · [Changelog](CHANGELOG.md)
+[Site](https://maxipavlovic.github.io/agent-eye/) · [Terminal](docs/terminal.md) · [Config](docs/config.md) · [Usage](docs/usage.md) · [Backups](docs/backups.md) · [Agents](docs/agents.md) · [API](docs/api.md) · [Changelog](CHANGELOG.md)
 
 ## License
 

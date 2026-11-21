@@ -17,6 +17,7 @@ import { Lanes } from './Lanes';
 import { useLayout } from './layout';
 import { Results } from './Results';
 import { Toasts } from './Toasts';
+import { UsageHost } from './Usage';
 import { useWalk } from './walk';
 import { Welcome } from './Welcome';
 
@@ -97,6 +98,7 @@ export function Root({ store }: { store: Store }) {
       )}
       <IdeaFormHost store={store} />
       <RemindFormHost store={store} />
+      <UsageHost store={store} />
       <CardMenu store={store} />
       <Toasts store={store} />
     </div>

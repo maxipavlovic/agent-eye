@@ -40,6 +40,8 @@ pub struct App {
     pub paths: Option<Paths>,
     /// Who "you" is in next lines.
     pub user: UserCfg,
+    /// Prices for the usage line of the preview.
+    pub usage_cfg: crate::config::UsageCfg,
     /// The enabled agents: their names label the preview, and they read the conversations.
     pub agents: Agents,
     /// The preview pane shows the conversation instead of the summary (Ctrl-T).
@@ -74,6 +76,7 @@ impl App {
             last_ms: 0.0,
             paths: None,
             user: UserCfg::default(),
+            usage_cfg: Default::default(),
             agents: Agents::default(),
             talk: false,
             talk_scroll: 0,

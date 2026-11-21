@@ -86,6 +86,14 @@ Snapshots of the database (see `backups.md`). Every key is optional.
 | `mirror` | `""` | An absolute path (or one that starts with `~`) to a folder that **already exists** (an external disk, a synced folder): each snapshot is copied there too, with the same rotation. A folder that is not there is skipped, never created, and `eye doctor` says so. A leading `~` is your home folder. Empty: off. |
 | `mirror_archive` | `false` | Also copy the transcript archive (`~/.agent-eye/archive/`) into `<mirror>/archive`: only files whose size or time changed, and nothing is ever deleted there. |
 
+## `[usage]`
+
+The cost estimate (see `usage.md`). Every key is optional.
+
+| Key | Default | Meaning |
+|---|---|---|
+| `[usage.prices."<model>"]` | the built-in table | Prices in USD per million tokens for a model, to add one or override a built-in price: `input`, `output`, `cache_write`, `cache_read` (each defaults to 0). The model id matches with its date and `[1m]` tag left off. A model named here is priced from this table alone; a model in neither table has no cost, only tokens. |
+
 ## Environment
 
 | Variable | Meaning |

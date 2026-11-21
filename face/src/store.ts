@@ -4,7 +4,7 @@ import { pushPref } from './prefs';
 import { signal, computed, effect, batch, type Signal, type ReadonlySignal } from '@preact/signals';
 import type {
   Agent, ArchivePage, Board, Card, CardDetail, ColumnId, Connection, ConversationPage, IdeaInput, MoveTarget,
-  FolderCheck, RemindInput, RemindSettings, ResumePlan, SearchHit, Source, StartPlan,
+  FolderCheck, RemindInput, RemindSettings, ResumePlan, SearchHit, Source, StartPlan, UsageReport,
 } from './api/types';
 
 export type ThemePref = 'auto' | 'light' | 'dark';
@@ -52,6 +52,8 @@ export interface Store {
   setHidden(id: string, hidden: boolean): Promise<void>;
   /** Runs the resume plan for real on the live source (opens iTerm); returns the plan. */
   resume(id: string, fork?: boolean): Promise<ResumePlan | null>;
+  /** Usage over the last `days` days; null (quietly) when the engine cannot say. */
+  usage(days: number): Promise<UsageReport | null>;
   /** Messages of a session, newest page first; null (quietly) when they cannot be had. */
   conversation(id: string, before?: number | null, limit?: number): Promise<ConversationPage | null>;
   /** True when saved; on failure a toast says why and the caller keeps the form open. */
@@ -254,6 +256,14 @@ export function createStore(src: Source, { defaultTheme = 'auto' }: { defaultThe
     }
   }
 
+  async function usage(days: number) {
+    try {
+      return await src.usage(days);
+    } catch {
+      return null;
+    }
+  }
+
   async function conversation(id: string, before: number | null = null, limit = 10) {
     try {
       return await src.conversation(id, limit, before);
@@ -351,7 +361,7 @@ export function createStore(src: Source, { defaultTheme = 'auto' }: { defaultThe
   return {
     source: src.name,
     board, selected, detail, query, results, searching, connection, themePref, accent, theme, toasts, agents, notice, needsYou, error,
-    open, close, search, move, setHidden, resume, conversation, addIdea, editIdea, startIdea, folderCheck: (path) => src.folderCheck(path), remind, loadNotice, setNotice,
+    open, close, search, move, setHidden, resume, usage, conversation, addIdea, editIdea, startIdea, folderCheck: (path) => src.folderCheck(path), remind, loadNotice, setNotice,
     archive: (offset, limit = 50) => src.archive(offset, limit),
     setTheme, setAccent, toast, dismissToast, refresh,
   };

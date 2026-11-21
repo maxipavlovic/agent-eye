@@ -58,7 +58,9 @@ pub mod server;
 pub mod summarize;
 /// The terminal picker screen.
 pub mod tui;
+/// The days a session was worked on.
+/// Usage by day and model, the cost estimate, and the plan limits.
+pub mod usage;
 /// Small helpers.
 pub mod util;
-/// The days a session was worked on.
 pub mod worked;

@@ -14,6 +14,7 @@ mod remind_settings;
 mod run;
 #[cfg(test)]
 mod test_support;
+mod usage_routes;
 
 pub use board::board_json;
 pub use card::{card_json, CardCtx};
@@ -101,6 +102,7 @@ pub fn router(state: Shared) -> Router {
         .route("/api/cards/:id/conversation", get(cards::api_conversation))
         .route("/api/search", get(cards::api_search))
         .route("/api/agents", get(agent_routes::api_agents))
+        .route("/api/usage", get(usage_routes::api_usage))
         .route(
             "/api/ideas",
             get(idea_routes::api_ideas).post(idea_routes::api_idea_add),

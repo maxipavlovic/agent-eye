@@ -11,6 +11,7 @@ use crate::paths::Paths;
 use crate::scan;
 use crate::server;
 use crate::summarize;
+use crate::usage;
 use crate::util::{now_ms, short_id};
 use crate::worked;
 use anyhow::{Context, Result};
@@ -365,6 +366,17 @@ pub fn tick(db: &mut Db, paths: &Paths, cfg: &Config) -> Result<()> {
         ),
         Ok(_) => {}
         Err(e) => log(paths, &format!("work timeline: {e:#}")),
+    }
+    match usage::backfill::run_batch(db, paths, &agents::enabled(cfg), usage::backfill::BATCH) {
+        Ok(p) if p.counted + p.unreadable > 0 => log(
+            paths,
+            &format!(
+                "usage by day: {} sessions counted, {} unreadable, {} to go",
+                p.counted, p.unreadable, p.left
+            ),
+        ),
+        Ok(_) => {}
+        Err(e) => log(paths, &format!("usage by day: {e:#}")),
     }
     notify_reminders(db, paths, cfg, &mut |title, body| {
         if !crate::platform::notify::send(title, body) {

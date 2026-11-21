@@ -28,6 +28,7 @@ function source(over: Partial<Source> = {}): Source {
     search: async () => ({ results: [] }),
     ideas: async () => ({ ideas: [] }),
     agents: async () => ({ agents: [{ id: 'claude', name: 'Claude Code', short: 'Claude', default: true }] }),
+    usage: async () => { throw new Error('no usage'); },
     move: async (id) => card(id, 'done'),
     setHidden: async (id) => card(id, 'paused'),
     conversation: async () => ({ messages: [], more: false, next_before: null }),

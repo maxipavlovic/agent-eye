@@ -55,6 +55,10 @@ pub(super) async fn api_card(State(st): State<Shared>, Path(id): Path<String>) -
         &id,
         &crate::worked::summary::local_offset_ms
     )?);
+    v["usage"] = match crate::usage::report::of_session(&db.conn, &st.cfg.usage, &id)? {
+        Some(sum) => crate::usage::report::session_json(&sum),
+        None => Value::Null,
+    };
     // Stored prompt lines include commands and paste tags; the agent says what is worth showing.
     let readable = |l: &str| st.agents.display_prompt(&s, l);
     let lines = db.prompt_lines(&id)?;

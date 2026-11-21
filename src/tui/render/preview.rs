@@ -57,6 +57,14 @@ pub(super) fn preview_lines<'a>(app: &App, r: &Row, pal: &Pal) -> Vec<Line<'a>> 
             if let Some(line) = crate::worked::summary::session_line(&app.db.conn, &s.id, app.now) {
                 v.push(Line::styled(format!("worked {line}"), pal.dim()));
             }
+            if let Ok(Some(sum)) =
+                crate::usage::report::of_session(&app.db.conn, &app.usage_cfg, &s.id)
+            {
+                v.push(Line::styled(
+                    format!("usage {}", crate::usage::report::session_line(&sum)),
+                    pal.dim(),
+                ));
+            }
             for t in activity::tasks(s, app.now) {
                 v.push(Line::from(vec![
                     label("Running"),

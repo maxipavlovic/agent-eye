@@ -451,3 +451,43 @@ fn the_word_list_is_readable_and_not_empty_after_migration_13() {
         .unwrap();
     assert!(n > 0);
 }
+
+/// An index from before `usage_day`: the tables are gone and the version is `from`.
+fn index_without_usage(dir: &std::path::Path, from: i64) -> Connection {
+    let path = dir.join("old.db");
+    {
+        let db = Db::open(&path).unwrap();
+        db.conn
+            .execute_batch("DROP TABLE usage_day; DROP TABLE usage_state;")
+            .unwrap();
+        db.meta_set("schema_version", &from.to_string()).unwrap();
+        db.conn
+            .execute("INSERT INTO session(id, tok_in) VALUES('s1', 5)", [])
+            .unwrap();
+    }
+    Connection::open(&path).unwrap()
+}
+
+#[test]
+fn migration_15_adds_the_usage_tables_from_13_and_from_14_and_keeps_every_row() {
+    for from in [13, 14] {
+        let tmp = tempfile::tempdir().unwrap();
+        let db = Db::init(index_without_usage(tmp.path(), from)).unwrap();
+        assert_eq!(
+            db.meta_get("schema_version").unwrap(),
+            Some(SCHEMA_VERSION.to_string())
+        );
+        assert_eq!(SCHEMA_VERSION, 15);
+        assert_eq!(count_rows(&db, "usage_day"), 0);
+        assert_eq!(count_rows(&db, "usage_state"), 0);
+        assert_eq!(count_rows(&db, "session"), 1);
+        // nothing is re-read for them: the cursors are left alone
+        assert!(db.cursor_get("/none").unwrap().is_none());
+    }
+}
+
+fn count_rows(db: &Db, table: &str) -> i64 {
+    db.conn
+        .query_row(&format!("SELECT count(*) FROM {table}"), [], |r| r.get(0))
+        .unwrap()
+}

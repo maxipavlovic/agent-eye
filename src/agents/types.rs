@@ -5,6 +5,7 @@
 pub use crate::activity::{BgTask, LoopInfo, Signals};
 pub use crate::model::Stamp;
 use crate::model::Tokens;
+pub use crate::usage::{LimitWindow, PlanLimits, UsageMsg};
 pub use crate::worked::WorkEvent;
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
@@ -131,6 +132,11 @@ pub struct Delta {
     /// Id of the last message counted in `usage`; carried to the next read so a message that
     /// spans several lines counts once.
     pub last_msg_id: Option<String>,
+    /// The token use of every message read, with its time and model, for usage by day
+    /// (`crate::usage`). What is new when `replaces` is false, the whole session otherwise.
+    pub usage_msgs: Vec<UsageMsg>,
+    /// The plan limits the newest message read reported, when the transcript carries them.
+    pub limits: Option<PlanLimits>,
 }
 
 /// What the scanner hands to a transcript read besides the transcript itself.
@@ -175,6 +181,8 @@ pub struct SubAgents {
 pub struct UsageRead {
     pub tokens: Tokens,
     pub last_id: Option<String>,
+    /// The messages behind `tokens`, for usage by day.
+    pub msgs: Vec<UsageMsg>,
     /// Where this read stopped (see [`Delta::marker`]).
     pub marker: String,
     /// True when `tokens` count the whole transcript, not only what is new (see

@@ -290,6 +290,13 @@ pub fn show(g: &Global, id: &str, json: bool, conversation: bool, n: usize) -> R
     if let Some(line) = worked::summary::session_line(&env.db.conn, &s.id, now) {
         println!("worked:   {}", printable(&line));
     }
+    if let Some(sum) = crate::usage::report::of_session(&env.db.conn, &env.cfg.usage, &s.id)? {
+        println!(
+            "usage:    {} ({})",
+            crate::usage::report::session_line(&sum),
+            crate::usage::prices::LABEL
+        );
+    }
     for t in activity::tasks(&s, now) {
         println!(
             "running:  background: {}",

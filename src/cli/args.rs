@@ -180,6 +180,29 @@ pub enum Cmd {
         #[arg(long)]
         json: bool,
     },
+    /// Cost and tokens by day, project, agent, model or session, with the plan limits
+    Usage {
+        /// The last N days, today included
+        #[arg(long, conflicts_with_all = ["week", "month"])]
+        days: Option<i64>,
+        /// The last 7 days (the default)
+        #[arg(long, conflicts_with = "month")]
+        week: bool,
+        /// The last 30 days
+        #[arg(long)]
+        month: bool,
+        /// Group rows by project, agent, model or session
+        #[arg(long, default_value = "project")]
+        by: String,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Status line command for Claude Code that keeps its plan limits (opt in, see docs/usage.md)
+    Statusline {
+        /// A status line command to run too: it gets the same input and its output is printed
+        #[arg(long)]
+        wrap: Option<String>,
+    },
     /// Search sessions
     Find {
         #[arg(required = true)]

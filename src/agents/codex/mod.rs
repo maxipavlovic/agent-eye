@@ -16,6 +16,7 @@ mod live;
 mod results;
 mod rollout;
 mod script;
+mod usage;
 mod work;
 
 use super::*;
@@ -195,6 +196,10 @@ impl Agent for Codex {
         work::read_events(path)
     }
 
+    fn usage_msgs(&self, path: &Path) -> Result<Vec<UsageMsg>> {
+        usage::read_msgs(path)
+    }
+
     fn owns_transcript(&self, path: &Path) -> bool {
         [files::SESSIONS_DIR, files::ARCHIVED_DIR]
             .iter()
@@ -242,6 +247,7 @@ impl Agent for Codex {
     ) -> Result<UsageRead> {
         Ok(UsageRead {
             tokens: rollout::last_total(&source.path)?.tokens(),
+            msgs: usage::read_msgs(&source.path)?,
             last_id,
             marker: source.stamp.size.to_string(),
             replaces: true,
