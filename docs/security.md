@@ -69,8 +69,9 @@ folder is tightened on the next run):
 **A pack** (`eye export`, a `.eyepack` file) holds the database, the whole archive and a copy of
 every transcript that was not archived yet: everything above except `board.token`, the queue and
 the logs. It is written 0600 where you ask (the current folder by default) and leaves the machine
-only when you move it. It is **not encrypted** and the transcripts in it are not masked, so keep
-it where only you can read it. `eye import` checks every file's sha256 before it changes anything
+only when you move it. eye does **not encrypt** it and the transcripts in it are not masked: send
+it through `age -p` or `gpg -c` with `eye export --to -` before it goes to cloud storage (see
+[backups.md](backups.md)), or keep it where only you can read it. `eye import` checks every file's sha256 before it changes anything
 and refuses a pack from a newer eye. The readable page of one session (`eye export <session>`,
 EXPORT on the board) masks secrets the way summaries do, which is best effort.
 

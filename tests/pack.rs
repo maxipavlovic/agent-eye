@@ -71,6 +71,25 @@ impl Home {
             .output()
             .unwrap()
     }
+    /// Run eye with `input` on its standard input; standard output comes back as bytes.
+    fn piped(&self, args: &[&str], input: &[u8]) -> std::process::Output {
+        use std::io::Write;
+        let mut child = std::process::Command::new(env!("CARGO_BIN_EXE_agent-eye"))
+            .env("HOME", &self.home)
+            .env_remove("EYE_HOME")
+            .env_remove("EYE_CLAUDE_DIR")
+            .env("PATH", "/usr/bin:/bin")
+            .env("NO_COLOR", "1")
+            .args(args)
+            .current_dir(&self.home)
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .unwrap();
+        child.stdin.take().unwrap().write_all(input).unwrap();
+        child.wait_with_output().unwrap()
+    }
     fn ok(&self, args: &[&str]) -> String {
         let o = self.eye(args);
         let t = text(&o);
@@ -524,4 +543,44 @@ fn one_session_exports_as_a_page_with_secrets_masked() {
     assert!(md.contains("### You") && md.contains("second task"), "{md}");
     // flags without a session are an error
     assert!(!a.eye(&["export", "--html"]).status.success());
+}
+
+#[test]
+fn a_pack_goes_through_a_pipe_both_ways() {
+    let t = tempfile::tempdir().unwrap();
+    let a = home_a(t.path());
+    // `eye export --to -`: the pack on standard output, the summary on standard error
+    let out = a.eye(&["export", "--to", "-"]);
+    assert!(out.status.success(), "{}", text(&out));
+    assert!(out.stdout.len() > 1000);
+    assert!(String::from_utf8_lossy(&out.stderr).contains("to standard output"));
+    assert!(
+        std::fs::read_dir(&a.home).unwrap().all(|e| !e
+            .unwrap()
+            .file_name()
+            .to_string_lossy()
+            .ends_with(".eyepack")),
+        "no pack file is left behind"
+    );
+    // `eye import -`: the same bytes into another home
+    let b = Home::new(t.path(), "b/home/max");
+    let done = b.piped(&["import", "-", "--yes"], &out.stdout);
+    assert!(done.status.success(), "{}", text(&done));
+    assert!(
+        text(&done).contains("2 new and 0 updated"),
+        "{}",
+        text(&done)
+    );
+    assert_eq!(session_ids(&b).len(), 2);
+    // a damaged stream is refused before anything changes
+    let c = Home::new(t.path(), "c/home/max");
+    let bad = c.piped(
+        &["import", "-", "--yes"],
+        &out.stdout[..out.stdout.len() / 2],
+    );
+    assert!(!bad.status.success());
+    // one session as a page on standard output
+    let page = a.eye(&["export", S1, "--to", "-"]);
+    assert!(page.status.success());
+    assert!(String::from_utf8_lossy(&page.stdout).contains("<html"));
 }

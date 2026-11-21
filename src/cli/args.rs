@@ -410,7 +410,8 @@ pub enum Cmd {
     Export {
         /// A session (id or prefix): write that session as a readable page instead
         session: Option<String>,
-        /// Where to write: a folder or a file name (default: the current folder)
+        /// Where to write: a folder or a file name (default: the current folder); `-` writes to
+        /// standard output, to encrypt it on the way (`eye export --to - | age -p > backup.eyepack.age`)
         #[arg(long)]
         to: Option<PathBuf>,
         /// With a session: a self-contained HTML page (the default)
@@ -422,6 +423,7 @@ pub enum Cmd {
     },
     /// Read a file made by `eye export` into this machine: shows the plan first, asks [y/N]
     Import {
+        /// The pack, or `-` to read it from standard input (`age -d backup.eyepack.age | eye import -`)
         file: PathBuf,
         /// Do not ask first (needed in a script)
         #[arg(long)]

@@ -49,12 +49,28 @@ eye import agent-eye-laptop-20261121-1030.eyepack --dry-run   # the plan only
 eye import agent-eye-laptop-20261121-1030.eyepack             # shows the plan, asks [y/N]
 ```
 
+### Encrypting a pack
+
+eye has no encryption of its own; `-` sends a pack through any tool you trust. With
+[age](https://github.com/FiloSottile/age) and a passphrase:
+
+```sh
+eye export --to - | age -p > eye-backup.eyepack.age     # asks for a passphrase twice
+age -d eye-backup.eyepack.age | eye import -            # on the other machine; asks [y/N] on the terminal
+```
+
+With GnuPG: `eye export --to - | gpg -c > eye-backup.eyepack.gpg` and
+`gpg -d eye-backup.eyepack.gpg | eye import -`. `eye export --to -` refuses a terminal as its
+output, prints its summary on standard error, and leaves no pack file behind; `eye import -`
+saves the stream in eye's temp folder, checks it like a file and asks its question on the terminal
+(add `--yes` in a script). `eye export <session> --to -` prints one session's page the same way.
+
 A pack is one file (a zstd-compressed tar) with the database, the whole transcript archive and a
 copy of the transcripts that are still with the agent but not archived yet, so it holds every
 session eye knows, plus a manifest with the sha256 of each file. Upload the file to Google Drive
 or any storage by hand; it is the same data as `~/.agent-eye`, so treat it that way (see
-[security.md](security.md)): packs are not encrypted in this version, so put them somewhere only
-you can read. No `board.token` is in it.
+[security.md](security.md)): encrypt it before it leaves the machine (above), or keep it somewhere
+only you can read. No `board.token` is in it.
 
 `eye import` checks the checksums and the schema first (an older pack is migrated, a newer one is
 refused), prints a plan and changes nothing until you say yes (`--yes` for scripts, `--dry-run` to
