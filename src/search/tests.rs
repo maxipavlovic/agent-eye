@@ -224,7 +224,7 @@ fn the_picker_and_find_give_the_same_order() {
     put(&db, "e", "Catalog migration", "", "x", 4);
     let idx = crate::pick::Index::load(&db, &Config::default(), NOW).unwrap();
     for q in ["catalog migration", "catalog", "migration cat", "catalg"] {
-        let picker: Vec<String> = crate::pick::search(&db, &idx, q, false, NOW)
+        let picker: Vec<String> = crate::pick::search(&db, &idx, q, false)
             .into_iter()
             .map(|i| idx.rows[i].id.clone())
             .collect();
@@ -328,4 +328,123 @@ fn edit_distance() {
     assert_eq!(distance("tradwind", "tradewind"), 1);
     assert_eq!(distance("migraton", "migrat"), 2);
     assert_eq!(distance("same", "same"), 0);
+}
+
+#[test]
+fn a_3000_word_query_is_cut_and_still_finds_its_first_words() {
+    let db = Db::open_memory().unwrap();
+    put(&db, "a", "Quokka habitat", "", "x", 5);
+    put(&db, "b", "Other", "", "x", 5);
+    let q = "quokka habitat ".repeat(1500);
+    let t = std::time::Instant::now();
+    let got = find_q(&db, &q, false);
+    assert!(t.elapsed().as_millis() < 500, "{:?}", t.elapsed());
+    assert_eq!(parse_len(&q), 20);
+    assert_eq!(got, ["a"]);
+}
+
+fn parse_len(q: &str) -> usize {
+    let words: Vec<String> = q.split_whitespace().map(String::from).collect();
+    query::parse(&words).units.len()
+}
+
+#[test]
+fn a_link_as_the_last_unit_is_not_a_prefix_and_not_fixed() {
+    let db = Db::open_memory().unwrap();
+    put(&db, "made", "Pricing page", "", "x", 30);
+    sql(
+        &db,
+        "INSERT INTO output(session_id,kind,value,first_seen_at)
+         VALUES('made','artifact','https://claude.ai/artifact/7YcJXxwvqTV94FL6',1)",
+    );
+    crate::db::fts_write(&db.conn, "made", "x", "", true, 10_000, 10_000).unwrap();
+    put(&db, "other", "Pricing review", "", "x", 1);
+    let w = |s: &str| vec![s.to_string()];
+    let q = query::parse(&w("https://claude.ai/artifact/7YcJXxwvqTV94FL6"));
+    assert!(q.units.iter().all(|u| !u.prefix && !u.typo_ok));
+    let q = query::parse(&[
+        "pricing".into(),
+        "https://claude.ai/artifact/7YcJXxwvqTV94FL6".into(),
+    ]);
+    assert!(!q.units.last().unwrap().prefix);
+    // a cut-off id is neither completed as a prefix nor fixed as a typo
+    assert!(find_q(&db, "https://claude.ai/artifact/7YcJXxwvqTV9", false).is_empty());
+    assert!(find_q(&db, "https://claude.ai/artifact/7YcJXxwvqTV94FL7", false).is_empty());
+    assert_eq!(
+        first(&db, "pricing https://claude.ai/artifact/7YcJXxwvqTV94FL6").as_deref(),
+        Some("made")
+    );
+}
+
+#[test]
+fn a_typo_in_the_last_unit_is_fixed() {
+    let db = Db::open_memory().unwrap();
+    for i in 0..20 {
+        put(
+            &db,
+            &format!("f{i}"),
+            &format!("Unrelated {i}"),
+            "",
+            "build",
+            9,
+        );
+    }
+    put(&db, "tw", "Tradewind pricing", "", "x", 5);
+    assert_eq!(first(&db, "pricing tradwnd").as_deref(), Some("tw"));
+    assert_eq!(first(&db, "pricing tradwind").as_deref(), Some("tw"));
+}
+
+#[test]
+fn the_picker_and_find_agree_for_an_untitled_session_and_an_id_prefix() {
+    use crate::config::Config;
+    let db = Db::open_memory().unwrap();
+    // untitled: the title is the start of the first prompt
+    for (id, first_prompt, days) in [
+        ("u1", "migrate the catalog service", 3),
+        (
+            "u2",
+            "migrate the catalog service to the new cluster this week",
+            2,
+        ),
+        ("u3", "catalog", 1),
+    ] {
+        put(&db, id, "", "", first_prompt, days);
+        db.conn
+            .execute(
+                "UPDATE session SET title=NULL, first_prompt=?2 WHERE id=?1",
+                params![id, first_prompt],
+            )
+            .unwrap();
+    }
+    // a hex prefix shared by 8 sessions, more than the old cap of 5
+    for n in 0..8 {
+        put(&db, &format!("ab12{n}000"), "Same", "", "x", n);
+    }
+    let idx = crate::pick::Index::load(&db, &Config::default(), NOW).unwrap();
+    for q in ["catalog", "migrate catalog", "ab12"] {
+        let picker: Vec<String> = crate::pick::search(&db, &idx, q, false)
+            .into_iter()
+            .map(|i| idx.rows[i].id.clone())
+            .collect();
+        let words: Vec<String> = q.split_whitespace().map(String::from).collect();
+        let found = ids(find(&db, &words, 50, false, NOW).unwrap());
+        assert_eq!(picker, found, "{q}");
+    }
+    assert_eq!(find_q(&db, "ab12", false).len(), 8);
+}
+
+#[test]
+fn an_id_hit_has_a_finite_score_above_the_scored_hits() {
+    let db = Db::open_memory().unwrap();
+    put(&db, "5b8fe153-0000", "Other", "", "x", 1);
+    put(&db, "m", "Mentions 5b8fe153", "", "see 5b8fe153", 1);
+    let w = vec!["5b8fe153".to_string()];
+    let h = find(&db, &w, 5, false, NOW).unwrap();
+    assert_eq!(h[0].session.id, "5b8fe153-0000");
+    assert!(h[0].score.is_finite());
+    assert_eq!(h[0].score, h[1].score + 1.0);
+    // an id hit alone scores 1.0
+    let db = Db::open_memory().unwrap();
+    put(&db, "5b8fe153-0000", "Other", "", "x", 1);
+    assert_eq!(find(&db, &w, 5, false, NOW).unwrap()[0].score, 1.0);
 }

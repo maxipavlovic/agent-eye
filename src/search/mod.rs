@@ -23,11 +23,13 @@ pub struct Hit {
     pub session: Session,
     pub column: Column,
     pub snippet: String,
-    /// How well it matches; higher is better.
+    /// How well it matches; higher is better. A session id hit has the top scored hit's score + 1
+    /// (1.0 when nothing else matched).
     pub score: f64,
 }
 
-/// Is there anything to search for in these words (not empty, not only punctuation)?
+/// Is there anything to search for in these words (not empty, not only punctuation)? The one
+/// check for "blank query", used by the picker, `find` and the server.
 pub fn has_terms(words: &[String]) -> bool {
     !query::parse(words).is_empty()
 }
@@ -101,7 +103,7 @@ fn facts(db: &Db, id: &str) -> Result<Option<Facts>> {
             let title: Option<String> = r.get(0)?;
             let first: Option<String> = r.get(1)?;
             Ok(Facts {
-                title: crate::pick::title_line(title.as_deref(), first.as_deref()).to_lowercase(),
+                title: crate::pick::title_lc(title.as_deref(), first.as_deref()),
                 last: r.get::<_, Option<i64>>(2)?.unwrap_or(0),
                 archived: r.get::<_, i64>(3)? != 0,
             })
@@ -127,9 +129,9 @@ pub fn find_without(
     // A session id typed in full or in part comes first, whatever its text says.
     let mut id_hits: Vec<String> = vec![];
     if let Some(prefix) = id_query(words) {
-        let mut st = db.conn.prepare(
-            "SELECT id FROM session WHERE id LIKE ?1 || '%' ORDER BY last_activity_at DESC LIMIT 5",
-        )?;
+        let mut st = db
+            .conn
+            .prepare("SELECT id FROM session WHERE id LIKE ?1 || '%'")?;
         id_hits = st
             .query_map([&prefix], |r| r.get(0))?
             .collect::<rusqlite::Result<_>>()?;
@@ -168,6 +170,7 @@ pub fn find_without(
     let with_outputs = db.session_ids_with_outputs()?;
     let or_query = scored.exprs.join(" OR ");
     let mut out = vec![];
+    let mut id_flags = vec![];
     for (rank, id) in ranked {
         let Some(session) = db.session_by_id(&id)? else {
             continue;
@@ -183,12 +186,30 @@ pub fn find_without(
             let rowid = scored.by_id.get(&id).map_or(0, |m| m.rowid);
             snippet(db, &or_query, rowid)?
         };
+        // a hit with no passage (only the fuzzy title match) shows its title
+        let snippet = if snippet.is_empty() {
+            crate::pick::session_title(&session)
+        } else {
+            snippet
+        };
+        id_flags.push(rank.id_hit);
         out.push(Hit {
             session,
             column,
             snippet,
-            score: if rank.id_hit { f64::MAX } else { rank.score },
+            score: rank.score,
         });
+    }
+    // an id hit sits above every scored hit by one point: a finite number, so it can be written
+    // as JSON and compared
+    let top = out
+        .iter()
+        .zip(&id_flags)
+        .filter(|(_, id)| !**id)
+        .map(|(h, _)| h.score)
+        .fold(None, |m: Option<f64>, s| Some(m.map_or(s, |m| m.max(s))));
+    for (h, _) in out.iter_mut().zip(&id_flags).filter(|(_, id)| **id) {
+        h.score = top.map_or(1.0, |t| t + 1.0);
     }
     Ok(out)
 }

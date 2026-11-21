@@ -87,7 +87,7 @@ impl App {
     /// Run the query again.
     pub fn research(&mut self) {
         let t = std::time::Instant::now();
-        self.results = pick::search(&self.db, &self.idx, &self.query, self.all, self.now);
+        self.results = pick::search(&self.db, &self.idx, &self.query, self.all);
         self.last_ms = t.elapsed().as_secs_f64() * 1000.0;
         self.sel = 0;
         self.msg = None;

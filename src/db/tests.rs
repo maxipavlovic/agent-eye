@@ -441,3 +441,13 @@ fn a_new_database_stems_from_the_start() {
         .unwrap();
     assert!(sql.contains("porter"));
 }
+
+#[test]
+fn the_word_list_is_readable_and_not_empty_after_migration_13() {
+    let db = Db::init(old_index()).unwrap();
+    let n: i64 = db
+        .conn
+        .query_row("SELECT count(*) FROM session_fts_vocab", [], |r| r.get(0))
+        .unwrap();
+    assert!(n > 0);
+}

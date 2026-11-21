@@ -52,7 +52,7 @@ fn ranking_quality() {
                 .and_then(|(_, v)| v.as_str())
                 .unwrap_or("")
         };
-        let got: Vec<String> = search(&db, &idx, q, false, now_ms())
+        let got: Vec<String> = search(&db, &idx, q, false)
             .into_iter()
             .map(|i| idx.rows[i].id.clone())
             .collect();

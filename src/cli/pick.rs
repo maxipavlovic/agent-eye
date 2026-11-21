@@ -43,7 +43,7 @@ pub fn run(g: &Global, a: &PickArgs) -> Result<()> {
     let idx = pick::Index::load(&env.db, &env.cfg, now)?;
     let query = a.filter.clone().unwrap_or_else(|| a.words.join(" "));
     if a.filter.is_some() || a.first || !tui::have_tty() {
-        let res = pick::search(&env.db, &idx, &query, a.all, now);
+        let res = pick::search(&env.db, &idx, &query, a.all);
         if a.first {
             let Some(&i) = res.first() else {
                 anyhow::bail!("no session matches");

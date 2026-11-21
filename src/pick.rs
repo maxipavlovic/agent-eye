@@ -89,6 +89,12 @@ pub fn session_title(s: &Session) -> String {
     title_line(s.title.as_deref(), s.first_prompt.as_deref())
 }
 
+/// The lowercase title of a session: the text the "extra title words" tie-break counts, in the
+/// picker and in `find` alike.
+pub fn title_lc(title: Option<&str>, first_prompt: Option<&str>) -> String {
+    title_line(title, first_prompt).to_lowercase()
+}
+
 /// A title on one line: the title, else the start of the first prompt, else "(untitled)".
 pub fn title_line(title: Option<&str>, first_prompt: Option<&str>) -> String {
     let t = title
@@ -119,7 +125,7 @@ impl Index {
             rows.push(Row {
                 kind: Kind::Session,
                 id: s.id.clone(),
-                title_lc: title.to_lowercase(),
+                title_lc: title_lc(s.title.as_deref(), s.first_prompt.as_deref()),
                 title,
                 notes_lc: String::new(),
                 project: s.cwd.as_deref().map(project_of).unwrap_or_default(),
@@ -185,7 +191,7 @@ impl Index {
         if words.is_empty() {
             return self.board_order(all);
         }
-        if scored.is_blank() {
+        if !search::has_terms(&words) {
             return vec![];
         }
         let id_q = crate::search::id_query(&words);
@@ -264,9 +270,8 @@ impl Index {
     }
 }
 
-/// Rows for a query, best first (empty query: board order).
-/// (`_now` is kept so callers need not change; no age moves a row any more.)
-pub fn search(db: &Db, idx: &Index, query: &str, all: bool, _now: i64) -> Vec<usize> {
+/// Rows for a query, best first (empty query: board order). No age moves a row.
+pub fn search(db: &Db, idx: &Index, query: &str, all: bool) -> Vec<usize> {
     let scored = if query.trim().is_empty() {
         Scored::default()
     } else {
@@ -661,7 +666,7 @@ mod tests {
     }
 
     fn ranked(i: &Index, db: &Db, q: &str, all: bool) -> Vec<String> {
-        ids(i, search(db, i, q, all, NOW))
+        ids(i, search(db, i, q, all))
     }
 
     #[test]
