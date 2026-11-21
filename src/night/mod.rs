@@ -475,6 +475,21 @@ pub fn read_log(paths: &Paths, id: i64, max: usize) -> String {
     String::from_utf8_lossy(&b[from..]).into_owned()
 }
 
+/// Is this the folder of a night-shift run (`<eye home>/night/<n>/wt` or `/work`)? Used where only a
+/// session's folder is at hand: the picker's `night` mark and Codex's `exec` rollouts.
+pub fn is_run_folder(cwd: Option<&str>) -> bool {
+    let parts: Vec<_> = std::path::Path::new(cwd.unwrap_or_default())
+        .components()
+        .map(|c| c.as_os_str().to_string_lossy().into_owned())
+        .collect();
+    parts.windows(3).any(|w| {
+        w[0] == "night"
+            && !w[1].is_empty()
+            && w[1].bytes().all(|b| b.is_ascii_digit())
+            && matches!(w[2].as_str(), "wt" | "work")
+    })
+}
+
 /// The slug of a branch name from a prompt or title: lowercase words joined by `-`.
 pub fn slug(s: &str) -> String {
     let mut out = String::new();

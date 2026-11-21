@@ -68,6 +68,18 @@ pub(super) fn preview_lines<'a>(app: &App, r: &Row, pal: &Pal) -> Vec<Line<'a>> 
             if let Some(line) = crate::loose::summary_line(&app.detail.loose) {
                 v.push(Line::raw(format!("{line}   (Ctrl-L)")));
             }
+            if let Some(run) = &app.detail.night {
+                v.push(Line::from(vec![
+                    label("Night run"),
+                    Span::raw(night_line(run)),
+                ]));
+                if let Some(rep) = run.report.as_deref().filter(|t| !t.trim().is_empty()) {
+                    let first = rep.lines().find(|l| !l.trim().is_empty()).unwrap_or("");
+                    v.push(Line::raw(crate::util::printable(&crate::util::head_chars(
+                        first, 200,
+                    ))));
+                }
+            }
             for t in activity::tasks(s, app.now) {
                 v.push(Line::from(vec![
                     label("Running"),
@@ -395,4 +407,19 @@ pub(super) fn topic_mark(status: Option<&str>) -> &'static str {
         Some("active") => "▶",
         _ => "‖",
     }
+}
+
+/// `done, 41 min, branch night/20261121-x` for the preview of a night run's session.
+fn night_line(run: &crate::night::Run) -> String {
+    let mut parts = vec![run.status.clone()];
+    if let (Some(a), Some(b)) = (run.started_at, run.ended_at) {
+        parts.push(format!("{} min", ((b - a).max(0) + 30_000) / 60_000));
+    }
+    if let Some(w) = &run.why {
+        parts.push(crate::util::printable(w));
+    }
+    if let Some(b) = &run.branch {
+        parts.push(format!("branch {}", crate::util::printable(b)));
+    }
+    parts.join(", ")
 }

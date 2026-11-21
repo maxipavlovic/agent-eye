@@ -229,3 +229,199 @@ pub(super) async fn api_night_of_session(
     .await?;
     Ok(Json(json!({"run": v})))
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::server::test_support::*;
+    use crate::util::now_ms;
+    use axum::http::StatusCode;
+    use serde_json::json;
+
+    fn idea_with(e: &Env, prompt: Option<&str>) -> i64 {
+        let dir = e._tmp.path().join("proj");
+        std::fs::create_dir_all(&dir).unwrap();
+        crate::ideas::add(
+            &e.db,
+            &crate::ideas::NewIdea {
+                title: "t",
+                prompt,
+                folder: dir.to_str(),
+                ..Default::default()
+            },
+        )
+        .unwrap()
+        .id
+    }
+
+    #[tokio::test]
+    async fn the_state_starts_off_and_empty_and_settings_land_in_the_config() {
+        let e = env();
+        let (st, v) = call(&e, req("GET", "/api/night", None)).await;
+        assert_eq!(st, StatusCode::OK);
+        assert_eq!(
+            (
+                v["enabled"].clone(),
+                v["window"].clone(),
+                v["planned"].clone()
+            ),
+            (json!(false), json!("01:00-07:00"), json!(0))
+        );
+        assert_eq!(v["open"], json!([]));
+        let (st, v) = call(
+            &e,
+            req(
+                "POST",
+                "/api/night/settings",
+                Some(json!({"enabled": true, "window": "23:00-05:00", "parallel": 3})),
+            ),
+        )
+        .await;
+        assert_eq!(st, StatusCode::OK);
+        assert_eq!(
+            (
+                v["enabled"].clone(),
+                v["window"].clone(),
+                v["parallel"].clone()
+            ),
+            (json!(true), json!("23:00-05:00"), json!(3))
+        );
+        let cfg = std::fs::read_to_string(e._tmp.path().join("home/config.toml")).unwrap();
+        assert!(
+            cfg.contains("window = \"23:00-05:00\"") && cfg.contains("parallel = 3"),
+            "{cfg}"
+        );
+        // bad values are refused and change nothing
+        for body in [
+            json!({"window": "7-9"}),
+            json!({"parallel": 0}),
+            json!({"parallel": 99}),
+        ] {
+            let (st, v) = call(&e, req("POST", "/api/night/settings", Some(body))).await;
+            assert_eq!(st, StatusCode::BAD_REQUEST, "{v}");
+        }
+        let (_, v) = call(&e, req("GET", "/api/night", None)).await;
+        assert_eq!(v["window"], "23:00-05:00");
+    }
+
+    #[tokio::test]
+    async fn planning_cancelling_and_changing_a_limit() {
+        let e = env();
+        let id = idea_with(&e, Some("write a readme"));
+        let (st, run) = call(
+            &e,
+            req(
+                "POST",
+                "/api/night/plan",
+                Some(json!({"idea_id": id, "limit": "2M"})),
+            ),
+        )
+        .await;
+        assert_eq!(st, StatusCode::OK, "{run}");
+        assert_eq!(
+            (run["status"].clone(), run["limit"]["text"].clone()),
+            (json!("planned"), json!("2M tokens"))
+        );
+        let rid = run["id"].as_i64().unwrap();
+        let (_, v) = call(&e, req("GET", "/api/night", None)).await;
+        assert_eq!(v["planned"], 1);
+        let (st, v) = call(
+            &e,
+            req(
+                "POST",
+                &format!("/api/night/{rid}/limit"),
+                Some(json!({"limit": "90m"})),
+            ),
+        )
+        .await;
+        assert_eq!(st, StatusCode::OK, "{v}");
+        assert_eq!(v["open"][0]["limit"]["text"], "90 minutes");
+        // a weekly limit eye cannot check is refused with the reason
+        let (st, v) = call(
+            &e,
+            req(
+                "POST",
+                &format!("/api/night/{rid}/limit"),
+                Some(json!({"limit": "80%"})),
+            ),
+        )
+        .await;
+        assert_eq!(st, StatusCode::BAD_REQUEST);
+        assert!(
+            v["error"].as_str().unwrap().contains("no weekly plan data"),
+            "{v}"
+        );
+        let (st, v) = call(&e, req("POST", &format!("/api/night/{rid}/cancel"), None)).await;
+        assert_eq!(st, StatusCode::OK, "{v}");
+        assert_eq!(v["planned"], 0);
+        // a second cancel is a conflict
+        let (st, _) = call(&e, req("POST", &format!("/api/night/{rid}/cancel"), None)).await;
+        assert_eq!(st, StatusCode::CONFLICT);
+    }
+
+    #[tokio::test]
+    async fn a_plan_that_cannot_run_says_why() {
+        let e = env();
+        let id = idea_with(&e, None);
+        let (st, v) = call(
+            &e,
+            req("POST", "/api/night/plan", Some(json!({"idea_id": id}))),
+        )
+        .await;
+        assert_eq!(st, StatusCode::BAD_REQUEST);
+        assert!(v["error"].as_str().unwrap().contains("no prompt"), "{v}");
+        let (st, v) = call(
+            &e,
+            req("POST", "/api/night/plan", Some(json!({"session_id": "x"}))),
+        )
+        .await;
+        assert_eq!(st, StatusCode::BAD_REQUEST, "{v}");
+        let (st, _) = call(&e, req("POST", "/api/night/plan", Some(json!({})))).await;
+        assert_eq!(st, StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn a_run_session_carries_the_night_chip_and_the_run_and_discard_needs_a_yes() {
+        let e = env();
+        add_session(&e.db, "aaaaaaaa-1", "Night one", None, 3, now_ms());
+        e.db.conn
+            .execute(
+                "INSERT INTO night_run(kind, agent, folder, prompt, night, status, run_session_id, report, created_at)
+                 VALUES('idea','claude','/x','p','2026-11-21','done','aaaaaaaa-1','The report <b>x</b>',1)",
+                [],
+            )
+            .unwrap();
+        let (_, c) = call(&e, req("GET", "/api/cards/aaaaaaaa-1", None)).await;
+        assert_eq!(c["night_run"]["status"], "done");
+        assert_eq!(c["night_run"]["report"], "The report <b>x</b>");
+        assert_eq!(c["night_run"]["tokens"], 0);
+        let (_, board) = call(&e, req("GET", "/api/board", None)).await;
+        let chip: Vec<_> = board["columns"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .flat_map(|c| c["cards"].as_array().unwrap().clone())
+            .filter(|c| c["id"] == "aaaaaaaa-1")
+            .map(|c| c["night"].clone())
+            .collect();
+        assert_eq!(chip, vec![json!({"id": 1, "status": "done"})]);
+        let (_, v) = call(&e, req("GET", "/api/night/session/aaaaaaaa", None)).await;
+        assert_eq!(v["run"]["id"], 1);
+        // another session has none
+        add_session(&e.db, "bbbbbbbb-1", "Plain", None, 3, now_ms());
+        let (_, c) = call(&e, req("GET", "/api/cards/bbbbbbbb-1", None)).await;
+        assert!(c["night_run"].is_null() && c["night"].is_null());
+        // discard needs the page's yes, and a run with no folder has nothing to discard
+        let (st, _) = call(&e, req("POST", "/api/night/1/discard", Some(json!({})))).await;
+        assert_eq!(st, StatusCode::BAD_REQUEST);
+        let (st, v) = call(
+            &e,
+            req(
+                "POST",
+                "/api/night/1/discard",
+                Some(json!({"confirm": true})),
+            ),
+        )
+        .await;
+        assert_eq!(st, StatusCode::CONFLICT, "{v}");
+    }
+}

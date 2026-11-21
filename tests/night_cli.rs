@@ -22,7 +22,11 @@ fn git(dir: &Path, args: &[&str]) -> String {
         .env("GIT_CONFIG_GLOBAL", "/dev/null")
         .output()
         .unwrap();
-    assert!(o.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&o.stderr));
+    assert!(
+        o.status.success(),
+        "git {args:?}: {}",
+        String::from_utf8_lossy(&o.stderr)
+    );
     String::from_utf8_lossy(&o.stdout).trim().to_string()
 }
 
@@ -78,7 +82,10 @@ impl Home {
         r
     }
     fn eye(&self, args: &[&str], mode: &str) -> Output {
-        let path = format!("{}:/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin", self.path().join("bin").display());
+        let path = format!(
+            "{}:/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin",
+            self.path().join("bin").display()
+        );
         Command::new(env!("CARGO_BIN_EXE_agent-eye"))
             .env("HOME", self.path())
             .env_remove("EYE_HOME")
@@ -100,12 +107,22 @@ impl Home {
         t
     }
     fn db(&self) -> Db {
-        Db::open(&Paths { home: self.eye_home() }.db_path()).unwrap()
+        Db::open(
+            &Paths {
+                home: self.eye_home(),
+            }
+            .db_path(),
+        )
+        .unwrap()
     }
 }
 
 fn text(o: &Output) -> String {
-    format!("{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr))
+    format!(
+        "{}{}",
+        String::from_utf8_lossy(&o.stdout),
+        String::from_utf8_lossy(&o.stderr)
+    )
 }
 
 fn runs(h: &Home) -> Vec<serde_json::Value> {
@@ -119,7 +136,15 @@ fn a_planned_idea_runs_in_a_worktree_and_comes_back_as_a_needs_you_card() {
     }
     let h = Home::new();
     let repo = h.repo();
-    h.ok(&["idea", "add", "readme", "--prompt", "Add a README line saying hello", "--dir", repo.to_str().unwrap()]);
+    h.ok(&[
+        "idea",
+        "add",
+        "readme",
+        "--prompt",
+        "Add a README line saying hello",
+        "--dir",
+        repo.to_str().unwrap(),
+    ]);
     let out = h.ok(&["night", "add", "idea:1", "--limit", "90m"]);
     assert!(out.contains("planned run 1"), "{out}");
     assert!(out.contains("night shift is off"), "{out}");
@@ -136,17 +161,34 @@ fn a_planned_idea_runs_in_a_worktree_and_comes_back_as_a_needs_you_card() {
     assert!(r["branch"].as_str().unwrap().starts_with("night/2"));
     // the original repo is as it was: same branch, README unchanged, no extra file
     assert_eq!(git(&repo, &["rev-parse", "--abbrev-ref", "HEAD"]), "main");
-    assert_eq!(std::fs::read_to_string(repo.join("README.md")).unwrap(), "# proj\n");
+    assert_eq!(
+        std::fs::read_to_string(repo.join("README.md")).unwrap(),
+        "# proj\n"
+    );
     assert!(!repo.join("extra.txt").exists());
     // the worktree has the edits
-    assert!(std::fs::read_to_string(wt.join("README.md")).unwrap().contains("hello"));
+    assert!(std::fs::read_to_string(wt.join("README.md"))
+        .unwrap()
+        .contains("hello"));
     // report masked, diff stat, argv safe
     let report = r["report"].as_str().unwrap();
-    assert!(report.contains("Added the hello line") && !report.contains("ghp_AAAA"), "{report}");
+    assert!(
+        report.contains("Added the hello line") && !report.contains("ghp_AAAA"),
+        "{report}"
+    );
     let diff = r["diff_stat"].as_str().unwrap();
-    assert!(diff.contains("README.md") && diff.contains("extra.txt"), "{diff}");
+    assert!(
+        diff.contains("README.md") && diff.contains("extra.txt"),
+        "{diff}"
+    );
     let argv = std::fs::read_to_string(h.path().join("claude-argv.txt")).unwrap();
-    for w in ["-p Add a README line saying hello", "--session-id", "--disallowedTools", "git push", "gh pr merge"] {
+    for w in [
+        "-p Add a README line saying hello",
+        "--session-id",
+        "--disallowedTools",
+        "git push",
+        "gh pr merge",
+    ] {
         assert!(argv.contains(w), "{w} in {argv}");
     }
     assert!(!argv.contains("force"));
@@ -155,12 +197,21 @@ fn a_planned_idea_runs_in_a_worktree_and_comes_back_as_a_needs_you_card() {
     let s = h.db().session_by_id(sid).unwrap().expect("indexed");
     assert_eq!(s.column_manual.as_deref(), Some("needs_you"));
     assert_eq!(s.next_step.as_deref(), Some("review the night run"));
-    assert_eq!(s.cwd.as_deref().map(|c| Path::new(c).canonicalize().unwrap()), Some(wt.canonicalize().unwrap()));
+    assert_eq!(
+        s.cwd
+            .as_deref()
+            .map(|c| Path::new(c).canonicalize().unwrap()),
+        Some(wt.canonicalize().unwrap())
+    );
     // the log is kept
     assert!(h.ok(&["night", "log", "1"]).contains("all done"));
     // discard refuses uncommitted work without --lose-changes, then removes it
     let o = h.eye(&["night", "discard", "1", "--yes"], "");
-    assert!(!o.status.success() && text(&o).contains("uncommitted"), "{}", text(&o));
+    assert!(
+        !o.status.success() && text(&o).contains("uncommitted"),
+        "{}",
+        text(&o)
+    );
     h.ok(&["night", "discard", "1", "--yes", "--lose-changes"]);
     assert!(!wt.exists());
     assert!(git(&repo, &["branch", "--list", "night/*"]).is_empty());
@@ -177,9 +228,14 @@ fn switch_on_and_off_and_the_window_and_parallel_land_in_config_toml() {
     assert!(!o.status.success());
     h.ok(&["night", "on"]);
     let cfg = std::fs::read_to_string(h.eye_home().join("config.toml")).unwrap();
-    assert!(cfg.contains("window = \"23:00-05:00\"") && cfg.contains("parallel = 3"), "{cfg}");
+    assert!(
+        cfg.contains("window = \"23:00-05:00\"") && cfg.contains("parallel = 3"),
+        "{cfg}"
+    );
     assert!(cfg.contains("enabled = true"), "{cfg}");
-    assert!(h.ok(&["night"]).contains("night shift on: window 23:00-05:00"));
+    assert!(h
+        .ok(&["night"])
+        .contains("night shift on: window 23:00-05:00"));
     h.ok(&["night", "off"]);
     assert!(h.ok(&["night", "ls"]).contains("night shift off"));
 }
@@ -191,7 +247,15 @@ fn a_weekly_limit_without_data_is_refused_when_planned() {
     }
     let h = Home::new();
     let repo = h.repo();
-    h.ok(&["idea", "add", "x", "--prompt", "do", "--dir", repo.to_str().unwrap()]);
+    h.ok(&[
+        "idea",
+        "add",
+        "x",
+        "--prompt",
+        "do",
+        "--dir",
+        repo.to_str().unwrap(),
+    ]);
     let o = h.eye(&["night", "add", "idea:1", "--limit", "80%"], "");
     assert!(!o.status.success());
     assert!(text(&o).contains("no weekly plan data"), "{}", text(&o));
@@ -213,16 +277,39 @@ fn a_rate_limited_run_starts_again_on_the_other_agent_when_it_allows_it() {
     }
     let h = Home::new();
     std::fs::create_dir_all(h.eye_home()).unwrap();
-    std::fs::write(h.eye_home().join("config.toml"), "[agents]\nenabled = [\"claude\", \"codex\"]\n").unwrap();
+    std::fs::write(
+        h.eye_home().join("config.toml"),
+        "[agents]\nenabled = [\"claude\", \"codex\"]\n",
+    )
+    .unwrap();
     let repo = h.repo();
-    h.ok(&["idea", "add", "x", "--prompt", "do it", "--dir", repo.to_str().unwrap(), "--agent", "claude"]);
+    h.ok(&[
+        "idea",
+        "add",
+        "x",
+        "--prompt",
+        "do it",
+        "--dir",
+        repo.to_str().unwrap(),
+        "--agent",
+        "claude",
+    ]);
     h.ok(&["night", "add", "idea:1", "--switch"]);
     let o = h.eye(&["night", "run-now", "1", "--yes", "--wait"], "ratelimit");
     assert!(o.status.success(), "{}", text(&o));
     let rs = runs(&h);
     let first = rs.iter().find(|r| r["id"] == 1).unwrap();
     assert_eq!(first["status"], "failed");
-    assert!(first["why"].as_str().unwrap().contains("started again on codex"), "{first}");
+    assert!(
+        first["why"]
+            .as_str()
+            .unwrap()
+            .contains("started again on codex"),
+        "{first}"
+    );
     let second = rs.iter().find(|r| r["id"] == 2).unwrap();
-    assert_eq!((second["agent"].as_str(), second["status"].as_str()), (Some("codex"), Some("planned")));
+    assert_eq!(
+        (second["agent"].as_str(), second["status"].as_str()),
+        (Some("codex"), Some("planned"))
+    );
 }
