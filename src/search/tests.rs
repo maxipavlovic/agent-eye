@@ -90,6 +90,26 @@ fn typos_are_fixed_from_the_words_in_the_index() {
 }
 
 #[test]
+fn a_typo_one_session_holds_still_finds_the_right_spelling() {
+    let db = Db::open_memory().unwrap();
+    // enough other sessions for word rarity to mean what it does on a real index
+    for i in 0..40 {
+        put(&db, &format!("f{i}"), &format!("Unrelated work {i}"), "", "build and test", 9);
+    }
+    put(&db, "tw1", "Tradewind", "", "x", 5);
+    put(&db, "tw2", "Tradewind account status", "", "x", 6);
+    put(&db, "typed", "Search check", "", "find tradwind please", 1);
+    let got = find_q(&db, "tradwind", false);
+    assert_eq!(got.first().map(String::as_str), Some("tw1"), "{got:?}");
+    assert!(got.contains(&"tw2".to_string()) && got.contains(&"typed".to_string()));
+    // a short rare word is taken as typed: "lago" is not widened to "logo"
+    put(&db, "lg", "Metrx vs Lago", "", "x", 2);
+    put(&db, "lo", "New logo", "", "x", 2);
+    put(&db, "lo2", "Logo colours", "", "x", 3);
+    assert_eq!(find_q(&db, "lago", false), vec!["lg".to_string()]);
+}
+
+#[test]
 fn a_pasted_link_finds_the_session_that_made_it() {
     let db = Db::open_memory().unwrap();
     put(&db, "made", "Pricing page", "", "x", 30);

@@ -96,6 +96,13 @@ fn idf(n: i64, df: usize) -> f64 {
     ((n - df + 0.5) / (df + 0.5) + 1.0).ln()
 }
 
+/// Whether a word that `df` sessions hold may be a typo worth fixing: none hold it, or a single
+/// one does and the word is long enough (5+ letters) that a typo is likelier than a rare word;
+/// a mistyped word often sits in the prompt where it was typed.
+fn maybe_typo(word: &str, df: usize) -> bool {
+    df == 0 || (df == 1 && word.chars().count() >= 5)
+}
+
 /// Score every session against a query.
 pub fn score(db: &Db, q: &Query) -> Result<Scored> {
     let mut out = Scored {
@@ -113,26 +120,41 @@ pub fn score(db: &Db, q: &Query) -> Result<Scored> {
     let mut totals: HashMap<i64, (f64, usize)> = HashMap::new();
     for unit in &q.units {
         let mut expr = unit.phrase();
-        let mut best = best_fields(db, &expr)?;
-        if best.is_empty() && unit.typo_ok {
+        let best = best_fields(db, &expr)?;
+        let unit_idf = idf(n, best.len());
+        // per row: the best weight this unit gives it
+        let mut gain: HashMap<i64, f64> = best.iter().map(|(r, w)| (*r, unit_idf * w)).collect();
+        if unit.typo_ok && maybe_typo(&unit.parts[0], best.len()) {
             let alts = typo::alternatives(db, &unit.parts[0]);
             if !alts.is_empty() {
                 // fixed words match whole
-                expr = alts
+                let alt_expr = alts
                     .iter()
                     .map(|a| format!("\"{a}\""))
                     .collect::<Vec<_>>()
                     .join(" OR ");
-                best = best_fields(db, &expr)?;
+                let alt_best = best_fields(db, &alt_expr)?;
+                // only a fix that more sessions hold than the word as typed
+                if alt_best.len() > best.len() {
+                    let alt_idf = idf(n, alt_best.len());
+                    for (rowid, w) in alt_best {
+                        let g = gain.entry(rowid).or_insert(0.0);
+                        *g = g.max(alt_idf * w);
+                    }
+                    expr = if best.is_empty() {
+                        alt_expr
+                    } else {
+                        format!("{expr} OR {alt_expr}")
+                    };
+                }
             }
         }
-        let idf = idf(n, best.len());
-        for (rowid, w) in best {
+        for (rowid, g) in gain {
             let t = totals.entry(rowid).or_default();
-            t.0 += idf * w;
+            t.0 += g;
             t.1 += 1;
         }
-        out.units.push((idf, unit.needle.clone()));
+        out.units.push((unit_idf, unit.needle.clone()));
         out.exprs.push(expr);
     }
     let mut st = db
