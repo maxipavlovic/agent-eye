@@ -32,6 +32,8 @@ pub mod hook;
 pub mod ideas;
 /// Install, uninstall and doctor.
 pub mod install;
+/// What a session left behind: servers still running, commits on no remote, and the like.
+pub mod loose;
 /// Putting a session in a column by hand.
 pub mod mark;
 /// The data types: sessions, streams, outputs, ideas, columns.

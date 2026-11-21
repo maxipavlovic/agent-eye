@@ -42,3 +42,10 @@ export function RemoteMark({ url }: { url?: string }) {
     ? <a class="mk rc" href={url} target="_blank" rel="noopener" title="Remote Control is on: open this session in the browser">{body}</a>
     : <span class="mk rc" title="Remote Control is on for this session">{body}</span>;
 }
+
+/** "2 loose ends": what the session left behind. A calm chip in neutral ink: the accent stays for what needs you. */
+export function LooseMark({ n }: { n: number | undefined }) {
+  if (!n || n < 1) return null;
+  const text = `${n} loose end${n === 1 ? '' : 's'}`;
+  return <span class="mk loose" title="The session left things behind: open it to see what">{text}</span>;
+}

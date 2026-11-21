@@ -228,3 +228,128 @@ fn narrow_and_tiny_terminals_do_not_panic() {
         }
     }
 }
+
+#[test]
+fn the_preview_names_what_the_session_left_behind_and_ctrl_l_lists_it() {
+    use crate::loose::{self, Kind, LooseEnd};
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    let mut a = app("");
+    let id = a.current().unwrap().id.clone();
+    let it = |key: &str, kind, what: &str, line: &str| LooseEnd {
+        key: key.into(),
+        session_id: id.clone(),
+        kind,
+        line: line.into(),
+        detail: what.into(),
+        since_ms: 1,
+    };
+    let items = [
+        it(
+            "proc:1:1",
+            Kind::Process,
+            "node vite (pid 1, port 4321)",
+            "node vite (pid 1) is still serving port 4321",
+        ),
+        it(
+            "proc:2:1",
+            Kind::Process,
+            "node api (pid 2, port 4350)",
+            "node api (pid 2) is still serving port 4350",
+        ),
+        it(
+            "unpushed:/r:abc",
+            Kind::Unpushed,
+            "3 commits in r",
+            "3 commits in r are on no remote",
+        ),
+    ];
+    // nothing stored: no line, and Ctrl-L says so
+    let t = render_text(&mut a, 170, 30).unwrap();
+    assert!(!t.contains("Left behind"), "{t}");
+    let ctrl_l = KeyEvent::new(KeyCode::Char('l'), KeyModifiers::CONTROL);
+    a.key(ctrl_l);
+    assert_eq!(a.msg.as_deref(), Some("nothing left behind"));
+    loose::replace(&a.db, &items, a.now).unwrap();
+    a.detail.loose = loose::list(&a.db, Some(&id), false).unwrap();
+    let t = render_text(&mut a, 170, 30).unwrap();
+    assert!(
+        t.contains("Left behind: 2 servers (ports 4321, 4350), 3 commits not pushed"),
+        "{t}"
+    );
+    // the list, with the keys in the footer
+    a.key(ctrl_l);
+    let t = render_text(&mut a, 170, 30).unwrap();
+    assert!(t.contains("› node api") || t.contains("› node vite"), "{t}");
+    assert!(
+        t.contains("s stop   r remove   c copy command   i ignore"),
+        "{t}"
+    );
+    // stop asks first with the exact words; anything but y cancels
+    a.key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE));
+    assert!(
+        a.msg
+            .as_deref()
+            .unwrap()
+            .ends_with("(pid 1, port 4321)? y/N")
+            || a.msg
+                .as_deref()
+                .unwrap()
+                .ends_with("(pid 2, port 4350)? y/N")
+    );
+    a.key(KeyEvent::new(KeyCode::Char('n'), KeyModifiers::NONE));
+    assert_eq!(a.msg.as_deref(), Some("cancelled"));
+    assert_eq!(
+        loose::list(&a.db, None, false).unwrap().len(),
+        3,
+        "nothing was done"
+    );
+    // a commit line cannot be stopped or removed, only copied
+    a.key(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE));
+    a.key(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE));
+    a.key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE));
+    assert!(a
+        .msg
+        .as_deref()
+        .unwrap()
+        .starts_with("that does not apply to unpushed"));
+    // ignore asks, y does it, and the preview line shrinks
+    a.key(KeyEvent::new(KeyCode::Char('i'), KeyModifiers::NONE));
+    assert_eq!(a.msg.as_deref(), Some("Stop listing 3 commits in r? y/N"));
+    a.key(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::NONE));
+    assert_eq!(a.detail.loose.len(), 2);
+    assert_eq!(loose::list(&a.db, None, false).unwrap().len(), 2);
+    // a stale process key is refused by the safety check, not killed; send asks and leaves the picker
+    let stale = format!("proc:{}:1", std::process::id());
+    loose::replace(
+        &a.db,
+        &[it(&stale, Kind::Process, "me (pid 1)", "me")],
+        a.now,
+    )
+    .unwrap();
+    a.loose.as_mut().unwrap().items = loose::list(&a.db, Some(&id), false).unwrap();
+    a.loose.as_mut().unwrap().sel = 0;
+    a.key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE));
+    a.key(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::NONE));
+    assert!(
+        a.msg.as_deref().unwrap().contains("another process"),
+        "{:?}",
+        a.msg
+    );
+    loose::replace(
+        &a.db,
+        &[it(
+            "uncommitted:/r",
+            Kind::Uncommitted,
+            "2 modified files in r",
+            "x",
+        )],
+        a.now,
+    )
+    .unwrap();
+    a.detail.loose = loose::list(&a.db, Some(&id), false).unwrap();
+    a.key(ctrl_l);
+    a.key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE));
+    assert!(a.msg.as_deref().unwrap().ends_with("left behind? y/N"));
+    let out = a.key(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::NONE));
+    assert_eq!(out, Some(crate::tui::Outcome::SendBack(id)));
+}

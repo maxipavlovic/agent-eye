@@ -8,6 +8,7 @@
 pub mod clipboard;
 mod launchd;
 pub mod notify;
+pub mod procs;
 pub mod service;
 mod systemd;
 pub mod terminal;

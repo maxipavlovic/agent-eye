@@ -127,6 +127,38 @@ pub struct SetupArgs {
 }
 
 #[derive(Subcommand)]
+pub enum LooseCmd {
+    /// Stop a server or a container (SIGTERM, or `docker stop`) after asking
+    Stop {
+        /// The key `eye loose` prints under the item
+        key: String,
+        /// Do not ask first
+        #[arg(long)]
+        yes: bool,
+    },
+    /// Remove a worktree with `git worktree remove` (no --force) after asking
+    Remove {
+        key: String,
+        /// Do not ask first
+        #[arg(long)]
+        yes: bool,
+    },
+    /// Stop listing an item
+    Ignore { key: String },
+    /// Resume the session with a first message that lists what it left behind
+    Send {
+        /// Session id or its first 6 characters
+        session: String,
+        /// Do not ask first
+        #[arg(long)]
+        yes: bool,
+        /// Show the command, run nothing
+        #[arg(long)]
+        dry_run: bool,
+    },
+}
+
+#[derive(Subcommand)]
 pub enum BackupCmd {
     /// List the snapshots, newest first
     Ls,
@@ -320,6 +352,17 @@ pub enum Cmd {
         /// Remove the reminder
         #[arg(long)]
         clear: bool,
+    },
+    /// What sessions left behind: servers still running, commits on no remote, ...
+    /// `loose [<session>]` lists them; `loose stop|remove|ignore <key>` and `loose send <session>` act
+    #[command(args_conflicts_with_subcommands = true)]
+    Loose {
+        #[command(subcommand)]
+        sub: Option<LooseCmd>,
+        /// Only this session (id or its first 6 characters)
+        session: Option<String>,
+        #[arg(long)]
+        json: bool,
     },
     /// Hook entry point (called by the agent, reads the event on stdin)
     Hook {

@@ -65,6 +65,9 @@ pub(super) fn preview_lines<'a>(app: &App, r: &Row, pal: &Pal) -> Vec<Line<'a>> 
                     pal.dim(),
                 ));
             }
+            if let Some(line) = crate::loose::summary_line(&app.detail.loose) {
+                v.push(Line::raw(format!("{line}   (Ctrl-L)")));
+            }
             for t in activity::tasks(s, app.now) {
                 v.push(Line::from(vec![
                     label("Running"),

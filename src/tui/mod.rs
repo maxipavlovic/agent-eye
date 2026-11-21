@@ -1,6 +1,7 @@
 //! The interactive picker screen. Drawn on /dev/tty so stdout stays clean for `--print`.
 
 mod input;
+mod loose;
 mod remind;
 mod render;
 mod state;
@@ -19,4 +20,6 @@ pub enum Outcome {
     Pick(String),
     /// Session id to fork: resume as a new session that branches from it.
     Fork(String),
+    /// Session id to resume with a first message that lists what it left behind.
+    SendBack(String),
 }

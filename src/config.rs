@@ -51,6 +51,10 @@ keep_daily = 7
 keep_weekly = 4
 mirror = ""            # a folder that already exists (an external disk, a synced folder) to copy each snapshot into; empty = off
 mirror_archive = false # also copy the transcript archive into <mirror>/archive
+
+[loose]
+enabled = true         # list what a session left behind (servers still running, commits on no remote, ...); it only reads
+days = 30              # look at the folders of sessions active in the last this many days
 "#;
 
 /// The config written on first run.
@@ -72,6 +76,7 @@ pub struct Config {
     pub hide: HideCfg,
     pub backup: BackupCfg,
     pub usage: UsageCfg,
+    pub loose: LooseCfg,
     /// The folder eye may create idea folders inside; not set: the account's home folder.
     #[serde(skip)]
     pub folder_root: Option<PathBuf>,
@@ -286,6 +291,24 @@ impl Default for BoardCfg {
             port: 7420,
             resume: crate::platform::default_resume().into(),
             done_days: 7,
+        }
+    }
+}
+
+/// `[loose]`: finding what a session left behind.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct LooseCfg {
+    /// Look for loose ends at all. It only reads, so it is on by default.
+    pub enabled: bool,
+    /// Only repos and folders of sessions active in the last this many days are looked at.
+    pub days: u32,
+}
+impl Default for LooseCfg {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            days: 30,
         }
     }
 }

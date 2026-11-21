@@ -153,6 +153,12 @@ pub trait Agent: Send + Sync + std::fmt::Debug {
     fn live_status_shows_prompts(&self) -> bool {
         true
     }
+    /// Folders where the agent's sessions keep scratch files, one per session below them (Claude
+    /// Code: `<tmp>/claude-<uid>/<project>/<session-id>/`). A process or worktree in there left by
+    /// a session is named by the session id in its path. The default: none.
+    fn scratch_roots(&self) -> Vec<PathBuf> {
+        vec![]
+    }
     /// Background sessions.
     fn jobs(&self) -> Vec<Job> {
         vec![]
@@ -389,6 +395,21 @@ impl Agents {
     pub fn resume_line(&self, s: &Session) -> Option<String> {
         let (agent, cwd) = self.runnable(s).ok()?;
         Some(agent.resume(&s.id).shell_line(cwd))
+    }
+
+    /// The resume line with a first message for the agent: `cd '<folder>' && claude --resume <id>
+    /// '<message>'`. The message is quoted like any other argument. None when
+    /// [`Agents::runnable`] says no.
+    pub fn resume_line_with(&self, s: &Session, message: &str) -> Option<String> {
+        let (agent, cwd) = self.runnable(s).ok()?;
+        let mut inv = agent.resume(&s.id);
+        inv.args.push(message.to_string());
+        Some(inv.shell_line(cwd))
+    }
+
+    /// Where every enabled agent keeps scratch files (see `Agent::scratch_roots`).
+    pub fn scratch_roots(&self) -> Vec<PathBuf> {
+        self.0.iter().flat_map(|a| a.scratch_roots()).collect()
     }
 
     /// The same for a fork (None too when the agent cannot fork).
