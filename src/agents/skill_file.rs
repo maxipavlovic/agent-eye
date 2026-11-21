@@ -25,6 +25,15 @@ pub fn install(path: &Path, text: &str, dry_run: bool) -> Result<State> {
     Ok(state)
 }
 
+/// After an upgrade: bring a skill that is already installed up to date. A skill the user never
+/// installed (or removed) is left absent; only `install` adds one.
+pub fn refresh(path: &Path, text: &str) -> Result<Option<State>> {
+    if !path.exists() {
+        return Ok(None);
+    }
+    install(path, text, false).map(Some)
+}
+
 impl State {
     /// For the summary: `skill added`, `skill ok`; `would add skill` in a dry run.
     pub fn said(self, dry: bool) -> &'static str {
@@ -63,6 +72,25 @@ pub fn removed_said(removed: bool, dry: bool) -> &'static str {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn refresh_updates_an_installed_skill_and_never_adds_one() {
+        let t = tempfile::tempdir().unwrap();
+        let p = t.path().join("skills/eye/SKILL.md");
+        assert_eq!(super::refresh(&p, "new").unwrap(), None);
+        assert!(!p.exists());
+        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+        std::fs::write(&p, "old").unwrap();
+        assert_eq!(
+            super::refresh(&p, "new").unwrap(),
+            Some(super::State::Updated)
+        );
+        assert_eq!(std::fs::read_to_string(&p).unwrap(), "new");
+        assert_eq!(
+            super::refresh(&p, "new").unwrap(),
+            Some(super::State::Unchanged)
+        );
+    }
+
     use super::*;
 
     #[test]

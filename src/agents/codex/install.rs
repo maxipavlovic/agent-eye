@@ -22,7 +22,7 @@ pub const EVENTS: [&str; 6] = [
     "Stop",
     "SessionEnd",
 ];
-const SKILL_MD: &str = include_str!("../../../skill/SKILL.codex.md");
+pub(crate) const SKILL_MD: &str = include_str!("../../../skill/SKILL.codex.md");
 
 /// What Codex's `hooks.json` looks like to eye: the form Claude Code uses, a command per event
 /// that names the agent. `statusMessage` is the name Codex shows in `/hooks` (and, briefly, while

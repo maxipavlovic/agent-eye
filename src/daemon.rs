@@ -481,6 +481,16 @@ pub fn run(paths: Paths, cfg: Config, port: u16, board: bool) -> Result<()> {
     paths.ensure_home()?;
     let lock = Lock::acquire(&paths)?;
     log(&paths, &format!("daemon start pid {}", std::process::id()));
+    // an upgrade brings its own /eye skill: rewrite the copies install put there (never add one)
+    for a in agents::enabled(&cfg).iter() {
+        match a.refresh_skill() {
+            Ok(Some(agents::skill_file::State::Updated)) => {
+                log(&paths, &format!("{} skill updated", a.id()));
+            }
+            Err(e) => log(&paths, &format!("{} skill not updated: {e:#}", a.id())),
+            _ => {}
+        }
+    }
     let stop = Arc::new(AtomicBool::new(false));
     let worker_busy = Arc::new(AtomicBool::new(false));
     let mut watch = upgrade::Watch::of_this_process();
