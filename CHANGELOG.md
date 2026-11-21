@@ -4,6 +4,11 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## Unreleased
 
+### Added
+
+- Loose ends: each session lists what it left behind. Servers and shells still running (on a port, or in the session's folder or scratchpad), containers, git worktrees in a scratchpad or whose folder is gone, commits on no remote and modified files nobody committed. A card shows "2 loose ends"; the panel has a LEFT BEHIND section; the picker's preview has a line and Ctrl-L opens the list; `eye loose` lists them and `eye loose stop|remove|ignore <key>` and `eye loose send <session>` act. Stop sends SIGTERM to a process whose pid and start time still match; remove runs `git worktree remove` without `--force`; commits and files only get a command to copy. Every action asks first. `[loose] enabled` and `days` in `config.toml`.
+- Database schema 14 (`loose` and `loose_ignore`).
+
 ### Changed
 
 - Search is one engine for the picker, the board and `eye find`. Word forms match (`tokens` finds `token`), a mistyped word is fixed from your own sessions, and half of the words are enough. A pasted link finds the session that made it. Titles and rare words count most; status and age no longer lift a session, so old sessions are not pushed to the bottom. Archived sessions still come last.
