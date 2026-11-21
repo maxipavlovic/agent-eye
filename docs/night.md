@@ -86,7 +86,7 @@ The prompt of a continued run starts with a note: it works in a copy at `<worktr
 
 ## What a run leaves
 
-When its process ends, eye stores the report (the run's last assistant message, secrets masked, at most 6000 characters), the diff stat (`git diff --stat <base>` plus the files git does not know yet; for a copy the list of changed and new files) and the loose ends of its session (`loose.md` is part of `eye loose`), marks its session **Needs you** with the next step "review the night run", and shows a desktop notice ("Night shift: 2 runs finished") when notices are on (`[remind] notify`). Status is `done` (exit 0), `failed` (anything else, with the last line of the log), `stopped` (a limit) or `skipped` (cancelled).
+When its process ends, eye stores the report (the run's last assistant message, secrets masked, at most 6000 characters), the diff stat (`git diff --stat <base>` plus the files git does not know yet; for a copy the list of changed and new files) and the loose ends of its session (the same list `eye loose` shows), marks its session **Needs you** with the next step "review the night run", and shows a desktop notice ("Night shift: 2 runs finished") when notices are on (`[remind] notify`). Status is `done` (exit 0), `failed` (anything else, with the last line of the log), `stopped` (a limit) or `skipped` (cancelled).
 
 **DISCARD** removes the worktree and its branch (or the copy) after a confirm. It refuses while the worktree has uncommitted changes unless the confirm says they will be lost. It never passes `--force` to git: it deletes the folder, runs `git worktree prune` and `git branch -D`. Commits that exist only on that branch are lost with it, and the confirm says so.
 

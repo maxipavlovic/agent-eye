@@ -39,7 +39,7 @@ A run starts an agent that edits files, unattended, so the guards are fixed in c
 - A continued session remembers the paths of its original folder. eye tells the agent to work only in the copy, but an agent that ignores that could still write there; that is why continuing is something you plan on purpose, and why the worktree and the original folder are both worth a look in the morning.
 - Runs are detached from the daemon (own session) and found again by pid and start time. A limit stops a run with SIGTERM to its process group, after checking pid and start time, and never with SIGKILL.
 - The only thing eye deletes is on DISCARD, after your confirm, and only inside `<eye home>/night`: it removes the run's folder, runs `git worktree prune` and `git branch -D` on its own `night/` branch. It refuses while there are uncommitted changes unless the confirm says they will be lost. Nothing is ever deleted by the daemon by itself.
-- Night runs are headless sessions in eye's night folder, so they do not count as a session you work in, and they read and write nothing outside their folder that you did not ask for in the prompt.
+- Night runs are headless sessions in eye's night folder, so they do not count as a session you work in. They keep your usual agent settings and hooks, so eye sees them like any other session.
 
 The prompt, report and diff stat are kept in `night_run` in `eye.db`, as private as the rest of it. The report is masked like any summary.
 
