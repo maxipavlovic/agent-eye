@@ -15,7 +15,8 @@ test.describe('board', () => {
 
   test('both agents, a remote session and the long project name show on their cards', async ({ board }) => {
     await expect(lane(board, /^running/i).getByText(/codex/i).first()).toBeVisible();
-    await expect(lane(board, /^waiting/i).getByText('Remote')).toBeVisible();
+    // a narrow card shows Remote as its icon only; the chip keeps its title
+    await expect(lane(board, /^waiting/i).getByTitle(/Remote Control is on/)).toBeVisible();
     await expect(lane(board, /^running/i)).toContainText('customer-billing');
   });
 });
@@ -66,8 +67,21 @@ test.describe('panel', () => {
     await expect.poll(async () => (await eye.api(`/api/cards/${sid(3)}`)).column).toBe('done');
   });
 
-  // U1 adds these panel keys.
-  test.fixme('R resumes and ? lists the keys', async () => {});
+  test('? lists the keys, T opens CONTINUE TONIGHT and N still moves to Needs you', async ({ board, eye }) => {
+    await card(board, /Fix stale tokens/).click();
+    await expect(board.getByRole('heading', { level: 2, name: /Fix stale tokens/ })).toBeVisible();
+    await board.keyboard.press('?');
+    const keys = board.getByRole('dialog', { name: 'Keyboard shortcuts' });
+    await expect(keys).toBeVisible();
+    for (const k of ['N', 'T', 'X', 'R']) await expect(keys.getByText(k, { exact: true })).toBeVisible();
+    await board.keyboard.press('Escape');
+    await expect(keys).toHaveCount(0);
+    await board.keyboard.press('t');
+    await expect(board.getByRole('form', { name: 'Continue tonight' })).toBeVisible();
+    await board.getByRole('form', { name: 'Continue tonight' }).getByRole('textbox').first().blur();
+    await board.keyboard.press('n');
+    await expect.poll(async () => (await eye.api(`/api/cards/${sid(4)}`)).column).toBe('needs_you');
+  });
 });
 
 test.describe('menu', () => {
@@ -88,7 +102,14 @@ test.describe('menu', () => {
     for (const t of ['EDIT', 'OPEN DETAILS']) await expect(menu.getByRole('menuitem', { name: t })).toBeVisible();
   });
 
-  test.fixme('CONTINUE TONIGHT… is in a session menu', async () => {});
+  test('CONTINUE TONIGHT… in a session menu opens the form with its prompt focused', async ({ board }) => {
+    await card(board, /Fix stale tokens/).click({ button: 'right' });
+    const menu = board.getByRole('menu', { name: /Actions for Fix stale tokens/ });
+    await menu.getByRole('menuitem', { name: 'CONTINUE TONIGHT…' }).click();
+    const form = board.getByRole('form', { name: 'Continue tonight' });
+    await expect(form).toBeVisible();
+    await expect(form.getByRole('textbox').first()).toBeFocused();
+  });
 });
 
 test.describe('reminders', () => {
@@ -114,7 +135,7 @@ test.describe('ideas', () => {
     await form.getByLabel('TITLE').fill('Try the new linter');
     await form.getByLabel(/^PROMPT FOR/).fill('Run the linter on the whole repo and list what it finds.');
     await form.getByRole('textbox', { name: 'FOLDER' }).fill('~/code/notes-app');
-    await form.getByLabel(/Run it tonight/).check();
+    await form.getByRole('button', { name: 'Run it tonight' }).click();
     await form.getByRole('button', { name: 'SAVE IDEA' }).click();
     await expect(form).toHaveCount(0);
     await expect(lane(board, /^ideas/i).getByRole('button', { name: /Try the new linter/ })).toBeVisible();
