@@ -157,10 +157,11 @@ installs none: status comes from the files changing. There is no live status (wh
 only while a conversation is open was not verified). The archive copy is a folder (`eye-conversation.db.zst`, a
 `VACUUM INTO` snapshot, and every file of `brain/<id>/` compressed under `files/`, without `scratch/` and files over
 8 MiB); restoring makes the folder again with the snapshot inside it, which lets eye read the conversation but not
-agy resume it. Not read: commits and folders as outputs, background tasks and sub-agents. Notes: `notes/v0.3/agy-spec.md`.
+agy resume it. Not read: commits and folders as outputs, background tasks and sub-agents.
 
-**OpenCode: built from the source, not tried on a real install.** The adapter follows the structs of
-sst/opencode v2.3.2 (and v1.1.1 for the older files) exactly and is tested on synthetic data in all three
+**OpenCode** (checked on a real OpenCode 2.3.2: a session is listed with its title, folder, conversation and
+tokens, a second message is picked up at the next scan, and `--session` / `--prompt` resume and start it). The
+adapter follows the structs of sst/opencode v2.3.2 (and v1.1.1 for the older files) and is tested in all three
 layouts: the `session_v2` tables, the older `session`/`message`/`part` tables (both in `opencode.db`, found in
 `$XDG_DATA_HOME/opencode` or `~/.local/share/opencode`) and the JSON files of v1.0 and v1.1
 (`storage/session|message|part`). A session of a database is no file, so its transcript path is `<db>#<id>` and

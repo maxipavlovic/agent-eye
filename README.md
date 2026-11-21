@@ -70,7 +70,7 @@ Moving to another machine, or keeping a copy: `eye export` writes one file, `eye
 
 Everything stays on your machine. Summaries run your agent's own CLI on a short excerpt (secrets masked) and count against your plan; turn them off in `~/.agent-eye/config.toml`. `agent-eye uninstall` reverts every change. Details: [docs/security.md](docs/security.md).
 
-Works with Claude Code, Codex CLI, Antigravity CLI (`agy`) and OpenCode (built from its source, not yet tried on a real install). Unofficial: not affiliated with Anthropic, OpenAI, Google or OpenCode.
+Works with Claude Code, Codex CLI, Antigravity CLI (`agy`) and OpenCode. Unofficial: not affiliated with Anthropic, OpenAI, Google or OpenCode.
 
 ## Docs
 
