@@ -311,6 +311,19 @@ impl Agent for Claude {
         live::read_sessions(&self.dir.join("sessions"))
     }
 
+    fn scratch_roots(&self) -> Vec<PathBuf> {
+        // `/private/tmp` is where macOS keeps `/tmp`; Linux has the folder in `/tmp` itself
+        let base = if cfg!(target_os = "macos") {
+            "/private/tmp"
+        } else {
+            "/tmp"
+        };
+        vec![PathBuf::from(format!(
+            "{base}/claude-{}",
+            crate::platform::uid()
+        ))]
+    }
+
     fn jobs(&self) -> Vec<Job> {
         live::read_jobs(&self.dir.join("jobs"))
     }
