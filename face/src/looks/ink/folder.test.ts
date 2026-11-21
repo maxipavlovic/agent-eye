@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { folderHint, folderMissing, startButton } from './folder';
+import { folderHint, folderMissing, isScratch, startButton } from './folder';
 
 describe('startButton', () => {
   it('is plain START for a folder that is there, and for an engine that does not say', () => {
@@ -33,5 +33,12 @@ describe('folderMissing', () => {
     expect(folderMissing({ folder_state: 'missing' })).toBe(true);
     expect(folderMissing({ folder_state: 'ok' })).toBe(false);
     expect(folderMissing({})).toBe(false);
+  });
+});
+
+describe('isScratch', () => {
+  it('is true for the system temp folders and eye\'s own night copies, false for real work', () => {
+    for (const p of ['/tmp/x', '/private/tmp/claude-501/a/work', '/var/folders/ab/T/x', '/private/var/folders/ab/T', '/var/tmp', '/Users/you/.agent-eye/night/1/wt', '/x/eyehome/night/4/work']) expect(isScratch(p), p).toBe(true);
+    for (const p of ['~/code/tmp', '/Users/you/code/app', '/Users/you/tmp-notes', '~', '/opt/tmpl']) expect(isScratch(p), p).toBe(false);
   });
 });
