@@ -37,6 +37,7 @@ struct Fake {
     sessions: RefCell<HashMap<i64, String>>,
     other: Option<String>,
     notes: RefCell<Vec<String>>,
+    no_start_time: Cell<bool>,
 }
 
 impl Fake {
@@ -53,6 +54,7 @@ impl Fake {
             sessions: Default::default(),
             other: None,
             notes: Default::default(),
+            no_start_time: Cell::new(false),
         }
     }
     fn at(&self, day: &str, hm: &str) {
@@ -88,7 +90,7 @@ impl Sys for Fake {
         self.started.borrow_mut().push(run.id);
         Ok(Started {
             pid,
-            pid_start: Some(7),
+            pid_start: (!self.no_start_time.get()).then_some(7),
             iso: iso::Isolation {
                 cwd: "/n/wt".into(),
                 root: format!("/n/{}/wt", run.id).into(),
@@ -1449,4 +1451,61 @@ fn accept_edits_allows_only_build_and_test_commands() {
     ] {
         assert!(allow.split(',').any(|a| a == ok), "{ok}");
     }
+}
+
+#[test]
+fn two_starters_of_one_run_launch_it_once() {
+    let db = db_with(1, "2026-11-21");
+    let sys = Fake::new("2026-11-21", "02:00");
+    let run = super::get(&db, 1).unwrap().unwrap();
+    assert!(sched::start_run(&db, &sys, run.clone(), false).unwrap());
+    // the second starter still holds the row it read while the run was planned
+    assert!(!sched::start_run(&db, &sys, run, false).unwrap());
+    assert_eq!(sys.started.borrow().len(), 1);
+    assert_eq!(super::get(&db, 1).unwrap().unwrap().status, "running");
+}
+
+#[test]
+fn a_run_being_launched_cannot_be_cancelled_and_cancel_wins_before() {
+    let db = db_with(2, "2026-11-21");
+    // a starter has claimed run 1 and is launching it
+    db.conn
+        .execute("UPDATE night_run SET status='starting' WHERE id=1", [])
+        .unwrap();
+    let err = super::cancel(&db, 1).unwrap_err().to_string();
+    assert!(err.contains("starting"), "{err}");
+    assert_eq!(super::get(&db, 1).unwrap().unwrap().status, "starting");
+    // a cancel that came first: the starter finds the run no longer planned and launches nothing
+    let stale = super::get(&db, 2).unwrap().unwrap();
+    super::cancel(&db, 2).unwrap();
+    let sys = Fake::new("2026-11-21", "02:00");
+    assert!(!sched::start_run(&db, &sys, stale, false).unwrap());
+    assert!(sys.started.borrow().is_empty());
+    assert_eq!(super::get(&db, 2).unwrap().unwrap().status, "skipped");
+}
+
+#[test]
+fn a_run_without_a_process_start_time_is_lost_and_never_signalled() {
+    let mut db = db_with(1, "2026-11-21");
+    let sys = Fake::new("2026-11-21", "02:00");
+    sys.no_start_time.set(true);
+    let run = super::get(&db, 1).unwrap().unwrap();
+    assert!(!sched::start_run(&db, &sys, run, false).unwrap());
+    let r = super::get(&db, 1).unwrap().unwrap();
+    assert_eq!(r.status, "lost");
+    assert!(r.pid.is_some() && r.why.as_deref().unwrap().contains("start time"));
+    assert!(r.ended_at.is_some());
+    // later ticks leave it alone
+    sched::tick(&mut db, &sys, &cfg_with("")).unwrap();
+    assert!(sys.terminated.borrow().is_empty());
+    // a running row without a start time (an older eye) is never signalled when a limit is hit
+    db.conn
+        .execute(
+            "UPDATE night_run SET status='running', ended_at=NULL, limit_kind='minutes', limit_value=1, started_at=1 WHERE id=1",
+            [],
+        )
+        .unwrap();
+    sys.alive.borrow_mut().insert(r.pid.unwrap());
+    sched::tick(&mut db, &sys, &cfg_with("")).unwrap();
+    assert!(sys.terminated.borrow().is_empty());
 }

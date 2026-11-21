@@ -24,7 +24,7 @@ export function durationText(ms: number | null | undefined): string {
 
 /** The words for a run's state, with why when it did not simply finish. */
 export function runStatus(r: NightRun): string {
-  const base = { planned: 'Planned', running: 'Running', done: 'Done', failed: 'Failed', stopped: 'Stopped', skipped: 'Skipped' }[r.status];
+  const base = { planned: 'Planned', starting: 'Starting', lost: 'Lost', running: 'Running', done: 'Done', failed: 'Failed', stopped: 'Stopped', skipped: 'Skipped' }[r.status];
   return r.why && r.status !== 'planned' ? `${base}: ${r.why}` : base;
 }
 

@@ -29,7 +29,12 @@ use serde_json::{json, Value};
 use std::path::PathBuf;
 
 pub const PLANNED: &str = "planned";
+/// A run a starter has claimed and is launching: nobody else starts or cancels it.
+pub const STARTING: &str = "starting";
 pub const RUNNING: &str = "running";
+/// A run eye started but cannot follow or signal (no process start time to tell it from a reused
+/// pid). It is left alone; its folder is still there.
+pub const LOST: &str = "lost";
 pub const DONE: &str = "done";
 pub const FAILED: &str = "failed";
 pub const STOPPED: &str = "stopped";
@@ -154,7 +159,7 @@ impl Run {
 
     /// A run that has not ended: planned, or still going.
     pub fn is_open(&self) -> bool {
-        self.status == PLANNED || (self.status == RUNNING)
+        self.status == PLANNED || self.status == STARTING || self.status == RUNNING
     }
 
     /// The folder the run works in (the worktree, or the copy).
@@ -463,10 +468,16 @@ pub fn cancel(db: &Db, id: i64) -> Result<()> {
         "run {id} is {}: only a planned run can be cancelled",
         r.status
     );
-    db.conn.execute(
-        "UPDATE night_run SET status='skipped', why='cancelled', ended_at=?2 WHERE id=?1",
+    // the status is checked again in the update: a starter may have claimed the run since the read
+    let n = db.conn.execute(
+        "UPDATE night_run SET status='skipped', why='cancelled', ended_at=?2
+         WHERE id=?1 AND status IN ('planned')",
         params![id, now_ms()],
     )?;
+    if n == 0 {
+        let now = get(db, id)?.map_or_else(|| "gone".to_string(), |r| r.status);
+        bail!("run {id} is now {now}: only a planned run can be cancelled");
+    }
     Ok(())
 }
 

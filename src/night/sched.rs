@@ -4,7 +4,7 @@
 //! clock and the live sessions themselves.
 
 use super::clock::{self, Window};
-use super::{launch, Limit, Run, DONE, FAILED, PLANNED, RUNNING, STOPPED};
+use super::{launch, Limit, Run, DONE, FAILED, LOST, PLANNED, RUNNING, STARTING, STOPPED};
 use crate::agents::Agents;
 use crate::config::Config;
 use crate::db::Db;
@@ -221,6 +221,9 @@ fn finish(db: &mut Db, sys: &dyn Sys, run: &Run) -> Result<()> {
     Ok(())
 }
 
+/// A run left in `starting` this long was abandoned (a worktree add or a clone is slow, not this slow).
+const STARTING_STALE_MS: i64 = 30 * 60_000;
+
 /// One pass: finish, watch, start.
 pub fn tick(db: &mut Db, sys: &dyn Sys, cfg: &Config) -> Result<Pass> {
     tick_with(db, sys, cfg, true)
@@ -241,11 +244,22 @@ pub fn tick_with(db: &mut Db, sys: &dyn Sys, cfg: &Config, start: bool) -> Resul
         link_session(db, &run)?;
         let run = super::get(db, run.id)?.context("run vanished")?;
         if let Some(why) = limit_hit(db, &run, now) {
-            if let Some(pid) = run.pid {
+            // never signal a pid whose start time is unknown: it may be another process now
+            if let (Some(pid), Some(_)) = (run.pid, run.pid_start) {
                 sys.terminate(pid);
             }
             set_status(db, run.id, STOPPED, Some(&why))?;
             pass.stopped.push(run.id);
+        }
+    }
+    // 1b. a run claimed long ago and never recorded: the starter died while launching
+    for run in super::with_status(db, STARTING)? {
+        if run.started_at.is_some_and(|t| now - t > STARTING_STALE_MS) {
+            db.conn.execute(
+                "UPDATE night_run SET status='failed', why='the start was interrupted', ended_at=?2
+                 WHERE id=?1 AND status='starting'",
+                params![run.id, now],
+            )?;
         }
     }
     // 2. stopped ones that still have a process: finish when it is gone
@@ -274,7 +288,7 @@ pub fn tick_with(db: &mut Db, sys: &dyn Sys, cfg: &Config, start: bool) -> Resul
 
 fn running_count(db: &Db) -> Result<usize> {
     Ok(db.conn.query_row(
-        "SELECT COUNT(*) FROM night_run WHERE status='running' OR (status='stopped' AND ended_at IS NULL)",
+        "SELECT COUNT(*) FROM night_run WHERE status IN ('running','starting') OR (status='stopped' AND ended_at IS NULL)",
         [],
         |r| r.get::<_, i64>(0),
     )? as usize)
@@ -310,13 +324,22 @@ fn start_due(db: &mut Db, sys: &dyn Sys, cfg: &Config, now: i64, pass: &mut Pass
 /// other agent when it allows that. Returns whether it started.
 pub fn start_run(db: &Db, sys: &dyn Sys, mut run: Run, allow_switch: bool) -> Result<bool> {
     let now = sys.now();
+    // Claim the run before anything is made: a second starter, or a cancel, that comes later finds
+    // it no longer planned and does nothing.
+    let claimed = db.conn.execute(
+        "UPDATE night_run SET status='starting', started_at=?2 WHERE id=?1 AND status='planned'",
+        params![run.id, now],
+    )?;
+    if claimed == 0 {
+        return Ok(false);
+    }
     if allow_switch && run.kind == "idea" && run.switch_ok && plan_out(db, &run.agent, now) {
         if let Some(other) = sys
             .other_agent(&run.agent)
             .filter(|o| !plan_out(db, o, now))
         {
             db.conn.execute(
-                "UPDATE night_run SET agent=?2, why=?3 WHERE id=?1",
+                "UPDATE night_run SET agent=?2, why=?3 WHERE id=?1 AND status='starting'",
                 params![
                     run.id,
                     other,
@@ -337,9 +360,21 @@ pub fn start_run(db: &Db, sys: &dyn Sys, mut run: Run, allow_switch: bool) -> Re
     }
     match sys.start(&run) {
         Ok(s) => {
-            db.conn.execute(
-                "UPDATE night_run SET status='running', pid=?2, pid_start=?3, worktree=?4, branch=?5, base_ref=?6,
-                        run_session_id=?7, started_at=?8 WHERE id=?1",
+            // Without the start time a pid cannot be told from a reused one, so eye could never
+            // check the process or signal it safely: the run is lost, with its pid and folder kept.
+            let (status, why) = if s.pid_start.is_some() {
+                (RUNNING, None)
+            } else {
+                (
+                    LOST,
+                    Some("started, but its process start time could not be read: eye cannot follow or stop it; look in its folder"),
+                )
+            };
+            let n = db.conn.execute(
+                "UPDATE night_run SET status=?9, why=?10, pid=?2, pid_start=?3, worktree=?4, branch=?5,
+                        base_ref=?6, run_session_id=?7, started_at=?8,
+                        ended_at=CASE WHEN ?9='lost' THEN ?8 ELSE NULL END
+                 WHERE id=?1 AND status='starting'",
                 params![
                     run.id,
                     s.pid,
@@ -348,14 +383,23 @@ pub fn start_run(db: &Db, sys: &dyn Sys, mut run: Run, allow_switch: bool) -> Re
                     s.iso.branch,
                     s.iso.base_ref,
                     s.session_id,
-                    sys.now()
+                    sys.now(),
+                    status,
+                    why
                 ],
             )?;
-            Ok(true)
+            if n == 0 {
+                // the claim was taken back while it launched: do not leave an unwatched process
+                if s.pid_start.is_some() {
+                    sys.terminate(s.pid);
+                }
+                return Ok(false);
+            }
+            Ok(status == RUNNING)
         }
         Err(e) => {
             db.conn.execute(
-                "UPDATE night_run SET status='failed', why=?2, ended_at=?3 WHERE id=?1",
+                "UPDATE night_run SET status='failed', why=?2, ended_at=?3 WHERE id=?1 AND status='starting'",
                 params![run.id, format!("could not start: {e:#}"), sys.now()],
             )?;
             Ok(false)

@@ -226,6 +226,18 @@ pub fn spawn(spec: &Spec, log: &Path, exit: &Path) -> Result<i64> {
     Ok(pid)
 }
 
+/// The start time of a process, read a few times: the wrapper has only just been forked.
+fn process_start(pid: i64) -> Option<i64> {
+    let p = u32::try_from(pid).ok()?;
+    for _ in 0..5 {
+        if let Some(i) = crate::platform::procs::info(p) {
+            return Some(i.start);
+        }
+        std::thread::sleep(std::time::Duration::from_millis(40));
+    }
+    None
+}
+
 /// What starting a run left: where it works and who it is.
 #[derive(Debug, Clone)]
 pub struct Started {
@@ -332,8 +344,7 @@ pub fn start(
         let pid = spawn(&spec, &dir.join("log"), &dir.join("exit"))?;
         Ok(Started {
             pid,
-            pid_start: crate::platform::procs::info(u32::try_from(pid).unwrap_or(0))
-                .map(|i| i.start),
+            pid_start: process_start(pid),
             session_id: spec.session_id,
             iso: iso.clone(),
         })
