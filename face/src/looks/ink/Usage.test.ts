@@ -48,7 +48,8 @@ describe('the USAGE panel', () => {
     expect(usage).toHaveBeenCalledWith(7);
     expect(text).toContain('API-equivalent estimate, not your bill');
     for (const t of ['PLAN LIMITS', 'THIS WEEK BY PROJECT', 'BY AGENT', 'TOP 10 SESSIONS', 'LAST 4 WEEKS']) expect(text).toContain(t);
-    expect(text).toContain('~/code/billing');
+    expect(text).toContain('billing');
+    expect(text).toContain('other (6)');
     expect(root.querySelectorAll('.usage .ubars')).toHaveLength(4);
     // only the Codex limit (86%) is above 80%, so it alone takes the accent
     const lims = [...root.querySelectorAll('.ulimits li')];
