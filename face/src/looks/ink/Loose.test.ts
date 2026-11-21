@@ -117,9 +117,9 @@ describe('the LEFT BEHIND section', () => {
     await vi.waitFor(() => expect(m.$('.page')).toBeNull());
     await openCard(m, '1 loose end');
     button(m.$$('.dloose li')[0]!, 'REMOVE')!.click();
-    await vi.waitFor(() => expect(text(m.$('.lask p'))).toBe('Remove worktree /private/tmp/claude-501/p/s/wt?'));
+    await vi.waitFor(() => expect(text(m.$('.lask p'))).toBe('Remove worktree /Users/you/code/web-retry?'));
     button(m.root, 'YES')!.click();
-    await vi.waitFor(() => expect(m.acts.at(-1)).toEqual(['remove', 'worktree:/private/tmp/claude-501/p/s/wt']));
+    await vi.waitFor(() => expect(m.acts.at(-1)).toEqual(['remove', 'worktree:/Users/you/code/web-retry']));
   });
 
   it('copying the command asks nothing and never calls an acting route', async () => {
