@@ -55,7 +55,7 @@ describe('CONTINUE TONIGHT in the card menu', () => {
     expect(labels.indexOf('CONTINUE TONIGHT…')).toBeLessThan(labels.indexOf('OPEN DETAILS'));
     m.$$('.ctx button').find((b) => text(b) === 'CONTINUE TONIGHT…')!.click();
     await vi.waitFor(() => expect(m.$('.page form.nplan textarea')).not.toBeNull());
-    expect(document.activeElement).toBe(m.$('.page form.nplan textarea'));
+    await vi.waitFor(() => expect(document.activeElement).toBe(m.$('.page form.nplan textarea')));
     expect(m.$('.ctx')).toBeNull();
   });
 
