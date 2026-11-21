@@ -32,13 +32,17 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 ### Changed
 
 - Search is one engine for the picker, the board and `eye find`. Word forms match (`tokens` finds `token`), a mistyped word is fixed from your own sessions, and half of the words are enough. A pasted link finds the session that made it. Titles and rare words count most; status and age no longer lift a session, so old sessions are not pushed to the bottom. Archived sessions still come last.
-- `score` in `eye find --json` and `/api/search` is now higher-is-better.
+- `eye find --json` and `/api/search` add `relevance` (higher is better). `score` keeps its 0.2 order, lower is better: it is `relevance` negated.
 - Database schema 13 (the search index stems words; 0.2.x still reads it).
 - Dependencies: axum 0.8, zstd 0.14, toml 1.2, jiff in place of chrono, vite 8.3.7 (face).
 - `config.toml`: a section or key this version does not know is listed once on standard error and ignored; text that is not TOML is still refused.
 - Night runs: a run is claimed before it starts, so two starters or a cancel cannot start it twice; a run whose process start time cannot be read is marked lost and never signalled. In `acceptEdits` mode only build and test commands are allowed.
 - `eye import` takes the `pre-import` snapshot before copying files, skips files that already match, and refuses a pack that unpacks to more than its manifest says. `POST /api/loose/stop|remove` need `confirm: true`. The usage backfill runs in its own thread.
 - Going back to 0.2.x works: it ignores the new config sections and still reads and writes the schema 17 database.
+
+### Fixed
+
+- The reminder's date picker moved from the old day when two keys came before it was drawn again (Down then PageDown from late in a month landed a month short).
 
 ## 0.2.1 - 2026-11-12
 

@@ -8,7 +8,6 @@ use agent_eye::loose::{Probe, System};
 use agent_eye::paths::Paths;
 use agent_eye::usage::{day_of, limits, LimitWindow, PlanLimits};
 use agent_eye::util::now_ms;
-use agent_eye::worked::summary::local_offset_ms;
 use rusqlite::params;
 use serde_json::Value;
 use std::io::Write;
@@ -178,7 +177,8 @@ impl World {
 
     /// One day of use of a session.
     fn usage(&self, sid: &str, days_ago: i64, model: &str, t: [i64; 4]) {
-        let day = day_of(now_ms() - days_ago * DAY, &local_offset_ms);
+        // the eye under test runs with TZ=UTC, so its days are UTC days
+        let day = day_of(now_ms() - days_ago * DAY, &|_| 0);
         let db = self.db();
         db.conn
             .execute(
@@ -531,6 +531,10 @@ fn find_ranks_by_words_filters_and_prints_json() {
     let j = w.json(&["find", "tokens", "--json"]);
     assert_eq!(j.as_array().unwrap().len(), 1);
     assert!(j[0].to_string().contains("stale tokens"));
+    // score keeps 0.2's lower-is-better order; relevance is the same number turned around
+    let relevance = j[0]["relevance"].as_f64().unwrap();
+    assert!(relevance > 0.0, "{}", j[0]);
+    assert_eq!(j[0]["score"].as_f64().unwrap(), -relevance);
     assert_eq!(
         w.json(&["find", "failed", "--json", "--limit", "1"])
             .as_array()

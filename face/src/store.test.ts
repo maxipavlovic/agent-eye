@@ -165,7 +165,7 @@ describe('search', () => {
 
   it('ignores an older answer that arrives after a newer one', async () => {
     vi.useFakeTimers();
-    const hit = (t: string) => ({ results: [{ card: card(t, 'paused'), snippet: t, score: 0 }] });
+    const hit = (t: string) => ({ results: [{ card: card(t, 'paused'), snippet: t, score: 0, relevance: 0 }] });
     const resolvers: Record<string, (v: ReturnType<typeof hit>) => void> = {};
     const s = createStore(source({
       search: (q) => new Promise((r) => { resolvers[q] = r as never; }),

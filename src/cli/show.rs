@@ -77,7 +77,9 @@ pub fn find(g: &Global, words: &[String], limit: usize, all: bool, json: bool) -
             .map(|h| {
                 let mut v = session_json(&h.session, h.column, &env.cfg.user, &env.agents);
                 v["snippet"] = json!(h.snippet);
-                v["score"] = json!(h.score);
+                // `score` keeps 0.2's order (lower is better); `relevance` is the same number turned around
+                v["score"] = json!(-h.score);
+                v["relevance"] = json!(h.score);
                 v
             })
             .collect();

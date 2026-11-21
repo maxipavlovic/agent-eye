@@ -453,5 +453,10 @@ mod tests {
         assert_eq!(r["results"].as_array().unwrap().len(), 0);
         let (_, r) = call(&e, req("GET", "/api/search?q=exirt&all=1", None)).await;
         assert_eq!(r["results"].as_array().unwrap().len(), 1);
+        // score keeps 0.2's lower-is-better order; relevance is the same number turned around
+        let hit = &r["results"][0];
+        let relevance = hit["relevance"].as_f64().unwrap();
+        assert!(relevance > 0.0, "{hit}");
+        assert_eq!(hit["score"].as_f64().unwrap(), -relevance);
     }
 }

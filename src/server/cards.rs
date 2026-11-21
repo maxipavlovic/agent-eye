@@ -415,7 +415,9 @@ pub(super) async fn api_search(State(st): State<Shared>, Query(q): Query<SearchQ
         out.push(json!({
             "card": load_card(&db, &h.session, now, st.card_ctx())?,
             "snippet": h.snippet,
-            "score": h.score,
+            // `score` keeps 0.2's order (lower is better); `relevance` is the same number turned around
+            "score": -h.score,
+            "relevance": h.score,
         }));
     }
     Ok(Json(json!({"results": out})))

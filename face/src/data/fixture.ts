@@ -324,9 +324,10 @@ export function fixtureSource(demo = false): Source {
         const hay = fields.join('\n').toLowerCase();
         if (!words.every((w) => hay.includes(w))) continue;
         const snippet = fields.map((f) => snippetOf(f, words)).find(Boolean) ?? c.title;
-        hits.push({ card: c, snippet, score: words.length + (c.title.toLowerCase().includes(words[0]!) ? 5 : 0) });
+        const relevance = words.length + (c.title.toLowerCase().includes(words[0]!) ? 5 : 0);
+        hits.push({ card: c, snippet, score: -relevance, relevance });
       }
-      hits.sort((a, b) => b.score - a.score);
+      hits.sort((a, b) => b.relevance - a.relevance);
       return delay({ results: hits.slice(0, 30) }, 120);
     },
     ideas: () => delay(structuredClone(ideas)),

@@ -401,7 +401,10 @@ export interface ArchivePage {
 export interface SearchHit {
   card: Card;
   snippet: string;
+  /** Lower is better (kept from 0.2). */
   score: number;
+  /** Higher is better: the same ranking as `score`, turned around. */
+  relevance: number;
 }
 
 /** An enabled agent: `short` is the name shown on cards and labels. */
