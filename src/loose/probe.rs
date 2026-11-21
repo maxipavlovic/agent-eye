@@ -118,18 +118,47 @@ pub fn run_timeout(mut cmd: Command, limit: Duration) -> Option<(bool, String, S
     Some((ok, o, e))
 }
 
+/// How long a git command that changes something may take: a worktree of a big repo takes
+/// longer than deleting a branch.
+fn act_timeout(args: &[&str]) -> Duration {
+    if args.starts_with(&["worktree", "add"]) {
+        Duration::from_secs(120)
+    } else {
+        Duration::from_secs(30)
+    }
+}
+
 fn git_command(dir: &Path, args: &[&str]) -> Command {
     let git = crate::util::find_in("git", &crate::platform::search_path())
         .unwrap_or_else(|| PathBuf::from("git"));
     let mut c = Command::new(git);
     c.arg("--no-optional-locks")
         // a configured file-system monitor would start a daemon and write to the repo
-        .args(["-c", "core.fsmonitor=false"])
+        .args(["-c", "core.fsmonitor=false", "-c", "core.pager=cat"])
         .args(args)
         .current_dir(dir)
         .env("GIT_OPTIONAL_LOCKS", "0")
         .env("GIT_TERMINAL_PROMPT", "0")
+        .env("GIT_PAGER", "cat")
+        .env("GIT_EDITOR", "true")
         .env("LC_ALL", "C");
+    c
+}
+
+/// A git command that changes something. It runs none of the repo's hooks (a reference-transaction
+/// or post-checkout hook that waits for something would stall it, and eye should not run a
+/// repo's code unattended) and no automatic gc or maintenance.
+pub fn git_act_command(dir: &Path, args: &[&str]) -> Command {
+    let mut c = git_command(dir, &[]);
+    c.args([
+        "-c",
+        "core.hooksPath=/dev/null",
+        "-c",
+        "gc.auto=0",
+        "-c",
+        "maintenance.auto=false",
+    ])
+    .args(args);
     c
 }
 
@@ -223,7 +252,7 @@ impl Probe for System {
     }
 
     fn git_act(&self, dir: &Path, args: &[&str]) -> Result<String, String> {
-        match run_timeout(git_command(dir, args), Duration::from_secs(30)) {
+        match run_timeout(git_act_command(dir, args), act_timeout(args)) {
             Some((true, out, err)) => Ok(format!("{out}{err}").trim().to_string()),
             Some((false, out, err)) => Err(format!("{out}{err}").trim().to_string()),
             None => Err("git did not answer in time".into()),
