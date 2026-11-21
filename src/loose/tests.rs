@@ -444,7 +444,7 @@ fn stop_acts_only_when_pid_and_start_still_match() {
         Kind::Process,
         "node (pid 500, port 80)",
     );
-    replace(&db, &[it.clone()], NOW).unwrap();
+    replace(&db, std::slice::from_ref(&it), NOW).unwrap();
     // the pid now belongs to a process that started later
     let mut fake = Fake::default();
     fake.infos.insert(
@@ -462,13 +462,13 @@ fn stop_acts_only_when_pid_and_start_still_match() {
         "a stale item is forgotten"
     );
     // gone
-    replace(&db, &[it.clone()], NOW).unwrap();
+    replace(&db, std::slice::from_ref(&it), NOW).unwrap();
     let e = stop(&db, &Fake::default(), &it.key)
         .unwrap_err()
         .to_string();
     assert!(e.contains("not running any more"));
     // someone else's process
-    replace(&db, &[it.clone()], NOW).unwrap();
+    replace(&db, std::slice::from_ref(&it), NOW).unwrap();
     let mut fake = Fake::default();
     fake.infos.insert(
         500,
@@ -497,7 +497,7 @@ fn stop_acts_only_when_pid_and_start_still_match() {
     // a key that no scan stored is refused, and so is the wrong kind
     assert!(stop(&db, &fake, "proc:1:1").is_err());
     let wt = item("worktree:/w", "s1", Kind::Worktree, "/w\nrepo /r");
-    replace(&db, &[wt.clone()], NOW).unwrap();
+    replace(&db, std::slice::from_ref(&wt), NOW).unwrap();
     assert!(stop(&db, &fake, &wt.key).is_err());
 }
 
@@ -510,7 +510,7 @@ fn a_container_is_stopped_only_when_id_and_creation_match() {
         Kind::Container,
         "container web (abcdef)",
     );
-    replace(&db, &[it.clone()], NOW).unwrap();
+    replace(&db, std::slice::from_ref(&it), NOW).unwrap();
     let mut fake = Fake::default();
     fake.boxes.push(Docker {
         id: "abcdef".into(),
@@ -522,7 +522,7 @@ fn a_container_is_stopped_only_when_id_and_creation_match() {
     });
     assert!(stop(&db, &fake, &it.key).is_err());
     assert!(fake.acted.lock().unwrap().is_empty());
-    replace(&db, &[it.clone()], NOW).unwrap();
+    replace(&db, std::slice::from_ref(&it), NOW).unwrap();
     fake.boxes[0].created = 77;
     stop(&db, &fake, &it.key).unwrap();
     assert_eq!(
@@ -544,7 +544,7 @@ fn a_worktree_is_removed_without_force_and_a_refusal_is_passed_on() {
         Kind::Worktree,
         &format!("{wt}\nrepo /r\nscratchpad"),
     );
-    replace(&db, &[it.clone()], NOW).unwrap();
+    replace(&db, std::slice::from_ref(&it), NOW).unwrap();
     let mut fake = Fake::default();
     fake.git.insert(
         "/r worktree list --porcelain".into(),
@@ -568,7 +568,7 @@ fn a_worktree_is_removed_without_force_and_a_refusal_is_passed_on() {
     remove(&db, &fake, &it.key).unwrap();
     assert!(get(&db, &it.key).unwrap().is_none());
     // git does not list it any more: nothing is run
-    replace(&db, &[it.clone()], NOW).unwrap();
+    replace(&db, std::slice::from_ref(&it), NOW).unwrap();
     let mut fake = Fake::default();
     fake.git.insert(
         "/r worktree list --porcelain".into(),
@@ -663,13 +663,17 @@ fn a_process_of_our_own_is_found_and_stopped_only_on_a_matching_start() {
         replace(&db, &mine, NOW).unwrap();
         stop(&db, &sys, &mine[0].key).unwrap();
     });
-    if outcome.is_ok() {
-        let st = child.wait().unwrap();
-        use std::os::unix::process::ExitStatusExt;
-        assert_eq!(st.signal(), Some(libc::SIGTERM));
-    } else {
-        let _ = child.kill();
-        let _ = child.wait();
-        outcome.unwrap();
+    match outcome {
+        Ok(()) => {
+            let st = child.wait().unwrap();
+            use std::os::unix::process::ExitStatusExt;
+            assert_eq!(st.signal(), Some(libc::SIGTERM));
+        }
+        Err(panic) => {
+            // only our own throwaway child is ever killed here
+            let _ = child.kill();
+            let _ = child.wait();
+            std::panic::resume_unwind(panic);
+        }
     }
 }

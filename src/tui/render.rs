@@ -349,9 +349,7 @@ pub fn draw(f: &mut Frame, app: &mut App) {
                 .enumerate()
                 .map(|(i, t)| {
                     // the title line and the selected item stand out
-                    if i == 0 {
-                        Line::styled(t, pal.bold())
-                    } else if t.starts_with('›') {
+                    if i == 0 || t.starts_with('›') {
                         Line::styled(t, pal.bold())
                     } else {
                         Line::raw(t)

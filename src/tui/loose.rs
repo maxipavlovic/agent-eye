@@ -94,7 +94,7 @@ impl App {
                 l.sel = (l.sel + 1).min(l.items.len().saturating_sub(1))
             }
             KeyCode::Char('s') | KeyCode::Char('r') | KeyCode::Char('i') => {
-                let Some(it) = item else { return None };
+                let it = item?;
                 let sel = l.sel;
                 let (ask, text) = match k.code {
                     KeyCode::Char('s') => (

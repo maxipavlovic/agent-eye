@@ -35,7 +35,7 @@ pub struct Info {
 
 // ---------- parsing (shared, tested with fixed text) ----------
 
-/// One line of `ps -axo pid=,ppid=,uid=,lstart=,command=` (lstart is `Fri Nov 21 10:11:12 2026`):
+/// One line of `ps -axo pid=,ppid=,uid=,lstart=,command=` (lstart is `Sat Nov 21 10:11:12 2026`):
 /// pid, ppid, uid, start in Unix seconds and the command.
 pub fn parse_ps_line(line: &str) -> Option<(u32, u32, u32, i64, String)> {
     let mut it = line.split_whitespace();
@@ -49,7 +49,7 @@ pub fn parse_ps_line(line: &str) -> Option<(u32, u32, u32, i64, String)> {
     Some((pid, ppid, uid, start, command.join(" ")))
 }
 
-/// `Fri Nov 21 10:11:12 2026` in local time, as Unix seconds.
+/// `Sat Nov 21 10:11:12 2026` in local time, as Unix seconds.
 pub fn parse_lstart(w: &[&str; 5]) -> Option<i64> {
     let text = w.join(" ");
     let naive = chrono::NaiveDateTime::parse_from_str(&text, "%a %b %e %H:%M:%S %Y").ok()?;
@@ -362,7 +362,7 @@ mod tests {
     #[test]
     fn a_ps_line_is_read() {
         let (pid, ppid, uid, start, cmd) = parse_ps_line(
-            "38090     1   501 Fri Nov 21 10:11:12 2026 /opt/homebrew/bin/node /x/vite.js --port 4321",
+            "38090     1   501 Sat Nov 21 10:11:12 2026 /opt/homebrew/bin/node /x/vite.js --port 4321",
         )
         .unwrap();
         assert_eq!((pid, ppid, uid), (38090, 1, 501));
