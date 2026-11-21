@@ -201,6 +201,12 @@ impl Agent for Agy {
         path.starts_with(self.dir.join(files::BRAIN))
     }
 
+    /// The conversation's folder under `brain/`, its database with the `-shm` and `-wal` files, and
+    /// its row in `conversation_summaries.db`.
+    fn delete_transcript(&self, path: &Path, session_id: &str) -> Result<Option<Vec<String>>> {
+        files::delete(&self.dir, path, session_id).map(Some)
+    }
+
     fn own_dirs(&self) -> Vec<String> {
         vec![self.dir.to_string_lossy().into_owned()]
     }

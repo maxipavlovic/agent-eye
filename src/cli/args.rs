@@ -476,6 +476,24 @@ pub enum Cmd {
     },
     /// Check that everything works
     Doctor,
+    /// Take sessions out of eye: its index and its archive copy, and with --transcript the
+    /// agent's own copy too. Cannot be undone (a snapshot is taken first)
+    Forget {
+        /// Sessions (ids or prefixes)
+        ids: Vec<String>,
+        /// Every session whose folder is this one or inside it
+        #[arg(long, conflicts_with = "ids")]
+        folder: Option<std::path::PathBuf>,
+        /// Also remove the agent's own copy (Claude Code's transcript, Codex's rollout, ...)
+        #[arg(long)]
+        transcript: bool,
+        /// Do not ask
+        #[arg(long)]
+        yes: bool,
+        /// Only list what would go
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Keep a compressed copy of transcripts
     Archive {
         id: Option<String>,

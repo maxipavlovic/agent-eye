@@ -41,6 +41,14 @@ use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
+/// Is `path` below `root`, with no `..` in it? What an adapter checks before it deletes.
+pub fn is_inside(root: &Path, path: &Path) -> bool {
+    path.starts_with(root)
+        && !path
+            .components()
+            .any(|c| matches!(c, std::path::Component::ParentDir))
+}
+
 /// A shared handle to an agent adapter.
 pub type AgentRef = Arc<dyn Agent>;
 
@@ -154,6 +162,14 @@ pub trait Agent: Send + Sync + std::fmt::Debug {
     /// original place, or a temporary one when the copy is only read).
     fn unarchive(&self, copy: &Path, dest: &Path) -> Result<()> {
         crate::archive::decompress_file(copy, dest)
+    }
+
+    /// Remove the agent's own copy of session `session_id`, whose transcript is `path` (`eye forget
+    /// --transcript`). Returns what was removed, as lines for people (empty when nothing was left
+    /// to remove). `Ok(None)` is the default and means this adapter does not delete sessions. An
+    /// adapter must check that `path` is inside the agent's own folder before it removes anything.
+    fn delete_transcript(&self, _path: &Path, _session_id: &str) -> Result<Option<Vec<String>>> {
+        Ok(None)
     }
 
     // ---- live state ----

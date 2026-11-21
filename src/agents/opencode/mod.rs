@@ -231,6 +231,11 @@ impl Agent for OpenCode {
         store::exists(path)
     }
 
+    /// The session's rows (and its sub-agents' rows) in the database, or its JSON files.
+    fn delete_transcript(&self, path: &Path, session_id: &str) -> Result<Option<Vec<String>>> {
+        store::delete(&self.dir, path, session_id).map(Some)
+    }
+
     fn own_dirs(&self) -> Vec<String> {
         vec![self.dir.to_string_lossy().into_owned()]
     }

@@ -4,6 +4,7 @@
 
 use crate::agents::append_only::for_each_line;
 use crate::agents::{Stamp, Transcript};
+use anyhow::Result;
 use regex::Regex;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -276,6 +277,45 @@ pub fn names(dir: &Path) -> Arc<Names> {
     let names = Arc::new(names);
     cache.insert(path, (stamp, names.clone()));
     names
+}
+
+/// Remove every rollout of thread `thread_id` and its lines in `session_index.jsonl`. Returns what
+/// was removed, as lines for people.
+pub fn delete_thread(dir: &Path, thread_id: &str) -> Result<Vec<String>> {
+    let id = thread_id.to_ascii_lowercase();
+    let mut all = vec![];
+    walk(&dir.join(SESSIONS_DIR), 3, &mut all);
+    walk(&dir.join(ARCHIVED_DIR), 0, &mut all);
+    let mut gone = vec![];
+    for f in all.into_iter().filter(|f| f.thread_id == id) {
+        std::fs::remove_file(&f.path)?;
+        gone.push(crate::util::show_path(&f.path));
+    }
+    let index = dir.join(INDEX_FILE);
+    if let Ok(text) = std::fs::read_to_string(&index) {
+        let keep: Vec<&str> = text
+            .lines()
+            .filter(|l| {
+                serde_json::from_str::<Value>(l)
+                    .ok()
+                    .and_then(|v| str_at(&v, &["id"]).map(str::to_ascii_lowercase))
+                    .is_none_or(|i| i != id)
+            })
+            .collect();
+        if keep.len() != text.lines().count() {
+            let tmp = index.with_extension("jsonl.eye-tmp");
+            let mut out = keep.join("\n");
+            if !keep.is_empty() {
+                out.push('\n');
+            }
+            let perms = std::fs::metadata(&index)?.permissions();
+            std::fs::write(&tmp, out)?;
+            std::fs::set_permissions(&tmp, perms)?;
+            std::fs::rename(&tmp, &index)?;
+            gone.push(format!("its line in {}", crate::util::show_path(&index)));
+        }
+    }
+    Ok(gone)
 }
 
 /// A sub-agent of a session.

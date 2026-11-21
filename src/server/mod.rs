@@ -94,6 +94,7 @@ pub fn router(state: Shared) -> Router {
         .route("/api/cards/{id}", get(cards::api_card))
         .route("/api/cards/{id}/column", post(cards::api_move))
         .route("/api/cards/{id}/hidden", post(cards::api_hidden))
+        .route("/api/sessions/{id}/forget", post(cards::api_forget))
         .route("/api/cards/{id}/remind", post(remind_routes::api_remind))
         .route(
             "/api/remind/settings",

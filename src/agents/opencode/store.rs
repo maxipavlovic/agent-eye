@@ -224,6 +224,82 @@ pub fn stamp(path: &Path) -> Option<Stamp> {
     file_stamp(data_dir_of(path)?, id, path)
 }
 
+/// Remove session `id` of the database or file layout that `path` names, with its sub-agent
+/// sessions. Returns what was removed, as lines for people.
+pub fn delete(dir: &Path, path: &Path, id: &str) -> Result<Vec<String>> {
+    anyhow::ensure!(valid_session_id(id), "{id} is not an OpenCode session id");
+    if let Some((db, sid)) = split_db_path(path) {
+        anyhow::ensure!(
+            sid == id && db.parent() == Some(dir) && db.is_file(),
+            "{} is not a database of OpenCode",
+            db.display()
+        );
+        let c = Connection::open(&db).with_context(|| format!("opening {}", db.display()))?;
+        c.busy_timeout(std::time::Duration::from_millis(1_000))?;
+        let tx = c.unchecked_transaction()?;
+        let mut rows = 0;
+        for (sessions, msgs, parts) in [
+            ("session_v2", "session_message", Some("session_part")),
+            ("session", "message", Some("part")),
+        ] {
+            if !has_table(&c, sessions) {
+                continue;
+            }
+            let ids: Vec<String> = tx
+                .prepare(&format!(
+                    "SELECT id FROM {sessions} WHERE id=?1 OR parent_id=?1"
+                ))?
+                .query_map([id], |r| r.get(0))?
+                .collect::<rusqlite::Result<_>>()?;
+            for sid in ids {
+                for (table, col) in [
+                    (parts, "session_id"),
+                    (Some(msgs), "session_id"),
+                    (Some(sessions), "id"),
+                ] {
+                    if let Some(t) = table.filter(|t| has_table(&c, t)) {
+                        rows += tx.execute(&format!("DELETE FROM {t} WHERE {col}=?1"), [&sid])?;
+                    }
+                }
+            }
+        }
+        tx.commit()?;
+        return Ok(if rows > 0 {
+            vec![format!("{rows} rows of {}", crate::util::show_path(&db))]
+        } else {
+            vec![]
+        });
+    }
+    anyhow::ensure!(
+        data_dir_of(path) == Some(dir)
+            && path.file_stem().and_then(|s| s.to_str()) == Some(id)
+            && crate::agents::is_inside(dir, path),
+        "{} is not a session file of OpenCode",
+        path.display()
+    );
+    let msgs = dir.join("storage/message").join(id);
+    let mut gone = vec![];
+    for m in std::fs::read_dir(&msgs).into_iter().flatten().flatten() {
+        if let Some(mid) = m.path().file_stem().and_then(|s| s.to_str()) {
+            if valid_session_id(mid) {
+                let parts = dir.join("storage/part").join(mid);
+                if parts.is_dir() {
+                    std::fs::remove_dir_all(&parts)?;
+                }
+            }
+        }
+    }
+    if msgs.is_dir() {
+        std::fs::remove_dir_all(&msgs)?;
+        gone.push(crate::util::show_path(&msgs));
+    }
+    if path.is_file() {
+        std::fs::remove_file(path)?;
+        gone.push(crate::util::show_path(path));
+    }
+    Ok(gone)
+}
+
 fn json_dir<T>(dir: &Path, mut each: impl FnMut(&Path, Value) -> Option<T>) -> Vec<T> {
     let mut out = vec![];
     let mut files: Vec<PathBuf> = std::fs::read_dir(dir)

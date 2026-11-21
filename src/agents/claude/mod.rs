@@ -213,6 +213,31 @@ impl Agent for Claude {
         path.starts_with(self.dir.join("projects"))
     }
 
+    /// The transcript file and the folder of the same name beside it (the sub-agents).
+    fn delete_transcript(&self, path: &Path, session_id: &str) -> Result<Option<Vec<String>>> {
+        anyhow::ensure!(
+            is_inside(&self.dir.join("projects"), path)
+                && path.file_name().and_then(|n| n.to_str())
+                    == Some(format!("{session_id}.jsonl").as_str()),
+            "{} is not the transcript of {session_id}",
+            path.display()
+        );
+        let mut gone = vec![];
+        let folder = path.with_extension("");
+        for p in [path.to_path_buf(), folder] {
+            let Ok(md) = std::fs::symlink_metadata(&p) else {
+                continue;
+            };
+            if md.is_dir() {
+                std::fs::remove_dir_all(&p)?;
+            } else {
+                std::fs::remove_file(&p)?;
+            }
+            gone.push(crate::util::show_path(&p));
+        }
+        Ok(Some(gone))
+    }
+
     fn own_dirs(&self) -> Vec<String> {
         let mut v = vec![self.dir.to_string_lossy().into_owned()];
         v.push(home_dir().join(".claude").to_string_lossy().into_owned());

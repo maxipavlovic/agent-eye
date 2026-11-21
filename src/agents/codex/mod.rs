@@ -217,6 +217,16 @@ impl Agent for Codex {
             .any(|d| path.starts_with(self.dir.join(d)))
     }
 
+    /// Every rollout file of the thread (live and archived), and its line in `session_index.jsonl`.
+    fn delete_transcript(&self, path: &Path, session_id: &str) -> Result<Option<Vec<String>>> {
+        anyhow::ensure!(
+            self.owns_transcript(path) && is_inside(&self.dir, path),
+            "{} is not a rollout of Codex",
+            path.display()
+        );
+        files::delete_thread(&self.dir, session_id).map(Some)
+    }
+
     fn own_dirs(&self) -> Vec<String> {
         let mut v = vec![self.dir.to_string_lossy().into_owned()];
         v.push(default_dir().to_string_lossy().into_owned());

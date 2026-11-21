@@ -72,7 +72,10 @@ pub(super) fn import(
         .conn
         .transaction_with_behavior(TransactionBehavior::Immediate)?;
     for (sid, h) in &agg {
-        if transcript_ids.contains(sid) || cfg.is_excluded(&h.project) {
+        if transcript_ids.contains(sid)
+            || cfg.is_excluded(&h.project)
+            || crate::forget::is_forgotten(&tx, sid)
+        {
             continue;
         }
         let ex: Option<HistEx> = tx

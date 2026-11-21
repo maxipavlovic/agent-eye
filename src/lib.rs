@@ -24,6 +24,7 @@ pub mod db;
 pub mod files;
 /// Whether an idea's folder exists and may be created.
 pub mod folder;
+pub mod forget;
 /// Sessions that are left out of lists.
 pub mod hide;
 /// The hook entry point.

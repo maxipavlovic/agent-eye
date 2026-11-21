@@ -181,6 +181,65 @@ pub(super) async fn api_hidden(
 
 #[derive(Deserialize, Default)]
 #[serde(default)]
+pub(super) struct ForgetBody {
+    /// The person said yes after the page told them what goes.
+    confirm: bool,
+    /// Also remove the agent's own copy of the transcript.
+    transcript: bool,
+}
+
+/// Same as `eye forget <id> [--transcript] --yes`, behind the guard and only with `confirm: true`.
+pub(super) async fn api_forget(
+    State(st): State<Shared>,
+    Path(id): Path<String>,
+    Json(b): Json<ForgetBody>,
+) -> ApiResult {
+    use crate::forget::{self, OwnCopy};
+    if id.starts_with("idea:") {
+        return Err(ApiError::bad(
+            "ideas are not forgotten; archive them instead",
+        ));
+    }
+    if !b.confirm {
+        return Err(ApiError::bad(
+            "forgetting needs the person's confirmation (confirm: true)",
+        ));
+    }
+    blocking(move || {
+        let db = open_db(&st)?;
+        let id = resolve(&db, &id)?;
+        let s = db
+            .session_by_id(&id)?
+            .ok_or_else(|| ApiError::not_found("no such session"))?;
+        if forget::is_open(&s) {
+            return Err(ApiError::conflict(
+                "open_now",
+                "this session is open now: close it first",
+            ));
+        }
+        let done = forget::forget(&db, &st.paths, &st.cfg, &st.agents, &[s], b.transcript)?;
+        let o = &done.outcomes[0];
+        let (own, detail) = match &o.own {
+            OwnCopy::Kept => ("kept", vec![]),
+            OwnCopy::Removed(g) => ("removed", g.clone()),
+            OwnCopy::Unsupported(w) => ("unsupported", vec![w.clone()]),
+            OwnCopy::Failed(e) => ("failed", vec![e.clone()]),
+        };
+        if !o.forgotten {
+            return Err(ApiError::conflict(
+                "not_done",
+                detail.first().cloned().unwrap_or_default(),
+            ));
+        }
+        Ok(Json(serde_json::json!({
+            "ok": true, "id": o.id, "agent_copy": own, "detail": detail,
+        })))
+    })
+    .await
+}
+
+#[derive(Deserialize, Default)]
+#[serde(default)]
 pub(super) struct ResumeBody {
     dry_run: Option<bool>,
     /// Branch a new session from this one (`--fork-session`).
@@ -435,6 +494,60 @@ mod tests {
         .await;
         assert_eq!(st, StatusCode::BAD_REQUEST);
         assert_eq!(c["error"], "sessions cannot be moved to Ideas");
+    }
+
+    #[tokio::test]
+    async fn forget_endpoint_needs_a_confirm_and_refuses_an_open_session() {
+        let e = env();
+        add_session(&e.db, "aaaaaaaa-1", "t", None, 5, now_ms());
+        add_session(&e.db, "bbbbbbbb-2", "u", None, 5, now_ms());
+        let uri = "/api/sessions/aaaaaaaa-1/forget";
+        let here = |id: &str| e.db.session_by_id(id).unwrap().is_some();
+        for body in [json!({}), json!({"confirm": false, "transcript": true})] {
+            let (st, v) = call(&e, req("POST", uri, Some(body))).await;
+            assert_eq!(st, StatusCode::BAD_REQUEST);
+            assert!(v["error"].as_str().unwrap().contains("confirm"));
+            assert!(here("aaaaaaaa-1"), "nothing goes without the confirm");
+        }
+        e.db.conn
+            .execute(
+                "UPDATE session SET live_status='idle' WHERE id='aaaaaaaa-1'",
+                [],
+            )
+            .unwrap();
+        let (st, v) = call(&e, req("POST", uri, Some(json!({"confirm": true})))).await;
+        assert_eq!(st, StatusCode::CONFLICT);
+        assert_eq!(v["code"], "open_now");
+        assert!(here("aaaaaaaa-1"));
+        let (st, _) = call(
+            &e,
+            req(
+                "POST",
+                "/api/sessions/idea:1/forget",
+                Some(json!({"confirm": true})),
+            ),
+        )
+        .await;
+        assert_eq!(st, StatusCode::BAD_REQUEST);
+        let mut r = req(
+            "POST",
+            "/api/sessions/bbbbbbbb-2/forget",
+            Some(json!({"confirm": true})),
+        );
+        r.headers_mut().remove("x-eye-token");
+        assert_eq!(call(&e, r).await.0, StatusCode::UNAUTHORIZED);
+        assert!(here("bbbbbbbb-2"));
+        let (st, v) = call(
+            &e,
+            req(
+                "POST",
+                "/api/sessions/bbbbbbbb-2/forget",
+                Some(json!({"confirm": true, "transcript": true})),
+            ),
+        )
+        .await;
+        assert_eq!((st, v["ok"].as_bool()), (StatusCode::OK, Some(true)));
+        assert!(!here("bbbbbbbb-2") && here("aaaaaaaa-1"));
     }
 
     #[tokio::test]

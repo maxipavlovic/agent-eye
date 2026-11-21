@@ -6,6 +6,7 @@ mod ask;
 mod backup;
 mod board;
 mod data;
+mod forget;
 mod ideas;
 mod loose;
 mod night;
@@ -231,6 +232,13 @@ pub fn run() -> Result<()> {
         Cmd::Install { a, board } => setup::install(&g, &a, board),
         Cmd::Uninstall { a, purge } => setup::uninstall(&g, &a, purge),
         Cmd::Doctor => setup::doctor(&g),
+        Cmd::Forget {
+            ids,
+            folder,
+            transcript,
+            yes,
+            dry_run,
+        } => forget::run(&g, &ids, folder.as_deref(), transcript, yes, dry_run),
         Cmd::Archive { id, all } => data::archive(&g, id.as_deref(), all),
         Cmd::Restore { id } => data::restore(&g, &id),
         Cmd::Backup { sub } => backup::run(&g, sub),

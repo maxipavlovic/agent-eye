@@ -157,6 +157,47 @@ pub fn stamp(folder: &Path, extra: i64) -> Option<Stamp> {
     })
 }
 
+/// Remove conversation `id` (its folder is `folder`): the folder, the database and its `-shm` and
+/// `-wal` files, and its row in `conversation_summaries.db`.
+pub fn delete(dir: &Path, folder: &Path, id: &str) -> anyhow::Result<Vec<String>> {
+    anyhow::ensure!(
+        crate::agents::is_inside(&dir.join(BRAIN), folder)
+            && valid_session_id(id)
+            && folder.file_name().and_then(|n| n.to_str()) == Some(id),
+        "{} is not a conversation of agy",
+        folder.display()
+    );
+    let mut gone = vec![];
+    if std::fs::symlink_metadata(folder).is_ok() {
+        std::fs::remove_dir_all(folder)?;
+        gone.push(crate::util::show_path(folder));
+    }
+    let db = dir.join(CONVERSATIONS).join(format!("{id}.db"));
+    for p in [
+        db.clone(),
+        PathBuf::from(format!("{}-shm", db.display())),
+        PathBuf::from(format!("{}-wal", db.display())),
+    ] {
+        if p.is_file() {
+            std::fs::remove_file(&p)?;
+            gone.push(crate::util::show_path(&p));
+        }
+    }
+    let sums = dir.join("conversation_summaries.db");
+    if sums.is_file() {
+        let c = Connection::open(&sums)?;
+        c.busy_timeout(std::time::Duration::from_millis(1_000))?;
+        if c.execute(
+            "DELETE FROM conversation_summaries WHERE conversation_id=?1",
+            [id],
+        )? > 0
+        {
+            gone.push("its row in conversation_summaries.db".to_string());
+        }
+    }
+    Ok(gone)
+}
+
 /// The name of the archive folder for a conversation in `folder`: its project, Claude Code style.
 fn project_dir(cwd: Option<&str>) -> String {
     match cwd {
