@@ -251,7 +251,7 @@ fn group_items(idx: &Index, probe: &dyn Probe, g: &Group) -> Vec<LooseEnd> {
         let log = sc.spawn(|| unpushed_item(probe, at, g, &repo, sid));
         let statuses = par_map(&dirs, |d| {
             probe
-                .git(d, &["status", "--porcelain"])
+                .git(d, &["status", "--porcelain", "-uno"])
                 .map(|t| parse_modified(&t))
         });
         (log.join().ok().flatten(), statuses)

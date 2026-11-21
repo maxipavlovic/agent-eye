@@ -78,8 +78,8 @@ pub fn stop(db: &Db, probe: &dyn Probe, key: &str) -> Result<String> {
 }
 
 /// Remove a worktree with plain `git worktree remove`: git refuses when it has changes, and what
-/// it says is passed on as it is. A record whose folder is gone is cleared with `git worktree
-/// prune`.
+/// it says is passed on as it is. A record whose folder is gone is not pruned (that would touch the
+/// whole repo): eye drops its item and says what to run.
 pub fn remove(db: &Db, probe: &dyn Probe, key: &str) -> Result<String> {
     let it = item(db, key, &[Kind::Worktree])?;
     let path = key
@@ -100,13 +100,18 @@ pub fn remove(db: &Db, probe: &dyn Probe, key: &str) -> Result<String> {
         forget(db, key)?;
         bail!("git no longer lists that worktree; nothing was removed");
     }
-    let gone = !Path::new(path).exists();
-    let said = if gone {
-        probe.git_act(repo, &["worktree", "prune"])
-    } else {
-        probe.git_act(repo, &["worktree", "remove", "--", path])
-    };
-    let said = said.map_err(|e| anyhow!("{e}"))?;
+    if !Path::new(path).exists() {
+        // `git worktree prune` works on the whole repo and would drop records of other worktrees
+        // too (one on an unmounted disk): eye only drops its own item and says what to run
+        forget(db, key)?;
+        return Ok(format!(
+            "the folder is gone; `git worktree prune` in {} cleans git's record",
+            repo.display()
+        ));
+    }
+    let said = probe
+        .git_act(repo, &["worktree", "remove", "--", path])
+        .map_err(|e| anyhow!("{e}"))?;
     forget(db, key)?;
     Ok(if said.is_empty() {
         format!("removed worktree {}", it.what())
