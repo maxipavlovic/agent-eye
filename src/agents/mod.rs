@@ -4,6 +4,8 @@
 //! can be added without touching them. Claude Code is the first and the default agent. See
 //! `docs/agents.md`.
 
+/// Google's Antigravity CLI (`agy`).
+pub mod agy;
 /// Reading a session that is one append-only text file.
 pub mod append_only;
 /// Claude Code, the first and default agent.
@@ -274,18 +276,23 @@ fn factory(id: &str) -> Option<Factory> {
     match id {
         claude::ID => Some(claude::build),
         codex::ID => Some(codex::build),
+        agy::ID => Some(agy::build),
         _ => None,
     }
 }
 
 fn registered_ids() -> Vec<String> {
     let extra = EXTRA.lock().unwrap_or_else(|e| e.into_inner());
-    let mut ids = vec![claude::ID.to_string(), codex::ID.to_string()];
+    let mut ids = vec![
+        claude::ID.to_string(),
+        codex::ID.to_string(),
+        agy::ID.to_string(),
+    ];
     ids.extend(
         extra
             .iter()
             .map(|(i, _)| i.clone())
-            .filter(|i| i != claude::ID && i != codex::ID),
+            .filter(|i| i != claude::ID && i != codex::ID && i != agy::ID),
     );
     ids
 }
