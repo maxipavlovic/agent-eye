@@ -1,7 +1,7 @@
 import { Pix } from '../../pixel/Pix';
 import type { ColumnId, Tokens, Topic } from '../../api/types';
 import { tok, tokTitle } from '../../format';
-import { EMPTY, INK, MARKS, sigil } from './art';
+import { EMPTY, INK, INK_CC, MARKS, SIGNAL, sigil } from './art';
 import { LANE_LABEL } from './columns';
 
 /** The small pixel stamp that tells sessions apart. */
@@ -28,4 +28,17 @@ export function Empty({ id }: { id: ColumnId }) {
       <span>{LANE_LABEL[id].empty}</span>
     </div>
   );
+}
+
+/** Which agent runs a session: the same chip on a card and in its panel. */
+export function AgentTag({ name }: { name: string }) {
+  return <span class="mk agent-tag" title={`${name} session`}>{name}</span>;
+}
+
+/** Remote Control is on for a session. A plain chip on a card; with `url`, the panel's link to it, opened in a new tab. */
+export function RemoteMark({ url }: { url?: string }) {
+  const body = <><Pix rows={SIGNAL} pal={INK_CC} scale={2} /><span>Remote</span></>;
+  return url
+    ? <a class="mk rc" href={url} target="_blank" rel="noopener" title="Remote Control is on: open this session in the browser">{body}</a>
+    : <span class="mk rc" title="Remote Control is on for this session">{body}</span>;
 }

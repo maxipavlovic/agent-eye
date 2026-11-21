@@ -19,6 +19,9 @@ function file<T>(name: string, fallback: T): T {
 /** The fixture's one agent; cards and ideas without agent fields (an old snapshot) get it. */
 const AGENT: Agent = { id: 'claude', name: 'Claude Code', short: 'Claude', default: true };
 
+/** The sample's second agent, so the board shows which agent a card belongs to. */
+const CODEX: Agent = { id: 'codex', name: 'Codex CLI', short: 'Codex', default: false };
+
 const delay = <T>(v: T, ms = 60) => new Promise<T>((r) => setTimeout(() => r(v), ms));
 
 /** Same words in, same "[match]" snippet style out as the server's FTS search. */
@@ -104,6 +107,38 @@ function whenOf(text: string, now = Date.now()): number {
   return at;
 }
 
+/** Local time `days` from now at `h:mm`. */
+function local(days: number, h: number, m = 0, now = Date.now()): number {
+  const d = new Date(now);
+  d.setDate(d.getDate() + days);
+  d.setHours(h, m, 0, 0);
+  return d.getTime();
+}
+
+/** The sample's demo states, set after its times move: reminders for tomorrow in every lane and on an idea,
+ *  and two sessions run by the second agent. A session's remote link and the one stopped on a prompt are in the JSON. */
+function demoStates(board: Board, details: Record<string, CardDetail>, ideas: Idea[]): void {
+  const remind: Array<[string, number, string | null]> = [
+    ['089be68b', local(1, 9), 'the contrast review'],
+    ['073b2574', local(1, 9, 30), null],
+    ['21743447', local(1, 9), "Sam's approval"],
+    ['7f270753', local(3, 14), 'after the rota change'],
+    ['a73427ab', local(1, 9), null],
+    ['idea:4', local(1, 9), 'before the docs freeze'],
+  ];
+  const codex = ['f3a379f4', '7f270753'];
+  const cards = [...board.columns.flatMap((c) => c.cards), ...Object.values(details)];
+  for (const c of cards) {
+    const r = remind.find(([id]) => c.id.startsWith(id));
+    if (r) Object.assign(c, { remind_at: r[1], remind_note: r[2], remind_due: false });
+    if (codex.some((id) => c.id.startsWith(id))) Object.assign(c, { agent: CODEX.id, agent_name: CODEX.short, next: c.next?.replace(/^Claude:/, 'Codex:') ?? c.next });
+  }
+  for (const i of ideas) {
+    const r = remind.find(([id]) => id === `idea:${i.id}`);
+    if (r) Object.assign(i, { remind_at: r[1], remind_note: r[2] });
+  }
+}
+
 /** A believable conversation from the stored prompts, long enough to page through. */
 function conversationOf(d: CardDetail): Message[] {
   const base = d.last_assistant_text ? 1 : 0;
@@ -129,7 +164,8 @@ function conversationOf(d: CardDetail): Message[] {
 }
 
 /** A Source over the bundled snapshot. Writes change only the in-memory copy. */
-export function fixtureSource(): Source {
+/** `demo`: the site's and the look's board, with the states that need showing (a second agent, reminders for tomorrow); the tests use the plain sample. */
+export function fixtureSource(demo = false): Source {
   const board = file<Board>('board.json', { columns: [], archive_count: 0, generated_at: Date.now() });
   const details = file<Record<string, CardDetail>>('cards.json', {});
   const archive = file<ArchivePage>('archive.json', { cards: [], total: 0, offset: 0 });
@@ -149,6 +185,7 @@ export function fixtureSource(): Source {
     const by = Date.now() - board.generated_at;
     for (const part of [board, details, archive, ideas, written]) shiftTimes(part, by);
     shiftWorked(details);
+    if (demo) demoStates(board, details, ideas.ideas);
   }
   /** What the real engine would say about a folder: the ones on the board exist, a new one under `~` can be made. */
   const exists = (p: string) => p === '~' || allCards().some((c) => c.folder === p && c.folder_state !== 'missing');
@@ -167,7 +204,7 @@ export function fixtureSource(): Source {
     const f = folderCheck(path);
     return { folder_state: f.state, folder_creatable: f.creatable, folder_note: f.note };
   };
-  const agents: Agent[] = [AGENT];
+  const agents: Agent[] = demo && files === sample ? [AGENT, CODEX] : [AGENT];
   /** The desktop notice setting, off by default as in a new config. */
   const notice = { notify: false, available: true };
   const nameOf = (id: string | null | undefined) => (agents.find((a) => a.id === id) ?? agents.find((a) => a.default)!).short;

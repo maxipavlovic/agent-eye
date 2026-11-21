@@ -29,12 +29,33 @@ describe('fixtureSource with the sample data', () => {
   it('offers one agent, Claude, and gives every card and idea its agent', async () => {
     const src = fixtureSource();
     expect((await src.agents()).agents).toEqual([{ id: 'claude', name: 'Claude Code', short: 'Claude', default: true }]);
+    for (const c of (await src.board()).columns.flatMap((col) => col.cards)) expect(c.agent_name).toBe('Claude');
+  });
+
+  it('the demo board offers two agents, and gives every card and idea its agent', async () => {
+    const src = fixtureSource(true);
+    expect((await src.agents()).agents).toEqual([
+      { id: 'claude', name: 'Claude Code', short: 'Claude', default: true },
+      { id: 'codex', name: 'Codex CLI', short: 'Codex', default: false },
+    ]);
     const b = await src.board();
-    for (const c of b.columns.flatMap((col) => col.cards)) {
-      expect(c.agent).toBe('claude');
-      expect(c.agent_name).toBe('Claude');
-    }
+    const cards = b.columns.flatMap((col) => col.cards);
+    for (const c of cards) expect(['Claude', 'Codex']).toContain(c.agent_name);
+    expect(cards.filter((c) => c.agent === 'codex').length).toBeGreaterThan(0);
     expect((await src.ideas()).ideas.every((i) => i.agent === null)).toBe(true);
+  });
+
+  it('the demo board shows each state: a remote session, a reminder for tomorrow in every lane and on an idea', async () => {
+    const src = fixtureSource(true);
+    const b = await src.board();
+    const cards = b.columns.flatMap((col) => col.cards);
+    expect(cards.some((c) => c.remote_url)).toBe(true);
+    const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
+    for (const lane of ['needs_you', 'running', 'waiting', 'paused', 'ideas', 'done']) {
+      const set = b.columns.find((c) => c.id === lane)!.cards.filter((c) => c.remind_at && !c.remind_due);
+      expect(set.length, lane).toBeGreaterThan(0);
+      expect(set.some((c) => new Date(c.remind_at!).toDateString() === tomorrow.toDateString()) || lane === 'paused', lane).toBe(true); // Paused shows a day name instead
+    }
   });
 
   it('keeps the agent of an idea it adds or edits', async () => {

@@ -33,14 +33,6 @@ export function Running({ d }: { d: CardDetail }) {
   );
 }
 
-/** The session's Remote Control link, when it is on. */
-export function Remote({ d }: { d: CardDetail }) {
-  if (!d.remote_url) return null;
-  return (
-    <p class="remote"><span class="k">REMOTE CONTROL</span> on · <a href={d.remote_url} target="_blank" rel="noopener">open in browser</a></p>
-  );
-}
-
 /** A section that starts folded: the heading (with an optional one-line summary) opens it. */
 export function FoldSec({ t, sum, open, toggle, children }: { t: string; sum?: string; open: boolean; toggle: () => void; children: ComponentChildren }) {
   return (

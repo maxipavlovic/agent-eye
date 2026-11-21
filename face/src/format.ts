@@ -177,6 +177,13 @@ export function remindText(c: Card, now = Date.now()): string | null {
   return c.remind_note ? `${when} · ${c.remind_note}` : when;
 }
 
+/** When a set reminder is, for the card itself: "Tomorrow 9:00", "Mon 14:00"; null for none. */
+export function remindShort(c: Card, now = Date.now()): string | null {
+  if (!c.remind_at) return null;
+  const w = remindWhen(c.remind_at, now);
+  return w.charAt(0).toUpperCase() + w.slice(1);
+}
+
 /** The tooltip of a card's clock mark: "Reminder: tomorrow 9:00 · Ana's reply"; null for none. */
 export function remindTitle(c: Card, now = Date.now()): string | null {
   const text = remindText(c, now);

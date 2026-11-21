@@ -106,10 +106,13 @@ describe('the board', () => {
 
 describe('what a session does on its own', () => {
   it('shows a background task, a loop and the remote control mark on the cards in Running', async () => {
-    const { $$ } = await mount();
+    const { $, $$ } = await mount();
     const lines = $$('.c-running .card .activity').map((e) => e.textContent);
     expect(lines).toEqual(['background: npm run dev · 4 min', '↻ every 10 min · next 14:20']);
     expect($$('.c-running .card .rc')).toHaveLength(1);
+    expect($('.c-running .card .rc')!.className).toBe('mk rc');
+    expect($('.c-running .card .rc')!.textContent).toBe('Remote');
+    expect($('.c-running .card .rc')!.tagName).toBe('SPAN');
     expect($$('.c-needs_you .card .rc, .c-needs_you .card .activity')).toHaveLength(0);
   });
 
@@ -117,14 +120,16 @@ describe('what a session does on its own', () => {
     const { $, $$, store } = await mount();
     const running = (await fixtureSource().board()).columns.find((c) => c.id === 'running')!.cards;
     store.open(running.find((c) => c.remote_url)!.id);
-    await vi.waitFor(() => expect($('.remote a')).not.toBeNull());
-    const a = $<HTMLAnchorElement>('.remote a')!;
+    await vi.waitFor(() => expect($('.dh a.rc')).not.toBeNull());
+    const a = $<HTMLAnchorElement>('.dh a.rc')!;
     expect(a.getAttribute('rel')).toBe('noopener');
+    expect(a.getAttribute('target')).toBe('_blank');
+    expect(a.className).toBe('mk rc');
+    expect(a.textContent).toBe('Remote');
     expect(a.getAttribute('href')).toMatch(/^https:\/\/claude\.ai\/code\//);
-    expect($('.remote')!.textContent).toBe('REMOTE CONTROL on · open in browser');
     store.open(running.find((c) => c.background?.length)!.id);
     await vi.waitFor(() => expect($$('.druns li').map((e) => e.textContent)).toEqual(['SHELLnpm run dev · 4 min']));
-    expect($('.remote')).toBeNull();
+    expect($('.dh .rc')).toBeNull();
   });
 });
 
@@ -225,13 +230,16 @@ describe('a board of several agents', () => {
     expect(metas.length).toBeGreaterThan(3);
     for (const m of metas) expect(m.querySelectorAll('.agent-tag')).toHaveLength(1);
     expect($$('.card.row .agent-tag, .card.idea .agent-tag')).toHaveLength(0);
-    expect($$('.card .meta .agent-tag').every((t) => t.parentElement!.classList.contains('meta'))).toBe(true);
+    expect($$('.card .meta .agent-tag').every((t) => t.parentElement!.classList.contains('ml'))).toBe(true);
+    expect($$('.agent-tag').every((t) => t.className === 'mk agent-tag')).toBe(true);
   });
 
   it('names the agent in the header of the panel', async () => {
     const { $, $$ } = await mount(mixedSource(), (root) => expect(root.querySelectorAll('.card .agent-tag').length).toBeGreaterThan(3));
     $$('.card').find((c) => c.querySelector('.agent-tag')?.textContent === 'Codex')!.click();
     await vi.waitFor(() => expect($('.page .dh .agent-tag')?.textContent).toBe('Codex'));
+    // the same chip as on the card
+    expect($('.page .dh .agent-tag')!.className).toBe('mk agent-tag');
   });
 
   it('adds nothing with one agent: the sample board keeps its look', async () => {
@@ -382,8 +390,8 @@ describe('reminders', () => {
     expect(first.querySelector('.next .chip.you.hot')).not.toBeNull();
     expect([...first.querySelectorAll('.tabs > .tab')].map((t) => t.className)).toEqual(['tab clock', 'tab']);
     expect(first.querySelector('.tab.clock')!.getAttribute('title')).toMatch(/^Reminder due: .+ · Dana's CDN rule$/);
-    // nothing is added below the card's own lines
-    expect(first.querySelector('.remind')).toBeNull();
+    // the YOU line says why; no second line for the time
+    expect(first.querySelector('.when')).toBeNull();
   });
 
   it('marks a card with a reminder set by a clock tab only, the lines as on any other card', async () => {
@@ -391,15 +399,34 @@ describe('reminders', () => {
     const c = card(root, 'waiting', 'Move the state bucket');
     expect(c.querySelector('.tabs .tab.clock')!.getAttribute('title')).toMatch(/^Reminder: .+ · Sam's approval$/);
     expect(c.querySelector('.tabs .tab:not(.clock)')).toBeNull();
-    expect([...c.children].map((e) => e.className)).toEqual(['tabs', 'meta', 'top', 'next']);
+    expect([...c.children].map((e) => e.className)).toEqual(['tabs', 'meta', 'top', 'next', 'when']);
+    expect(c.querySelector('.when b')!.textContent).toMatch(/^(Today|Tomorrow) \d{1,2}:\d\d$/);
+    expect(c.querySelector('.when .wn')!.textContent).toBe(" · Sam's approval");
     expect(card(root, 'waiting', 'Add rate limits').querySelector('.tabs')).toBeNull();
   });
 
-  it('puts the clock of an idea in its title, so a narrow lane keeps the title whole', async () => {
+  it('gives an idea the clock tab and the time in words', async () => {
     const { root } = await mount();
     const c = card(root, 'ideas', 'Migration guide');
-    expect(c.querySelector('.tabs')).toBeNull();
-    expect(c.querySelector('h3 .rclock')!.getAttribute('title')).toMatch(/^Reminder: .+/);
+    expect(c.classList.contains('clock')).toBe(true);
+    expect(c.querySelector('.tabs .tab.clock')!.getAttribute('title')).toMatch(/^Reminder: .+/);
+    expect(c.querySelector('.when b')!.textContent).toMatch(/\d{1,2}:\d\d$/);
+  });
+
+  it('lets a row show the time under its title', async () => {
+    const { root } = await mount();
+    const r = card(root, 'paused', 'on-call handbook');
+    expect(r.querySelector('.tw .when b')!.textContent).toMatch(/\d{1,2}:\d\d$/);
+    expect(r.querySelector('.when .wn')).toBeNull();
+  });
+
+  it('pulses the border of the card whose session waits for your answer, and no other', async () => {
+    const { root, $$ } = await mount();
+    const asking = $$('.card.ask');
+    expect(asking).toHaveLength(1);
+    expect(asking[0]!.textContent).toContain('Upgrade the date library');
+    expect(asking[0]!.querySelector('.chip.now')).not.toBeNull();
+    expect(card(root, 'needs_you', 'Replace the staging queue').classList.contains('ask')).toBe(false);
   });
 
   it('sets a reminder from the menu, and clearing is offered once one is set', async () => {
@@ -412,10 +439,10 @@ describe('reminders', () => {
     expect($$('.ctx button').map((b) => b.textContent)).not.toContain('CLEAR REMINDER');
     $$('.ctx button').find((b) => b.textContent === 'TOMORROW 9:00')!.click();
     await vi.waitFor(() => expect(store.toasts.value.some((t) => t.text.startsWith('Reminder set: tomorrow 9:00'))).toBe(true));
-    await vi.waitFor(() => expect(card(root, 'paused', 'Changelog generator').querySelector('.rclock')!.getAttribute('title')).toBe('Reminder: tomorrow 9:00'));
+    await vi.waitFor(() => expect(card(root, 'paused', 'Changelog generator').querySelector('.when')!.getAttribute('title')).toBe('Reminder: tomorrow 9:00'));
     await open('Changelog generator');
     $$('.ctx button').find((b) => b.textContent === 'CLEAR REMINDER')!.click();
-    await vi.waitFor(() => expect(card(root, 'paused', 'Changelog generator').querySelector('.rclock')).toBeNull());
+    await vi.waitFor(() => expect(card(root, 'paused', 'Changelog generator').querySelector('.when')).toBeNull());
   });
 
   const openForm = async (root: HTMLElement, $: (s: string) => HTMLElement | null, $$: (s: string) => HTMLElement[]) => {

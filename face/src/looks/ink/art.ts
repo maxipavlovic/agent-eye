@@ -112,6 +112,8 @@ export const PIN: Rows = ['.###.', '#ooo#', '#ooo#', '.###.', '..#..', '..#..'];
 export const BANG: Rows = ['..##..', '..##..', '..##..', '..##..', '......', '..##..', '..##..'];
 /** A reminder is set: the mark on a card's top edge beside `!`, and before the age of a row. */
 export const CLOCK: Rows = ['.#####.', '#..#..#', '#..#..#', '#..##.#', '#.....#', '#.....#', '.#####.'];
+/** Remote Control is on: a dot with a signal going out each side. */
+export const SIGNAL: Rows = ['#.....#', '#.#.#.#', '#.#.#.#', '#..#..#', '#.....#'];
 export const SUN: Rows = ['....#....', '.#..#..#.', '..#####..', '..#ooo#..', '###ooo###', '..#ooo#..', '..#####..', '.#..#..#.', '....#....'];
 export const MOON: Rows = ['..####...', '.##ooo#..', '##oo##...', '#oo#.....', '#oo#.....', '##oo#..##', '.##ooo##.', '..#####..', '.........'];
 export const AUTO: Rows = ['#########', '#####oooo#', '#####oooo#', '#####oooo#', '#####oooo#', '#####oooo#', '#####oooo#', '#####oooo#', '#########'];
