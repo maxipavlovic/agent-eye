@@ -65,6 +65,7 @@ Each run has a folder `<eye home>/night/<run id>/` with `log` (stdout and stderr
 
 - **Repo:** `git worktree add <run dir>/wt -b night/<YYYYMMDD>-<slug> HEAD`. The base is the current HEAD and is recorded. A second run with the same slug gets `-<run id>`. A run planned for a sub-folder starts in the same sub-folder of its worktree.
 - **Plain folder:** copied into `<run dir>/work`, leaving out `node_modules`, `.git`, `target`, `.venv`, `dist` and symlinks. Over 100 MB (not counting those) is refused when you plan it.
+- **Claimed:** before anything is made, the daemon sets the run to `starting` (only from `planned`), so two starters or a cancel cannot start it twice; `eye night cancel` works on a planned run only. A run whose process start time cannot be read is set to `lost` (its pid and folder are kept, eye never signals it); a run stuck in `starting` for 30 minutes is set to `failed`.
 - **Detached:** every run is started as `sh -c '"$@"; echo $? > exit'` in its own session, so the daemon finds it again by pid and start time after a restart or an upgrade of its own binary.
 
 ### Claude Code
