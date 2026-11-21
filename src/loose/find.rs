@@ -56,7 +56,11 @@ pub fn load(db: &Db, cfg: &Config, _agents: &Agents, now: i64) -> Result<Input> 
          JOIN session s ON s.id = w.session_id WHERE s.last_activity_at >= ?1",
     )?;
     for row in st.query_map([since], |r| {
-        Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?, r.get::<_, i64>(2)?))
+        Ok((
+            r.get::<_, String>(0)?,
+            r.get::<_, i64>(1)?,
+            r.get::<_, i64>(2)?,
+        ))
     })? {
         let (id, hour, n) = row?;
         events.insert((id, hour), n);
@@ -169,12 +173,59 @@ fn ignored_program(command: &str, has_port: bool) -> bool {
     let base = first.rsplit('/').next().unwrap_or(first);
     let base = base.trim_start_matches('-').to_lowercase();
     const NEVER: &[&str] = &[
-        "claude", "codex", "eye", "agent-eye", "sh", "bash", "zsh", "fish", "dash", "ksh", "tcsh",
-        "csh", "nu", "login", "tmux", "screen", "sshd", "ssh", "ssh-agent", "vim", "nvim", "vi",
-        "emacs", "nano", "less", "more", "man", "code", "cursor", "zed", "subl", "idea", "ps",
-        "lsof", "docker", "docker-proxy", "dockerd", "containerd", "colima", "limactl",
-        "firefox", "chrome", "safari", "brave", "iterm2", "terminal", "ghostty", "alacritty",
-        "kitty", "wezterm", "git", "caffeinate", "pbcopy",
+        "claude",
+        "codex",
+        "eye",
+        "agent-eye",
+        "sh",
+        "bash",
+        "zsh",
+        "fish",
+        "dash",
+        "ksh",
+        "tcsh",
+        "csh",
+        "nu",
+        "login",
+        "tmux",
+        "screen",
+        "sshd",
+        "ssh",
+        "ssh-agent",
+        "vim",
+        "nvim",
+        "vi",
+        "emacs",
+        "nano",
+        "less",
+        "more",
+        "man",
+        "code",
+        "cursor",
+        "zed",
+        "subl",
+        "idea",
+        "ps",
+        "lsof",
+        "docker",
+        "docker-proxy",
+        "dockerd",
+        "containerd",
+        "colima",
+        "limactl",
+        "firefox",
+        "chrome",
+        "safari",
+        "brave",
+        "iterm2",
+        "terminal",
+        "ghostty",
+        "alacritty",
+        "kitty",
+        "wezterm",
+        "git",
+        "caffeinate",
+        "pbcopy",
     ];
     if NEVER.contains(&base.as_str()) || base.starts_with("com.docker") {
         return true;
@@ -185,10 +236,23 @@ fn ignored_program(command: &str, has_port: bool) -> bool {
     }
     // helpers of an editor or an agent talk over a pipe: only a port makes them a leftover
     !has_port
-        && ["mcp", "language-server", "language_server", "rust-analyzer", "gopls", "pyright",
-            "tsserver", "typescript-language", "eslint_d", "copilot", "lsp", "ripgrep", "fsevents"]
-            .iter()
-            .any(|h| lower.contains(h))
+        && [
+            "mcp",
+            "language-server",
+            "language_server",
+            "rust-analyzer",
+            "gopls",
+            "pyright",
+            "tsserver",
+            "typescript-language",
+            "eslint_d",
+            "copilot",
+            "lsp",
+            "ripgrep",
+            "fsevents",
+        ]
+        .iter()
+        .any(|h| lower.contains(h))
 }
 
 /// `node vite (pid 4)`: the program, and for an interpreter its script.
@@ -216,7 +280,10 @@ fn ports_text(ports: &[u16]) -> String {
         [p] => format!("port {p}"),
         many => format!(
             "ports {}",
-            many.iter().map(u16::to_string).collect::<Vec<_>>().join(", ")
+            many.iter()
+                .map(u16::to_string)
+                .collect::<Vec<_>>()
+                .join(", ")
         ),
     }
 }
@@ -231,9 +298,15 @@ fn process_item(p: &Proc, sid: &str, now: i64) -> LooseEnd {
     };
     let started = ago(now, p.start * 1000);
     let line = if ports.is_empty() {
-        format!("{name} (pid {}) is still running, started {started} ago", p.pid)
+        format!(
+            "{name} (pid {}) is still running, started {started} ago",
+            p.pid
+        )
     } else {
-        format!("{name} (pid {}) is still serving {ports}, started {started} ago", p.pid)
+        format!(
+            "{name} (pid {}) is still serving {ports}, started {started} ago",
+            p.pid
+        )
     };
     let cwd = p.cwd.as_deref().map(|c| home_rel(&c.to_string_lossy()));
     let mut detail = what;
@@ -302,8 +375,12 @@ pub fn find(input: &Input, probe: &dyn Probe, now: i64) -> Vec<LooseEnd> {
         out.extend(gitscan::find(&idx, probe, now));
     }
     out.sort_by(|a, b| {
-        (&a.session_id, a.kind, std::cmp::Reverse(a.since_ms), &a.key)
-            .cmp(&(&b.session_id, b.kind, std::cmp::Reverse(b.since_ms), &b.key))
+        (&a.session_id, a.kind, std::cmp::Reverse(a.since_ms), &a.key).cmp(&(
+            &b.session_id,
+            b.kind,
+            std::cmp::Reverse(b.since_ms),
+            &b.key,
+        ))
     });
     out
 }

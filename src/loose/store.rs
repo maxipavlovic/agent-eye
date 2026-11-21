@@ -85,7 +85,9 @@ pub fn counts(db: &Db) -> Result<HashMap<String, usize>> {
         "SELECT session_id, COUNT(*) FROM loose
          WHERE key NOT IN (SELECT key FROM loose_ignore) GROUP BY session_id",
     )?;
-    let rows = st.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)? as usize)))?;
+    let rows = st.query_map([], |r| {
+        Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)? as usize))
+    })?;
     Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
 
@@ -148,7 +150,11 @@ pub fn summary_line(items: &[LooseEnd]) -> Option<String> {
             "{} ({} {})",
             count(servers.len(), "server", "servers"),
             if ports.len() == 1 { "port" } else { "ports" },
-            ports.iter().map(u16::to_string).collect::<Vec<_>>().join(", ")
+            ports
+                .iter()
+                .map(u16::to_string)
+                .collect::<Vec<_>>()
+                .join(", ")
         ));
     }
     if !quiet.is_empty() {

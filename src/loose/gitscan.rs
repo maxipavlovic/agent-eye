@@ -253,7 +253,10 @@ fn group_items(idx: &Index, probe: &dyn Probe, g: &Group) -> Vec<LooseEnd> {
         };
         let n = files.len();
         let shown = home_rel(&dir.to_string_lossy());
-        let mut detail = format!("{} in {shown}", plural(n, "modified file", "modified files"));
+        let mut detail = format!(
+            "{} in {shown}",
+            plural(n, "modified file", "modified files")
+        );
         for f in files.iter().take(SHOWN) {
             detail.push_str(&format!("\n{f}"));
         }

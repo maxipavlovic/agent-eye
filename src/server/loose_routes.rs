@@ -20,10 +20,7 @@ fn items_json(items: &[LooseEnd]) -> Vec<Value> {
 }
 
 /// The items of one session (or all), the count the person chose to ignore, and the one-line summary.
-fn listing(
-    db: &crate::db::Db,
-    session: Option<&str>,
-) -> Result<Value, ApiError> {
+fn listing(db: &crate::db::Db, session: Option<&str>) -> Result<Value, ApiError> {
     let items = loose::list(db, session, false)?;
     let all = loose::list(db, session, true)?;
     Ok(json!({
@@ -65,13 +62,12 @@ async fn act_on(
         act(&db, &probe, &key).map_err(|e| ApiError::conflict("not_done", format!("{e:#}")))
     })
     .await?;
-    Ok(Json(json!({"ok": true, "note": note, "session_id": session})))
+    Ok(Json(
+        json!({"ok": true, "note": note, "session_id": session}),
+    ))
 }
 
-pub(super) async fn api_loose_stop(
-    State(st): State<Shared>,
-    Json(b): Json<KeyBody>,
-) -> ApiResult {
+pub(super) async fn api_loose_stop(State(st): State<Shared>, Json(b): Json<KeyBody>) -> ApiResult {
     act_on(st, b.key, loose::stop).await
 }
 
@@ -161,8 +157,18 @@ mod tests {
         let e = env();
         add_session(&e.db, "aaaaaaaa-1", "A", None, 3, now_ms());
         add_session(&e.db, "bbbbbbbb-1", "B", None, 3, now_ms());
-        let a = item("proc:1:1", "aaaaaaaa-1", Kind::Process, "node (pid 1, port 4321)");
-        let b = item("unpushed:/r:abc", "aaaaaaaa-1", Kind::Unpushed, "3 commits in r");
+        let a = item(
+            "proc:1:1",
+            "aaaaaaaa-1",
+            Kind::Process,
+            "node (pid 1, port 4321)",
+        );
+        let b = item(
+            "unpushed:/r:abc",
+            "aaaaaaaa-1",
+            Kind::Unpushed,
+            "3 commits in r",
+        );
         loose::replace(&e.db, &[a.clone(), b.clone()], now_ms()).unwrap();
         // the card and the board carry the count
         let (_, c) = call(&e, req("GET", "/api/cards/aaaaaaaa-1", None)).await;
@@ -176,7 +182,12 @@ mod tests {
             .unwrap()
             .iter()
             .flat_map(|c| c["cards"].as_array().unwrap().clone())
-            .map(|c| (c["id"].as_str().unwrap().to_string(), c["loose"].as_i64().unwrap()))
+            .map(|c| {
+                (
+                    c["id"].as_str().unwrap().to_string(),
+                    c["loose"].as_i64().unwrap(),
+                )
+            })
             .collect();
         assert!(counts.contains(&("aaaaaaaa-1".into(), 2)));
         assert!(counts.contains(&("bbbbbbbb-1".into(), 0)));
@@ -187,17 +198,42 @@ mod tests {
         assert_eq!(v["items"][0]["action"], "stop");
         assert_eq!(v["items"][0]["confirm"], "Stop node (pid 1, port 4321)?");
         assert_eq!(v["items"][1]["action"], "push");
-        assert!(v["items"][1]["command"].as_str().unwrap().ends_with("git push --all"));
-        assert_eq!(v["summary"], "Left behind: 1 server (port 4321), 3 commits not pushed");
+        assert!(v["items"][1]["command"]
+            .as_str()
+            .unwrap()
+            .ends_with("git push --all"));
+        assert_eq!(
+            v["summary"],
+            "Left behind: 1 server (port 4321), 3 commits not pushed"
+        );
         // ignore drops the count; all ignored: no chip
-        let (st, _) = call(&e, req("POST", "/api/loose/ignore", Some(json!({"key": "proc:1:1"})))).await;
+        let (st, _) = call(
+            &e,
+            req(
+                "POST",
+                "/api/loose/ignore",
+                Some(json!({"key": "proc:1:1"})),
+            ),
+        )
+        .await;
         assert_eq!(st, StatusCode::OK);
         let (_, c) = call(&e, req("GET", "/api/cards/aaaaaaaa-1", None)).await;
         assert_eq!(c["loose"], 1);
-        call(&e, req("POST", "/api/loose/ignore", Some(json!({"key": b.key})))).await;
+        call(
+            &e,
+            req("POST", "/api/loose/ignore", Some(json!({"key": b.key}))),
+        )
+        .await;
         let (_, v) = call(&e, req("GET", "/api/loose?session=aaaaaaaa", None)).await;
-        assert_eq!((v["items"].as_array().unwrap().len(), v["ignored"].as_i64()), (0, Some(2)));
-        let (st, _) = call(&e, req("POST", "/api/loose/ignore", Some(json!({"key": "nope"})))).await;
+        assert_eq!(
+            (v["items"].as_array().unwrap().len(), v["ignored"].as_i64()),
+            (0, Some(2))
+        );
+        let (st, _) = call(
+            &e,
+            req("POST", "/api/loose/ignore", Some(json!({"key": "nope"}))),
+        )
+        .await;
         assert_eq!(st, StatusCode::NOT_FOUND);
     }
 
@@ -205,8 +241,17 @@ mod tests {
     async fn acting_routes_need_the_guard_and_a_stored_item() {
         let e = env();
         add_session(&e.db, "aaaaaaaa-1", "A", None, 3, now_ms());
-        for uri in ["/api/loose/stop", "/api/loose/remove", "/api/loose/ignore", "/api/loose/send"] {
-            let mut r = req("POST", uri, Some(json!({"key": "x", "session": "aaaaaaaa"})));
+        for uri in [
+            "/api/loose/stop",
+            "/api/loose/remove",
+            "/api/loose/ignore",
+            "/api/loose/send",
+        ] {
+            let mut r = req(
+                "POST",
+                uri,
+                Some(json!({"key": "x", "session": "aaaaaaaa"})),
+            );
             r.headers_mut().remove("origin");
             assert_eq!(call(&e, r).await.0, StatusCode::FORBIDDEN, "{uri}");
             let mut r = req("POST", uri, Some(json!({"key": "x"})));
@@ -219,7 +264,15 @@ mod tests {
             assert_eq!(st, StatusCode::NOT_FOUND, "{uri}");
         }
         // nothing to send back
-        let (st, _) = call(&e, req("POST", "/api/loose/send", Some(json!({"session": "aaaaaaaa"})))).await;
+        let (st, _) = call(
+            &e,
+            req(
+                "POST",
+                "/api/loose/send",
+                Some(json!({"session": "aaaaaaaa"})),
+            ),
+        )
+        .await;
         assert_eq!(st, StatusCode::BAD_REQUEST);
     }
 
@@ -235,9 +288,16 @@ mod tests {
             now_ms(),
         )
         .unwrap();
-        let (st, v) = call(&e, req("POST", "/api/loose/stop", Some(json!({"key": key})))).await;
+        let (st, v) = call(
+            &e,
+            req("POST", "/api/loose/stop", Some(json!({"key": key}))),
+        )
+        .await;
         assert_eq!(st, StatusCode::CONFLICT);
-        assert!(v["error"].as_str().unwrap().contains("another process"), "{v}");
+        assert!(
+            v["error"].as_str().unwrap().contains("another process"),
+            "{v}"
+        );
         assert_eq!(v["code"], "not_done");
     }
 
@@ -247,15 +307,31 @@ mod tests {
         add_session(&e.db, "aaaaaaaa-1", "A", None, 3, now_ms());
         loose::replace(
             &e.db,
-            &[item("uncommitted:/r", "aaaaaaaa-1", Kind::Uncommitted, "2 modified files in r")],
+            &[item(
+                "uncommitted:/r",
+                "aaaaaaaa-1",
+                Kind::Uncommitted,
+                "2 modified files in r",
+            )],
             now_ms(),
         )
         .unwrap();
-        let (st, v) = call(&e, req("POST", "/api/loose/send", Some(json!({"session": "aaaaaaaa"})))).await;
+        let (st, v) = call(
+            &e,
+            req(
+                "POST",
+                "/api/loose/send",
+                Some(json!({"session": "aaaaaaaa"})),
+            ),
+        )
+        .await;
         assert_eq!(st, StatusCode::OK);
         assert_eq!(v["dry_run"], true);
         let cmd = v["command"].as_str().unwrap();
-        assert!(cmd.contains("claude --resume aaaaaaaa-1 'Before you call this finished"), "{cmd}");
+        assert!(
+            cmd.contains("claude --resume aaaaaaaa-1 'Before you call this finished"),
+            "{cmd}"
+        );
         assert!(v.get("note").is_none());
     }
 }

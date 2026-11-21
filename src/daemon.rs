@@ -219,9 +219,8 @@ fn loose_due(since_last: Option<Duration>, flagged: bool) -> bool {
 
 /// One loose-ends scan, stored. Failures go to the log; the scan only reads.
 fn loose_round(paths: &Paths, cfg: &Config) {
-    let r = Db::open(&paths.db_path()).and_then(|db| {
-        crate::loose::scan_and_store(&db, cfg, &agents::enabled(cfg), now_ms())
-    });
+    let r = Db::open(&paths.db_path())
+        .and_then(|db| crate::loose::scan_and_store(&db, cfg, &agents::enabled(cfg), now_ms()));
     if let Err(e) = r {
         log(paths, &format!("loose ends: {e:#}"));
     }
@@ -472,7 +471,9 @@ pub fn run(paths: Paths, cfg: Config, port: u16, board: bool) -> Result<()> {
                     let flagged = db.meta_get(LOOSE_FLAG).ok().flatten().is_some();
                     if loose_due(last_loose.map(|t| t.elapsed()), flagged) {
                         last_loose = Some(Instant::now());
-                        let _ = db.conn.execute("DELETE FROM meta WHERE key=?1", [LOOSE_FLAG]);
+                        let _ = db
+                            .conn
+                            .execute("DELETE FROM meta WHERE key=?1", [LOOSE_FLAG]);
                         loose_busy.store(true, Ordering::SeqCst);
                         let (paths, cfg, busy) = (paths.clone(), cfg.clone(), loose_busy.clone());
                         std::thread::spawn(move || {

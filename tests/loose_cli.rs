@@ -22,7 +22,11 @@ fn git(dir: &Path, args: &[&str]) -> String {
         .env("GIT_CONFIG_GLOBAL", "/dev/null")
         .output()
         .unwrap();
-    assert!(o.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&o.stderr));
+    assert!(
+        o.status.success(),
+        "git {args:?}: {}",
+        String::from_utf8_lossy(&o.stderr)
+    );
     String::from_utf8_lossy(&o.stdout).into_owned()
 }
 
@@ -53,7 +57,11 @@ impl Home {
 
     fn ok(&self, args: &[&str]) -> String {
         let o = self.eye(args);
-        assert!(o.status.success(), "{args:?}: {}", String::from_utf8_lossy(&o.stderr));
+        assert!(
+            o.status.success(),
+            "{args:?}: {}",
+            String::from_utf8_lossy(&o.stderr)
+        );
         String::from_utf8_lossy(&o.stdout).into_owned()
     }
 
@@ -79,7 +87,10 @@ fn world() -> (Home, std::path::PathBuf, std::path::PathBuf) {
     std::fs::write(repo.join("a.txt"), "one").unwrap();
     git(&repo, &["add", "a.txt"]);
     git(&repo, &["commit", "-q", "-m", "first"]);
-    git(&repo, &["remote", "add", "origin", &remote.display().to_string()]);
+    git(
+        &repo,
+        &["remote", "add", "origin", &remote.display().to_string()],
+    );
     git(&repo, &["push", "-q", "-u", "origin", "main"]);
     std::fs::write(repo.join("a.txt"), "two").unwrap();
     git(&repo, &["commit", "-q", "-am", "second"]);
@@ -105,20 +116,40 @@ fn it_lists_commits_on_no_remote_and_modified_files_and_never_pushes() {
     let out = h.ok(&["loose"]);
     assert!(out.contains("abcdef"), "{out}");
     assert!(out.contains("1 commit in repo is on no remote"), "{out}");
-    assert!(out.contains("1 modified file in repo is not committed"), "{out}");
-    assert!(out.contains("Left behind: 1 commit not pushed, 1 file not committed"), "{out}");
+    assert!(
+        out.contains("1 modified file in repo is not committed"),
+        "{out}"
+    );
+    assert!(
+        out.contains("Left behind: 1 commit not pushed, 1 file not committed"),
+        "{out}"
+    );
     let json: serde_json::Value = serde_json::from_str(&h.ok(&["loose", "--json"])).unwrap();
-    let kinds: Vec<&str> = json.as_array().unwrap().iter().map(|i| i["kind"].as_str().unwrap()).collect();
+    let kinds: Vec<&str> = json
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|i| i["kind"].as_str().unwrap())
+        .collect();
     assert_eq!(kinds, vec!["uncommitted", "unpushed"]);
-    assert!(json[1]["command"].as_str().unwrap().ends_with("git push --all"));
+    assert!(json[1]["command"]
+        .as_str()
+        .unwrap()
+        .ends_with("git push --all"));
     // a session prefix limits the list
     assert!(h.ok(&["loose", "abcdef"]).contains("not committed"));
     // it only read: the remote still has one commit and the working copy is as it was
     assert_eq!(git(&remote, &["rev-list", "--count", "main"]).trim(), "1");
-    assert_eq!(std::fs::read_to_string(repo.join("a.txt")).unwrap(), "three");
+    assert_eq!(
+        std::fs::read_to_string(repo.join("a.txt")).unwrap(),
+        "three"
+    );
     // eye does not act on commits or files
     let e = h.err(&["loose", "stop", json[1]["key"].as_str().unwrap(), "--yes"]);
-    assert!(e.contains("does not act on a unpushed") || e.contains("cannot"), "{e}");
+    assert!(
+        e.contains("does not act on a unpushed") || e.contains("cannot"),
+        "{e}"
+    );
 }
 
 #[test]
@@ -134,8 +165,12 @@ fn an_ignored_item_is_not_listed_again_after_a_new_scan() {
     assert!(h.ok(&["loose"]).contains("nothing left behind"));
     assert_eq!(h.ok(&["loose", "--json"]).trim(), "[]");
     // a key no scan found is refused
-    assert!(h.err(&["loose", "ignore", "proc:1:1"]).contains("no such loose end"));
-    assert!(h.err(&["loose", "remove", "worktree:/nope", "--yes"]).contains("no such loose end"));
+    assert!(h
+        .err(&["loose", "ignore", "proc:1:1"])
+        .contains("no such loose end"));
+    assert!(h
+        .err(&["loose", "remove", "worktree:/nope", "--yes"])
+        .contains("no such loose end"));
 }
 
 #[test]

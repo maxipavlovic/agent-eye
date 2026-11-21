@@ -154,7 +154,11 @@ pub fn parse_docker_ps(text: &str) -> Vec<Docker> {
             });
             // `2026-11-21 10:00:00 +0100 CET`
             let created = s("CreatedAt");
-            let created = created.split_whitespace().take(3).collect::<Vec<_>>().join(" ");
+            let created = created
+                .split_whitespace()
+                .take(3)
+                .collect::<Vec<_>>()
+                .join(" ");
             let created = chrono::DateTime::parse_from_str(&created, "%Y-%m-%d %H:%M:%S %z")
                 .map(|t| t.timestamp())
                 .unwrap_or(0);

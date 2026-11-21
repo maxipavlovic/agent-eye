@@ -201,7 +201,15 @@ fn list_macos(want: &dyn Fn(&str) -> bool) -> Vec<Proc> {
     }
     let listen = run(
         lsof_path(),
-        &["-nP", "-iTCP", "-sTCP:LISTEN", "-Fpn", "-a", "-u", &me.to_string()],
+        &[
+            "-nP",
+            "-iTCP",
+            "-sTCP:LISTEN",
+            "-Fpn",
+            "-a",
+            "-u",
+            &me.to_string(),
+        ],
     )
     .map(|t| parse_lsof_listen(&t))
     .unwrap_or_default();
@@ -251,9 +259,8 @@ fn list_linux(want: &dyn Fn(&str) -> bool) -> Vec<Proc> {
     let (Some(btime), hz) = (boot_time(), clock_ticks()) else {
         return vec![];
     };
-    let mut sockets = parse_proc_net_tcp(
-        &std::fs::read_to_string("/proc/net/tcp").unwrap_or_default(),
-    );
+    let mut sockets =
+        parse_proc_net_tcp(&std::fs::read_to_string("/proc/net/tcp").unwrap_or_default());
     sockets.extend(parse_proc_net_tcp(
         &std::fs::read_to_string("/proc/net/tcp6").unwrap_or_default(),
     ));
@@ -320,10 +327,7 @@ fn list_linux(want: &dyn Fn(&str) -> bool) -> Vec<Proc> {
 /// Owner and start time of one pid, now; None when there is no such process.
 pub fn info(pid: u32) -> Option<Info> {
     if MACOS {
-        let t = run(
-            ps_path(),
-            &["-p", &pid.to_string(), "-o", "uid=,lstart="],
-        )?;
+        let t = run(ps_path(), &["-p", &pid.to_string(), "-o", "uid=,lstart="])?;
         let mut it = t.split_whitespace();
         let uid = it.next()?.parse().ok()?;
         let start = parse_lstart(&[it.next()?, it.next()?, it.next()?, it.next()?, it.next()?])?;
@@ -378,7 +382,9 @@ mod tests {
         let cwd = parse_lsof_cwd("p12\nfcwd\nn/a/b\np13\nfcwd\nn/c d\n");
         assert_eq!(cwd[&12], PathBuf::from("/a/b"));
         assert_eq!(cwd[&13], PathBuf::from("/c d"));
-        let l = parse_lsof_listen("p5\nf9\nn*:4350\nf10\nn127.0.0.1:4321\nf11\nn[::1]:4321\np6\nfx\nn*:80\n");
+        let l = parse_lsof_listen(
+            "p5\nf9\nn*:4350\nf10\nn127.0.0.1:4321\nf11\nn[::1]:4321\np6\nfx\nn*:80\n",
+        );
         assert_eq!(l[&5], vec![4321, 4350]);
         assert_eq!(l[&6], vec![80]);
     }

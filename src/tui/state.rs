@@ -50,6 +50,8 @@ pub struct App {
     pub(super) talk_cache: HashMap<String, Talk>,
     /// The one-line input for a reminder, while it is open (Ctrl-R).
     pub(super) remind: Option<super::remind::Input>,
+    /// The list of what the selected session left behind, while it is open (Ctrl-L).
+    pub(super) loose: Option<super::loose::List>,
 }
 
 impl App {
@@ -79,6 +81,7 @@ impl App {
             talk_scroll: 0,
             talk_cache: HashMap::new(),
             remind: None,
+            loose: None,
         };
         a.research();
         a

@@ -474,12 +474,22 @@ fn a_session_that_stops_or_ends_asks_for_a_loose_ends_scan() {
     let (_t, p, db) = env();
     add_session(&db, "s1", 100);
     assert_eq!(db.meta_get(LOOSE_FLAG).unwrap(), None);
-    run_hook(&p, "Stop", br#"{"session_id":"s1","last_assistant_message":"done"}"#);
+    run_hook(
+        &p,
+        "Stop",
+        br#"{"session_id":"s1","last_assistant_message":"done"}"#,
+    );
     drain_queue(&db, &p, &agents()).unwrap();
     assert_eq!(db.meta_get(LOOSE_FLAG).unwrap().as_deref(), Some("1"));
     // a scan clears it, and a prompt does not set it
-    db.conn.execute("DELETE FROM meta WHERE key=?1", [LOOSE_FLAG]).unwrap();
-    run_hook(&p, "UserPromptSubmit", br#"{"session_id":"s1","prompt":"x"}"#);
+    db.conn
+        .execute("DELETE FROM meta WHERE key=?1", [LOOSE_FLAG])
+        .unwrap();
+    run_hook(
+        &p,
+        "UserPromptSubmit",
+        br#"{"session_id":"s1","prompt":"x"}"#,
+    );
     drain_queue(&db, &p, &agents()).unwrap();
     assert_eq!(db.meta_get(LOOSE_FLAG).unwrap(), None);
     run_hook(&p, "SessionEnd", br#"{"session_id":"s1"}"#);

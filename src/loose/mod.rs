@@ -113,7 +113,11 @@ impl LooseEnd {
 /// A scan: every loose end of the sessions active lately, with the real machine.
 pub fn scan(db: &Db, cfg: &Config, agents: &Agents, now: i64) -> Result<Vec<LooseEnd>> {
     let input = find::load(db, cfg, agents, now)?;
-    Ok(find(&input, &System::with_roots(agents.scratch_roots()), now))
+    Ok(find(
+        &input,
+        &System::with_roots(agents.scratch_roots()),
+        now,
+    ))
 }
 
 /// Scan and store: what `eye loose` and the daemon do. Does nothing when `[loose]` is off.

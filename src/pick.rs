@@ -281,6 +281,8 @@ pub fn search(db: &Db, idx: &Index, query: &str, all: bool, _now: i64) -> Vec<us
 pub struct Detail {
     pub streams: Vec<Stream>,
     pub outputs: Vec<Output>,
+    /// What the session left behind (see `loose`), ignored items left out.
+    pub loose: Vec<crate::loose::LooseEnd>,
 }
 
 /// The streams and outputs the preview shows for a row.
@@ -291,6 +293,7 @@ pub fn detail(db: &Db, row: &Row) -> Detail {
     Detail {
         streams: db.streams_for(&row.id).unwrap_or_default(),
         outputs: db.outputs_for(&row.id).unwrap_or_default(),
+        loose: crate::loose::list(db, Some(&row.id), false).unwrap_or_default(),
     }
 }
 

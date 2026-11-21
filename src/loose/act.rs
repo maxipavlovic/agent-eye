@@ -12,7 +12,11 @@ use std::path::Path;
 fn item(db: &Db, key: &str, kinds: &[Kind]) -> Result<LooseEnd> {
     let it = get(db, key)?.ok_or_else(|| anyhow!("no such loose end: {key} (scan again)"))?;
     if !kinds.contains(&it.kind) {
-        bail!("{} cannot do that to a {}", crate::pick::bin_name(), it.kind.as_str());
+        bail!(
+            "{} cannot do that to a {}",
+            crate::pick::bin_name(),
+            it.kind.as_str()
+        );
     }
     Ok(it)
 }
@@ -129,11 +133,7 @@ pub fn copy_command(it: &LooseEnd) -> Option<String> {
 
 /// The first message of a session that is sent back: what it left, one line, plain text.
 pub fn send_prompt(items: &[LooseEnd]) -> String {
-    let mut lines: Vec<String> = items
-        .iter()
-        .take(8)
-        .map(|i| printable(&i.line))
-        .collect();
+    let mut lines: Vec<String> = items.iter().take(8).map(|i| printable(&i.line)).collect();
     if items.len() > 8 {
         lines.push(format!("and {} more", items.len() - 8));
     }
