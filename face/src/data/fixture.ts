@@ -1,6 +1,6 @@
 import { demoUsage, emptyUsage } from './usageSample';
 import type {
-  Agent, ArchivePage, Board, Card, CardDetail, ColumnId, ConversationPage, FolderCheck, Idea, LooseEnd, Message, SearchHit, Source, StartPlan, Tokens,
+  Agent, ArchivePage, NightRun, NightState, Board, Card, CardDetail, ColumnId, ConversationPage, FolderCheck, Idea, LooseEnd, Message, SearchHit, Source, StartPlan, Tokens,
 } from '../api/types';
 
 // fixtures/sample/ is synthetic: every build, test, screenshot and the site use it. fixtures/real/
@@ -251,6 +251,38 @@ export function fixtureSource(demo = false): Source {
     return i ? { ...withLoose, notes: i.notes || null, prompt: i.prompt ?? null } : withLoose;
   };
 
+  /** The night shift: off, nothing planned; the demo has one finished run on a card. */
+  const nightState: NightState = { enabled: false, window: '01:00-07:00', parallel: 2, quiet_minutes: 20, in_window: false, planned: 0, open: [], recent: [] };
+  let nightSeq = 0;
+  const nightRun = (o: Partial<NightRun>): NightRun => ({
+    id: ++nightSeq, kind: 'idea', idea_id: null, session_id: null, agent: 'claude', switch: false, folder: '~/code/demo', prompt: 'Add a README line saying hello',
+    night: new Date().toISOString().slice(0, 10), status: 'planned', why: null, limit: null, run_session_id: null, worktree: null, branch: null, base_ref: null,
+    started_at: null, ended_at: null, duration_ms: null, report: null, diff_stat: null, created_at: Date.now(), ...o,
+  });
+  const nightLimit = (text: string): NightRun['limit'] => {
+    const t = text.trim();
+    if (!t) return null;
+    return { kind: t.endsWith('%') ? 'weekly' : /[mh]$/.test(t) ? 'minutes' : 'tokens', value: parseFloat(t), text: t };
+  };
+  if (demo && files === sample) {
+    const c = board.columns.find((x) => x.id === 'needs_you')?.cards.find((x) => x.kind !== 'idea');
+    if (c) {
+      const t = Date.now() - 6 * 3600_000;
+      const run = nightRun({
+        status: 'done', run_session_id: c.id, started_at: t, ended_at: t + 41 * 60_000, duration_ms: 41 * 60_000, tokens: 182_000, uncommitted: false,
+        worktree: '~/.agent-eye/night/1/wt', branch: 'night/20261121-add-a-readme-line', base_ref: 'abc1234', limit: { kind: 'minutes', value: 90, text: '90 minutes' },
+        report: 'Added the README line and a test for it. Tests pass. Nothing is pushed.',
+        diff_stat: ' README.md      | 2 ++\n tests/readme.rs | 9 +++++++++\n 2 files changed, 11 insertions(+)',
+      });
+      c.night = { id: run.id, status: run.status };
+      const d = details[c.id];
+      if (d) d.night_run = run;
+      nightState.recent.push(run);
+    }
+  }
+  const nightClone = () => structuredClone(nightState);
+  const nightCount = () => { nightState.planned = nightState.open.filter((r) => r.status === 'planned').length; };
+
   return {
     name: 'fixture',
     board: () => delay(structuredClone(board)),
@@ -407,6 +439,48 @@ export function fixtureSource(demo = false): Source {
       dry_run: true, mode: 'iterm', command: `claude --resume ${session} 'Before you call this finished, please deal with what this session left behind'`,
       note: 'Fixture: would open the session with the list',
     }),
+    night: () => delay(nightClone()),
+    nightSettings: (input) => {
+      if (input.window !== undefined) {
+        if (!/^([01]\d|2[0-3]):[0-5]\d-([01]\d|2[0-3]):[0-5]\d$/.test(input.window) || input.window.slice(0, 5) === input.window.slice(6)) return Promise.reject(new Error(`'${input.window}' is not a window: write it as 01:00-07:00`));
+        nightState.window = input.window;
+      }
+      if (input.parallel !== undefined) nightState.parallel = input.parallel;
+      if (input.enabled !== undefined) nightState.enabled = input.enabled;
+      return delay(nightClone());
+    },
+    nightPlan: (input) => {
+      if (input.session_id && !input.prompt?.trim()) return Promise.reject(new Error('continue tonight needs a prompt: say what the session should do tonight'));
+      const idea = input.idea_id == null ? undefined : ideas.ideas.find((i) => i.id === input.idea_id);
+      if (input.idea_id != null && !idea?.prompt) return Promise.reject(new Error('this idea has no prompt: write what the agent should do (the idea\'s prompt), then plan it'));
+      if (input.idea_id != null && !idea?.folder) return Promise.reject(new Error('this idea has no folder: add the folder the run should work on, then plan it'));
+      if (input.limit?.trim().endsWith('%')) return Promise.reject(new Error('eye has no weekly plan data for Claude Code, so a weekly limit cannot be checked. Run `eye install` so Claude Code reports its limits, then plan again.'));
+      const run = nightRun({
+        kind: input.session_id ? 'session' : 'idea', idea_id: input.idea_id ?? null, session_id: input.session_id ?? null, agent: input.agent ?? 'claude',
+        switch: !!input.switch, prompt: (input.prompt ?? idea?.prompt ?? '').trim(), folder: idea?.folder ?? '~/code/demo', limit: nightLimit(input.limit ?? ''),
+      });
+      nightState.open.push(run);
+      nightCount();
+      return delay(structuredClone(run));
+    },
+    nightCancel: (id) => {
+      nightState.open = nightState.open.filter((r) => r.id !== id);
+      nightCount();
+      return delay(nightClone());
+    },
+    nightLimit: (id, limit) => {
+      const r = nightState.open.find((x) => x.id === id);
+      if (!r) return Promise.reject(new Error('no such run'));
+      r.limit = nightLimit(limit);
+      return delay(nightClone());
+    },
+    nightDiscard: (id, _lose) => {
+      for (const r of nightState.recent.filter((x) => x.id === id)) { r.worktree = null; r.branch = null; }
+      for (const d of Object.values(details)) if (d.night_run?.id === id) { d.night_run.worktree = null; d.night_run.branch = null; }
+      changed();
+      return delay({ ok: true, note: 'removed (fixture)' });
+    },
+    nightOpen: () => delay({ ok: true }),
     remindSettings: () => delay({ ...notice }),
     setRemindSettings: (input) => {
       notice.notify = input.notify;

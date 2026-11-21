@@ -11,6 +11,7 @@ import { ideaForm } from './IdeaForm';
 import { MoveMenu, QuickMove } from './Move';
 import { Next } from './Card';
 import { LeftBehind } from './Loose';
+import { ContinueTonight, NightRunSection, TonightIdea } from './Night';
 import { RemindPanel } from './Remind';
 import { AgentTag, RemoteMark, Sigil } from './pieces';
 import { Kids, Outputs, Running, Sec, TokenSec, Topics, Where } from './Sections';
@@ -37,6 +38,7 @@ function IdeaBody({ d, store }: { d: CardDetail; store: Store }) {
         <button class="btn" disabled={!!start.blocked} title={d.prompt ? `${d.agent_name} works on it without you` : 'Needs a prompt first'} onClick={() => (d.prompt ? void store.startIdea(d, true) : edit('prompt'))}>IN BACKGROUND</button>
         <button class="btn" onClick={() => edit()}>EDIT</button>
       </div>
+      {store.night.value && <TonightIdea d={d} store={store} />}
       {(start.blocked || folderMissing(d)) && <p class="fnote" role="status">{start.blocked ?? d.folder_note}</p>}
       <Sec t="NOTES">{d.notes ? <p class="notes"><Hl s={d.notes} /></p> : <p class="dim">None.</p>}</Sec>
       <Sec t={`PROMPT FOR ${d.agent_name.toUpperCase()}`}>
@@ -125,6 +127,7 @@ export function Detail({ store, walk }: { store: Store; walk: Walk }) {
         {session && d.state && <p class="lead"><Hl s={d.state} /></p>}
         <Next c={d} hot={need} />
         <Running d={d} />
+        <NightRunSection d={d} store={store} />
         <LeftBehind key={d.id} d={d} store={store} />
         {d.kind === 'idea' && d.idea_id != null && <IdeaBody d={d} store={store} />}
         {d.recap && <Sec t="RECAP"><p class="recap"><Hl s={d.recap} /></p></Sec>}
@@ -146,6 +149,7 @@ export function Detail({ store, walk }: { store: Store; walk: Walk }) {
           </Sec>
         )}
         <Where d={d} />
+        <ContinueTonight d={d} store={store} />
         <RemindPanel c={d} store={store} />
         <Receipt d={d} />
         <Actions d={d} store={store} />

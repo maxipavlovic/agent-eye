@@ -6,6 +6,7 @@ import { AUTO, INK_CC, LAYOUT_ICON, MOON, SUN } from './art';
 import { Eye } from './Eye';
 import { ideaForm } from './IdeaForm';
 import type { Layout } from './layout';
+import { TonightChip } from './Night';
 import { usagePanel } from './Usage';
 
 const CONN: Record<string, string> = { live: 'LIVE', connecting: 'LINKING', offline: 'OFFLINE', fixture: 'SAMPLE' };
@@ -45,6 +46,7 @@ export function Header({ store, layout, setLayout }: { store: Store; layout: Lay
         ))}
       </div>
       <AccentPicker store={store} />
+      <TonightChip store={store} />
       <button class="btn" title="What the sessions used and cost, and where the plan limits stand" aria-haspopup="dialog" onClick={() => { usagePanel.value = !usagePanel.value; }}>USAGE</button>
       <button class="btn plus" onClick={() => { ideaForm.value = {}; }}>+ IDEA</button>
     </header>
