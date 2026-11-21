@@ -7,7 +7,7 @@ use anyhow::{bail, Result};
 
 pub fn run(g: &Global, days: i64, by: &str, json: bool) -> Result<()> {
     let Some(by) = report::By::parse(by) else {
-        bail!("--by takes project, agent, model or session, not '{by}'");
+        bail!("--by takes project, folder, agent, model or session, not '{by}'");
     };
     if days < 1 {
         bail!("--days takes a number of days from 1");

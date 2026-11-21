@@ -24,7 +24,7 @@ pub(super) async fn api_usage(State(st): State<Shared>, Query(q): Query<UsageQ>)
     let by = match q.by.as_deref() {
         None => By::Project,
         Some(b) => By::parse(b)
-            .ok_or_else(|| ApiError::bad("by takes project, agent, model or session"))?,
+            .ok_or_else(|| ApiError::bad("by takes project, folder, agent, model or session"))?,
     };
     blocking(move || {
         let db = open_db(&st)?;
