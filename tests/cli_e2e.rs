@@ -97,6 +97,10 @@ impl World {
             )
             .env("TZ", "UTC")
             .env("NO_COLOR", "1");
+        // keeps the binary's own coverage when the suite runs under `cargo llvm-cov`
+        if let Some(v) = std::env::var_os("LLVM_PROFILE_FILE") {
+            c.env("LLVM_PROFILE_FILE", v);
+        }
         c
     }
 
