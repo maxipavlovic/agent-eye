@@ -405,6 +405,31 @@ pub enum Cmd {
     },
     /// Put an archived transcript back where its agent expects it
     Restore { id: String },
+    /// Write one portable file with everything eye knows (to move to another machine or keep a
+    /// copy), or with a session id one readable page of that session
+    Export {
+        /// A session (id or prefix): write that session as a readable page instead
+        session: Option<String>,
+        /// Where to write: a folder or a file name (default: the current folder)
+        #[arg(long)]
+        to: Option<PathBuf>,
+        /// With a session: a self-contained HTML page (the default)
+        #[arg(long)]
+        html: bool,
+        /// With a session: Markdown instead
+        #[arg(long, conflicts_with = "html")]
+        md: bool,
+    },
+    /// Read a file made by `eye export` into this machine: shows the plan first, asks [y/N]
+    Import {
+        file: PathBuf,
+        /// Do not ask first (needed in a script)
+        #[arg(long)]
+        yes: bool,
+        /// Show the plan, change nothing
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Snapshot the database now (`eye backup ls` lists them, `eye backup restore` puts one back)
     Backup {
         #[command(subcommand)]

@@ -57,6 +57,7 @@ Ctrl-G then opens the picker with the current command line as the start query. T
 - `eye loose [<session>] [--json]` scans now and lists what sessions left behind, each with its key. `eye loose stop <key>`, `eye loose remove <key>` and `eye loose send <session>` ask y/N first (`--yes` skips it; without a terminal it is required); `eye loose ignore <key>` stops listing an item. `send --dry-run` prints the command and runs nothing.
 - `eye remind <id> <when> [--note TEXT]` sets a reminder on a session (an id or its first 6 characters) or an idea (`idea:<n>`), `eye remind <id> --clear` removes it and `eye remind ls` lists them, due ones first, `eye remind notify [on|off]` shows or switches the desktop notice for due reminders (off by default). `<when>` is as for Ctrl-R above. `eye show` and `eye ls --json` carry it.
 - `eye idea add` and `eye idea edit` take `--agent <id>` to start an idea in a particular agent (default: the first enabled one).
+- `eye export [--to <folder or file>]` writes `agent-eye-<host>-<date>-<time>.eyepack` (database, archive, transcripts not archived yet); `eye import <file> [--dry-run] [--yes]` reads one back, on this machine or another (see [backups.md](backups.md)). `eye export <session> [--html|--md] [--to …]` writes one session as a readable page.
 - Without a terminal, `eye` prints the list like `eye ls`.
 
 ## Config and environment

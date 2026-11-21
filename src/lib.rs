@@ -39,6 +39,8 @@ pub mod mark;
 /// The data types: sessions, streams, outputs, ideas, columns.
 pub mod model;
 /// Where eye keeps its data.
+/// One portable file with everything eye knows (`eye export`, `eye import`), and one session as a page.
+pub mod pack;
 pub mod paths;
 /// The picker's index, ranking and launching.
 pub mod pick;

@@ -7,6 +7,7 @@ mod board;
 mod data;
 mod ideas;
 mod loose;
+mod pack;
 mod pick;
 mod remind;
 mod setup;
@@ -227,5 +228,12 @@ pub fn run() -> Result<()> {
         Cmd::Archive { id, all } => data::archive(&g, id.as_deref(), all),
         Cmd::Restore { id } => data::restore(&g, &id),
         Cmd::Backup { sub } => backup::run(&g, sub),
+        Cmd::Export {
+            session,
+            to,
+            html,
+            md,
+        } => pack::export(&g, session.as_deref(), to.as_deref(), html, md),
+        Cmd::Import { file, yes, dry_run } => pack::import(&g, &file, yes, dry_run),
     }
 }

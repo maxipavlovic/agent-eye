@@ -75,6 +75,7 @@ a:hover { background: var(--ink); color: var(--paper); text-decoration: none; }
 .btn:hover { background: var(--ink); color: var(--paper); }
 .btn:active { transform: translate(4px, 4px); box-shadow: none; }
 .btn.ghost { box-shadow: none; }
+a.btn { display: inline-block; text-decoration: none; }
 .btn.sm { padding: 7px 10px 6px; box-shadow: 2px 2px 0 var(--ink); }
 .btn.sm.ghost { box-shadow: none; }
 .btn.big { background: var(--ink); color: var(--paper); font-size: 24px; padding: 16px 28px 14px; box-shadow: 6px 6px 0 var(--accent); }
