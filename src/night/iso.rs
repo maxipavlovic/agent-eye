@@ -118,7 +118,9 @@ pub fn prepare(
                 "the repo has no commit yet: commit once so a run has something to start from",
             )?;
         let mut branch = format!("night/{}-{slug}", super::clock::compact(night));
-        if !branch_free(p, &repo, &branch) {
+        // a copy's branch meets the repo only when it is brought in, so it always carries the run
+        // number: two copies planned with the same words never bring the same name
+        if mode == Mode::Copy || !branch_free(p, &repo, &branch) {
             branch = format!("{branch}-{run_id}");
         }
         // a run started in a sub-folder of the repo starts in the same sub-folder of its folder

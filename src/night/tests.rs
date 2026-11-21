@@ -1633,14 +1633,14 @@ fn a_copy_run_clones_the_repo_on_the_night_branch_with_no_way_back() {
     )
     .unwrap();
     assert_eq!(i.root, night.join("1/work"));
-    assert_eq!(i.branch.as_deref(), Some("night/20261121-x"));
+    assert_eq!(i.branch.as_deref(), Some("night/20261121-x-1"));
     assert_eq!(i.base_ref.as_deref(), Some(head.as_str()));
     assert!(i.root.join("a.txt").is_file());
     assert!(i.root.join(".git").is_dir(), "a clone, not a worktree");
     assert_eq!(git(&i.root, &["rev-parse", "HEAD"]), head);
     assert_eq!(
         git(&i.root, &["rev-parse", "--abbrev-ref", "HEAD"]),
-        "night/20261121-x"
+        "night/20261121-x-1"
     );
     assert_eq!(git(&i.root, &["remote"]), "", "no origin points back");
     // the original knows nothing about the copy
@@ -1736,8 +1736,8 @@ fn bring_puts_the_copy_branch_in_the_original_and_refuses_a_second_time() {
     let run = copy_run(&orig, &i);
     assert!(run.is_repo_copy());
     let said = iso::bring(&p, &run).unwrap();
-    assert!(said.contains("night/20261121-x"), "{said}");
-    let b = "night/20261121-x";
+    assert!(said.contains("night/20261121-x-1"), "{said}");
+    let b = "night/20261121-x-1";
     assert_eq!(
         git(&orig, &["branch", "--list", b]).trim_start_matches(['*', ' ']),
         b
@@ -1798,7 +1798,7 @@ fn discard_removes_a_copy_without_touching_the_original_and_a_worktree_with_its_
     };
     iso::bring(&p, &r2).unwrap();
     iso::discard(&p, &night, &r2, false).unwrap();
-    assert!(!git(&orig, &["branch", "--list", "night/20261121-y"]).is_empty());
+    assert!(!git(&orig, &["branch", "--list", "night/20261121-y-2"]).is_empty());
     // a worktree run: folder and branch go
     let w = iso::prepare(
         &p,
