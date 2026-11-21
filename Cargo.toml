@@ -34,6 +34,11 @@ path = "src/lib.rs"
 name = "agent-eye"
 path = "src/main.rs"
 
+[features]
+# For the end-to-end suite only (`e2e/`): `EYE_FIXED_NOW_MS` replaces the clock, so ages, due
+# reminders and usage windows come out the same on every run. Never enabled in a release.
+fixed-clock = []
+
 [dependencies]
 anyhow = "1"
 axum = { version = "0.8", default-features = false, features = ["http1", "tokio", "json", "query"] }

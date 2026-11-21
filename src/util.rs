@@ -114,8 +114,18 @@ pub fn hex(b: &[u8]) -> String {
 }
 
 /// Now, in Unix ms.
+#[cfg(not(feature = "fixed-clock"))]
 pub fn now_ms() -> i64 {
     Timestamp::now().as_millisecond()
+}
+
+/// Now, in Unix ms; `EYE_FIXED_NOW_MS` replaces the clock (the end-to-end suite's build only).
+#[cfg(feature = "fixed-clock")]
+pub fn now_ms() -> i64 {
+    std::env::var("EYE_FIXED_NOW_MS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or_else(|| Timestamp::now().as_millisecond())
 }
 
 /// A Unix ms time on the wall clock of this machine; None when it is out of range.
