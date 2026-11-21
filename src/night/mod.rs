@@ -419,6 +419,9 @@ pub fn plan_idea(
     };
     iso::check_plain_size(std::path::Path::new(folder))?;
     let mode = pick_mode(cfg, o, folder)?;
+    if agent.id() == "agy" {
+        barrier::agy_gate(cfg)?;
+    }
     if let Some(l) = o.limit {
         check_limit(db, &agent, l)?;
     }

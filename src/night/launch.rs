@@ -101,6 +101,23 @@ pub fn claude_project_dir(cwd: &Path) -> String {
         .collect()
 }
 
+/// The `--settings` JSON of an agy run: the build and test commands of `ALLOW` as `command(...)`
+/// rules, and `DENY` as deny rules (`Bash(git push*)` is `command(git push)`).
+pub fn agy_settings() -> String {
+    let rule = |r: &&str| {
+        let inner = r.strip_prefix("Bash(").and_then(|x| x.strip_suffix(')'))?;
+        Some(format!(
+            "command({})",
+            inner.trim_end_matches('*').trim_end()
+        ))
+    };
+    serde_json::json!({"permissions": {
+        "allow": ALLOW.iter().filter_map(rule).collect::<Vec<_>>(),
+        "deny": DENY.iter().filter_map(rule).collect::<Vec<_>>(),
+    }})
+    .to_string()
+}
+
 /// The command of a run. `new_id` names the run's own session (Claude only); `guard` is the
 /// `--settings` JSON of its barrier (see `barrier`).
 pub fn build(
@@ -151,6 +168,15 @@ pub fn build(
         }
         if !cfg.night.claude_model.trim().is_empty() {
             args.extend(["--model".into(), cfg.night.claude_model.trim().into()]);
+        }
+    } else if run.agent == "agy" {
+        // `-p` answers a permission request with a denial (it cannot ask), so the commands a run may
+        // use are allowed up front; agy has no fork, so a run is always a new conversation
+        args.extend(["-p".into(), prompt]);
+        args.extend(["--mode".into(), "accept-edits".into(), "--sandbox".into()]);
+        args.extend(["--settings".into(), agy_settings()]);
+        if !cfg.night.agy_model.trim().is_empty() {
+            args.extend(["--model".into(), cfg.night.agy_model.trim().into()]);
         }
     } else {
         args.push("exec".into());
@@ -302,6 +328,8 @@ pub fn start(
     // a Claude run needs its sandbox, or the user's say-so to go without, before anything is made
     let sandboxed = if run.agent == LEGACY_ID {
         barrier::gate(cfg)?
+    } else if run.agent == "agy" {
+        barrier::agy_gate(cfg)?
     } else {
         true
     };

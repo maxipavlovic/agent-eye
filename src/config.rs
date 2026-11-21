@@ -60,7 +60,8 @@ parallel = 2           # runs going at once; planned runs never wait for each ot
 claude_permission = "auto"  # `auto`, or `acceptEdits` (then only build and test commands are allowed)
 claude_model = ""      # a model for Claude night runs; empty = Claude's default
 codex_model = ""       # a model for Codex night runs; empty = Codex's default
-allow_unsandboxed = false # start Claude runs even where its sandbox is missing (Linux without bubblewrap and socat); Bash is then not confined
+agy_model = ""         # a model for Antigravity (agy) night runs; empty = agy's default
+allow_unsandboxed = false # start Claude runs even where its sandbox is missing (Linux without bubblewrap and socat), and agy runs at all (eye could not verify that agy's --sandbox keeps a run in its folder); Bash is then not confined
 # network = ["registry.npmjs.org", "pypi.org", "files.pythonhosted.org", "crates.io", "index.crates.io", "static.crates.io", "proxy.golang.org"]  # the only hosts a sandboxed Claude run may reach (never github.com, gitlab.com, bitbucket.org); this is the default
 
 [loose]
@@ -112,6 +113,7 @@ const KNOWN: &[(&str, &[&str])] = &[
             "claude_permission",
             "claude_model",
             "codex_model",
+            "agy_model",
             "allow_unsandboxed",
             "network",
         ],
@@ -410,6 +412,8 @@ pub struct NightCfg {
     pub claude_permission: String,
     pub claude_model: String,
     pub codex_model: String,
+    /// A model for Antigravity (agy) night runs; empty = agy's default.
+    pub agy_model: String,
     /// Start Claude runs even where its sandbox is not available (Bash is then not confined).
     pub allow_unsandboxed: bool,
     /// The hosts a sandboxed Claude run may reach (package registries); empty = the built-in list.
@@ -441,6 +445,7 @@ impl Default for NightCfg {
             claude_permission: "auto".into(),
             claude_model: String::new(),
             codex_model: String::new(),
+            agy_model: String::new(),
             allow_unsandboxed: false,
             network: vec![],
             isolation: "worktree".into(),
