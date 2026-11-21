@@ -78,12 +78,12 @@ describe('the panel keys and the keys list', () => {
     return m;
   }
 
-  it('N opens CONTINUE TONIGHT and M the reminder picker', async () => {
+  it('T opens CONTINUE TONIGHT and M the reminder picker', async () => {
     const m = await open();
     expect(m.$('.page form.nplan')).toBeNull();
-    press('n');
+    press('t');
     await vi.waitFor(() => expect(m.$('.page form.nplan')).not.toBeNull());
-    expect(m.$('.page .acts.end .btn[aria-keyshortcuts=N]')!.getAttribute('aria-expanded')).toBe('true');
+    expect(m.$('.page .acts.end .btn[aria-keyshortcuts=T]')!.getAttribute('aria-expanded')).toBe('true');
     expect(remindForm.value).toBeNull();
     press('m');
     await vi.waitFor(() => expect(m.$('form.modal[aria-label="Remind me"]')).not.toBeNull());
@@ -113,8 +113,8 @@ describe('the panel keys and the keys list', () => {
     const m = await open();
     const keyed = (sel: string) => text(m.$(`${sel} u`));
     expect(keyed('.qmove .resume')).toBe('R');
-    expect(m.$$('.page .acts.end .btn u').map(text)).toEqual(['F', 'C', 'E', 'N', 'H']);
-    expect(m.$$('.qmove button[aria-keyshortcuts] u').map(text)).toEqual(['Y', 'W', 'P', 'D', 'R']);
+    expect(m.$$('.page .acts.end .btn u').map(text)).toEqual(['F', 'C', 'E', 'T', 'H']);
+    expect(m.$$('.qmove button[aria-keyshortcuts] u').map(text)).toEqual(['N', 'W', 'P', 'D', 'R']);
   });
 
   it('? opens the list of keys, and ?, Esc or CLOSE closes it without closing the panel', async () => {
@@ -137,6 +137,12 @@ describe('the panel keys and the keys list', () => {
     m.$$('.keyhelp button').find((b) => text(b) === 'CLOSE')!.click();
     await tick();
     expect(m.$('.keyhelp')).toBeNull();
+  });
+
+  it('N still moves the open session to Needs you, as it always did', async () => {
+    const m = await open();
+    press('n');
+    await vi.waitFor(() => expect(m.$('.qmove button[aria-pressed="true"]')?.textContent).toBe('NEEDS YOU'));
   });
 
   it('X opens the FORGET… confirm for the open session', async () => {

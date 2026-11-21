@@ -152,13 +152,13 @@ export function canContinueTonight(d: Pick<CardDetail, 'kind' | 'resumable'>, st
   return d.kind !== 'idea' && !!d.resumable && store.night.value !== null;
 }
 
-/** CONTINUE TONIGHT… in the panel's action row; N does the same. */
+/** CONTINUE TONIGHT… in the panel's action row; T does the same. */
 export function TonightButton({ d, store }: { d: CardDetail; store: Store }) {
   if (!canContinueTonight(d, store)) return null;
   const open = tonightOpen.value === d.id;
   return (
-    <button class="btn" aria-expanded={open} aria-keyshortcuts="N" title="Fork this session tonight, in its own worktree, with a prompt you write now (N)" onClick={() => { tonightOpen.value = open ? null : d.id; }}>
-      CO<u>N</u>TINUE TONIGHT…
+    <button class="btn" aria-expanded={open} aria-keyshortcuts="T" title="Fork this session tonight, in its own worktree, with a prompt you write now (T)" onClick={() => { tonightOpen.value = open ? null : d.id; }}>
+      CONTINUE <u>T</u>ONIGHT…
     </button>
   );
 }

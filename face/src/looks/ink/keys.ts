@@ -10,7 +10,7 @@ import { closeRemind, openRemind, remindForm } from './Remind';
 import type { Walk } from './walk';
 
 /** Board keys: / or ⌘K / Ctrl-K searches, ← → walk the cards, Esc backs out one level, ? lists the keys. The open session's panel
- *  takes R D W P Y M N F C H L E X (see KEY_LIST), and only while no field has the focus. */
+ *  takes R D W P N M T F C H L E X (see KEY_LIST), and only while no field has the focus. */
 /** Back to the search box, with what is in it selected, so typing starts a new search. */
 export function focusSearch() {
   const q = document.getElementById('q') as HTMLInputElement | null;
@@ -79,7 +79,7 @@ function panelAct(store: Store, d: NonNullable<Store['detail']['value']>, k: str
   const session = d.kind !== 'idea';
   switch (k) {
     case 'm': openRemind(d.id); return true;
-    case 'n':
+    case 't':
       if (!canContinueTonight(d, store)) return false;
       tonightOpen.value = d.id;
       return true;

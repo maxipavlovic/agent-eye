@@ -13,9 +13,9 @@ const MOVES: Array<{ to: MoveTarget; label: string }> = [
   { to: 'auto', label: 'AUTO (RULES)' },
 ];
 
-/** The quick-move targets; the underlined letter of each label is its key (Y, W, P, D). N is CONTINUE TONIGHT. */
+/** The quick-move targets; the underlined letter of each label is its key (N, W, P, D). */
 export const QUICK: Array<{ to: MoveTarget; label: string; key: string }> = [
-  { to: 'needs_you', label: 'NEEDS YOU', key: 'y' },
+  { to: 'needs_you', label: 'NEEDS YOU', key: 'n' },
   { to: 'waiting', label: 'WAITING', key: 'w' },
   { to: 'paused', label: 'PAUSED', key: 'p' },
   { to: 'done', label: 'DONE', key: 'd' },

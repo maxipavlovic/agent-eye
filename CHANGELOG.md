@@ -22,6 +22,7 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 - Database schema 15 (`usage_day`, `usage_state`).
 - Database schema 16 (`night_run`).
 - Database schema 17 (`session.origin`, `session.origin_raw`).
+- Board panel keys: the existing N, W, P, D and R stay as they were; new are M (remind me), T (continue tonight), F (fork), C (copy the resume command), H (hide), L (loose ends), E (export) and X (forget). `?` lists them, and each button shows its letter.
 
 ### Changed
 
