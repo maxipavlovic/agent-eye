@@ -712,8 +712,8 @@ fieldset.nightpick .fchips { margin: 4px 0 0; }
 .keyhelp .where { grid-template-columns: 4.5em 1fr; margin: 12px 0 8px; }
 @media (max-width: 1200px) { .page .x.qk { right: 100px; } }
 
-/* a narrow card keeps one meta row by letting go of the least needed first: Remote shrinks to its icon, then the project name goes */
+/* a narrow card keeps one meta row by letting go of the least needed first: Remote shrinks to its icon, then the token count goes (it stays in the panel); the project name stays, cut short */
 .card:not(.row) { container: card / inline-size; }
 @container card (max-width: 340px) { .card .meta .mk.rc span { display: none; } }
-@container card (max-width: 310px) { .card .meta .ptag { display: none; } }
+@container card (max-width: 310px) { .card .meta .tok { display: none; } .card .meta .ptag { min-width: 5ch; } }
 .modal > .fchips { margin: -6px 0 16px; }
