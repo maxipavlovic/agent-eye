@@ -1,0 +1,15 @@
+{
+  "name": "eye-e2e",
+  "private": true,
+  "version": "0.0.0",
+  "description": "End-to-end suite: the real binary and the real board in Chromium and WebKit. Run it with scripts/e2e.sh.",
+  "type": "module",
+  "scripts": {
+    "test": "playwright test",
+    "update": "playwright test --update-snapshots"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.62.1",
+    "@types/node": "24.12.0"
+  }
+}
