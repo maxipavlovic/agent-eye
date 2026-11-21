@@ -16,31 +16,59 @@ use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-/// What a run is never allowed to run: nothing leaves the machine.
-pub const DENY: [&str; 6] = [
+/// What a run is never allowed to run. A rule matches the command text, so these are a first line
+/// only (`git -c x=y push` is not matched); what stops a push is the network allowlist in
+/// `barrier::settings`, which has no git host in it.
+pub const DENY: [&str; 11] = [
     "Bash(git push*)",
     "Bash(git -C * push*)",
     "Bash(git remote*)",
-    "Bash(gh pr create*)",
-    "Bash(gh pr merge*)",
-    "Bash(gh release*)",
+    "Bash(gh*)",
+    "Bash(ssh*)",
+    "Bash(scp*)",
+    "Bash(npm publish*)",
+    "Bash(cargo publish*)",
+    "Bash(twine upload*)",
+    "Bash(gem push*)",
+    "Bash(docker push*)",
 ];
 
+/// Package registries a sandboxed run may reach by default: `[night] network` replaces it.
+pub const NETWORK: [&str; 7] = [
+    "registry.npmjs.org",
+    "pypi.org",
+    "files.pythonhosted.org",
+    "crates.io",
+    "index.crates.io",
+    "static.crates.io",
+    "proxy.golang.org",
+];
+
+/// Hosts a run never reaches, even when `[night] network` lists them or a wildcard covers them.
+pub const NETWORK_DENIED: [&str; 3] = ["github.com", "gitlab.com", "bitbucket.org"];
+
 /// Build and test commands a run may use when Claude is not in `auto` mode.
-pub const ALLOW: [&str; 14] = [
+pub const ALLOW: [&str; 21] = [
     "Bash(git status*)",
     "Bash(git diff*)",
     "Bash(git log*)",
     "Bash(git add*)",
     "Bash(git commit*)",
-    "Bash(cargo *)",
-    "Bash(npm *)",
-    "Bash(npx *)",
-    "Bash(node *)",
-    "Bash(python*)",
+    "Bash(npm test*)",
+    "Bash(npm run *)",
+    "Bash(npm ci*)",
+    "Bash(npm install*)",
+    "Bash(cargo build*)",
+    "Bash(cargo test*)",
+    "Bash(cargo check*)",
+    "Bash(cargo fmt*)",
+    "Bash(cargo clippy*)",
+    "Bash(python -m pytest*)",
     "Bash(pytest*)",
-    "Bash(go *)",
-    "Bash(make*)",
+    "Bash(go test*)",
+    "Bash(go build*)",
+    "Bash(make test*)",
+    "Bash(node *)",
     "Bash(ls*)",
 ];
 
@@ -291,7 +319,7 @@ pub fn start(
                 protect.push(c);
             }
             let b = barrier::plan(&iso.root, &protect);
-            barrier::settings(&b, &DENY, sandboxed)
+            barrier::settings(&b, &DENY, &cfg.night.network_list(), sandboxed)
         });
         let spec = build(
             cfg,

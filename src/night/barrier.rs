@@ -8,6 +8,9 @@
 //!   and the few git folders a commit in a worktree has to write. `failIfUnavailable` makes Claude
 //!   refuse to start rather than run unsandboxed, and `allowUnsandboxedCommands = false` removes
 //!   the retry outside the sandbox.
+//! * `sandbox.network`: the package registries of `[night] network` and no git host, so a command
+//!   that reaches a remote over HTTPS fails however it is written. `ssh` ignores the proxy, so it
+//!   cannot connect either (Claude's docs), and `ssh` and `scp` are denied as well.
 //! * `sandbox.filesystem.denyWrite` and `Edit` deny rules for the original folder, so a rule in the
 //!   user's own settings that opens it (an `Edit(//Users/me/code/**)` allow, an `allowWrite`, an
 //!   `additionalDirectories`) cannot win: deny is checked before allow in every scope.
@@ -198,9 +201,11 @@ pub fn hook_command(guard: &[PathBuf], bash: bool) -> Option<String> {
     ))
 }
 
-/// The `--settings` JSON of a run. `sandboxed` is false only when the platform has no sandbox and
+/// The `--settings` JSON of a run. `network` is the only list of hosts a sandboxed command may
+/// reach (Claude Code: `sandbox.network.allowedDomains`; `strictAllowlist` denies the rest instead
+/// of asking). `sandboxed` is false only when the platform has no sandbox and
 /// `[night] allow_unsandboxed = true`: the Edit rules still apply, Bash is then not confined.
-pub fn settings(b: &Barrier, deny: &[&str], sandboxed: bool) -> String {
+pub fn settings(b: &Barrier, deny: &[&str], network: &[String], sandboxed: bool) -> String {
     let paths = |v: &[PathBuf]| -> Vec<Value> {
         v.iter()
             .map(|p| Value::String(p.to_string_lossy().into_owned()))
@@ -230,6 +235,11 @@ pub fn settings(b: &Barrier, deny: &[&str], sandboxed: bool) -> String {
             "filesystem": {
                 "allowWrite": paths(&b.allow_write),
                 "denyWrite": paths(&b.deny_write),
+            },
+            "network": {
+                "allowedDomains": network,
+                "deniedDomains": super::launch::NETWORK_DENIED,
+                "strictAllowlist": true,
             },
         });
     }

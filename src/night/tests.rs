@@ -948,9 +948,9 @@ fn the_claude_command_denies_every_way_out_and_names_its_session() {
     for w in [
         "git push",
         "git remote",
-        "gh pr create",
-        "gh pr merge",
-        "gh release",
+        "Bash(gh*)",
+        "Bash(ssh*)",
+        "npm publish",
     ] {
         assert!(deny.contains(w), "{w} in {deny}");
     }
@@ -975,7 +975,7 @@ fn accept_edits_mode_adds_an_allow_list_and_a_model_when_set() {
         None,
     );
     assert_eq!(after(&s.args, "--permission-mode"), "acceptEdits");
-    assert!(after(&s.args, "--allowedTools").contains("Bash(cargo *)"));
+    assert!(after(&s.args, "--allowedTools").contains("Bash(cargo test*)"));
     assert!(after(&s.args, "--disallowedTools").contains("git push"));
     assert_eq!(after(&s.args, "--model"), "haiku");
 }
@@ -1275,8 +1275,13 @@ fn the_settings_of_a_run_turn_the_sandbox_on_and_keep_the_push_deny_list() {
         deny_edit: vec!["Edit(//orig/a.txt)".into()],
         guard: vec![PathBuf::from("/orig")],
     };
-    let v: serde_json::Value =
-        serde_json::from_str(&barrier::settings(&b, &launch::DENY, true)).unwrap();
+    let v: serde_json::Value = serde_json::from_str(&barrier::settings(
+        &b,
+        &launch::DENY,
+        &Config::default().night.network_list(),
+        true,
+    ))
+    .unwrap();
     let sb = &v["sandbox"];
     assert!(sb["enabled"].as_bool().unwrap());
     assert!(sb["failIfUnavailable"].as_bool().unwrap());
@@ -1290,7 +1295,7 @@ fn the_settings_of_a_run_turn_the_sandbox_on_and_keep_the_push_deny_list() {
     assert_eq!(hooks.len(), 2);
     // without a sandbox the rules and the hooks stay, the sandbox section goes
     let v: serde_json::Value =
-        serde_json::from_str(&barrier::settings(&b, &launch::DENY, false)).unwrap();
+        serde_json::from_str(&barrier::settings(&b, &launch::DENY, &[], false)).unwrap();
     assert!(v.get("sandbox").is_none() && v["permissions"]["deny"].is_array());
 }
 
@@ -1355,4 +1360,93 @@ fn git_acts_do_not_wait_for_the_repos_hooks_and_never_page() {
     assert!(t.elapsed().as_secs() < 10, "took {:?}", t.elapsed());
     let branches = git(&dir, &["branch", "--list", "night/*"]);
     assert!(branches.is_empty(), "{branches}");
+}
+
+#[test]
+fn the_network_of_a_run_is_the_registries_and_no_git_host() {
+    let b = barrier::Barrier::default();
+    let net = Config::default().night.network_list();
+    let v: serde_json::Value =
+        serde_json::from_str(&barrier::settings(&b, &launch::DENY, &net, true)).unwrap();
+    let n = &v["sandbox"]["network"];
+    let allowed: Vec<&str> = n["allowedDomains"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|d| d.as_str().unwrap())
+        .collect();
+    for h in [
+        "registry.npmjs.org",
+        "pypi.org",
+        "crates.io",
+        "proxy.golang.org",
+    ] {
+        assert!(allowed.contains(&h), "{h}");
+    }
+    for h in ["github.com", "gitlab.com", "bitbucket.org"] {
+        assert!(!allowed.contains(&h), "{h}");
+        assert!(n["deniedDomains"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|d| d == h));
+    }
+    assert!(n["strictAllowlist"].as_bool().unwrap());
+    // [night] network replaces the list
+    let cfg = Config::parse("[night]\nnetwork = [\"example.org\"]\n").unwrap();
+    assert_eq!(cfg.night.network_list(), vec!["example.org".to_string()]);
+    // no sandbox, no network section
+    let v: serde_json::Value =
+        serde_json::from_str(&barrier::settings(&b, &launch::DENY, &net, false)).unwrap();
+    assert!(v.get("sandbox").is_none());
+}
+
+#[test]
+fn publishing_and_remote_tools_are_denied() {
+    for r in [
+        "Bash(npm publish*)",
+        "Bash(cargo publish*)",
+        "Bash(twine upload*)",
+        "Bash(gem push*)",
+        "Bash(docker push*)",
+        "Bash(gh*)",
+        "Bash(ssh*)",
+        "Bash(scp*)",
+        "Bash(git push*)",
+    ] {
+        assert!(launch::DENY.contains(&r), "{r}");
+    }
+}
+
+#[test]
+fn accept_edits_allows_only_build_and_test_commands() {
+    let cfg = Config::parse("[night]\nclaude_permission = \"acceptEdits\"\n").unwrap();
+    let s = launch::build(
+        &cfg,
+        &run_of("claude", "idea"),
+        "claude",
+        Path::new("/w"),
+        None,
+        None,
+    );
+    let allow = after(&s.args, "--allowedTools");
+    for broad in [
+        "Bash(npm *)",
+        "Bash(cargo *)",
+        "Bash(npx *)",
+        "Bash(python*)",
+        "Bash(go *)",
+        "Bash(make*)",
+    ] {
+        assert!(!allow.split(',').any(|a| a == broad), "{broad}");
+    }
+    for ok in [
+        "Bash(npm test*)",
+        "Bash(cargo test*)",
+        "Bash(python -m pytest*)",
+        "Bash(go test*)",
+        "Bash(make test*)",
+    ] {
+        assert!(allow.split(',').any(|a| a == ok), "{ok}");
+    }
 }

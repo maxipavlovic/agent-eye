@@ -61,6 +61,7 @@ claude_permission = "auto"  # `auto`, or `acceptEdits` (then only build and test
 claude_model = ""      # a model for Claude night runs; empty = Claude's default
 codex_model = ""       # a model for Codex night runs; empty = Codex's default
 allow_unsandboxed = false # start Claude runs even where its sandbox is missing (Linux without bubblewrap and socat); Bash is then not confined
+# network = ["registry.npmjs.org", "pypi.org", "files.pythonhosted.org", "crates.io", "index.crates.io", "static.crates.io", "proxy.golang.org"]  # the only hosts a sandboxed Claude run may reach (never github.com, gitlab.com, bitbucket.org); this is the default
 
 [loose]
 enabled = true         # list what a session left behind (servers still running, commits on no remote, ...); it only reads
@@ -322,6 +323,21 @@ pub struct NightCfg {
     pub codex_model: String,
     /// Start Claude runs even where its sandbox is not available (Bash is then not confined).
     pub allow_unsandboxed: bool,
+    /// The hosts a sandboxed Claude run may reach (package registries); empty = the built-in list.
+    pub network: Vec<String>,
+}
+impl NightCfg {
+    /// The hosts to allow: the configured list, or the built-in package registries.
+    pub fn network_list(&self) -> Vec<String> {
+        if self.network.is_empty() {
+            crate::night::launch::NETWORK
+                .iter()
+                .map(|s| (*s).to_string())
+                .collect()
+        } else {
+            self.network.clone()
+        }
+    }
 }
 impl Default for NightCfg {
     fn default() -> Self {
@@ -334,6 +350,7 @@ impl Default for NightCfg {
             claude_model: String::new(),
             codex_model: String::new(),
             allow_unsandboxed: false,
+            network: vec![],
         }
     }
 }
