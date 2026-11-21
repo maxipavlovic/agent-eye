@@ -285,7 +285,7 @@ fn git_world() -> (tempfile::TempDir, Input, Fake) {
         "aaa1111\t1799999000\tnewest\nbbb2222\t1799990000\toldest\n".into(),
     );
     git.insert(
-        format!("{r} status --porcelain"),
+        format!("{r} status --porcelain -uno"),
         " M src/a.rs\nM  src/b.rs\n?? scratch.txt\n".into(),
     );
     let inp = input(
@@ -800,11 +800,16 @@ fn real_git_finds_and_removes_a_scratch_worktree_and_refuses_one_with_changes() 
     assert!(real_git(&wt, &["checkout", "--", "a.txt"]));
     remove(&db, &sys, &scratch.key).unwrap();
     assert!(!wt.exists() && get(&db, &scratch.key).unwrap().is_none());
-    // the record of a folder that is gone is cleared
-    remove(&db, &sys, &missing.key).unwrap();
+    // a folder that is gone: eye drops its item, says what to run, and git's record stays
+    let said = remove(&db, &sys, &missing.key).unwrap();
+    assert!(
+        said.contains("the folder is gone") && said.contains("git worktree prune"),
+        "{said}"
+    );
+    assert!(said.contains(&repo.display().to_string()), "{said}");
     assert!(get(&db, &missing.key).unwrap().is_none());
     let left = System::new()
         .git(&repo, &["worktree", "list", "--porcelain"])
         .unwrap();
-    assert_eq!(left.matches("worktree ").count(), 1, "{left}");
+    assert_eq!(left.matches("worktree ").count(), 2, "{left}");
 }

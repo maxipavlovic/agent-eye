@@ -584,3 +584,118 @@ fn a_pack_goes_through_a_pipe_both_ways() {
     assert!(page.status.success());
     assert!(String::from_utf8_lossy(&page.stdout).contains("<html"));
 }
+
+/// Write a pack by hand: `manifest` as given and each file with its real bytes, so the header can
+/// disagree with the manifest.
+fn handmade(out: &Path, manifest: &pack::Manifest, dir: &Path) {
+    let file = std::fs::File::create(out).unwrap();
+    let mut tar = tar::Builder::new(zstd::stream::write::Encoder::new(file, 3).unwrap());
+    let json = serde_json::to_vec(manifest).unwrap();
+    let mut h = tar::Header::new_gnu();
+    h.set_size(json.len() as u64);
+    h.set_mode(0o600);
+    tar.append_data(&mut h, "manifest.json", &json[..]).unwrap();
+    for name in manifest.files.keys() {
+        let data = std::fs::read(dir.join(name)).unwrap();
+        let mut h = tar::Header::new_gnu();
+        h.set_size(data.len() as u64);
+        h.set_mode(0o600);
+        tar.append_data(&mut h, name, &data[..]).unwrap();
+    }
+    tar.into_inner().unwrap().finish().unwrap();
+}
+
+#[test]
+fn a_pack_bigger_than_its_manifest_says_is_refused() {
+    let t = tempfile::tempdir().unwrap();
+    let (a, b) = (Local::new(t.path(), "a"), Local::new(t.path(), "b"));
+    a.session(S1, "alpha", 10);
+    let da = a.scan();
+    let good = t.path().join("good.eyepack");
+    export_to(&a, &da, &good);
+    let dir = tempfile::tempdir().unwrap();
+    let m = pack::read(&good, dir.path()).unwrap().manifest;
+
+    // the manifest claims fewer bytes in all than its files add up to
+    let small = t.path().join("small.eyepack");
+    let mut mm = m.clone();
+    mm.counts.bytes /= 2;
+    handmade(&small, &mm, dir.path());
+    let e = pack::plan(&b.paths, &small)
+        .err()
+        .expect("refused")
+        .to_string();
+    assert!(e.contains("refusing"), "{e}");
+
+    // a file whose size in the pack is not the size in the manifest
+    let liar = t.path().join("liar.eyepack");
+    let mut mm = m.clone();
+    mm.files.get_mut("eye.db").unwrap().bytes -= 1;
+    mm.counts.bytes -= 1;
+    handmade(&liar, &mm, dir.path());
+    let e = pack::plan(&b.paths, &liar)
+        .err()
+        .expect("refused")
+        .to_string();
+    assert!(e.contains("eye.db") && e.contains("manifest"), "{e}");
+
+    // within 1% of the claim is accepted: the real pack still reads
+    assert!(pack::plan(&b.paths, &good).is_ok());
+}
+
+#[test]
+fn the_snapshot_is_taken_before_any_file_is_copied_and_equal_files_are_not_copied() {
+    let t = tempfile::tempdir().unwrap();
+    let (a, b) = (Local::new(t.path(), "a"), Local::new(t.path(), "b"));
+    a.session(S1, "alpha", 10);
+    b.session(S2, "beta", 11);
+    let (da, _db) = (a.scan(), b.scan());
+    let pack_file = t.path().join("p.eyepack");
+    export_to(&a, &da, &pack_file);
+
+    // the archive folder cannot be made (a file is in the way): the copy fails, the snapshot exists
+    std::fs::write(b.paths.home.join("archive"), "in the way").unwrap();
+    let plan = import_in(&b, &pack_file);
+    assert!(plan.files_copy > 0);
+    assert!(pack::apply(&opts(&b.paths), &b.cfg, plan).is_err());
+    let snaps = backup::list(&backup::dir(&b.paths));
+    assert!(
+        snaps.iter().any(|s| s.reason == Reason::PreImport),
+        "no pre-import snapshot after a failed copy"
+    );
+    std::fs::remove_file(b.paths.home.join("archive")).unwrap();
+
+    // a copy that is older but holds the same bytes is not copied again
+    let c = Local::new(t.path(), "c");
+    c.session(S3, "gamma", 12);
+    let _dc = c.scan();
+    let plan = import_in(&c, &pack_file);
+    let n = plan.files_copy;
+    assert!(n > 0);
+    pack::apply(&opts(&c.paths), &c.cfg, plan).unwrap();
+    for e in walk(&c.paths.home.join("archive")) {
+        let old = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1000);
+        std::fs::File::options()
+            .write(true)
+            .open(&e)
+            .unwrap()
+            .set_modified(old)
+            .unwrap();
+    }
+    let again = import_in(&c, &pack_file);
+    assert_eq!(again.files_copy, 0, "equal bytes need no copy");
+    assert_eq!(again.files_have, n);
+}
+
+fn walk(dir: &Path) -> Vec<PathBuf> {
+    let mut v = vec![];
+    for e in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+        let p = e.path();
+        if p.is_dir() {
+            v.extend(walk(&p));
+        } else {
+            v.push(p);
+        }
+    }
+    v
+}

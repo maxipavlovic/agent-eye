@@ -21,6 +21,9 @@ use std::path::PathBuf;
 pub const BATCH: usize = 5;
 /// A pass stops early after this long, so a few very long transcripts do not hold up a tick.
 const PASS_BUDGET: std::time::Duration = std::time::Duration::from_secs(1);
+/// A pass stops starting new sessions after reading this many bytes of transcripts (the first
+/// session of a pass is always read, so a huge one still gets done, alone).
+const PASS_BYTES: u64 = 32 << 20;
 /// `meta` key set when no session is waiting any more.
 pub const DONE_KEY: &str = "usage_backfilled_at";
 
@@ -55,13 +58,19 @@ pub fn run_batch(db: &mut Db, paths: &Paths, agents: &Agents, limit: usize) -> R
         .collect::<rusqlite::Result<_>>()?;
     let mut pass = Pass::default();
     let started = std::time::Instant::now();
+    let mut read_bytes = 0u64;
     for id in &ids {
-        if started.elapsed() > PASS_BUDGET {
+        if started.elapsed() > PASS_BUDGET || read_bytes >= PASS_BYTES {
             break;
         }
         let Some(s) = db.session_by_id(id)? else {
             continue;
         };
+        read_bytes += s
+            .transcript_path
+            .as_deref()
+            .and_then(|p| std::fs::metadata(p).ok())
+            .map_or(0, |m| m.len());
         // The files are read while the write lock is held: a scan in another process that appends
         // between this read and the store would otherwise be counted twice.
         let tx = db

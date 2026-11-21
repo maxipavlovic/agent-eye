@@ -229,6 +229,31 @@ fn loose_round(paths: &Paths, cfg: &Config) {
     }
 }
 
+/// One batch of the usage-by-day backfill. It runs in its own thread, never in the 2 s tick: a
+/// large transcript is read while the database's write lock is held, and the tick's hook drain
+/// would wait behind it.
+fn usage_round(paths: &Paths, cfg: &Config) {
+    let r = Db::open(&paths.db_path()).and_then(|mut db| {
+        usage::backfill::run_batch(
+            &mut db,
+            paths,
+            &agents::enabled(cfg),
+            usage::backfill::BATCH,
+        )
+    });
+    match r {
+        Ok(p) if p.counted + p.unreadable > 0 => log(
+            paths,
+            &format!(
+                "usage by day: {} sessions counted, {} unreadable, {} to go",
+                p.counted, p.unreadable, p.left
+            ),
+        ),
+        Ok(_) => {}
+        Err(e) => log(paths, &format!("usage by day: {e:#}")),
+    }
+}
+
 /// One pass of the night shift. The config is read again, so a switch made on the board or with
 /// `eye night on` counts at the next pass; a run that already goes is watched even when the shift
 /// was switched off since. Failures go to the log.
@@ -238,6 +263,7 @@ fn night_round(paths: &Paths, cfg: &Config) {
         .and_then(|t| Config::parse(&t).ok())
         .map(|mut c| {
             c.folder_root = cfg.folder_root.clone();
+            c.night_dir = cfg.night_dir.clone();
             c
         })
         .unwrap_or_else(|| cfg.clone());
@@ -403,7 +429,7 @@ fn notify_reminders(db: &Db, paths: &Paths, cfg: &Config, send: &mut dyn FnMut(&
 }
 
 /// One pass of the main loop: events, then the incremental scan, a few sessions of the work timeline
-/// backfill, then due reminders.
+/// backfill, then due reminders. (The usage backfill has its own thread, see `usage_round`.)
 pub fn tick(db: &mut Db, paths: &Paths, cfg: &Config) -> Result<()> {
     let n = drain_queue(db, paths, &agents::enabled(cfg))?;
     let st = scan::scan(db, cfg, false)?;
@@ -426,17 +452,6 @@ pub fn tick(db: &mut Db, paths: &Paths, cfg: &Config) -> Result<()> {
         ),
         Ok(_) => {}
         Err(e) => log(paths, &format!("work timeline: {e:#}")),
-    }
-    match usage::backfill::run_batch(db, paths, &agents::enabled(cfg), usage::backfill::BATCH) {
-        Ok(p) if p.counted + p.unreadable > 0 => log(
-            paths,
-            &format!(
-                "usage by day: {} sessions counted, {} unreadable, {} to go",
-                p.counted, p.unreadable, p.left
-            ),
-        ),
-        Ok(_) => {}
-        Err(e) => log(paths, &format!("usage by day: {e:#}")),
     }
     notify_reminders(db, paths, cfg, &mut |title, body| {
         if !crate::platform::notify::send(title, body) {
@@ -491,6 +506,7 @@ pub fn run(paths: Paths, cfg: Config, port: u16, board: bool) -> Result<()> {
             let loose_busy = Arc::new(AtomicBool::new(false));
             let mut last_night: Option<Instant> = None;
             let night_busy = Arc::new(AtomicBool::new(false));
+            let usage_busy = Arc::new(AtomicBool::new(false));
             while !stop.load(Ordering::Relaxed) {
                 if let Err(e) = tick(&mut db, &paths, &cfg) {
                     log(&paths, &format!("tick failed: {e:#}"));
@@ -526,6 +542,13 @@ pub fn run(paths: Paths, cfg: Config, port: u16, board: bool) -> Result<()> {
                             busy.store(false, Ordering::SeqCst);
                         });
                     }
+                }
+                if !usage_busy.swap(true, Ordering::SeqCst) {
+                    let (paths, cfg, busy) = (paths.clone(), cfg.clone(), usage_busy.clone());
+                    std::thread::spawn(move || {
+                        usage_round(&paths, &cfg);
+                        busy.store(false, Ordering::SeqCst);
+                    });
                 }
                 if last_night.is_none_or(|t| t.elapsed() >= NIGHT_EVERY)
                     && !night_busy.swap(true, Ordering::SeqCst)

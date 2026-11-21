@@ -5,8 +5,7 @@ use super::Global;
 use crate::backup::{self, Reason};
 use crate::install::Opts;
 use crate::util::{ago, now_ms, show_path};
-use anyhow::{bail, Context, Result};
-use std::io::{BufRead, IsTerminal, Write};
+use anyhow::Result;
 
 pub fn run(g: &Global, sub: Option<BackupCmd>) -> Result<()> {
     match sub {
@@ -75,7 +74,12 @@ fn restore(g: &Global, name: &str, yes: bool) -> Result<()> {
     println!("  - the daemon is stopped while the database is replaced, and started again");
     println!("  - close other eye windows (the picker, `eye pick`) first: one that stays open keeps writing to the old database");
     println!("  - ideas, column moves and summaries made after this snapshot are not in it");
-    if !yes && !confirm()? {
+    if !yes
+        && !super::ask::confirm(
+            "go on?",
+            super::ask::From::Terminal("restore without asking"),
+        )?
+    {
         println!("nothing was changed");
         return Ok(());
     }
@@ -93,19 +97,4 @@ fn restore(g: &Global, name: &str, yes: bool) -> Result<()> {
     }
     println!("restored; the next scan brings back sessions newer than the snapshot");
     Ok(())
-}
-
-/// Ask `[y/N]` on a terminal; a script has to say `--yes`.
-fn confirm() -> Result<bool> {
-    if !std::io::stdin().is_terminal() {
-        bail!("not a terminal: add --yes to restore without asking");
-    }
-    print!("go on? [y/N] ");
-    std::io::stdout().flush()?;
-    let mut line = String::new();
-    std::io::stdin()
-        .lock()
-        .read_line(&mut line)
-        .context("reading the answer")?;
-    Ok(matches!(line.trim(), "y" | "Y" | "yes"))
 }

@@ -5,8 +5,7 @@ use super::Global;
 use crate::loose::{self, LooseEnd, System};
 use crate::resume;
 use crate::util::{now_ms, printable, short_id};
-use anyhow::{bail, Context, Result};
-use std::io::{BufRead, IsTerminal, Write};
+use anyhow::{Context, Result};
 
 pub fn run(g: &Global, sub: Option<LooseCmd>, session: Option<&str>, json: bool) -> Result<()> {
     match sub {
@@ -62,17 +61,7 @@ fn list(g: &Global, session: Option<&str>, json: bool) -> Result<()> {
 }
 
 fn confirm(question: &str) -> Result<bool> {
-    if !std::io::stdin().is_terminal() {
-        bail!("not a terminal: add --yes to go on without asking");
-    }
-    print!("{question} [y/N] ");
-    std::io::stdout().flush()?;
-    let mut line = String::new();
-    std::io::stdin()
-        .lock()
-        .read_line(&mut line)
-        .context("reading the answer")?;
-    Ok(matches!(line.trim(), "y" | "Y" | "yes"))
+    super::ask::confirm(question, super::ask::From::Terminal("go on without asking"))
 }
 
 #[derive(Clone, Copy)]

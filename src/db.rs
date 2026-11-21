@@ -61,9 +61,6 @@ CREATE VIRTUAL TABLE IF NOT EXISTS session_fts_vocab USING fts5vocab(session_fts
 /// The SQLite database of sessions, streams, outputs, ideas, events and read cursors.
 pub struct Db {
     pub conn: Connection,
-    /// `<eye home>/night`, as the path the database was opened by names it: a session whose folder
-    /// is under it is a night run. None for a database in memory.
-    pub night_dir: Option<std::path::PathBuf>,
 }
 
 /// How far something was read: the marker the adapter gave back, and the stamp it had then.
@@ -92,10 +89,7 @@ impl Db {
         crate::files::make_private(path);
         let conn = Connection::open(path).with_context(|| format!("opening {}", path.display()))?;
         let _upgrading = crate::backup::before_upgrade(&conn, path, SCHEMA_VERSION);
-        let night = path.parent().map(|p| p.join("night"));
-        let mut db = Self::init(conn)?;
-        db.night_dir = night;
-        Ok(db)
+        Self::init(conn)
     }
 
     /// An empty database in memory (tests).
@@ -107,10 +101,7 @@ impl Db {
         conn.busy_timeout(std::time::Duration::from_secs(5))?;
         conn.pragma_update(None, "journal_mode", "WAL")?;
         conn.pragma_update(None, "synchronous", "NORMAL")?;
-        let db = Db {
-            conn,
-            night_dir: None,
-        };
+        let db = Db { conn };
         db.migrate()?;
         Ok(db)
     }

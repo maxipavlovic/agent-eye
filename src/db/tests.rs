@@ -541,7 +541,4 @@ fn migration_17_adds_origin_from_16_and_keeps_every_row() {
     assert_eq!((s.origin, s.origin_raw), (None, None));
     assert_eq!(s.tokens.unwrap().input, 5);
     assert_eq!(count_rows(&db, "session"), 1);
-    // the night folder sits next to the database
-    assert_eq!(db.night_dir, Some(tmp.path().join("night")));
-    assert_eq!(Db::open_memory().unwrap().night_dir, None);
 }

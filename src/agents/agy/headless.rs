@@ -66,6 +66,32 @@ pub fn reply_of(stdout: &str, duration_ms: i64) -> Result<HeadlessReply> {
     })
 }
 
+/// The arguments of a summary run.
+fn command_args(prompt: String, schema: &Value, model: &str) -> Vec<String> {
+    let mut args: Vec<String> = vec!["-p".into(), prompt];
+    args.extend(
+        [
+            "--output-format",
+            "json",
+            "--disable-slash-commands",
+            // a summary needs no tools: plan mode does not edit or run commands, and the sandbox
+            // confines whatever still runs (agy's changelog: `--mode plan` applies in `-p` runs;
+            // `--sandbox` is a flag without a value). No `--print-timeout`: its unit is not
+            // documented and `--help` was not run here; the loop below kills agy at `req.timeout`.
+            "--mode",
+            "plan",
+            "--sandbox",
+            "--json-schema",
+        ]
+        .map(String::from),
+    );
+    args.push(schema.to_string());
+    if !model.is_empty() {
+        args.extend(["--model".into(), model.into()]);
+    }
+    args
+}
+
 pub fn ask(a: &Agy, req: &HeadlessRequest) -> Result<HeadlessReply> {
     std::fs::create_dir_all(req.work_dir)?;
     let dir = req.work_dir.join(format!("{ASK_PREFIX}{}", new_uuid()?));
@@ -75,20 +101,7 @@ pub fn ask(a: &Agy, req: &HeadlessRequest) -> Result<HeadlessReply> {
     if prompt.starts_with('-') {
         prompt.insert_str(0, "Task: ");
     }
-    let mut args: Vec<String> = vec!["-p".into(), prompt];
-    args.extend(
-        [
-            "--output-format",
-            "json",
-            "--disable-slash-commands",
-            "--json-schema",
-        ]
-        .map(String::from),
-    );
-    args.push(req.schema.to_string());
-    if !req.model.is_empty() {
-        args.extend(["--model".into(), req.model.into()]);
-    }
+    let args = command_args(prompt, req.schema, req.model);
     let exe = a.executable_path();
     let started = Instant::now();
     let mut child = Command::new(&exe)
@@ -134,6 +147,17 @@ pub fn ask(a: &Agy, req: &HeadlessRequest) -> Result<HeadlessReply> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_flags_that_stop_tools_are_in_the_command() {
+        let args = command_args("p".into(), &json!({"type":"object"}), "m");
+        let at = |f: &str| args.iter().position(|a| a == f).unwrap();
+        assert_eq!(args[at("--mode") + 1], "plan");
+        assert!(args.contains(&"--sandbox".to_string()));
+        assert_eq!(args[at("--model") + 1], "m");
+        // the flag value of --json-schema is the next argument, not --sandbox
+        assert_eq!(args[at("--json-schema") + 1], "{\"type\":\"object\"}");
+    }
 
     #[test]
     fn the_structured_output_is_the_answer() {

@@ -194,7 +194,8 @@ fn a_planned_idea_runs_in_a_worktree_and_comes_back_as_a_needs_you_card() {
         "--session-id",
         "--disallowedTools",
         "git push",
-        "gh pr merge",
+        "Bash(gh*)",
+        "Bash(ssh*)",
     ] {
         assert!(argv.contains(w), "{w} in {argv}");
     }

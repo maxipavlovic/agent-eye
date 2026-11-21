@@ -105,6 +105,9 @@ pub enum Role {
         title: String,
         detail: Option<String>,
     },
+    /// A `codex exec` rollout: a session only when it ran in a night run's folder of this eye home
+    /// (decided in [`scan`], which knows the folder), else [`Role::Hidden`].
+    ExecRun,
     /// Left out, like Codex's own picker leaves it out: `codex exec` runs, internal and
     /// guardian-review threads, memory consolidation.
     Hidden,
@@ -164,11 +167,7 @@ fn role_of(meta: &Value) -> Role {
     match meta.get("source") {
         None | Some(Value::Null) => Role::Session,
         Some(Value::String(s)) if matches!(s.as_str(), "cli" | "vscode") => Role::Session,
-        Some(Value::String(s))
-            if s == "exec" && crate::night::is_run_folder(str_at(meta, &["cwd"])) =>
-        {
-            Role::Session
-        }
+        Some(Value::String(s)) if s == "exec" => Role::ExecRun,
         Some(Value::Object(o)) if o.contains_key("subagent") => {
             child_of(meta).unwrap_or(Role::Hidden)
         }
@@ -308,7 +307,7 @@ pub struct Index {
 /// A named session takes the change time of `session_index.jsonl` when that is newer than its
 /// rollout, so a rename (or an unnamed one) makes eye read it again and take the new title. The
 /// file's own time is used, not the time written in the line, so it does not depend on clocks.
-pub fn scan(dir: &Path) -> (Vec<Transcript>, Index) {
+pub fn scan(dir: &Path, night_dir: Option<&Path>) -> (Vec<Transcript>, Index) {
     let names = names(dir);
     let renamed_at = Stamp::of_file(&dir.join(INDEX_FILE)).map_or(0, |s| s.mtime);
     let mut out = vec![];
@@ -317,7 +316,14 @@ pub fn scan(dir: &Path) -> (Vec<Transcript>, Index) {
         let Some(head) = head(&f.path, &f.thread_id) else {
             continue;
         };
-        match head.role {
+        let role = match head.role {
+            Role::ExecRun if crate::night::is_night_folder(night_dir, head.cwd.as_deref()) => {
+                Role::Session
+            }
+            Role::ExecRun => Role::Hidden,
+            r => r,
+        };
+        match role {
             Role::Session => {
                 let mut stamp = f.stamp;
                 if names.contains_key(&f.thread_id) {
@@ -348,7 +354,7 @@ pub fn scan(dir: &Path) -> (Vec<Transcript>, Index) {
                 title,
                 detail,
             }),
-            Role::Hidden => {}
+            Role::Hidden | Role::ExecRun => {}
         }
     }
     (out, index)
@@ -360,20 +366,24 @@ mod tests {
 
     #[test]
     fn a_night_run_is_a_session_and_other_exec_runs_are_not() {
-        let night = "/h/.agent-eye/night/12/wt/sub";
+        // the rollout says it is an exec run; the folder decides, against this eye home
         let meta = |cwd: &str| json!({"source": "exec", "cwd": cwd});
-        assert!(matches!(role_of(&meta(night)), Role::Session));
-        assert!(matches!(
-            role_of(&meta("/h/.agent-eye/night/3/work")),
-            Role::Session
-        ));
+        assert!(matches!(role_of(&meta("/h/proj")), Role::ExecRun));
+        let tmp = tempfile::tempdir().unwrap();
+        let night = tmp.path().join("eye/night");
+        std::fs::create_dir_all(night.join("12/wt/sub")).unwrap();
+        let is = |cwd: &str| crate::night::is_night_folder(Some(&night), Some(cwd));
+        assert!(is(&night.join("12/wt/sub").to_string_lossy()));
+        assert!(is(&night.join("3/work").to_string_lossy()));
         for other in [
             "/h/proj",
             "/h/night/x/wt",
             "/h/night/1/other",
             "/h/.agent-eye/work",
+            // a user's own folder with the same shape, in another place
+            "/h/night/7/wt",
         ] {
-            assert!(matches!(role_of(&meta(other)), Role::Hidden), "{other}");
+            assert!(!is(other), "{other}");
         }
     }
     use serde_json::json;
@@ -413,7 +423,6 @@ mod tests {
             assert_eq!(role(shown.clone()), Role::Session, "{shown}");
         }
         for hidden in [
-            json!({"source": "exec"}),
             json!({"source": "mcp"}),
             json!({"source": {"custom": "other"}}),
             json!({"source": {"internal": "memory_consolidation"}}),
@@ -425,6 +434,8 @@ mod tests {
         ] {
             assert_eq!(role(hidden.clone()), Role::Hidden, "{hidden}");
         }
+        // an exec run is decided by its folder in `scan`
+        assert_eq!(role(json!({"source": "exec"})), Role::ExecRun);
     }
 
     #[test]

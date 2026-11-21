@@ -6,7 +6,7 @@ use crate::folder::FolderMissing;
 use crate::ideas::{self, Edit, NewIdea, StartOpts};
 use crate::util::home_rel;
 use anyhow::{Context, Result};
-use std::io::{BufRead, IsTerminal, Write};
+use std::io::IsTerminal;
 use std::path::PathBuf;
 
 fn canonical(d: &std::path::Path) -> String {
@@ -16,13 +16,9 @@ fn canonical(d: &std::path::Path) -> String {
         .into_owned()
 }
 
-/// Ask a yes/no question on the terminal; anything but y or yes is no.
+/// Ask a yes/no question; the answer may come from a pipe.
 fn confirm(question: &str) -> Result<bool> {
-    eprint!("{question}");
-    std::io::stderr().flush()?;
-    let mut line = String::new();
-    std::io::stdin().lock().read_line(&mut line)?;
-    Ok(matches!(line.trim().to_lowercase().as_str(), "y" | "yes"))
+    super::ask::confirm(question, super::ask::From::Stdin)
 }
 
 pub fn run(g: &Global, c: IdeaCmd) -> Result<()> {
@@ -132,7 +128,7 @@ pub fn run(g: &Global, c: IdeaCmd) -> Result<()> {
             let r = match first {
                 Err(e) => match e.downcast_ref::<FolderMissing>() {
                     Some(FolderMissing(dir)) if !dry_run && std::io::stdin().is_terminal() => {
-                        if !confirm(&format!("Folder {dir} does not exist. Create it? [y/N] "))? {
+                        if !confirm(&format!("Folder {dir} does not exist. Create it?"))? {
                             anyhow::bail!("not started: the folder {dir} does not exist");
                         }
                         opts.create_folder = true;

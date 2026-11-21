@@ -44,6 +44,14 @@ pub(super) struct KeyBody {
     key: String,
 }
 
+/// The body of `stop` and `remove`: the page asked and the person said yes.
+#[derive(Deserialize)]
+pub(super) struct ActBody {
+    key: String,
+    #[serde(default)]
+    confirm: bool,
+}
+
 /// Run `act` on the stored item, then answer with what was done and what is left of the session.
 async fn act_on(
     st: Shared,
@@ -67,14 +75,26 @@ async fn act_on(
     ))
 }
 
-pub(super) async fn api_loose_stop(State(st): State<Shared>, Json(b): Json<KeyBody>) -> ApiResult {
+fn need_confirm(b: &ActBody, what: &str) -> Result<(), ApiError> {
+    if b.confirm {
+        Ok(())
+    } else {
+        Err(ApiError::bad(format!(
+            "{what} needs the person's confirmation (confirm: true)"
+        )))
+    }
+}
+
+pub(super) async fn api_loose_stop(State(st): State<Shared>, Json(b): Json<ActBody>) -> ApiResult {
+    need_confirm(&b, "stopping")?;
     act_on(st, b.key, loose::stop).await
 }
 
 pub(super) async fn api_loose_remove(
     State(st): State<Shared>,
-    Json(b): Json<KeyBody>,
+    Json(b): Json<ActBody>,
 ) -> ApiResult {
+    need_confirm(&b, "removing")?;
     act_on(st, b.key, loose::remove).await
 }
 
@@ -260,8 +280,20 @@ mod tests {
         }
         // a key no scan found is refused, and nothing is run
         for uri in ["/api/loose/stop", "/api/loose/remove"] {
-            let (st, _) = call(&e, req("POST", uri, Some(json!({"key": "proc:1:1"})))).await;
+            let (st, _) = call(
+                &e,
+                req(
+                    "POST",
+                    uri,
+                    Some(json!({"key": "proc:1:1", "confirm": true})),
+                ),
+            )
+            .await;
             assert_eq!(st, StatusCode::NOT_FOUND, "{uri}");
+            // and without the person's yes nothing is looked at
+            let (st, v) = call(&e, req("POST", uri, Some(json!({"key": "proc:1:1"})))).await;
+            assert_eq!(st, StatusCode::BAD_REQUEST, "{uri}");
+            assert!(v["error"].as_str().unwrap().contains("confirm"), "{v}");
         }
         // nothing to send back
         let (st, _) = call(
@@ -290,7 +322,11 @@ mod tests {
         .unwrap();
         let (st, v) = call(
             &e,
-            req("POST", "/api/loose/stop", Some(json!({"key": key}))),
+            req(
+                "POST",
+                "/api/loose/stop",
+                Some(json!({"key": key, "confirm": true})),
+            ),
         )
         .await;
         assert_eq!(st, StatusCode::CONFLICT);

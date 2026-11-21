@@ -5,7 +5,7 @@ use crate::install::Opts;
 use crate::pack::{self, Format};
 use crate::util::show_path;
 use anyhow::{bail, Context, Result};
-use std::io::{BufRead, IsTerminal, Write};
+use std::io::{IsTerminal, Write};
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 
@@ -27,22 +27,15 @@ fn to_stdout(file: &Path) -> Result<()> {
 
 /// The answer to "go on?": from the terminal itself when standard input carries the pack.
 fn ask(from_tty: bool) -> Result<bool> {
-    print!("go on? [y/N] ");
-    std::io::stdout().flush()?;
-    let mut line = String::new();
-    if from_tty {
-        let tty = std::fs::File::open("/dev/tty")
-            .context("no terminal to ask on: add --yes to import without asking")?;
-        std::io::BufReader::new(tty)
-            .read_line(&mut line)
-            .context("reading the answer")?;
-    } else {
-        std::io::stdin()
-            .lock()
-            .read_line(&mut line)
-            .context("reading the answer")?;
-    }
-    Ok(matches!(line.trim(), "y" | "Y" | "yes"))
+    let hint = "import without asking";
+    super::ask::confirm(
+        "go on?",
+        if from_tty {
+            super::ask::From::DevTty(hint)
+        } else {
+            super::ask::From::Stdin
+        },
+    )
 }
 
 /// `to` as the file to write: a folder gets `name` inside it; nothing means the current folder.

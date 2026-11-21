@@ -37,6 +37,7 @@ struct Fake {
     sessions: RefCell<HashMap<i64, String>>,
     other: Option<String>,
     notes: RefCell<Vec<String>>,
+    no_start_time: Cell<bool>,
 }
 
 impl Fake {
@@ -53,6 +54,7 @@ impl Fake {
             sessions: Default::default(),
             other: None,
             notes: Default::default(),
+            no_start_time: Cell::new(false),
         }
     }
     fn at(&self, day: &str, hm: &str) {
@@ -88,7 +90,7 @@ impl Sys for Fake {
         self.started.borrow_mut().push(run.id);
         Ok(Started {
             pid,
-            pid_start: Some(7),
+            pid_start: (!self.no_start_time.get()).then_some(7),
             iso: iso::Isolation {
                 cwd: "/n/wt".into(),
                 root: format!("/n/{}/wt", run.id).into(),
@@ -948,9 +950,9 @@ fn the_claude_command_denies_every_way_out_and_names_its_session() {
     for w in [
         "git push",
         "git remote",
-        "gh pr create",
-        "gh pr merge",
-        "gh release",
+        "Bash(gh*)",
+        "Bash(ssh*)",
+        "npm publish",
     ] {
         assert!(deny.contains(w), "{w} in {deny}");
     }
@@ -975,7 +977,7 @@ fn accept_edits_mode_adds_an_allow_list_and_a_model_when_set() {
         None,
     );
     assert_eq!(after(&s.args, "--permission-mode"), "acceptEdits");
-    assert!(after(&s.args, "--allowedTools").contains("Bash(cargo *)"));
+    assert!(after(&s.args, "--allowedTools").contains("Bash(cargo test*)"));
     assert!(after(&s.args, "--disallowedTools").contains("git push"));
     assert_eq!(after(&s.args, "--model"), "haiku");
 }
@@ -1275,8 +1277,13 @@ fn the_settings_of_a_run_turn_the_sandbox_on_and_keep_the_push_deny_list() {
         deny_edit: vec!["Edit(//orig/a.txt)".into()],
         guard: vec![PathBuf::from("/orig")],
     };
-    let v: serde_json::Value =
-        serde_json::from_str(&barrier::settings(&b, &launch::DENY, true)).unwrap();
+    let v: serde_json::Value = serde_json::from_str(&barrier::settings(
+        &b,
+        &launch::DENY,
+        &Config::default().night.network_list(),
+        true,
+    ))
+    .unwrap();
     let sb = &v["sandbox"];
     assert!(sb["enabled"].as_bool().unwrap());
     assert!(sb["failIfUnavailable"].as_bool().unwrap());
@@ -1290,7 +1297,7 @@ fn the_settings_of_a_run_turn_the_sandbox_on_and_keep_the_push_deny_list() {
     assert_eq!(hooks.len(), 2);
     // without a sandbox the rules and the hooks stay, the sandbox section goes
     let v: serde_json::Value =
-        serde_json::from_str(&barrier::settings(&b, &launch::DENY, false)).unwrap();
+        serde_json::from_str(&barrier::settings(&b, &launch::DENY, &[], false)).unwrap();
     assert!(v.get("sandbox").is_none() && v["permissions"]["deny"].is_array());
 }
 
@@ -1355,4 +1362,150 @@ fn git_acts_do_not_wait_for_the_repos_hooks_and_never_page() {
     assert!(t.elapsed().as_secs() < 10, "took {:?}", t.elapsed());
     let branches = git(&dir, &["branch", "--list", "night/*"]);
     assert!(branches.is_empty(), "{branches}");
+}
+
+#[test]
+fn the_network_of_a_run_is_the_registries_and_no_git_host() {
+    let b = barrier::Barrier::default();
+    let net = Config::default().night.network_list();
+    let v: serde_json::Value =
+        serde_json::from_str(&barrier::settings(&b, &launch::DENY, &net, true)).unwrap();
+    let n = &v["sandbox"]["network"];
+    let allowed: Vec<&str> = n["allowedDomains"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|d| d.as_str().unwrap())
+        .collect();
+    for h in [
+        "registry.npmjs.org",
+        "pypi.org",
+        "crates.io",
+        "proxy.golang.org",
+    ] {
+        assert!(allowed.contains(&h), "{h}");
+    }
+    for h in ["github.com", "gitlab.com", "bitbucket.org"] {
+        assert!(!allowed.contains(&h), "{h}");
+        assert!(n["deniedDomains"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|d| d == h));
+    }
+    assert!(n["strictAllowlist"].as_bool().unwrap());
+    // [night] network replaces the list
+    let cfg = Config::parse("[night]\nnetwork = [\"example.org\"]\n").unwrap();
+    assert_eq!(cfg.night.network_list(), vec!["example.org".to_string()]);
+    // no sandbox, no network section
+    let v: serde_json::Value =
+        serde_json::from_str(&barrier::settings(&b, &launch::DENY, &net, false)).unwrap();
+    assert!(v.get("sandbox").is_none());
+}
+
+#[test]
+fn publishing_and_remote_tools_are_denied() {
+    for r in [
+        "Bash(npm publish*)",
+        "Bash(cargo publish*)",
+        "Bash(twine upload*)",
+        "Bash(gem push*)",
+        "Bash(docker push*)",
+        "Bash(gh*)",
+        "Bash(ssh*)",
+        "Bash(scp*)",
+        "Bash(git push*)",
+    ] {
+        assert!(launch::DENY.contains(&r), "{r}");
+    }
+}
+
+#[test]
+fn accept_edits_allows_only_build_and_test_commands() {
+    let cfg = Config::parse("[night]\nclaude_permission = \"acceptEdits\"\n").unwrap();
+    let s = launch::build(
+        &cfg,
+        &run_of("claude", "idea"),
+        "claude",
+        Path::new("/w"),
+        None,
+        None,
+    );
+    let allow = after(&s.args, "--allowedTools");
+    for broad in [
+        "Bash(npm *)",
+        "Bash(cargo *)",
+        "Bash(npx *)",
+        "Bash(python*)",
+        "Bash(go *)",
+        "Bash(make*)",
+    ] {
+        assert!(!allow.split(',').any(|a| a == broad), "{broad}");
+    }
+    for ok in [
+        "Bash(npm test*)",
+        "Bash(cargo test*)",
+        "Bash(python -m pytest*)",
+        "Bash(go test*)",
+        "Bash(make test*)",
+    ] {
+        assert!(allow.split(',').any(|a| a == ok), "{ok}");
+    }
+}
+
+#[test]
+fn two_starters_of_one_run_launch_it_once() {
+    let db = db_with(1, "2026-11-21");
+    let sys = Fake::new("2026-11-21", "02:00");
+    let run = super::get(&db, 1).unwrap().unwrap();
+    assert!(sched::start_run(&db, &sys, run.clone(), false).unwrap());
+    // the second starter still holds the row it read while the run was planned
+    assert!(!sched::start_run(&db, &sys, run, false).unwrap());
+    assert_eq!(sys.started.borrow().len(), 1);
+    assert_eq!(super::get(&db, 1).unwrap().unwrap().status, "running");
+}
+
+#[test]
+fn a_run_being_launched_cannot_be_cancelled_and_cancel_wins_before() {
+    let db = db_with(2, "2026-11-21");
+    // a starter has claimed run 1 and is launching it
+    db.conn
+        .execute("UPDATE night_run SET status='starting' WHERE id=1", [])
+        .unwrap();
+    let err = super::cancel(&db, 1).unwrap_err().to_string();
+    assert!(err.contains("starting"), "{err}");
+    assert_eq!(super::get(&db, 1).unwrap().unwrap().status, "starting");
+    // a cancel that came first: the starter finds the run no longer planned and launches nothing
+    let stale = super::get(&db, 2).unwrap().unwrap();
+    super::cancel(&db, 2).unwrap();
+    let sys = Fake::new("2026-11-21", "02:00");
+    assert!(!sched::start_run(&db, &sys, stale, false).unwrap());
+    assert!(sys.started.borrow().is_empty());
+    assert_eq!(super::get(&db, 2).unwrap().unwrap().status, "skipped");
+}
+
+#[test]
+fn a_run_without_a_process_start_time_is_lost_and_never_signalled() {
+    let mut db = db_with(1, "2026-11-21");
+    let sys = Fake::new("2026-11-21", "02:00");
+    sys.no_start_time.set(true);
+    let run = super::get(&db, 1).unwrap().unwrap();
+    assert!(!sched::start_run(&db, &sys, run, false).unwrap());
+    let r = super::get(&db, 1).unwrap().unwrap();
+    assert_eq!(r.status, "lost");
+    assert!(r.pid.is_some() && r.why.as_deref().unwrap().contains("start time"));
+    assert!(r.ended_at.is_some());
+    // later ticks leave it alone
+    sched::tick(&mut db, &sys, &cfg_with("")).unwrap();
+    assert!(sys.terminated.borrow().is_empty());
+    // a running row without a start time (an older eye) is never signalled when a limit is hit
+    db.conn
+        .execute(
+            "UPDATE night_run SET status='running', ended_at=NULL, limit_kind='minutes', limit_value=1, started_at=1 WHERE id=1",
+            [],
+        )
+        .unwrap();
+    sys.alive.borrow_mut().insert(r.pid.unwrap());
+    sched::tick(&mut db, &sys, &cfg_with("")).unwrap();
+    assert!(sys.terminated.borrow().is_empty());
 }

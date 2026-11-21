@@ -39,7 +39,6 @@ pub(super) fn prompt_title(p: &str) -> String {
 }
 
 /// Store what one parse of a transcript found: the session row, its tokens, outputs and search text.
-#[allow(clippy::too_many_arguments)]
 pub(super) fn apply(
     tx: &Connection,
     agent: &dyn Agent,
@@ -48,7 +47,6 @@ pub(super) fn apply(
     reset_in: bool,
     cfg: &Config,
     repo_cache: &mut HashMap<String, Option<String>>,
-    night_dir: Option<&std::path::Path>,
 ) -> Result<()> {
     let sid = f.session_id.as_str();
     let found: Option<Ex> = tx
@@ -191,7 +189,7 @@ pub(super) fn apply(
             agent.id(),
             raw.as_deref(),
             cwd.as_deref(),
-            night_dir,
+            cfg.night_dir.as_deref(),
         );
         tx.execute(
             "UPDATE session SET origin=?2, origin_raw=?3 WHERE id=?1",
