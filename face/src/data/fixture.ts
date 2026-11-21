@@ -273,7 +273,7 @@ export function fixtureSource(demo = false): Source {
   const nightLimit = (text: string): NightRun['limit'] => {
     const t = text.trim();
     if (!t) return null;
-    return { kind: t.endsWith('%') ? 'weekly' : /[mh]$/.test(t) ? 'minutes' : 'tokens', value: parseFloat(t), text: t };
+    return { kind: t.endsWith('%') ? 'weekly' : /[mh]$/.test(t) ? 'minutes' : 'tokens', value: Number.parseFloat(t), text: t };
   };
   if (demo && files === sample) {
     const c = board.columns.find((x) => x.id === 'needs_you')?.cards.find((x) => x.kind !== 'idea');
