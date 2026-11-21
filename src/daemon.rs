@@ -27,6 +27,10 @@ const TICK: Duration = Duration::from_secs(2);
 const WORKER_EVERY: Duration = Duration::from_secs(30);
 /// How often the daemon looks whether a daily snapshot is due.
 const BACKUP_EVERY: Duration = Duration::from_secs(600);
+/// How often the daemon looks for loose ends (what sessions left behind).
+const LOOSE_EVERY: Duration = Duration::from_secs(300);
+/// The least time between two scans when a session just ended or stopped.
+const LOOSE_MIN_GAP: Duration = Duration::from_secs(20);
 /// The longest an upgrade restart waits for a snapshot or a summary round to finish.
 const RESTART_WAIT: Duration = Duration::from_secs(60);
 const LOG_MAX: u64 = 10 << 20;
@@ -194,7 +198,33 @@ fn apply_event(db: &Db, agents: &Agents, ev: &Value) -> Result<()> {
             params![sid, ts],
         )?;
     }
+    if matches!(kind, "SessionEnd" | "Stop") {
+        // the loose-ends scan looks again soon: what the session left is known now
+        meta_set(&db.conn, LOOSE_FLAG, "1")?;
+    }
     Ok(())
+}
+
+/// The meta key a `Stop` or `SessionEnd` event sets, and the loose-ends scan clears.
+const LOOSE_FLAG: &str = "loose_due";
+
+/// Is a loose-ends scan due? The first one at once, then every five minutes, and a short while
+/// after a session ended or stopped.
+fn loose_due(since_last: Option<Duration>, flagged: bool) -> bool {
+    match since_last {
+        None => true,
+        Some(d) => d >= LOOSE_EVERY || (flagged && d >= LOOSE_MIN_GAP),
+    }
+}
+
+/// One loose-ends scan, stored. Failures go to the log; the scan only reads.
+fn loose_round(paths: &Paths, cfg: &Config) {
+    let r = Db::open(&paths.db_path()).and_then(|db| {
+        crate::loose::scan_and_store(&db, cfg, &agents::enabled(cfg), now_ms())
+    });
+    if let Err(e) = r {
+        log(paths, &format!("loose ends: {e:#}"));
+    }
 }
 
 /// Read what the hooks queued since the last pass. Returns the number of events.
@@ -415,6 +445,8 @@ pub fn run(paths: Paths, cfg: Config, port: u16, board: bool) -> Result<()> {
             }
             let mut last_worker: Option<Instant> = None;
             let mut last_backup: Option<Instant> = None;
+            let mut last_loose: Option<Instant> = None;
+            let loose_busy = Arc::new(AtomicBool::new(false));
             while !stop.load(Ordering::Relaxed) {
                 if let Err(e) = tick(&mut db, &paths, &cfg) {
                     log(&paths, &format!("tick failed: {e:#}"));
@@ -435,6 +467,19 @@ pub fn run(paths: Paths, cfg: Config, port: u16, board: bool) -> Result<()> {
                         }
                         busy.store(false, Ordering::SeqCst);
                     });
+                }
+                if cfg.loose.enabled && !loose_busy.load(Ordering::SeqCst) {
+                    let flagged = db.meta_get(LOOSE_FLAG).ok().flatten().is_some();
+                    if loose_due(last_loose.map(|t| t.elapsed()), flagged) {
+                        last_loose = Some(Instant::now());
+                        let _ = db.conn.execute("DELETE FROM meta WHERE key=?1", [LOOSE_FLAG]);
+                        loose_busy.store(true, Ordering::SeqCst);
+                        let (paths, cfg, busy) = (paths.clone(), cfg.clone(), loose_busy.clone());
+                        std::thread::spawn(move || {
+                            loose_round(&paths, &cfg);
+                            busy.store(false, Ordering::SeqCst);
+                        });
+                    }
                 }
                 let due = last_worker.is_none_or(|t| t.elapsed() >= WORKER_EVERY);
                 if due && !busy.swap(true, Ordering::SeqCst) {

@@ -8,6 +8,7 @@ mod cards;
 mod face;
 mod guard;
 mod idea_routes;
+mod loose_routes;
 mod prefs;
 mod remind_routes;
 mod remind_settings;
@@ -108,6 +109,11 @@ pub fn router(state: Shared) -> Router {
         .route("/api/ideas/:id", post(idea_routes::api_idea_edit))
         .route("/api/ideas/:id/start", post(idea_routes::api_idea_start))
         .route("/api/folder", get(idea_routes::api_folder))
+        .route("/api/loose", get(loose_routes::api_loose))
+        .route("/api/loose/stop", post(loose_routes::api_loose_stop))
+        .route("/api/loose/remove", post(loose_routes::api_loose_remove))
+        .route("/api/loose/ignore", post(loose_routes::api_loose_ignore))
+        .route("/api/loose/send", post(loose_routes::api_loose_send))
         .route("/api/events", get(run::api_events))
         .fallback(get(face::face_asset))
         .layer(axum::extract::DefaultBodyLimit::max(64 * 1024))

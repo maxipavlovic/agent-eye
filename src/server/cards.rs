@@ -50,6 +50,9 @@ pub(super) async fn api_card(State(st): State<Shared>, Path(id): Path<String>) -
         )
         .collect::<Vec<_>>());
     v["topics_more"] = json!(0);
+    let left = crate::loose::list(&db, Some(&id), false)?;
+    v["loose"] = json!(left.len());
+    v["loose_ends"] = json!(left.iter().map(crate::loose::LooseEnd::to_json).collect::<Vec<_>>());
     v["worked"] = json!(crate::worked::summary::of_session(
         &db.conn,
         &id,

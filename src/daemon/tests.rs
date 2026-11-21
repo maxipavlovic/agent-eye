@@ -468,3 +468,40 @@ fn events_of_a_disabled_agent_are_logged_and_change_nothing() {
         .unwrap();
     assert_eq!(n, 1);
 }
+
+#[test]
+fn a_session_that_stops_or_ends_asks_for_a_loose_ends_scan() {
+    let (_t, p, db) = env();
+    add_session(&db, "s1", 100);
+    assert_eq!(db.meta_get(LOOSE_FLAG).unwrap(), None);
+    run_hook(&p, "Stop", br#"{"session_id":"s1","last_assistant_message":"done"}"#);
+    drain_queue(&db, &p, &agents()).unwrap();
+    assert_eq!(db.meta_get(LOOSE_FLAG).unwrap().as_deref(), Some("1"));
+    // a scan clears it, and a prompt does not set it
+    db.conn.execute("DELETE FROM meta WHERE key=?1", [LOOSE_FLAG]).unwrap();
+    run_hook(&p, "UserPromptSubmit", br#"{"session_id":"s1","prompt":"x"}"#);
+    drain_queue(&db, &p, &agents()).unwrap();
+    assert_eq!(db.meta_get(LOOSE_FLAG).unwrap(), None);
+    run_hook(&p, "SessionEnd", br#"{"session_id":"s1"}"#);
+    drain_queue(&db, &p, &agents()).unwrap();
+    assert!(db.meta_get(LOOSE_FLAG).unwrap().is_some());
+}
+
+#[test]
+fn a_loose_scan_is_due_at_first_every_five_minutes_and_soon_after_a_stop() {
+    let s = Duration::from_secs;
+    assert!(loose_due(None, false));
+    assert!(!loose_due(Some(s(10)), false));
+    assert!(!loose_due(Some(s(10)), true), "not twice in a few seconds");
+    assert!(loose_due(Some(s(25)), true));
+    assert!(!loose_due(Some(s(299)), false));
+    assert!(loose_due(Some(s(300)), false));
+}
+
+#[test]
+fn a_loose_round_with_no_sessions_stores_nothing() {
+    let (_t, p, db) = env();
+    let cfg = Config::default();
+    loose_round(&p, &cfg);
+    assert!(crate::loose::list(&db, None, true).unwrap().is_empty());
+}

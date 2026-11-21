@@ -60,11 +60,13 @@ pub fn board_json(db: &Db, cfg: &Config, agents: &Agents, now: i64, all: bool) -
     let mut buckets: HashMap<&'static str, Vec<Place>> = HashMap::new();
     let mut archive_count = 0usize;
     let hidden = hidden_set(db, cfg, all)?;
+    // what each session left behind, not counting what was ignored
+    let loose = crate::loose::counts(db)?;
     for s in db.all_sessions()? {
         if hidden.contains(&s.id) {
             continue;
         }
-        let card = card_json(
+        let mut card = card_json(
             &s,
             streams.get(&s.id).unwrap_or(&empty_s),
             outputs.get(&s.id).unwrap_or(&empty_o),
@@ -72,6 +74,7 @@ pub fn board_json(db: &Db, cfg: &Config, agents: &Agents, now: i64, all: bool) -
             false,
             cx,
         );
+        card["loose"] = json!(loose.get(&s.id).copied().unwrap_or(0));
         let col = card["column"].as_str().unwrap_or("paused");
         if col == "archive" || aged_out(col, s.last_activity_at.unwrap_or(0), now, cfg) {
             archive_count += 1;

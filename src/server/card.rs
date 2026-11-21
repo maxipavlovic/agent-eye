@@ -240,14 +240,16 @@ pub(super) fn idea_card(i: &Idea, agents: &Agents, cfg: &Config, now: i64) -> Va
 }
 
 pub(super) fn load_card(db: &Db, s: &Session, now: i64, cx: CardCtx) -> Result<Value> {
-    Ok(card_json(
+    let mut card = card_json(
         s,
         &db.streams_for(&s.id)?,
         &db.outputs_for(&s.id)?,
         now,
         false,
         cx,
-    ))
+    );
+    card["loose"] = json!(crate::loose::list(db, Some(&s.id), false)?.len());
+    Ok(card)
 }
 
 #[cfg(test)]
