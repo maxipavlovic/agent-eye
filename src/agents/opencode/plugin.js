@@ -6,7 +6,8 @@
 // agent-eye-plugin: 1
 import { spawn } from "node:child_process"
 
-const EYE = "__EYE_BIN__"
+// install writes the absolute path of agent-eye here
+const EYE = "/__EYE_BIN__"
 const KEY = Symbol.for("agent-eye.opencode.plugin")
 
 // one hook at a time, in the order the events came: a permission answered must not be queued

@@ -24,7 +24,7 @@ const RELOAD_NOTE: &str =
 pub(crate) fn plugin_text(eye_bin: &Path) -> String {
     let quoted =
         serde_json::to_string(&eye_bin.to_string_lossy()).unwrap_or_else(|_| "\"\"".into());
-    PLUGIN_JS.replace("\"__EYE_BIN__\"", &quoted)
+    PLUGIN_JS.replace("\"/__EYE_BIN__\"", &quoted)
 }
 
 impl OpenCode {
