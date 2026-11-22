@@ -1,5 +1,17 @@
+import { useEffect, useRef } from 'preact/hooks';
+import { useSignal } from '@preact/signals';
 import type { Store } from '../../store';
 import type { CardDetail, MoveTarget } from '../../api/types';
+
+const MOVES: Array<{ to: MoveTarget; label: string }> = [
+  { to: 'needs_you', label: 'NEEDS YOU' },
+  { to: 'running', label: 'RUNNING' },
+  { to: 'waiting', label: 'WAITING' },
+  { to: 'paused', label: 'PAUSED' },
+  { to: 'done', label: 'DONE' },
+  { to: 'archive', label: 'ARCHIVE' },
+  { to: 'auto', label: 'AUTO (RULES)' },
+];
 
 /** The quick-move targets; the underlined letter of each label is its key (N, W, P, D). */
 export const QUICK: Array<{ to: MoveTarget; label: string; key: string }> = [
@@ -48,3 +60,37 @@ export function QuickMove({ d, store }: { d: CardDetail; store: Store }) {
   );
 }
 
+/** The full list of places a session can go, including Archive and back to the rules. */
+export function MoveMenu({ d, store }: { d: CardDetail; store: Store }) {
+  const open = useSignal(false);
+  const box = useRef<HTMLDivElement>(null);
+  // A click anywhere else, or Esc, closes the open menu.
+  useEffect(() => {
+    if (!open.value) return;
+    const away = (e: PointerEvent) => { if (!box.current?.contains(e.target as Node)) open.value = false; };
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); open.value = false; } };
+    addEventListener('pointerdown', away, true);
+    addEventListener('keydown', esc, true);
+    return () => { removeEventListener('pointerdown', away, true); removeEventListener('keydown', esc, true); };
+  }, [open.value]);
+  return (
+    <div class="move" ref={box}>
+      <button class="btn" aria-haspopup="menu" aria-expanded={open.value} onClick={() => (open.value = !open.value)}>MOVE TO…</button>
+      {open.value && (
+        <ul class="menu" role="menu">
+          {MOVES.filter((m) => m.to !== d.column).map((m) => (
+            <li key={m.to}>
+              <button
+                role="menuitem"
+                onClick={() => {
+                  open.value = false;
+                  void store.move(d.id, m.to).then(() => { if (m.to === 'archive') store.close(); });
+                }}
+              >{m.label}</button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}

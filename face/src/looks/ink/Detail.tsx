@@ -11,13 +11,13 @@ import { openForget } from './Forget';
 import { Hl, HlWords, hlPattern } from './highlight';
 import { ideaForm } from './IdeaForm';
 import { keyHelp } from './KeyHelp';
-import { hideSession, QuickMove } from './Move';
+import { hideSession, Keyed, MoveMenu, QuickMove } from './Move';
 import { Next } from './Card';
 import { Leftovers } from './Loose';
-import { canContinueTonight, ContinueTonight, NightRunLine, NightRunSection, TonightIdea, tonightOpen } from './Night';
+import { canContinueTonight, ContinueTonight, NightRunLine, NightRunSection, TonightButton, TonightIdea, tonightOpen } from './Night';
 import { openRemind, RemindPanel, RemindRow } from './Remind';
 import { originChip, RemoteMark, Sigil } from './pieces';
-import { Fold, Kids, Outputs, Running, Sec, TokenSec, Topics, Where } from './Sections';
+import { Kids, Outputs, Running, Sec, TokenSec, Topics, Where } from './Sections';
 import { projectKey, projectLabel } from './model';
 import type { Walk } from './walk';
 
@@ -65,18 +65,34 @@ function WalkNav({ walk }: { walk: Walk }) {
   );
 }
 
-/** The command that resumes the session, printed like a till receipt, folded with the details. */
+/** The command that resumes the session, printed like a till receipt: with the action row, the panel's end. */
 function Receipt({ d }: { d: CardDetail }) {
   if (!d.resumable || !d.resume_cmd) return null;
   const { label, via } = resumeLabel(d.resume_mode, d.resume_terminal);
   return (
-    <Fold name="resume-command" t="RESUME COMMAND" text={d.resume_cmd}>
-      <div class="receipt" style={`clip-path:${ZIG}`}>
-        <div class="rt"><span>RESUME</span><span>{label}{via && <small>{via}</small>}</span></div>
-        <code>{d.resume_cmd}</code>
-        <div class="barcode" aria-hidden="true" />
-      </div>
-    </Fold>
+    <div class="receipt" style={`clip-path:${ZIG}`}>
+      <div class="rt"><span>RESUME</span><span>{label}{via && <small>{via}</small>}</span></div>
+      <code>{d.resume_cmd}</code>
+      <div class="barcode" aria-hidden="true" />
+    </div>
+  );
+}
+
+/** The action row that ends the panel: RESUME, and the other actions with their keys (MORE at the top has them too). */
+function Actions({ d, store }: { d: CardDetail; store: Store }) {
+  // an idea has START, EDIT and ARCHIVE in its own row
+  if (d.kind === 'idea') return null;
+  return (
+    <div class="acts end">
+      {d.resumable && <button class="btn big" aria-keyshortcuts="R" title="Resume (R)" onClick={() => void store.resume(d.id)}>RESUME</button>}
+      {d.resumable && d.resume_cmd && <button class="btn" aria-keyshortcuts="F" title="Resume as a new session branched from this one (F)" onClick={() => void store.resume(d.id, true)}><Keyed label="FORK" k="f" /></button>}
+      {d.resume_cmd && <button class="btn" aria-keyshortcuts="C" title="Copy the resume command (C)" onClick={() => copy(d.resume_cmd!, store)}><Keyed label="COPY" k="c" /></button>}
+      <a class="btn" aria-keyshortcuts="E" href={`/api/sessions/${encodeURIComponent(d.id)}/export?format=html`} download title="Save this session as one readable page; secrets are masked (E)"><Keyed label="EXPORT" k="e" /></a>
+      <TonightButton d={d} store={store} />
+      <button class="btn ghost" aria-keyshortcuts="H" title="Hide this session from the board (H)" onClick={() => hideSession(store, d.id)}><Keyed label="HIDE" k="h" /></button>
+      <button class="btn ghost" aria-keyshortcuts="X" title="Remove this session from eye, and optionally from its agent (X)" onClick={() => openForget(d)}>FORGET…</button>
+      <MoveMenu d={d} store={store} />
+    </div>
   );
 }
 
@@ -107,7 +123,7 @@ function moreItems(d: CardDetail, store: Store): MoreItem[] {
   return out;
 }
 
-/** MORE ▾: the session's other actions in a small menu beside the moves; a click elsewhere, or Esc, closes it. */
+/** MORE ▾: the session's other actions in a small menu in the panel's top bar; a click elsewhere, or Esc, closes it. */
 function More({ d, store }: { d: CardDetail; store: Store }) {
   const open = useSignal(false);
   const box = useRef<HTMLDivElement>(null);
@@ -171,8 +187,12 @@ export function Detail({ store, walk }: { store: Store; walk: Walk }) {
   return (
     <HlWords.Provider value={re}>
       <div class="page" ref={ref}>
-        <button class="x" onClick={() => store.close()} aria-label="Close (Esc)">ESC ✕</button>
-        <button class="x qk" onClick={() => { keyHelp.value = true; }} aria-label="Keyboard shortcuts (?)" title="Keyboard shortcuts (?)">?</button>
+        {/* the top bar's right end: MORE (a session's other actions), the keys list and close */}
+        <div class="ptop">
+          {session && <More d={d} store={store} />}
+          <button class="x qk" onClick={() => { keyHelp.value = true; }} aria-label="Keyboard shortcuts (?)" title="Keyboard shortcuts (?)">?</button>
+          <button class="x" onClick={() => store.close()} aria-label="Close (Esc)">ESC ✕</button>
+        </div>
         <WalkNav walk={walk} />
         <header class="dh">
           <Sigil id={d.id} big />
@@ -188,7 +208,7 @@ export function Detail({ store, walk }: { store: Store; walk: Walk }) {
           </div>
         </header>
         {/* 1. now: what to do, the next step, and the forms you open (continue tonight, remind) */}
-        {session && <div class="dbar"><QuickMove d={d} store={store} /><More d={d} store={store} /></div>}
+        {session && <div class="dbar"><QuickMove d={d} store={store} /></div>}
         <RemindRow c={d} store={store} />
         {/* opened from the menu, T or MORE: at the top, where nothing that loads later can push it away */}
         <ContinueTonight d={d} store={store} />
@@ -209,16 +229,18 @@ export function Detail({ store, walk }: { store: Store; walk: Walk }) {
           </Sec>
         )}
         <Outputs key={d.id} outputs={d.outputs} />
-        {/* 3. the details, folded: one line each until you open it (eye remembers which) */}
+        {d.first_prompt && <Sec t="FIRST PROMPT"><blockquote class="prompt first"><Hl s={d.first_prompt} /></blockquote></Sec>}
+        <Where d={d} />
+        {/* 3. the long or seldom needed parts, folded to one line until you open them (eye remembers which) */}
         <div class="details">
           <NightRunSection d={d} store={store} />
-          {d.first_prompt && <Fold name="first-prompt" t="FIRST PROMPT" text={d.first_prompt}><blockquote class="prompt first"><Hl s={d.first_prompt} /></blockquote></Fold>}
           {session && <Conversation store={store} id={d.id} agent={d.agent_name} fallback={prompts} />}
           {d.tokens && <TokenSec key={d.id} t={d.tokens} />}
-          <Where d={d} />
           <RemindPanel c={d} store={store} />
-          <Receipt d={d} />
         </div>
+        {/* the end: how to resume it, and the actions */}
+        <Receipt d={d} />
+        <Actions d={d} store={store} />
       </div>
     </HlWords.Provider>
   );

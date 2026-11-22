@@ -259,10 +259,7 @@ describe('the panel', () => {
     expect($('.qmove button[aria-pressed="true"]')!.textContent).toBe('NEEDS YOU');
     expect($('.page .chip.now')).not.toBeNull();
     expect($$('.page .sec h4').map((h4) => h4.textContent)).toEqual(expect.arrayContaining(['TOPICS3', 'OUTPUTS2']));
-    // the resume command is folded with the details
-    expect($('.receipt')).toBeNull();
-    $<HTMLButtonElement>('#resume-command .fhead')!.click();
-    await vi.waitFor(() => expect($('.receipt code')!.textContent).toContain('claude --resume'));
+    expect($('.receipt code')!.textContent).toContain('claude --resume');
     key('Escape');
     await vi.waitFor(() => expect(store.selected.value).toBeNull());
     expect($('.page')).toBeNull();
@@ -306,6 +303,8 @@ describe('the panel', () => {
     expect(btn.textContent).toBe('RESUME');
     expect(btn.getAttribute('aria-keyshortcuts')).toBe('R');
     expect($$('.qmove button').map((b) => b.textContent)).toEqual(['NEEDS YOU', 'WAITING', 'PAUSED', 'DONE', 'RESUME']);
+    // MORE is in the top bar, with ? and ESC
+    expect($$('.page .ptop button').map((b) => b.textContent)).toEqual(['MORE ▾', '?', 'ESC ✕']);
     btn.click();
     await vi.waitFor(() => expect(resume).toHaveBeenCalledTimes(1));
     key('r');
@@ -316,9 +315,8 @@ describe('the panel', () => {
     document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'r', metaKey: true, bubbles: true }));
     await new Promise((r) => setTimeout(r, 30));
     expect(resume).toHaveBeenCalledTimes(2);
-    // RESUME lives in the action bar only; the resume command is folded with the details
-    expect($('.page .acts.end')).toBeNull();
-    expect($('.page #resume-command')).not.toBeNull();
+    // the receipt and the bottom actions end the panel
+    expect($('.page .acts.end .btn.big')!.textContent).toBe('RESUME');
   });
 
   it('does not resume or move the session behind the idea form', async () => {
@@ -565,23 +563,19 @@ describe('long lists in the panel', () => {
   it('shows the first items with a +N MORE button that opens the rest in place and folds them again', async () => {
     const { root, $, $$ } = await mount();
     card(root, 'needs_you', 'Review the retry policy').click();
-    // the outputs are one row of chips: the first 8 links, then +N MORE; the commits are one chip
-    const links = () => $$('.ochips > .oc.out').filter((c) => c.tagName !== 'BUTTON');
-    // the full detail (the board's copy of the card carries only a few outputs)
-    await vi.waitFor(() => expect(links()).toHaveLength(8));
-    const moreLinks = $$<HTMLButtonElement>('.ochips > .lnk')[0]!;
-    expect(moreLinks.textContent).toMatch(/^\+\d+ MORE$/);
-    const all = 8 + Number(moreLinks.textContent!.match(/\d+/)![0]);
-    moreLinks.click();
-    await vi.waitFor(() => expect(links()).toHaveLength(all));
-    const chip = $$<HTMLButtonElement>('.ochips > button.oc').find((b) => b.textContent!.endsWith('12 commits'))!;
-    expect(chip.getAttribute('aria-expanded')).toBe('false');
-    chip.click();
-    const list = () => $$('.page .sec ul li:not(.more)').filter((li) => li.closest('.sec')!.querySelector('h4')!.textContent!.startsWith('OUTPUTS'));
-    await vi.waitFor(() => expect(list()).toHaveLength(8));
-    const more = $$<HTMLButtonElement>('.page li.more button').find((b) => b.textContent === '+4 MORE')!;
+    const group = (name: string) => $$('.og').find((g) => g.querySelector('h5')!.textContent!.startsWith(name))!;
+    await vi.waitFor(() => expect(group('Commits')).toBeDefined());
+    const commits = group('Commits');
+    expect(commits.querySelectorAll('li:not(.more)')).toHaveLength(8);
+    const more = commits.querySelector<HTMLButtonElement>('li.more button')!;
+    expect(more.textContent).toBe('+4 MORE');
+    expect(more.getAttribute('aria-expanded')).toBe('false');
     more.click();
-    await vi.waitFor(() => expect(list()).toHaveLength(12));
+    await vi.waitFor(() => expect(group('Commits').querySelectorAll('li:not(.more)')).toHaveLength(12));
+    expect(group('Commits').querySelector('li.more button')!.textContent).toBe('SHOW LESS');
+    expect(group('Jira').querySelector('li.more button')!.textContent).toBe('+3 MORE');
+    group('Commits').querySelector<HTMLButtonElement>('li.more button')!.click();
+    await vi.waitFor(() => expect(group('Commits').querySelectorAll('li:not(.more)')).toHaveLength(8));
 
     $$('.kidsum button')[0]!.click();
     await vi.waitFor(() => expect($$('.kids li:not(.more)')).toHaveLength(8));

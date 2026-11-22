@@ -574,7 +574,7 @@ a.mk:hover { background: var(--ink); color: var(--paper); }
   .pagewrap::before { display: none; }
   .page { padding: 64px 22px 48px; }
   .dh { padding-right: 0; }
-  .page .x { top: 12px; right: 14px; }
+  .page .x, .page .ptop { top: 12px; right: 14px; }
   .rgrid { grid-template-columns: minmax(0, 1fr); }
   .toasts { right: 16px; bottom: 16px; left: 16px; justify-items: stretch; }
   .toast { max-width: none; }
@@ -711,7 +711,6 @@ fieldset.nightpick .fchips { margin: 4px 0 0; }
 .keyhelp .where { grid-template-columns: 4.5em 1fr; margin: 12px 0 8px; }
 @media (max-width: 1200px) { .page .x.qk { right: 100px; } }
 
-/* a narrow card keeps one meta row by letting go of the least needed first: Remote shrinks to its icon, then the token count and the origin chip go (both stay in the panel); the project name stays, cut short */
 .modal > .fchips { margin: -6px 0 16px; }
 
 /* ───────── the panel in three layers ─────────
@@ -719,13 +718,18 @@ fieldset.nightpick .fchips { margin: 4px 0 0; }
    2. what happened: recap, topics, sub-agents, outputs
    3. the details, each folded to one line until opened (eye remembers which) */
 .dh .facts { font: 400 15.5px/1.4 var(--f-body); color: var(--mute); overflow-wrap: anywhere; }
-.dbar { display: flex; align-items: flex-start; gap: 10px; margin: 16px 0 0; }
-.dbar .qmove { flex: 1; margin: 0; }
-.dbar .more > .btn { font: 400 14px/1 var(--f-label); letter-spacing: 1px; padding: 9px 12px 8px; box-shadow: none; }
-/* MORE opens downward from the top of the panel, at its right edge */
-.dbar .menu { top: calc(100% + 6px); bottom: auto; left: auto; right: 0; min-width: 270px; z-index: 6; }
+.dbar { margin: 16px 0 0; }
+.dbar .qmove { margin: 0; }
+/* the top bar's right end: MORE, ? and ESC in one row, so none has its own offset to keep in step */
+.page .ptop { position: absolute; top: 14px; right: 18px; display: flex; align-items: stretch; gap: 10px; z-index: 6; }
+.page .ptop .x, .page .ptop .x.qk { position: static; }
+.page .ptop .more > .btn { height: 100%; font: 400 16px/1 var(--f-label); padding: 8px 10px 7px; box-shadow: none; }
+/* MORE opens downward, at the right edge of the panel */
+.page .ptop .menu { top: calc(100% + 6px); bottom: auto; left: auto; right: 0; min-width: 330px; }
 .more .menu button { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
-.more .menu kbd { font: 400 16px/1 var(--f-label); border: 2px solid currentColor; padding: 2px 5px 1px; min-width: 22px; text-align: center; }
+.more .menu button span { white-space: nowrap; }
+/* every key the same box, whatever the letter's width */
+.more .menu kbd { flex: none; box-sizing: border-box; width: 26px; height: 24px; display: inline-grid; place-items: center; padding: 1px 0 0; font: 400 16px/1 var(--f-label); border: 2px solid currentColor; }
 
 /* LEFTOVERS: how many and what, the bulk actions; SHOW opens one line per item */
 .lefto { margin-top: 30px; }
@@ -741,16 +745,7 @@ fieldset.nightpick .fchips { margin: 4px 0 0; }
 .nline { margin: 18px 0 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; font: 400 17px/1.45 var(--f-body); }
 .nline b { font: 400 16px/1 var(--f-label); letter-spacing: 1px; background: var(--ink); color: var(--paper); padding: 3px 6px 2px; }
 
-/* outputs: one row of chips; the commits and the folders are one chip each that opens their list */
-.ochips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.oc.out { gap: 7px; max-width: 100%; padding: 3px 8px 3px 3px; font: 400 15px/1.3 var(--f-body); color: var(--ink); background: var(--paper); text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.oc.out .ot { min-width: 0; border: 0; background: var(--ink); color: var(--paper); padding: 3px 5px 2px; }
-button.oc.out { cursor: pointer; }
-a.oc.out:hover, button.oc.out:hover, button.oc.out[aria-expanded='true'] { background: var(--ink); color: var(--paper); }
-a.oc.out:hover .ot, button.oc.out:hover .ot, button.oc.out[aria-expanded='true'] .ot { background: var(--paper); color: var(--ink); }
-.ochips + ul { margin-top: 12px; }
-
-/* the details: folded sections close together, under one gap */
+/* the folded sections close together, under one gap; the resume receipt and the action row end the panel */
 .details { margin-top: 44px; }
 .details .fsec { margin-top: 16px; }
 .details .fsec.open { margin-top: 30px; }

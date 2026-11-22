@@ -115,14 +115,14 @@ describe('the panel keys and the keys list', () => {
     const keyed = (sel: string) => text(m.$(`${sel} u`));
     expect(keyed('.qmove .resume')).toBe('R');
     expect(m.$$('.qmove button[aria-keyshortcuts] u').map(text)).toEqual(['N', 'W', 'P', 'D', 'R']);
-    [...m.$$<HTMLButtonElement>('.page .dbar button')].find((b) => text(b) === 'MORE ▾')!.click();
+    [...m.$$<HTMLButtonElement>('.page .ptop button')].find((b) => text(b) === 'MORE ▾')!.click();
     await vi.waitFor(() => expect(m.$('.page [role=menu]')).not.toBeNull());
     expect(m.$$('.page [role=menuitem] kbd').map(text)).toEqual(['F', 'C', 'E', 'T', 'M', 'H', 'X']);
   });
 
   it('MORE holds the other actions; a choice runs and closes it, and Esc closes it without closing the panel', async () => {
     const m = await open();
-    const more = () => [...m.$$<HTMLButtonElement>('.page .dbar button')].find((b) => text(b) === 'MORE ▾')!;
+    const more = () => [...m.$$<HTMLButtonElement>('.page .ptop button')].find((b) => text(b) === 'MORE ▾')!;
     more().click();
     await vi.waitFor(() => expect(m.$('.page [role=menu]')).not.toBeNull());
     expect(m.$$('.page [role=menuitem] span').map(text)).toEqual(['FORK', 'COPY RESUME COMMAND', 'EXPORT', 'CONTINUE TONIGHT…', 'REMIND ME…', 'HIDE', 'FORGET…', 'ARCHIVE']);
@@ -136,18 +136,21 @@ describe('the panel keys and the keys list', () => {
     expect(m.$('.page [role=menu]')).toBeNull();
   });
 
-  it('the details start folded, and a section you open stays open on the next card', async () => {
+  it('folds only the long or seldom needed parts, ends with the receipt and the actions, and keeps a section you open open', async () => {
     const m = await open();
-    const heads = () => m.$$('.page .details .fsec h4').map((h) => text(h.querySelector('.fhead')).replace(/(SHOW|HIDE)$/, ''));
-    expect(heads().some((h) => h.startsWith('WHERE'))).toBe(true);
+    expect(m.$$('.page .details .fsec').map((x) => x.id)).toEqual(['conversation', 'tokens', 'reminder']);
     expect(m.$$('.page .details .fsec.open').length).toBe(0);
-    m.$<HTMLButtonElement>('#where .fhead')!.click();
-    await vi.waitFor(() => expect(m.$('#where.open dl.where')).not.toBeNull());
+    // WHERE and FIRST PROMPT stay open; the receipt and the action row end the panel
+    expect(m.$('.page dl.where')).not.toBeNull();
+    const last = [...m.$('.page')!.children].slice(-2).map((e) => e.className);
+    expect(last).toEqual(['receipt', 'acts end']);
+    m.$<HTMLButtonElement>('#tokens .fhead')!.click();
+    await vi.waitFor(() => expect(m.$('#tokens.open')).not.toBeNull());
     m.store.close();
     await vi.waitFor(() => expect(m.$('.page')).toBeNull());
     session(m).click();
-    await vi.waitFor(() => expect(m.$('.page #where')).not.toBeNull());
-    expect(m.$('#where')!.classList.contains('open')).toBe(true);
+    await vi.waitFor(() => expect(m.$('.page #tokens')).not.toBeNull());
+    expect(m.$('#tokens')!.classList.contains('open')).toBe(true);
   });
 
   it('? opens the list of keys, and ?, Esc or CLOSE closes it without closing the panel', async () => {
@@ -232,9 +235,6 @@ describe('the COST row', () => {
   it('is a label and value row of WHERE, with the note in the small hint style', async () => {
     const m = await mount();
     session(m).click();
-    // WHERE is folded with the details
-    await vi.waitFor(() => expect(m.$('.page #where .fhead')).not.toBeNull());
-    m.$<HTMLButtonElement>('#where .fhead')!.click();
     await vi.waitFor(() => expect(m.$('.page dl.where')).not.toBeNull());
     const dts = m.$$('.page dl.where dt');
     const cost = dts.find((d) => text(d) === 'COST')!;

@@ -147,6 +147,17 @@ export function canContinueTonight(d: Pick<CardDetail, 'kind' | 'resumable'>, st
   return d.kind !== 'idea' && !!d.resumable && store.night.value !== null;
 }
 
+/** CONTINUE TONIGHT… in the panel's action row; T and MORE do the same. */
+export function TonightButton({ d, store }: { d: CardDetail; store: Store }) {
+  if (!canContinueTonight(d, store)) return null;
+  const open = tonightOpen.value === d.id;
+  return (
+    <button class="btn" aria-expanded={open} aria-keyshortcuts="T" title="Fork this session tonight, in its own worktree, with a prompt you write now (T)" onClick={() => { tonightOpen.value = open ? null : d.id; }}>
+      CONTINUE <u>T</u>ONIGHT…
+    </button>
+  );
+}
+
 /** The CONTINUE TONIGHT form, in the panel, while it is open. */
 export function ContinueTonight({ d, store }: { d: CardDetail; store: Store }) {
   if (!canContinueTonight(d, store) || tonightOpen.value !== d.id) return null;
