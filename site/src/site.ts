@@ -27,7 +27,15 @@ function applyTheme(pref: ThemePref) {
 let pref = savedTheme();
 applyTheme(pref);
 system.addEventListener('change', () => applyTheme(pref));
-document.querySelector('iframe')?.addEventListener('load', () => applyTheme(pref));
+document.querySelector('iframe')?.addEventListener('load', () => { applyTheme(pref); markEmbedded(!document.fullscreenElement); });
+
+/** The demo board in the page (not full screen) leaves its theme switch to the site's, so + IDEA fits. */
+function markEmbedded(on: boolean) {
+  try {
+    const root = document.querySelector('iframe')?.contentDocument?.documentElement;
+    if (on) root?.setAttribute('data-embed', ''); else root?.removeAttribute('data-embed');
+  } catch { /* not loaded yet */ }
+}
 for (const b of document.querySelectorAll<HTMLElement>('[data-theme-set]')) {
   b.addEventListener('click', () => {
     pref = b.dataset.themeSet as ThemePref;
@@ -52,6 +60,7 @@ if (frame && full && document.fullscreenEnabled) {
     const on = document.fullscreenElement === frame;
     full.textContent = on ? 'EXIT FULL SCREEN (ESC)' : 'FULL SCREEN';
     full.setAttribute('aria-pressed', String(on));
+    markEmbedded(!on);
     if (on) frame.querySelector('iframe')?.focus();
   });
 }

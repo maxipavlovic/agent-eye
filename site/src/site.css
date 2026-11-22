@@ -188,7 +188,7 @@ code { background: color-mix(in srgb, var(--ink) 11%, var(--paper)); padding: .0
 .doc .anchor { margin-left: .5em; font-weight: 400; text-decoration: none; opacity: 0; }
 .doc :is(h2, h3):hover .anchor, .doc .anchor:focus { opacity: 1; }
 .doc .anchor:hover { background: none; color: var(--accent); }
-.doc pre { background: var(--code-bg); color: var(--code-fg); padding: 14px 16px; overflow-x: auto; border: 2px solid var(--ink); font-size: 14.5px; line-height: 1.5; margin: 18px 0; }
+.doc pre { background: var(--code-bg); color: var(--code-fg); padding: 14px 16px; white-space: pre-wrap; overflow-wrap: anywhere; border: 2px solid var(--ink); font-size: 14.5px; line-height: 1.5; margin: 18px 0; }
 .doc pre code { background: none; padding: 0; font-size: inherit; }
 .doc blockquote { margin: 18px 0; padding: 2px 0 2px 18px; border-left: 4px solid var(--ink); }
 .doc hr { border: 0; height: 8px; background: var(--d50); margin: 36px 0; }

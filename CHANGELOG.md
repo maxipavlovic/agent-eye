@@ -7,6 +7,7 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 ### Changed
 
 - Dependencies: rusqlite 0.43 (SQLite from libsqlite3-sys 0.40), sha2 0.11, vite 8.3.8 (face).
+- Site: a shorter headline ("Keeps an eye on your agent sessions, even overnight") and pitch, shorter feature cards, code in the docs wraps instead of scrolling sideways, and the demo board leaves its theme switch to the page's so + IDEA fits. The README uses the same headline.
 
 ## 0.3.0 - 2026-11-22
 

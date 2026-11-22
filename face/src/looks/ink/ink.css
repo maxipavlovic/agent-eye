@@ -749,3 +749,6 @@ fieldset.nightpick .fchips { margin: 4px 0 0; }
 .details { margin-top: 44px; }
 .details .fsec { margin-top: 16px; }
 .details .fsec.open { margin-top: 30px; }
+
+/* the board embedded in the site's page (not full screen): the site's own switch sets the theme, so the header keeps room for + IDEA */
+:root[data-embed] .hd .theme[aria-label='Theme'] { display: none; }
