@@ -43,7 +43,13 @@ export function Root({ store }: { store: Store }) {
   useEffect(() => {
     if (!b || !first.current) return;
     first.current = false;
-    if (innerWidth <= 1100) document.querySelector('.board.lanes [data-col="needs_you"]')?.scrollIntoView({ inline: 'start', block: 'nearest' });
+    if (innerWidth > 1100) return;
+    // only the lanes scroll sideways: scrollIntoView would also scroll a page the board is embedded in (the site's demo)
+    const board = document.querySelector<HTMLElement>('.board.lanes');
+    const col = board?.querySelector<HTMLElement>('[data-col="needs_you"]');
+    if (!board || !col) return;
+    const pad = Number.parseFloat(getComputedStyle(board).scrollPaddingInlineStart) || 0;
+    board.scrollLeft += col.getBoundingClientRect().left - board.getBoundingClientRect().left - pad;
   }, [!b]);
 
   const all = b ? b.columns.flatMap((c) => c.cards) : [];
