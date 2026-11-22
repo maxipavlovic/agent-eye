@@ -168,6 +168,11 @@ a.btn { display: inline-block; text-decoration: none; }
 /* The open session waits for your answer: the border pulses slowly in the accent, a ring outside it, so nothing moves. Smooth, not stepped. */
 .card.ask { animation: ask 2.4s ease-in-out infinite; }
 @keyframes ask { 50% { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); } }
+/* and its `!` on the top edge blinks, filled and hollow, as the panel's chip does */
+.card.ask .tab.need { animation: askbang 1.1s steps(1, end) infinite; }
+.card.ask .tab.need rect { animation: askbangfill 1.1s steps(1, end) infinite; }
+@keyframes askbang { 50% { background: var(--paper); } }
+@keyframes askbangfill { 50% { fill: var(--accent); } }
 @keyframes nowblink { 50% { background: var(--paper); color: var(--accent); box-shadow: inset 0 0 0 2px var(--accent); } }
 
 .topics { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 3px; }
