@@ -187,6 +187,10 @@ pub fn restore(db: &Db, paths: &Paths, agents: &Agents, id: &str) -> Result<Path
     );
     let src = copy_of(&s, paths, agent.as_ref());
     anyhow::ensure!(src.exists(), "no archived copy at {}", src.display());
+    if let Some(done) = agent.restore_archived(&src, &dest) {
+        done?;
+        return Ok(dest);
+    }
     std::fs::create_dir_all(dest.parent().context("no parent dir")?)?;
     let tmp = sibling(&dest, ".restoring");
     remove_any(&tmp);
@@ -201,7 +205,11 @@ pub fn restore(db: &Db, paths: &Paths, agents: &Agents, id: &str) -> Result<Path
 /// that resuming works. Nothing happens when the transcript is there or no copy was kept.
 pub fn restore_if_missing(db: &Db, paths: &Paths, agents: &Agents, s: &Session) -> Result<()> {
     if let Some(tp) = s.transcript_path.as_deref() {
-        if !Path::new(tp).exists() && s.archive_path.is_some() {
+        let there = match agents.of_session(s) {
+            Some(a) => a.transcript_exists(Path::new(tp)),
+            None => Path::new(tp).exists(),
+        };
+        if !there && s.archive_path.is_some() {
             restore(db, paths, agents, &s.id)
                 .context("restoring the transcript from eye's archive")?;
         }
@@ -228,7 +236,7 @@ impl Drop for Readable {
 /// the agent restores from the archive.
 pub fn readable(s: &Session, paths: &Paths, agent: &dyn Agent) -> Result<Readable> {
     let live = s.transcript_path.as_deref().map(PathBuf::from);
-    if let Some(p) = live.as_ref().filter(|p| p.exists()) {
+    if let Some(p) = live.as_ref().filter(|p| agent.transcript_exists(p)) {
         return Ok(Readable {
             path: p.clone(),
             scratch: None,

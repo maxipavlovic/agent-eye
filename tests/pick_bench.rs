@@ -38,7 +38,7 @@ fn keystroke_timing() {
         for c in q.chars() {
             line.push(c);
             let t = Instant::now();
-            let r = search(&db, &idx, &line, false, now_ms());
+            let r = search(&db, &idx, &line, false);
             let ms = t.elapsed().as_secs_f64() * 1e3;
             worst = worst.max(ms);
             prev.push(format!("{ms:.1}"));

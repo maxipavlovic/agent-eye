@@ -127,6 +127,109 @@ pub struct SetupArgs {
 }
 
 #[derive(Subcommand)]
+pub enum NightCmd {
+    /// Switch the night shift on (`[night] enabled = true`)
+    On,
+    /// Switch the night shift off
+    Off,
+    /// Plan a run for tonight: `idea:<n>` or a session to continue (with --prompt)
+    Add {
+        /// `idea:<n>`, or a session id (or its first 6 characters)
+        target: String,
+        /// What a continued session should do tonight (required for a session)
+        #[arg(long)]
+        prompt: Option<String>,
+        /// One optional limit: 30% (weekly plan), 2M or 500k (tokens), 90m or 2h (time)
+        #[arg(long)]
+        limit: Option<String>,
+        /// claude, codex, agy or opencode (default: the idea's agent)
+        #[arg(long)]
+        agent: Option<String>,
+        /// Start again on the other agent when this one's plan runs out (ideas only)
+        #[arg(long)]
+        switch: bool,
+        /// worktree (a git worktree of the repo, the default) or copy (a separate copy: your folder is fully locked)
+        #[arg(long)]
+        isolation: Option<String>,
+    },
+    /// Planned and finished runs (the default)
+    Ls {
+        #[arg(long)]
+        json: bool,
+    },
+    /// Cancel a planned run
+    Cancel { run: i64 },
+    /// Print the log of a run
+    Log { run: i64 },
+    /// Set the window, e.g. 01:00-07:00 (local time; 23:00-05:00 crosses midnight)
+    Window { window: String },
+    /// Set how many runs go at once
+    Parallel { n: u32 },
+    /// Start a planned run at once, ignoring the window and the quiet rule (to try it out)
+    RunNow {
+        run: i64,
+        /// Confirm: this starts an agent that edits files in a worktree
+        #[arg(long)]
+        yes: bool,
+        /// Stay until the run has ended and print what it did (without the daemon watching it)
+        #[arg(long)]
+        wait: bool,
+    },
+    /// One pass of the scheduler, as the daemon does it every minute (to try it out)
+    #[command(hide = true)]
+    Tick,
+    /// Bring the night branch of a repo copy into your repo after asking
+    Bring {
+        run: i64,
+        /// Do not ask first
+        #[arg(long)]
+        yes: bool,
+    },
+    /// Remove a finished run's worktree and branch (or copy) after asking
+    Discard {
+        run: i64,
+        /// Do not ask first
+        #[arg(long)]
+        yes: bool,
+        /// Also discard uncommitted changes
+        #[arg(long)]
+        lose_changes: bool,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum LooseCmd {
+    /// Stop a server or a container (SIGTERM, or `docker stop`) after asking
+    Stop {
+        /// The key `eye loose` prints under the item
+        key: String,
+        /// Do not ask first
+        #[arg(long)]
+        yes: bool,
+    },
+    /// Remove a worktree with `git worktree remove` (no --force) after asking
+    Remove {
+        key: String,
+        /// Do not ask first
+        #[arg(long)]
+        yes: bool,
+    },
+    /// Stop listing an item
+    Ignore { key: String },
+    /// Resume the session with a first message that lists what it left behind
+    Send {
+        /// Session id or its first 6 characters
+        session: String,
+        /// Do not ask first
+        #[arg(long)]
+        yes: bool,
+        /// Show the command, run nothing
+        #[arg(long)]
+        dry_run: bool,
+    },
+}
+
+#[derive(Subcommand)]
 pub enum BackupCmd {
     /// List the snapshots, newest first
     Ls,
@@ -180,6 +283,29 @@ pub enum Cmd {
         #[arg(long)]
         json: bool,
     },
+    /// Cost and tokens by day, project, agent, model or session, with the plan limits
+    Usage {
+        /// The last N days, today included
+        #[arg(long, conflicts_with_all = ["week", "month"])]
+        days: Option<i64>,
+        /// The last 7 days (the default)
+        #[arg(long, conflicts_with = "month")]
+        week: bool,
+        /// The last 30 days
+        #[arg(long)]
+        month: bool,
+        /// Group rows by project, folder, agent, model or session
+        #[arg(long, default_value = "project")]
+        by: String,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Status line command for Claude Code that keeps its plan limits (opt in, see docs/usage.md)
+    Statusline {
+        /// A status line command to run too: it gets the same input and its output is printed
+        #[arg(long)]
+        wrap: Option<String>,
+    },
     /// Search sessions
     Find {
         #[arg(required = true)]
@@ -196,6 +322,9 @@ pub enum Cmd {
     Ls {
         #[arg(long)]
         column: Option<String>,
+        /// Only sessions started from here: terminal, headless, app, desktop, ide, web or night
+        #[arg(long)]
+        origin: Option<String>,
         /// Include hidden (trivial) sessions
         #[arg(long)]
         all: bool,
@@ -298,6 +427,22 @@ pub enum Cmd {
         #[arg(long)]
         clear: bool,
     },
+    /// Leftovers: what sessions left behind (servers still running, commits on no remote, ...)
+    /// `loose [<session>]` lists them; `loose stop|remove|ignore <key>` and `loose send <session>` act
+    #[command(args_conflicts_with_subcommands = true)]
+    Loose {
+        #[command(subcommand)]
+        sub: Option<LooseCmd>,
+        /// Only this session (id or its first 6 characters)
+        session: Option<String>,
+        #[arg(long)]
+        json: bool,
+    },
+    /// The night shift: runs that start by themselves inside a time window, in their own worktree or copy
+    Night {
+        #[command(subcommand)]
+        sub: Option<NightCmd>,
+    },
     /// Hook entry point (called by the agent, reads the event on stdin)
     Hook {
         event: String,
@@ -331,6 +476,24 @@ pub enum Cmd {
     },
     /// Check that everything works
     Doctor,
+    /// Take sessions out of eye: its index and its archive copy, and with --transcript the
+    /// agent's own copy too. Cannot be undone (a snapshot is taken first)
+    Forget {
+        /// Sessions (ids or prefixes)
+        ids: Vec<String>,
+        /// Every session whose folder is this one or inside it
+        #[arg(long, conflicts_with = "ids")]
+        folder: Option<std::path::PathBuf>,
+        /// Also remove the agent's own copy (Claude Code's transcript, Codex's rollout, ...)
+        #[arg(long)]
+        transcript: bool,
+        /// Do not ask
+        #[arg(long)]
+        yes: bool,
+        /// Only list what would go
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Keep a compressed copy of transcripts
     Archive {
         id: Option<String>,
@@ -339,6 +502,33 @@ pub enum Cmd {
     },
     /// Put an archived transcript back where its agent expects it
     Restore { id: String },
+    /// Write one portable file with everything eye knows (to move to another machine or keep a
+    /// copy), or with a session id one readable page of that session
+    Export {
+        /// A session (id or prefix): write that session as a readable page instead
+        session: Option<String>,
+        /// Where to write: a folder or a file name (default: the current folder); `-` writes to
+        /// standard output, to encrypt it on the way (`eye export --to - | age -p > backup.eyepack.age`)
+        #[arg(long)]
+        to: Option<PathBuf>,
+        /// With a session: a self-contained HTML page (the default)
+        #[arg(long)]
+        html: bool,
+        /// With a session: Markdown instead
+        #[arg(long, conflicts_with = "html")]
+        md: bool,
+    },
+    /// Read a file made by `eye export` into this machine: shows the plan first, asks [y/N]
+    Import {
+        /// The pack, or `-` to read it from standard input (`age -d backup.eyepack.age | eye import -`)
+        file: PathBuf,
+        /// Do not ask first (needed in a script)
+        #[arg(long)]
+        yes: bool,
+        /// Show the plan, change nothing
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Snapshot the database now (`eye backup ls` lists them, `eye backup restore` puts one back)
     Backup {
         #[command(subcommand)]

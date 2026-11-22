@@ -34,6 +34,7 @@ name = ""          # your name as older summaries wrote it, e.g. "Sam": lines st
 
 [exclude]
 paths = []         # cwd prefixes eye ignores completely
+temp = true        # sessions started in a temp folder (/tmp, the system temp folder, Claude's scratchpads) are not indexed; false indexes them, e.g. for testing
 
 [outputs]
 jira_projects = [] # empty = learn project prefixes; or list them, e.g. ["PROJ", "ACME"]
@@ -51,7 +52,107 @@ keep_daily = 7
 keep_weekly = 4
 mirror = ""            # a folder that already exists (an external disk, a synced folder) to copy each snapshot into; empty = off
 mirror_archive = false # also copy the transcript archive into <mirror>/archive
+
+[night]
+enabled = false        # planned runs start by themselves inside the window below; off until you switch it on (`eye night on`)
+window = "01:00-07:00" # local time; a run starts only inside it (a window like 23:00-05:00 crosses midnight)
+quiet_minutes = 20     # start only when no session you work in has been busy or touched for this long
+parallel = 2           # runs going at once; planned runs never wait for each other
+claude_permission = "auto"  # `auto`, or `acceptEdits` (then only build and test commands are allowed)
+claude_model = ""      # a model for Claude night runs; empty = Claude's default
+codex_model = ""       # a model for Codex night runs; empty = Codex's default
+agy_model = ""         # a model for Antigravity (agy) night runs; empty = agy's default
+opencode_model = ""    # a model (provider/model) for OpenCode night runs; empty = OpenCode's default
+allow_unsandboxed = false # start Claude runs even where its sandbox is missing (Linux without bubblewrap and socat), and agy and OpenCode runs at all (agy: eye could not verify that its --sandbox keeps a run in its folder; OpenCode has no sandbox); Bash is then not confined
+# network = ["registry.npmjs.org", "pypi.org", "files.pythonhosted.org", "crates.io", "index.crates.io", "static.crates.io", "proxy.golang.org"]  # the only hosts a sandboxed Claude run may reach (never github.com, gitlab.com, bitbucket.org); this is the default
+
+[loose]
+enabled = true         # list what a session left behind (servers still running, commits on no remote, ...); it never changes repos or processes, it keeps what it found in eye's database
+days = 30              # look at the folders of sessions active in the last this many days
 "#;
+
+/// The keys each section of `config.toml` has in this version. `agents` (its own tables per agent)
+/// and `usage` (`[usage.prices."<model>"]`) hold names the user chooses and are not listed.
+const KNOWN: &[(&str, &[&str])] = &[
+    (
+        "summary",
+        &[
+            "enabled",
+            "quiet_minutes",
+            "model",
+            "agent",
+            "concurrency",
+            "auto_days",
+        ],
+    ),
+    ("user", &["name"]),
+    ("board", &["enabled", "port", "resume", "done_days"]),
+    ("remind", &["notify"]),
+    ("exclude", &["paths", "temp"]),
+    ("outputs", &["jira_projects", "jira_url"]),
+    (
+        "hide",
+        &["trivial", "max_prompts", "max_reply_chars", "commands"],
+    ),
+    (
+        "backup",
+        &[
+            "enabled",
+            "keep_daily",
+            "keep_weekly",
+            "mirror",
+            "mirror_archive",
+        ],
+    ),
+    ("loose", &["enabled", "days"]),
+    (
+        "night",
+        &[
+            "enabled",
+            "window",
+            "quiet_minutes",
+            "parallel",
+            "claude_permission",
+            "claude_model",
+            "codex_model",
+            "agy_model",
+            "opencode_model",
+            "allow_unsandboxed",
+            "network",
+        ],
+    ),
+];
+/// Sections whose keys are chosen by the user.
+const OPEN_SECTIONS: &[&str] = &["agents", "usage"];
+
+/// Names this version does not know, as `[section]` or `section.key`.
+fn unknown_keys(t: &toml::Table) -> Vec<String> {
+    let mut out = vec![];
+    for (name, v) in t {
+        if OPEN_SECTIONS.contains(&name.as_str()) {
+            if let (Some(a), "agents") = (v.as_table(), name.as_str()) {
+                out.extend(
+                    a.iter()
+                        .filter(|(k, v)| *k != "enabled" && !v.is_table())
+                        .map(|(k, _)| format!("agents.{k}")),
+                );
+            }
+            continue;
+        }
+        let Some((_, keys)) = KNOWN.iter().find(|(n, _)| n == name) else {
+            out.push(format!("[{name}]"));
+            continue;
+        };
+        if let Some(tab) = v.as_table() {
+            out.extend(
+                tab.keys()
+                    .filter(|k| !keys.contains(&k.as_str()))
+                    .map(|k| format!("{name}.{k}")),
+            );
+        }
+    }
+    out
+}
 
 /// The config written on first run.
 pub fn default_toml() -> String {
@@ -71,9 +172,35 @@ pub struct Config {
     pub outputs: OutputsCfg,
     pub hide: HideCfg,
     pub backup: BackupCfg,
+    pub usage: UsageCfg,
+    pub loose: LooseCfg,
+    pub night: NightCfg,
     /// The folder eye may create idea folders inside; not set: the account's home folder.
     #[serde(skip)]
     pub folder_root: Option<PathBuf>,
+    /// `<eye home>/night`: set when the file is loaded from an eye home. A session whose folder is
+    /// a run folder in it is a night run (see `night::is_night_folder`).
+    #[serde(skip)]
+    pub night_dir: Option<PathBuf>,
+}
+
+/// `[usage]`: the cost estimate.
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(default)]
+pub struct UsageCfg {
+    /// `[usage.prices."<model>"]`: USD per million tokens, to add a model or override a built-in
+    /// price. A model named here is priced from this table alone.
+    pub prices: BTreeMap<String, PriceCfg>,
+}
+
+/// USD per million tokens for one model.
+#[derive(Debug, Clone, Copy, Deserialize, Default, PartialEq)]
+#[serde(default)]
+pub struct PriceCfg {
+    pub input: f64,
+    pub output: f64,
+    pub cache_write: f64,
+    pub cache_read: f64,
 }
 
 /// Which coding agents eye follows, and where each keeps its files.
@@ -97,6 +224,10 @@ pub struct AgentCfg {
     /// A folder given on the command line; it beats the environment and `dir`.
     #[serde(skip)]
     pub dir_override: Option<PathBuf>,
+    /// `<eye home>/night`, copied from the config: Codex shows a `codex exec` rollout only when it
+    /// ran in a night run's folder.
+    #[serde(skip)]
+    pub night_dir: Option<PathBuf>,
 }
 
 /// A leading `~` or `~/` is the home folder.
@@ -270,6 +401,83 @@ impl Default for BoardCfg {
     }
 }
 
+/// `[night]`: runs that start by themselves while you are away. See `docs/night.md`.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct NightCfg {
+    /// Off until switched on: nothing runs unless this is true and a run is planned.
+    pub enabled: bool,
+    /// `HH:MM-HH:MM` in local time.
+    pub window: String,
+    pub quiet_minutes: u32,
+    pub parallel: u32,
+    /// Claude's permission mode for headless runs.
+    pub claude_permission: String,
+    pub claude_model: String,
+    pub codex_model: String,
+    /// A model for Antigravity (agy) night runs; empty = agy's default.
+    pub agy_model: String,
+    /// A model (`provider/model`) for OpenCode night runs.
+    pub opencode_model: String,
+    /// Start Claude runs even where its sandbox is not available, and agy and OpenCode runs at
+    /// all (eye cannot confine them): Bash is then not confined.
+    pub allow_unsandboxed: bool,
+    /// The hosts a sandboxed Claude run may reach (package registries); empty = the built-in list.
+    pub network: Vec<String>,
+    /// `worktree` (a git worktree of the repo, the default) or `copy` (a separate local copy, the
+    /// original folder fully locked). A run can choose its own.
+    pub isolation: String,
+}
+impl NightCfg {
+    /// The hosts to allow: the configured list, or the built-in package registries.
+    pub fn network_list(&self) -> Vec<String> {
+        if self.network.is_empty() {
+            crate::night::launch::NETWORK
+                .iter()
+                .map(|s| (*s).to_string())
+                .collect()
+        } else {
+            self.network.clone()
+        }
+    }
+}
+impl Default for NightCfg {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            window: "01:00-07:00".into(),
+            quiet_minutes: 20,
+            parallel: 2,
+            claude_permission: "auto".into(),
+            claude_model: String::new(),
+            codex_model: String::new(),
+            agy_model: String::new(),
+            opencode_model: String::new(),
+            allow_unsandboxed: false,
+            network: vec![],
+            isolation: "worktree".into(),
+        }
+    }
+}
+
+/// `[loose]`: finding what a session left behind.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct LooseCfg {
+    /// Look for loose ends at all. It never changes repos or processes (it keeps what it found in eye's database), so it is on by default.
+    pub enabled: bool,
+    /// Only repos and folders of sessions active in the last this many days are looked at.
+    pub days: u32,
+}
+impl Default for LooseCfg {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            days: 30,
+        }
+    }
+}
+
 /// `[remind]`: what happens when a reminder falls due.
 #[derive(Debug, Clone, Deserialize, Default)]
 #[serde(default)]
@@ -279,16 +487,42 @@ pub struct RemindCfg {
 }
 
 /// `[exclude]`: folders that are never indexed.
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct ExcludeCfg {
     pub paths: Vec<String>,
+    /// Sessions started in a temp folder (test runs, scratch work) are not indexed. True by default.
+    pub temp: bool,
+}
+
+impl Default for ExcludeCfg {
+    fn default() -> Self {
+        ExcludeCfg {
+            paths: vec![],
+            temp: true,
+        }
+    }
 }
 
 impl Config {
     /// Parse the text of a `config.toml`.
     pub fn parse(s: &str) -> Result<Config> {
-        toml::from_str(s).context("parsing config.toml")
+        Ok(Self::parse_noting(s)?.0)
+    }
+
+    /// Parse the text, and list what this version does not know: sections, keys, and entries of
+    /// `[agents]` that are neither `enabled` nor a table. A file written by a newer eye must still
+    /// load, so those are left out and reported, never fatal. Text that is not TOML at all, or a
+    /// known key with the wrong type, is still an error.
+    pub fn parse_noting(s: &str) -> Result<(Config, Vec<String>)> {
+        let mut table: toml::Table = s.parse().context("parsing config.toml")?;
+        let mut unknown = unknown_keys(&table);
+        if let Some(toml::Value::Table(a)) = table.get_mut("agents") {
+            a.retain(|k, v| k == "enabled" || v.is_table());
+        }
+        let cfg = Config::deserialize(table).context("parsing config.toml")?;
+        unknown.sort();
+        Ok((cfg, unknown))
     }
 
     /// Load the config, writing the defaults first when the file is missing.
@@ -300,7 +534,20 @@ impl Config {
         crate::files::make_private(path);
         let s =
             std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
-        Config::parse(&s)
+        let (cfg, unknown) = Config::parse_noting(&s)?;
+        if !unknown.is_empty() {
+            static ONCE: std::sync::Once = std::sync::Once::new();
+            ONCE.call_once(|| {
+                eprintln!(
+                    "eye: {} has settings this version does not know ({}); they are ignored",
+                    path.display(),
+                    unknown.join(", ")
+                );
+            });
+        }
+        let mut cfg = cfg;
+        cfg.night_dir = path.parent().map(|p| p.join("night"));
+        Ok(cfg)
     }
 
     /// The ids in `[agents] enabled`; Claude Code when the key is not set.
@@ -320,7 +567,9 @@ impl Config {
 
     /// The settings of one agent (the defaults when it has no table).
     pub fn agent_cfg(&self, id: &str) -> AgentCfg {
-        self.agents.each.get(id).cloned().unwrap_or_default()
+        let mut c = self.agents.each.get(id).cloned().unwrap_or_default();
+        c.night_dir.clone_from(&self.night_dir);
+        c
     }
 
     /// Point an agent at a folder for this run only (the `--claude-dir` flag).
@@ -339,12 +588,13 @@ impl Config {
         c
     }
 
-    /// Is `cwd` inside an excluded folder?
+    /// Is `cwd` inside an excluded folder, or (with `[exclude] temp`, the default) a temp folder?
     pub fn is_excluded(&self, cwd: &str) -> bool {
         self.exclude
             .paths
             .iter()
             .any(|p| !p.is_empty() && cwd.starts_with(p.as_str()))
+            || (self.exclude.temp && crate::util::is_temp_folder(cwd))
     }
 }
 
@@ -416,6 +666,11 @@ pub fn set_agents_enabled(text: &str, ids: &[String]) -> String {
         "enabled",
         &format!("[{}]", list.join(", ")),
     )
+}
+
+/// Write one `[night]` key into the config file (created from the defaults when missing).
+pub fn write_night(path: &Path, key: &str, value: &str) -> Result<()> {
+    crate::config_edit::rewrite(path, |t| set_key(t, "[night]", key, value))
 }
 
 /// Write `[board] enabled` into the config file (created from the defaults when missing).
@@ -651,6 +906,18 @@ mod tests {
         assert!(!c.is_excluded("/x"));
         let c = Config::parse("[exclude]\npaths=[\"/x\"]").unwrap();
         assert!(c.is_excluded("/x/y"));
+        // temp folders are left out unless `temp = false`
+        let tmp = std::env::temp_dir().join("eye-x");
+        for p in [
+            "/tmp/x",
+            "/private/tmp/claude-501/p/s/scratchpad",
+            tmp.to_str().unwrap(),
+        ] {
+            assert!(c.is_excluded(p), "{p}");
+        }
+        assert!(!c.is_excluded("/tmpfoo/x") && !c.is_excluded("/Users/me/code/x"));
+        let c = Config::parse("[exclude]\ntemp = false").unwrap();
+        assert!(!c.is_excluded("/tmp/x") && !c.is_excluded(tmp.to_str().unwrap()));
         assert!(c.summary.enabled);
         assert!(c.hide.trivial);
         assert_eq!(c.hide.max_reply_chars, 200);
@@ -659,5 +926,48 @@ mod tests {
         assert_eq!(d.hide.commands, c.hide.commands);
         let c = Config::parse("[hide]\ntrivial=false").unwrap();
         assert!(!c.hide.trivial && c.hide.max_prompts == 1);
+    }
+
+    #[test]
+    fn a_newer_config_loads_and_what_is_unknown_is_listed() {
+        let t = format!(
+            "{}\n[future]\nx = 1\n[night]\nnew_key = true\n[agents]\nnew_scalar = 3\n",
+            "[board]\nport = 7500"
+        );
+        let (c, unknown) = Config::parse_noting(&t).unwrap();
+        assert_eq!(c.board.port, 7500);
+        assert_eq!(
+            unknown,
+            vec!["[future]", "agents.new_scalar", "night.new_key"]
+        );
+        // text that is not TOML is still refused
+        assert!(Config::parse("[board\nport =").is_err());
+    }
+
+    #[test]
+    fn the_default_file_has_no_unknown_names() {
+        let (_, unknown) = Config::parse_noting(&default_toml()).unwrap();
+        assert!(unknown.is_empty(), "{unknown:?}");
+        // every key of the default file is listed, so a new key is not reported as unknown
+        let t: toml::Table = default_toml().parse().unwrap();
+        for (sec, v) in &t {
+            if OPEN_SECTIONS.contains(&sec.as_str()) {
+                continue;
+            }
+            let keys = KNOWN.iter().find(|(n, _)| n == sec).unwrap().1;
+            for k in v.as_table().unwrap().keys() {
+                assert!(keys.contains(&k.as_str()), "{sec}.{k}");
+            }
+        }
+    }
+
+    #[test]
+    fn load_or_create_warns_and_goes_on_with_a_future_section() {
+        let tmp = tempfile::tempdir().unwrap();
+        let p = tmp.path().join("config.toml");
+        std::fs::write(&p, "[future]\nx = 1\n[board]\nport = 7501\n").unwrap();
+        assert_eq!(Config::load_or_create(&p).unwrap().board.port, 7501);
+        std::fs::write(&p, "this is = not [toml").unwrap();
+        assert!(Config::load_or_create(&p).is_err());
     }
 }

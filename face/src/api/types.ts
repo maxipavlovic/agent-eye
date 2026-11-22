@@ -75,6 +75,9 @@ export interface LoopItem {
   line: string;
 }
 
+/** Where a session was started; `null` when unknown. The terminal is the normal case. */
+export type Origin = 'terminal' | 'headless' | 'app' | 'desktop' | 'ide' | 'web' | 'night';
+
 export interface Card {
   id: string;
   /** Agent id, e.g. "claude". */
@@ -85,6 +88,10 @@ export interface Card {
   folder: string | null;
   repo: string | null;
   branch: string | null;
+  /** Where the session was started (see `Origin`). */
+  origin?: Origin | null;
+  /** What the agent wrote that `origin` was mapped from (`sdk-ts`). */
+  origin_raw?: string | null;
   column: Where;
   auto_column: Where;
   manual: boolean;
@@ -134,6 +141,10 @@ export interface Card {
   remind_note?: string | null;
   /** The reminder's time has come: the card is in Needs you (an idea stays an idea card). */
   remind_due?: boolean;
+  /** What the session left behind (servers still running, commits on no remote, ...), not counting what was ignored. */
+  loose?: number;
+  /** The session was made by a night-shift run. */
+  night?: { id: number; status: string };
   /** Idea cards with a folder: what the folder is now. Older engines leave all three out. */
   folder_state?: FolderState;
   /** Idea cards: a missing folder that Start may create. */
@@ -175,7 +186,169 @@ export interface Worked {
   more_days: number;
 }
 
+/** Tokens and the estimated cost of a group of messages (API-equivalent, not a bill). */
+export interface UsageSum {
+  input: number;
+  output: number;
+  cache_write: number;
+  cache_read: number;
+  total: number;
+  /** null: no token of the group has a known price. */
+  cost_usd: number | null;
+  /** Tokens on a model without a price: counted in the totals, not in the cost. */
+  unpriced_tokens: number;
+}
+
+export interface UsageRow extends UsageSum {
+  name: string;
+  /** Session rows only. */
+  id?: string;
+  agent?: string;
+}
+
+export interface UsageWeek extends UsageSum {
+  from: string;
+  to: string;
+}
+
+export interface UsageLimitWindow {
+  label: string;
+  used_percent: number;
+  window_minutes: number | null;
+  /** Unix ms. */
+  resets_at: number | null;
+  /** The window has reset since it was seen. */
+  reset: boolean;
+}
+
+/** The plan limits one agent reported, as the newest seen. */
+export interface UsageLimits {
+  agent: string;
+  name: string;
+  /** Unix ms. */
+  seen_at: number;
+  plan: string | null;
+  windows: UsageLimitWindow[];
+  /** One sentence per window, with its age. */
+  lines: string[];
+}
+
+/** GET /api/usage. */
+export interface UsageReport {
+  /** "API-equivalent estimate, not your bill". */
+  estimate: string;
+  days: number;
+  from: string;
+  to: string;
+  by: 'project' | 'agent' | 'model' | 'session';
+  rows: UsageRow[];
+  totals: UsageSum;
+  by_project: UsageRow[];
+  by_agent: UsageRow[];
+  by_model: UsageRow[];
+  top_sessions: UsageRow[];
+  /** The last four weeks, oldest first. */
+  weeks: UsageWeek[];
+  limits: UsageLimits[];
+  /** Sessions whose usage is still being counted in the background. */
+  backfill_left: number;
+}
+
+/** A session's usage over its whole life (detail cards); null while it is not counted. */
+export interface CardUsage extends UsageSum {
+  estimate: string;
+}
+
+/** One thing a session left behind. */
+export interface LooseEnd {
+  /** Stable across scans; what the actions send. */
+  key: string;
+  session_id: string;
+  kind: 'process' | 'container' | 'worktree' | 'unpushed' | 'uncommitted';
+  /** One plain sentence. */
+  line: string;
+  /** What it is, in a few words: the confirm question names it. */
+  what: string;
+  detail: string;
+  since_ms: number;
+  /** What eye can do: stop, remove, or (git work it never touches) copy a command. */
+  action: 'stop' | 'remove' | 'push' | 'commit';
+  /** The question to ask before the action (stop and remove only). */
+  confirm: string | null;
+  /** The git command to copy (push and commit only); eye never runs it. */
+  command: string | null;
+}
+
+export type LooseAct = 'stop' | 'remove' | 'ignore';
+
+export type NightIsolation = 'worktree' | 'copy';
+
+/** One night-shift run (GET /api/night, a card's `night`). The report is untrusted output: render it as text. */
+export interface NightRun {
+  id: number;
+  kind: 'idea' | 'session';
+  idea_id: number | null;
+  session_id: string | null;
+  agent: string;
+  switch: boolean;
+  folder: string;
+  prompt: string;
+  /** The local date (YYYY-MM-DD) of the night it is planned for. */
+  night: string;
+  status: 'planned' | 'running' | 'done' | 'failed' | 'stopped' | 'skipped';
+  why: string | null;
+  limit: { kind: 'weekly' | 'tokens' | 'minutes'; value: number; text: string } | null;
+  run_session_id: string | null;
+  worktree: string | null;
+  branch: string | null;
+  base_ref: string | null;
+  started_at: number | null;
+  ended_at: number | null;
+  duration_ms: number | null;
+  report: string | null;
+  diff_stat: string | null;
+  created_at: number;
+  /** How the run keeps the folder safe: a git worktree of the repo, or a separate copy (the original fully locked). */
+  isolation: NightIsolation;
+  /** Detail cards only: tokens the run's session used, and whether its worktree has uncommitted changes. */
+  tokens?: number;
+  uncommitted?: boolean;
+}
+
+/** GET /api/night: the switch, the window, and the runs. */
+export interface NightState {
+  enabled: boolean;
+  window: string;
+  parallel: number;
+  /** `[night] isolation`: what a new plan starts with. */
+  isolation: NightIsolation;
+  quiet_minutes: number;
+  in_window: boolean;
+  planned: number;
+  open: NightRun[];
+  recent: NightRun[];
+}
+
+/** POST /api/night/plan: an idea (`idea_id`) or a session to continue (`session_id`, with `prompt`). */
+export interface NightPlanInput {
+  idea_id?: number;
+  session_id?: string;
+  prompt?: string;
+  /** `30%`, `2M`, `500k`, `90m`, `2h`; empty: none. */
+  limit?: string;
+  agent?: string;
+  switch?: boolean;
+  isolation?: NightIsolation;
+}
+
 export interface CardDetail extends Card {
+  usage?: CardUsage | null;
+  /** What the session left behind, ignored items left out. */
+  loose_ends?: LooseEnd[];
+  /** What is left, by kind, in one line ("2 servers (ports 4321, 4350), 3 commits not pushed"); null when nothing is. */
+  loose_summary?: string | null;
+  /** The night run that made this session; null (or missing) for any other. */
+  night_run?: NightRun | null;
   /** Up to the last 10 prompts, oldest first. */
   prompts: string[];
   first_prompt: string | null;
@@ -230,7 +403,10 @@ export interface ArchivePage {
 export interface SearchHit {
   card: Card;
   snippet: string;
+  /** Lower is better (kept from 0.2). */
   score: number;
+  /** Higher is better: the same ranking as `score`, turned around. */
+  relevance: number;
 }
 
 /** An enabled agent: `short` is the name shown on cards and labels. */
@@ -309,9 +485,13 @@ export interface Source {
   ideas(): Promise<{ ideas: Idea[] }>;
   /** The enabled agents (GET /api/agents). */
   agents(): Promise<{ agents: Agent[] }>;
+  /** Usage over the last `days` days (GET /api/usage); an older engine answers 404. */
+  usage(days: number): Promise<UsageReport>;
   move(id: string, column: MoveTarget): Promise<Card>;
   /** Manual hide / unhide of a session (POST /api/cards/:id/hidden). */
   setHidden(id: string, hidden: boolean): Promise<Card>;
+  /** Removes a session from eye, and with `transcript` the agent's own copy too (POST /api/sessions/:id/forget, `confirm: true`). Cannot be undone. */
+  forget(id: string, transcript: boolean): Promise<void>;
   /** The newest `limit` messages, or the `limit` before index `before`. */
   conversation(id: string, limit: number, before: number | null): Promise<ConversationPage>;
   /** `fork`: resume as a new session branched from this one. */
@@ -325,10 +505,28 @@ export interface Source {
   folderCheck(path: string): Promise<FolderCheck>;
   /** Sets or clears a "check on this" reminder on a session or an idea card (POST /api/cards/:id/remind). */
   remind(id: string, input: RemindInput): Promise<Card>;
+  /** Stops, removes or ignores one thing a session left behind (POST /api/loose/<action>); the engine refuses what no longer matches. */
+  looseAct(action: LooseAct, key: string): Promise<{ ok: boolean; note?: string }>;
+  /** Resumes the session with a first message that lists what it left (POST /api/loose/send). */
+  looseSend(session: string, dryRun: boolean): Promise<ResumePlan>;
   /** Whether a due reminder shows a desktop notice (GET /api/remind/settings); an older engine answers 404. */
   remindSettings(): Promise<RemindSettings>;
   /** Turns the desktop notice on or off; it takes effect at once (POST /api/remind/settings). */
   setRemindSettings(input: { notify: boolean }): Promise<RemindSettings>;
+  /** The night shift: switch, window, planned and finished runs (GET /api/night); an older engine answers 404. */
+  night(): Promise<NightState>;
+  /** Changes the switch, the window or `parallel` (POST /api/night/settings). */
+  nightSettings(input: { enabled?: boolean; window?: string; parallel?: number }): Promise<NightState>;
+  /** Plans a run for tonight (POST /api/night/plan); the engine says why when it refuses. */
+  nightPlan(input: NightPlanInput): Promise<NightRun>;
+  nightCancel(id: number): Promise<NightState>;
+  /** Changes the limit of a planned run; empty removes it. */
+  nightLimit(id: number, limit: string): Promise<NightState>;
+  /** Removes a run's worktree and branch, or its copy; the page asked first. */
+  nightDiscard(id: number, loseChanges: boolean): Promise<{ ok: boolean; note?: string }>;
+  nightOpen(id: number): Promise<{ ok: boolean }>;
+  /** Fetches a repo copy's night branch into the original repo (POST /api/night/:id/bring); the page asked first. */
+  nightBring(id: number): Promise<{ ok: boolean; note?: string }>;
   /** Calls onChange when the data changed; reports connection state. Returns unsubscribe. */
   subscribe(onChange: () => void, onState: (s: Connection) => void): () => void;
 }

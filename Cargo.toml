@@ -1,9 +1,9 @@
 [package]
 name = "agent-eye"
-version = "0.2.1"
+version = "0.3.0"
 edition = "2021"
 rust-version = "1.89"
-description = "Find, sort and resume your coding-agent sessions: local index, terminal picker and board"
+description = "Find, sort, resume and finish your coding-agent sessions, even overnight: local index, terminal picker and board"
 license = "MIT"
 repository = "https://github.com/maxipavlovic/agent-eye"
 homepage = "https://maxipavlovic.github.io/agent-eye/"
@@ -34,26 +34,35 @@ path = "src/lib.rs"
 name = "agent-eye"
 path = "src/main.rs"
 
+[features]
+# For the end-to-end suite only (`e2e/`): `EYE_FIXED_NOW_MS` replaces the clock, so ages, due
+# reminders and usage windows come out the same on every run. Never enabled in a release.
+fixed-clock = []
+
 [dependencies]
 anyhow = "1"
-axum = { version = "0.7", default-features = false, features = ["http1", "tokio", "json", "query"] }
-chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+axum = { version = "0.8", default-features = false, features = ["http1", "tokio", "json", "query"] }
+jiff = { version = "0.2", default-features = false, features = ["std", "tz-system", "tzdb-bundle-platform"] }
 clap = { version = "4", features = ["derive", "env"] }
 libc = "0.2"
 regex = "1"
 rusqlite = { version = "0.41", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
-zstd = "0.13"
+zstd = "0.14"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "signal", "sync"] }
 tokio-stream = { version = "0.1", features = ["sync"] }
-toml = "0.8"
+toml = "1.2"
 ratatui = "0.30.2"
 crossterm = { version = "0.29", features = ["use-dev-tty"] }
 nucleo-matcher = "0.3.1"
 unicode-width = "0.2"
+tar = { version = "0.4.46", default-features = false }
+sha2 = "0.10"
 
 [dev-dependencies]
+# tests name Europe/Madrid, and a bare Linux image has no tz database
+jiff = { version = "0.2", default-features = false, features = ["std", "tz-system", "tzdb-bundle-always"] }
 http-body-util = "0.1"
 tempfile = "3"
 tower = { version = "0.5", features = ["util"] }

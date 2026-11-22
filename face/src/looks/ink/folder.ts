@@ -17,3 +17,11 @@ export function folderHint(check: FolderCheck | null): string | null {
 
 /** Does this idea card's folder not exist yet (so the card carries the quiet mark)? */
 export const folderMissing = (c: Folder) => c.folder_state === 'missing';
+
+/** Temp and scratch folders (the system temp dirs, eye's own night copies): never offered as a place to work. */
+export function isScratch(path: string): boolean {
+  let p = path.trim();
+  while (p.length > 1 && p.endsWith('/')) p = p.slice(0, -1);
+  return /^\/(private\/)?(tmp|var\/tmp|var\/folders)(\/|$)/.test(p)
+    || /(^|\/)(\.agent-eye|eyehome)(\/|$)/.test(p);
+}

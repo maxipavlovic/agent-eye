@@ -1,7 +1,7 @@
 //! What a snapshot's file name says, and which snapshots the keep rules leave.
 
 use crate::config::BackupCfg;
-use chrono::{DateTime, Datelike, Local, NaiveDateTime, TimeZone, Utc};
+use jiff::{civil::DateTime, tz::TimeZone};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
@@ -23,6 +23,8 @@ pub enum Reason {
     /// Before the schema was upgraded to this version.
     PreUpgrade(i64),
     PreRestore,
+    /// Before `eye import` changes the database.
+    PreImport,
 }
 
 impl Reason {
@@ -32,6 +34,7 @@ impl Reason {
             Reason::Manual => "manual".into(),
             Reason::PreUpgrade(v) => format!("pre-v{v}"),
             Reason::PreRestore => "pre-restore".into(),
+            Reason::PreImport => "pre-import".into(),
         }
     }
 
@@ -40,6 +43,7 @@ impl Reason {
             "daily" => Some(Reason::Daily),
             "manual" => Some(Reason::Manual),
             "pre-restore" => Some(Reason::PreRestore),
+            "pre-import" => Some(Reason::PreImport),
             _ => s
                 .strip_prefix("pre-v")
                 .and_then(|v| v.parse().ok())
@@ -55,11 +59,11 @@ impl Reason {
 
 /// The file name of a snapshot made at `at` (UTC) of a database at schema `schema`, which is
 /// left out of the name when it is not known.
-pub fn file_name(at: NaiveDateTime, reason: &Reason, schema: Option<i64>) -> String {
+pub fn file_name(at: DateTime, reason: &Reason, schema: Option<i64>) -> String {
     let schema = schema.map_or(String::new(), |v| format!("-s{v}"));
     format!(
         "{PREFIX}{}-{}{schema}{SUFFIX}",
-        at.format(STAMP),
+        at.strftime(STAMP),
         reason.word()
     )
 }
@@ -70,7 +74,7 @@ pub struct Entry {
     pub name: String,
     pub path: PathBuf,
     /// When it was made, in UTC.
-    pub stamp: NaiveDateTime,
+    pub stamp: DateTime,
     pub reason: Reason,
     /// The schema version of the database it holds, from the name; None when the name has none.
     pub schema: Option<i64>,
@@ -84,7 +88,7 @@ impl Entry {
         let name = path.file_name()?.to_str()?.to_string();
         let body = name.strip_prefix(PREFIX)?.strip_suffix(SUFFIX)?;
         let (stamp, reason) = body.split_at_checked(STAMP_LEN)?;
-        let stamp = NaiveDateTime::parse_from_str(stamp, STAMP).ok()?;
+        let stamp = DateTime::strptime(STAMP, stamp).ok()?;
         let reason = reason.strip_prefix('-')?;
         let (reason, schema) = match reason.rsplit_once('-') {
             Some((r, s)) if s.starts_with('s') && s[1..].parse::<i64>().is_ok() => {
@@ -106,26 +110,35 @@ impl Entry {
 
     /// When it was made, in Unix ms.
     pub fn stamp_ms(&self) -> i64 {
-        Utc.from_utc_datetime(&self.stamp).timestamp_millis()
+        self.stamp
+            .to_zoned(TimeZone::UTC)
+            .map_or(0, |z| z.timestamp().as_millisecond())
     }
 
-    /// When it was made, on the wall clock of this machine.
-    pub fn local_stamp(&self) -> DateTime<Local> {
-        Utc.from_utc_datetime(&self.stamp).with_timezone(&Local)
+    /// When it was made, on the wall clock of this machine, as `YYYY-MM-DD HH:MM`.
+    pub fn local_stamp(&self) -> String {
+        self.stamp.to_zoned(TimeZone::UTC).map_or_else(
+            |_| "?".into(),
+            |z| {
+                z.with_time_zone(TimeZone::system())
+                    .strftime("%Y-%m-%d %H:%M")
+                    .to_string()
+            },
+        )
     }
 }
 
 /// The names the keep rules leave, from the snapshots newest first: the newest `keep_daily`
 /// dailies; the newest daily of each of the newest `keep_weekly` ISO weeks that have one; the last
-/// 3 `pre-v*`, the last 3 `pre-restore` and the last 5 `manual`.
+/// 3 `pre-v*`, the last 3 `pre-restore`, the last 3 `pre-import` and the last 5 `manual`.
 pub fn keep(all: &[Entry], cfg: &BackupCfg) -> HashSet<String> {
     let of = |want: fn(&Reason) -> bool| all.iter().filter(move |e| want(&e.reason));
     let mut keep: HashSet<String> = HashSet::new();
     let dailies: Vec<&Entry> = of(|r| matches!(r, Reason::Daily)).collect();
     keep.extend(dailies.iter().take(cfg.keep_daily).map(|e| e.name.clone()));
-    let mut weeks: Vec<(i32, u32)> = vec![];
+    let mut weeks: Vec<(i16, i8)> = vec![];
     for e in &dailies {
-        let w = e.stamp.date().iso_week();
+        let w = e.stamp.date().iso_week_date();
         let week = (w.year(), w.week());
         if !weeks.contains(&week) && weeks.len() < cfg.keep_weekly {
             weeks.push(week);
@@ -139,6 +152,11 @@ pub fn keep(all: &[Entry], cfg: &BackupCfg) -> HashSet<String> {
     );
     keep.extend(
         of(|r| matches!(r, Reason::PreRestore))
+            .take(3)
+            .map(|e| e.name.clone()),
+    );
+    keep.extend(
+        of(|r| matches!(r, Reason::PreImport))
             .take(3)
             .map(|e| e.name.clone()),
     );

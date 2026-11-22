@@ -94,6 +94,17 @@ describe('the date picker', () => {
     removeEventListener('keydown', board);
   });
 
+  it('takes two keys pressed before it is drawn again from the newest day', async () => {
+    // 27 Mar: right to the 28th, down a week into April, then a month on: May, not April
+    const { el, month } = show('2027-03-27');
+    const grid = el.querySelector('table')!;
+    key(grid, 'ArrowRight');
+    key(grid, 'ArrowDown');
+    key(grid, 'PageDown');
+    await flush();
+    expect(month()).toBe('MAY 2027');
+  });
+
   it('never moves before the first day it may pick', async () => {
     const { el, focused } = show(today);
     key(el.querySelector('table')!, 'PageUp');

@@ -7,8 +7,13 @@ use axum::Json;
 use serde_json::{json, Value};
 
 /// Board settings the face mirrors here, so every browser and the installed app share them.
-pub(super) const PREF_KEYS: &[&str] =
-    &["eye.theme", "eye.ink.layout", "eye.ink.fold", "eye.accent"];
+pub(super) const PREF_KEYS: &[&str] = &[
+    "eye.theme",
+    "eye.ink.layout",
+    "eye.ink.fold",
+    "eye.ink.panel",
+    "eye.accent",
+];
 
 pub(super) fn prefs_path(st: &AppState) -> std::path::PathBuf {
     st.paths.home.join("ui.json")

@@ -5,7 +5,8 @@ import type { Store } from '../../store';
 import type { Card, CardDetail, FolderCheck } from '../../api/types';
 import { homePath } from '../../format';
 import { ICONS, INK } from './art';
-import { folderHint } from './folder';
+import { folderHint, isScratch } from './folder';
+import { LIMIT_HELP } from './Night';
 
 /** The idea form: a new idea, or the idea card `edit` (its detail is loaded first); `focus` picks the first field. */
 export const ideaForm = signal<{ edit?: string; focus?: 'prompt' } | null>(null);
@@ -13,11 +14,12 @@ export const ideaForm = signal<{ edit?: string; focus?: 'prompt' } | null>(null)
 /** How long the folder field rests before the typed path is checked. */
 export const FOLDER_CHECK_MS = 300;
 
-/** Folders of the sessions on the board, most recently active first, each once. */
+/** Folders of the sessions on the board, most recently active first, each once. Temp and scratch folders and
+ *  ones the engine says are gone are left out. */
 export function recentFolders(cards: Card[]): string[] {
   const seen = new Set<string>();
   return [...cards]
-    .filter((c) => c.kind !== 'idea' && c.folder)
+    .filter((c) => c.kind !== 'idea' && c.folder && !isScratch(c.folder) && (!c.folder_state || c.folder_state === 'ok'))
     .sort((a, b) => (b.last_activity_at ?? 0) - (a.last_activity_at ?? 0))
     .map((c) => c.folder!)
     .filter((f) => !seen.has(f) && !!seen.add(f));
@@ -38,17 +40,32 @@ function IdeaForm({ store, idea, focus, onClose }: { store: Store; idea?: CardDe
   const prompt = useRef<HTMLTextAreaElement>(null);
   const folder = useSignal(idea?.folder ?? '');
   const busy = useSignal(false);
+  // TONIGHT: plan the idea for the night shift as it is saved
+  const tonight = useSignal(false);
+  const limit = useSignal('');
+  const sw = useSignal(false);
+  const canNight = store.night.value !== null;
   // The agent picker shows only when there is a choice; the default agent stands in until one is picked.
   const agents = store.agents.value;
   const chosen = useSignal(idea?.agent ?? '');
   const agent = agents.find((a) => a.id === chosen.value) ?? agents.find((a) => a.default) ?? agents[0];
   const who = agent?.short ?? 'the agent';
-  const folders = recentFolders(store.board.value?.columns.flatMap((c) => c.cards) ?? []);
+  const candidates = recentFolders(store.board.value?.columns.flatMap((c) => c.cards) ?? []);
+  // only folders that exist: the engine is asked about the first dozen once, and the gone ones drop out
+  const gone = useSignal<ReadonlySet<string>>(new Set());
+  const folders = candidates.filter((f) => !gone.value.has(f));
   const shown = folderChoices(folders, folder.value);
   const picked = homePath(folder.value.trim());
   const check = useSignal<FolderCheck | null>(null);
   const hint = folderHint(check.value);
   useEffect(() => { (focus === 'prompt' ? prompt : title).current?.focus(); }, []);
+  useEffect(() => {
+    let live = true;
+    void Promise.all(candidates.slice(0, 12).map((f) => store.folderCheck(f).then((c) => (c.state === 'ok' ? null : f), () => null))).then((bad) => {
+      if (live) gone.value = new Set(bad.filter((f): f is string => f !== null));
+    });
+    return () => { live = false; };
+  }, []);
   // what the typed folder is, once typing pauses; an engine without the check says nothing
   useEffect(() => {
     const typed = folder.value.trim();
@@ -67,9 +84,17 @@ function IdeaForm({ store, idea, focus, onClose }: { store: Store; idea?: CardDe
     if (!v('title')) { title.current?.focus(); return; }
     const input = { title: v('title'), notes: v('notes'), prompt: v('prompt'), folder: folder.value.trim(), agent: agents.length > 1 ? agent?.id : undefined };
     busy.value = true;
-    const ok = idea?.idea_id != null
-      ? await store.editIdea(idea.idea_id, input)
-      : await store.addIdea({ title: input.title, notes: input.notes || undefined, prompt: input.prompt || undefined, folder: input.folder || undefined, agent: input.agent });
+    let ideaId = idea?.idea_id ?? null;
+    let ok = false;
+    if (ideaId != null) {
+      ok = await store.editIdea(ideaId, input);
+    } else {
+      const card = await store.addIdea({ title: input.title, notes: input.notes || undefined, prompt: input.prompt || undefined, folder: input.folder || undefined, agent: input.agent });
+      ok = card !== null;
+      ideaId = card?.idea_id ?? null;
+    }
+    // the idea is saved either way; a refused plan says why in a toast and the idea stays parked
+    if (ok && tonight.value && ideaId != null) await store.nightPlan({ idea_id: ideaId, limit: limit.value.trim() || undefined, agent: agents.length > 1 ? agent?.id : undefined, switch: sw.value });
     busy.value = false;
     if (ok) onClose();
   };
@@ -104,6 +129,30 @@ function IdeaForm({ store, idea, focus, onClose }: { store: Store; idea?: CardDe
               <button type="button" key={f} title={f} aria-pressed={homePath(f) === picked} onClick={() => { folder.value = homePath(f); }}>{homePath(f)}</button>
             ))}
           </div>
+        )}
+        {canNight && (
+          <fieldset class="pick">
+            <legend>TONIGHT</legend>
+            <div class="fchips">
+              <button type="button" aria-pressed={!tonight.value} onClick={() => { tonight.value = false; }}>Not tonight</button>
+              <button type="button" aria-pressed={tonight.value} onClick={() => { tonight.value = true; }}>Run it tonight</button>
+            </div>
+            <span class="hint">{tonight.value ? 'In its own worktree. Needs a prompt and a folder.' : 'Save the idea and start it yourself.'}</span>
+          </fieldset>
+        )}
+        {canNight && tonight.value && (
+          <>
+            <label>LIMIT<span class="hint">{LIMIT_HELP}</span><input name="limit" value={limit.value} onInput={(e) => { limit.value = e.currentTarget.value; }} placeholder="none" autocomplete="off" spellcheck={false} /></label>
+            {agents.length > 1 && (
+              <fieldset class="pick">
+                <legend>WHEN THE PLAN RUNS OUT</legend>
+                <div class="fchips">
+                  <button type="button" aria-pressed={!sw.value} onClick={() => { sw.value = false; }}>Stop</button>
+                  <button type="button" aria-pressed={sw.value} onClick={() => { sw.value = true; }}>Start again on the other agent</button>
+                </div>
+              </fieldset>
+            )}
+          </>
         )}
         <div class="acts end">
           <button type="button" class="btn ghost" onClick={onClose}>CANCEL</button>

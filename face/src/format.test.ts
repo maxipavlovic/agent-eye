@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { artifactName, codeParts, folderGroup, homePath, nextParts, outputLabel, remindReason, remindText, remindTitle, remindWhen, resumeLabel, snippetParts, tok } from './format';
+import { artifactName, codeParts, folderGroup, homePath, nextParts, outputLabel, remindReason, remindShort, remindText, remindTitle, remindWhen, resumeLabel, snippetParts, tok } from './format';
 import type { Output } from './api/types';
 
 describe('nextParts', () => {
@@ -120,6 +120,9 @@ describe('reminders', () => {
   });
 
   it('titles the clock mark of any set reminder, near or far, and says when one is due', () => {
+    expect(remindShort(c({ remind_at: at(1, 9) }), now)).toBe('Tomorrow 9:00');
+    expect(remindShort(c({ remind_at: at(3, 14) }), now)).toMatch(/^[A-Z][a-z]{2} 14:00$/);
+    expect(remindShort(c({}), now)).toBeNull();
     expect(remindTitle(c({ remind_at: at(1, 9), remind_note: "Ana's reply" }), now)).toBe("Reminder: tomorrow 9:00 · Ana's reply");
     expect(remindTitle(c({ remind_at: at(30, 9) }), now)).toBe('Reminder: 10 Jul 9:00');
     expect(remindTitle(c({ remind_at: at(0, 7), remind_due: true }), now)).toBe('Reminder due: today 7:00');

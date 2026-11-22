@@ -48,6 +48,15 @@ pub(super) fn preview_lines<'a>(app: &App, r: &Row, pal: &Pal) -> Vec<Line<'a>> 
     }
     match (&r.session, &r.idea) {
         (Some(s), _) => {
+            if let Some(o) = s.origin.as_deref().filter(|o| *o != "terminal") {
+                v.push(Line::styled(
+                    format!(
+                        "started from: {}",
+                        crate::agents::origin::phrase(o, s.origin_raw.as_deref())
+                    ),
+                    pal.dim(),
+                ));
+            }
             if s.live_status.is_some() {
                 v.push(Line::styled(
                     "Open now in another terminal",
@@ -56,6 +65,29 @@ pub(super) fn preview_lines<'a>(app: &App, r: &Row, pal: &Pal) -> Vec<Line<'a>> 
             }
             if let Some(line) = crate::worked::summary::session_line(&app.db.conn, &s.id, app.now) {
                 v.push(Line::styled(format!("worked {line}"), pal.dim()));
+            }
+            if let Ok(Some(sum)) =
+                crate::usage::report::of_session(&app.db.conn, &app.usage_cfg, &s.id)
+            {
+                v.push(Line::styled(
+                    format!("usage {}", crate::usage::report::session_line(&sum)),
+                    pal.dim(),
+                ));
+            }
+            if let Some(line) = crate::loose::summary_line(&app.detail.loose) {
+                v.push(Line::raw(format!("{line}   (Ctrl-L)")));
+            }
+            if let Some(run) = &app.detail.night {
+                v.push(Line::from(vec![
+                    label("Night run"),
+                    Span::raw(night_line(run)),
+                ]));
+                if let Some(rep) = run.report.as_deref().filter(|t| !t.trim().is_empty()) {
+                    let first = rep.lines().find(|l| !l.trim().is_empty()).unwrap_or("");
+                    v.push(Line::raw(crate::util::printable(&crate::util::head_chars(
+                        first, 200,
+                    ))));
+                }
             }
             for t in activity::tasks(s, app.now) {
                 v.push(Line::from(vec![
@@ -207,6 +239,18 @@ pub(super) fn preview_lines<'a>(app: &App, r: &Row, pal: &Pal) -> Vec<Line<'a>> 
                     }
                 }
                 None => {}
+            }
+            if let Some(cwd) = s
+                .cwd
+                .as_deref()
+                .filter(|c| !c.is_empty() && !std::path::Path::new(c).is_dir())
+                .filter(|_| s.kind.as_deref() != Some("history_only"))
+            {
+                // an imported session, or a folder that was moved or deleted
+                v.push(Line::styled(
+                    format!("folder not on this machine: {cwd} (resume needs it)"),
+                    pal.dim(),
+                ));
             }
             if s.kind.as_deref() == Some("history_only") {
                 v.push(Line::styled(
@@ -372,4 +416,19 @@ pub(super) fn topic_mark(status: Option<&str>) -> &'static str {
         Some("active") => "▶",
         _ => "‖",
     }
+}
+
+/// `done, 41 min, branch night/20261121-x` for the preview of a night run's session.
+fn night_line(run: &crate::night::Run) -> String {
+    let mut parts = vec![run.status.clone()];
+    if let (Some(a), Some(b)) = (run.started_at, run.ended_at) {
+        parts.push(format!("{} min", ((b - a).max(0) + 30_000) / 60_000));
+    }
+    if let Some(w) = &run.why {
+        parts.push(crate::util::printable(w));
+    }
+    if let Some(b) = &run.branch {
+        parts.push(format!("branch {}", crate::util::printable(b)));
+    }
+    parts.join(", ")
 }

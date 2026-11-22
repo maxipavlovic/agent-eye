@@ -11,6 +11,7 @@ use crate::paths::Paths;
 use crate::scan;
 use crate::server;
 use crate::summarize;
+use crate::usage;
 use crate::util::{now_ms, short_id};
 use crate::worked;
 use anyhow::{Context, Result};
@@ -27,6 +28,12 @@ const TICK: Duration = Duration::from_secs(2);
 const WORKER_EVERY: Duration = Duration::from_secs(30);
 /// How often the daemon looks whether a daily snapshot is due.
 const BACKUP_EVERY: Duration = Duration::from_secs(600);
+/// How often the daemon looks for loose ends (what sessions left behind).
+const LOOSE_EVERY: Duration = Duration::from_secs(300);
+/// The least time between two scans when a session just ended or stopped.
+const LOOSE_MIN_GAP: Duration = Duration::from_secs(20);
+/// How often the night shift looks at its runs.
+const NIGHT_EVERY: Duration = Duration::from_secs(60);
 /// The longest an upgrade restart waits for a snapshot or a summary round to finish.
 const RESTART_WAIT: Duration = Duration::from_secs(60);
 const LOG_MAX: u64 = 10 << 20;
@@ -89,7 +96,7 @@ pub fn log(paths: &Paths, msg: &str) {
         let _ = writeln!(
             f,
             "{} {}",
-            chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
+            jiff::Zoned::now().strftime("%Y-%m-%d %H:%M:%S"),
             msg
         );
     }
@@ -158,6 +165,93 @@ pub fn refresh_waits(db: &Db, agents: &Agents) -> Result<usize> {
     Ok(n)
 }
 
+/// Change the wait of the session `sid` as `kind` says; the number of rows changed (0: no such
+/// session, or the event does not change a wait).
+fn apply_wait(
+    db: &Db,
+    agent: &crate::agents::AgentRef,
+    kind: &str,
+    ev: &Value,
+    ts: i64,
+    sid: &str,
+) -> Result<usize> {
+    let Some(w) = agent.wait_effect(kind, ev, ts) else {
+        return Ok(1);
+    };
+    // `?5` limits the change to a wait that is a prompt
+    let sql = if kind == "Notification" {
+        "UPDATE session SET waiting_since=?2, waiting_note=CASE WHEN waiting_since IS NULL
+           THEN ?3 ELSE COALESCE(waiting_note, ?3) END, waiting_prompt=?4
+         WHERE id=?1 AND (NOT ?5 OR waiting_prompt=1)"
+    } else {
+        "UPDATE session SET waiting_since=?2, waiting_note=?3, waiting_prompt=?4
+         WHERE id=?1 AND (NOT ?5 OR waiting_prompt=1)"
+    };
+    let n = db.conn.execute(
+        sql,
+        params![sid, w.since, w.note, w.prompt, w.only_if_prompt],
+    )?;
+    // an update that finds the session but changes nothing (`?5`) is not a missing session
+    Ok(if n == 0 && session_exists(db, sid) {
+        1
+    } else {
+        n
+    })
+}
+
+fn session_exists(db: &Db, sid: &str) -> bool {
+    db.conn
+        .query_row("SELECT 1 FROM session WHERE id=?1", [sid], |_| Ok(()))
+        .is_ok()
+}
+
+/// Events of sessions the index did not have yet, with how many passes they have waited.
+static UNPLACED: std::sync::Mutex<Vec<(Value, u8)>> = std::sync::Mutex::new(Vec::new());
+
+fn remember_unplaced(ev: &Value) {
+    let mut v = UNPLACED.lock().unwrap_or_else(|e| e.into_inner());
+    if v.len() < 200 {
+        v.push((ev.clone(), 0));
+    }
+}
+
+/// After a scan: apply the waits of events whose session was not there before. An event that
+/// still finds none after a few passes is dropped.
+pub fn apply_unplaced(db: &Db, agents: &Agents) -> Result<()> {
+    let pending: Vec<(Value, u8)> =
+        std::mem::take(&mut *UNPLACED.lock().unwrap_or_else(|e| e.into_inner()));
+    for (ev, tries) in pending {
+        let kind = ev.get("event").and_then(Value::as_str).unwrap_or("");
+        let ts = ev.get("ts").and_then(Value::as_i64).unwrap_or_else(now_ms);
+        let agent_id = ev.get("agent").and_then(Value::as_str).unwrap_or(LEGACY_ID);
+        let (Some(sid), Some(agent)) = (
+            ev.get("session_id").and_then(Value::as_str),
+            agents.get(agent_id),
+        ) else {
+            continue;
+        };
+        // a later event of the session has said more since: it wins
+        let later = db
+            .conn
+            .query_row(
+                "SELECT 1 FROM event WHERE session_id=?1 AND ts>?2 LIMIT 1",
+                params![sid, ts],
+                |_| Ok(()),
+            )
+            .is_ok();
+        if later {
+            continue;
+        }
+        if apply_wait(db, agent, kind, &ev, ts, sid)? == 0 && tries < 3 {
+            UNPLACED
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .push((ev, tries + 1));
+        }
+    }
+    Ok(())
+}
+
 /// Apply the effect of one queue line on the session row.
 fn apply_event(db: &Db, agents: &Agents, ev: &Value) -> Result<()> {
     let kind = ev.get("event").and_then(Value::as_str).unwrap_or("");
@@ -173,20 +267,10 @@ fn apply_event(db: &Db, agents: &Agents, ev: &Value) -> Result<()> {
     let Some(agent) = agents.get(agent_id) else {
         return Ok(());
     };
-    if let Some(w) = agent.wait_effect(kind, ev, ts) {
-        // `?5` limits the change to a wait that is a prompt
-        let sql = if kind == "Notification" {
-            "UPDATE session SET waiting_since=?2, waiting_note=CASE WHEN waiting_since IS NULL
-               THEN ?3 ELSE COALESCE(waiting_note, ?3) END, waiting_prompt=?4
-             WHERE id=?1 AND (NOT ?5 OR waiting_prompt=1)"
-        } else {
-            "UPDATE session SET waiting_since=?2, waiting_note=?3, waiting_prompt=?4
-             WHERE id=?1 AND (NOT ?5 OR waiting_prompt=1)"
-        };
-        db.conn.execute(
-            sql,
-            params![sid, w.since, w.note, w.prompt, w.only_if_prompt],
-        )?;
+    if apply_wait(db, agent, kind, ev, ts, sid)? == 0 {
+        // the session is not in the index yet (a session that began a moment ago is found by the
+        // scan after this drain): try again after the next scan
+        remember_unplaced(ev);
     }
     if kind == "SessionEnd" {
         db.conn.execute(
@@ -194,7 +278,87 @@ fn apply_event(db: &Db, agents: &Agents, ev: &Value) -> Result<()> {
             params![sid, ts],
         )?;
     }
+    if matches!(kind, "SessionEnd" | "Stop") {
+        // the loose-ends scan looks again soon: what the session left is known now
+        meta_set(&db.conn, LOOSE_FLAG, "1")?;
+    }
     Ok(())
+}
+
+/// The meta key a `Stop` or `SessionEnd` event sets, and the loose-ends scan clears.
+const LOOSE_FLAG: &str = "loose_due";
+
+/// Is a loose-ends scan due? The first one at once, then every five minutes, and a short while
+/// after a session ended or stopped.
+fn loose_due(since_last: Option<Duration>, flagged: bool) -> bool {
+    match since_last {
+        None => true,
+        Some(d) => d >= LOOSE_EVERY || (flagged && d >= LOOSE_MIN_GAP),
+    }
+}
+
+/// One loose-ends scan, stored. Failures go to the log; the scan only reads.
+fn loose_round(paths: &Paths, cfg: &Config) {
+    let r = Db::open(&paths.db_path())
+        .and_then(|db| crate::loose::scan_and_store(&db, cfg, &agents::enabled(cfg), now_ms()));
+    if let Err(e) = r {
+        log(paths, &format!("leftovers scan: {e:#}"));
+    }
+}
+
+/// One batch of the usage-by-day backfill. It runs in its own thread, never in the 2 s tick: a
+/// large transcript is read while the database's write lock is held, and the tick's hook drain
+/// would wait behind it.
+fn usage_round(paths: &Paths, cfg: &Config) {
+    let r = Db::open(&paths.db_path()).and_then(|mut db| {
+        usage::backfill::run_batch(
+            &mut db,
+            paths,
+            &agents::enabled(cfg),
+            usage::backfill::BATCH,
+        )
+    });
+    match r {
+        Ok(p) if p.counted + p.unreadable > 0 => log(
+            paths,
+            &format!(
+                "usage by day: {} sessions counted, {} unreadable, {} to go",
+                p.counted, p.unreadable, p.left
+            ),
+        ),
+        Ok(_) => {}
+        Err(e) => log(paths, &format!("usage by day: {e:#}")),
+    }
+}
+
+/// One pass of the night shift. The config is read again, so a switch made on the board or with
+/// `eye night on` counts at the next pass; a run that already goes is watched even when the shift
+/// was switched off since. Failures go to the log.
+fn night_round(paths: &Paths, cfg: &Config) {
+    let cfg = std::fs::read_to_string(paths.config_path())
+        .ok()
+        .and_then(|t| Config::parse(&t).ok())
+        .map(|mut c| {
+            c.folder_root = cfg.folder_root.clone();
+            c.night_dir = cfg.night_dir.clone();
+            c
+        })
+        .unwrap_or_else(|| cfg.clone());
+    let agents = agents::enabled(&cfg);
+    let sys = crate::night::sched::RealSys::new(paths, &cfg, &agents);
+    let r = Db::open(&paths.db_path())
+        .and_then(|mut db| crate::night::sched::tick(&mut db, &sys, &cfg));
+    match r {
+        Ok(p) if p.started.is_empty() && p.finished.is_empty() && p.stopped.is_empty() => {}
+        Ok(p) => log(
+            paths,
+            &format!(
+                "night: started {:?}, finished {:?}, stopped {:?}",
+                p.started, p.finished, p.stopped
+            ),
+        ),
+        Err(e) => log(paths, &format!("night: {e:#}")),
+    }
 }
 
 /// Read what the hooks queued since the last pass. Returns the number of events.
@@ -342,10 +506,11 @@ fn notify_reminders(db: &Db, paths: &Paths, cfg: &Config, send: &mut dyn FnMut(&
 }
 
 /// One pass of the main loop: events, then the incremental scan, a few sessions of the work timeline
-/// backfill, then due reminders.
+/// backfill, then due reminders. (The usage backfill has its own thread, see `usage_round`.)
 pub fn tick(db: &mut Db, paths: &Paths, cfg: &Config) -> Result<()> {
     let n = drain_queue(db, paths, &agents::enabled(cfg))?;
     let st = scan::scan(db, cfg, false)?;
+    apply_unplaced(db, &agents::enabled(cfg))?;
     if n > 0 || st.files_parsed > 0 {
         log(
             paths,
@@ -415,6 +580,11 @@ pub fn run(paths: Paths, cfg: Config, port: u16, board: bool) -> Result<()> {
             }
             let mut last_worker: Option<Instant> = None;
             let mut last_backup: Option<Instant> = None;
+            let mut last_loose: Option<Instant> = None;
+            let loose_busy = Arc::new(AtomicBool::new(false));
+            let mut last_night: Option<Instant> = None;
+            let night_busy = Arc::new(AtomicBool::new(false));
+            let usage_busy = Arc::new(AtomicBool::new(false));
             while !stop.load(Ordering::Relaxed) {
                 if let Err(e) = tick(&mut db, &paths, &cfg) {
                     log(&paths, &format!("tick failed: {e:#}"));
@@ -433,6 +603,38 @@ pub fn run(paths: Paths, cfg: Config, port: u16, board: bool) -> Result<()> {
                             Ok(None) => {}
                             Err(e) => log(&paths, &format!("snapshot failed: {e:#}")),
                         }
+                        busy.store(false, Ordering::SeqCst);
+                    });
+                }
+                if cfg.loose.enabled && !loose_busy.load(Ordering::SeqCst) {
+                    let flagged = db.meta_get(LOOSE_FLAG).ok().flatten().is_some();
+                    if loose_due(last_loose.map(|t| t.elapsed()), flagged) {
+                        last_loose = Some(Instant::now());
+                        let _ = db
+                            .conn
+                            .execute("DELETE FROM meta WHERE key=?1", [LOOSE_FLAG]);
+                        loose_busy.store(true, Ordering::SeqCst);
+                        let (paths, cfg, busy) = (paths.clone(), cfg.clone(), loose_busy.clone());
+                        std::thread::spawn(move || {
+                            loose_round(&paths, &cfg);
+                            busy.store(false, Ordering::SeqCst);
+                        });
+                    }
+                }
+                if !usage_busy.swap(true, Ordering::SeqCst) {
+                    let (paths, cfg, busy) = (paths.clone(), cfg.clone(), usage_busy.clone());
+                    std::thread::spawn(move || {
+                        usage_round(&paths, &cfg);
+                        busy.store(false, Ordering::SeqCst);
+                    });
+                }
+                if last_night.is_none_or(|t| t.elapsed() >= NIGHT_EVERY)
+                    && !night_busy.swap(true, Ordering::SeqCst)
+                {
+                    last_night = Some(Instant::now());
+                    let (paths, cfg, busy) = (paths.clone(), cfg.clone(), night_busy.clone());
+                    std::thread::spawn(move || {
+                        night_round(&paths, &cfg);
                         busy.store(false, Ordering::SeqCst);
                     });
                 }

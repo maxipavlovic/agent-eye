@@ -22,7 +22,7 @@ pub const EVENTS: [&str; 6] = [
     "Stop",
     "SessionEnd",
 ];
-const SKILL_MD: &str = include_str!("../../../skill/SKILL.codex.md");
+pub(crate) const SKILL_MD: &str = include_str!("../../../skill/SKILL.codex.md");
 
 /// What Codex's `hooks.json` looks like to eye: the form Claude Code uses, a command per event
 /// that names the agent. `statusMessage` is the name Codex shows in `/hooks` (and, briefly, while
@@ -165,7 +165,7 @@ pub fn doctor(c: &Codex, _ctx: &InstallCtx) -> Vec<Check> {
         Ok(()) => Check::ok("`codex exec` has the flags summaries need"),
         Err(e) => Check::warn(format!("summaries: {e:#}")),
     });
-    let (files, _) = super::files::scan(&c.dir);
+    let (files, _) = super::files::scan(&c.dir, c.night_dir.as_deref());
     match files.iter().max_by_key(|f| f.stamp.mtime) {
         Some(f) => {
             let tokens = HashSet::new();

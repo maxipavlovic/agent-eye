@@ -324,3 +324,221 @@ fn fts_append_and_cap() {
         .unwrap();
     assert_eq!(n, 1);
 }
+
+/// A schema-12 file: the index has the old tokenizer and rows already in it.
+fn old_index() -> Connection {
+    let conn = Connection::open_in_memory().unwrap();
+    conn.execute(
+        "CREATE TABLE session(id TEXT PRIMARY KEY, title TEXT, recap TEXT, state_line TEXT, next_step TEXT, archived INTEGER NOT NULL DEFAULT 0)",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "CREATE VIRTUAL TABLE session_fts USING fts5(session_id UNINDEXED, title, prompts, replies, extra)",
+        [],
+    )
+    .unwrap();
+    for (n, (id, title)) in [("s1", "Stale tokens"), ("s2", "Billing"), ("s3", "Notes")]
+        .into_iter()
+        .enumerate()
+    {
+        conn.execute("INSERT INTO session(id,title) VALUES(?1,?2)", [id, title])
+            .unwrap();
+        conn.execute(
+            "INSERT INTO session_fts(rowid,session_id,title,prompts,replies,extra) VALUES(?1,?2,?3,'we rebranded it','','')",
+            params![n as i64 + 1, id, title],
+        )
+        .unwrap();
+    }
+    conn.execute("CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT)", [])
+        .unwrap();
+    conn.execute("INSERT INTO meta VALUES('schema_version','12')", [])
+        .unwrap();
+    conn
+}
+
+fn count(db: &Db, q: &str) -> i64 {
+    db.conn
+        .query_row(
+            "SELECT count(*) FROM session_fts WHERE session_fts MATCH ?1",
+            [q],
+            |r| r.get(0),
+        )
+        .unwrap()
+}
+
+#[test]
+fn migration_13_stems_the_index_and_keeps_every_row() {
+    let conn = old_index();
+    // the old tokenizer does not know word forms
+    let n: i64 = conn
+        .query_row(
+            "SELECT count(*) FROM session_fts WHERE session_fts MATCH 'token'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(n, 0);
+    let db = Db::init(conn).unwrap();
+    assert_eq!(
+        db.meta_get("schema_version").unwrap(),
+        Some(SCHEMA_VERSION.to_string())
+    );
+    let rows: Vec<(i64, String, String)> = db
+        .conn
+        .prepare("SELECT rowid, session_id, title FROM session_fts ORDER BY rowid")
+        .unwrap()
+        .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+        .unwrap()
+        .collect::<rusqlite::Result<_>>()
+        .unwrap();
+    assert_eq!(
+        rows,
+        [
+            (1, "s1".into(), "Stale tokens".into()),
+            (2, "s2".into(), "Billing".into()),
+            (3, "s3".into(), "Notes".into())
+        ]
+    );
+    // word forms work, in the title and in the text
+    assert_eq!(count(&db, "token"), 1);
+    assert_eq!(count(&db, "rebranding"), 3);
+    // the word list for typo fixing exists and holds stems
+    let doc: i64 = db
+        .conn
+        .query_row(
+            "SELECT doc FROM session_fts_vocab WHERE term='rebrand'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(doc, 3);
+    // opening it again, or another process opening it, changes nothing
+    db.migrate().unwrap();
+    db.stem_session_fts().unwrap();
+    assert_eq!(count(&db, "token"), 1);
+    // a row written afterwards is stemmed too
+    db.conn
+        .execute(
+            "INSERT INTO session(id,title) VALUES('s4','Tokens again')",
+            [],
+        )
+        .unwrap();
+    fts_write(&db.conn, "s4", "x", "", true, 100, 100).unwrap();
+    assert_eq!(count(&db, "token"), 2);
+}
+
+#[test]
+fn a_new_database_stems_from_the_start() {
+    let db = Db::open_memory().unwrap();
+    let sql: String = db
+        .conn
+        .query_row(
+            "SELECT sql FROM sqlite_master WHERE name='session_fts'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert!(sql.contains("porter"));
+}
+
+#[test]
+fn the_word_list_is_readable_and_not_empty_after_migration_13() {
+    let db = Db::init(old_index()).unwrap();
+    let n: i64 = db
+        .conn
+        .query_row("SELECT count(*) FROM session_fts_vocab", [], |r| r.get(0))
+        .unwrap();
+    assert!(n > 0);
+}
+
+/// An index from before `usage_day`: the tables are gone and the version is `from`.
+fn index_without_usage(dir: &std::path::Path, from: i64) -> Connection {
+    let path = dir.join("old.db");
+    {
+        let db = Db::open(&path).unwrap();
+        db.conn
+            .execute_batch("DROP TABLE usage_day; DROP TABLE usage_state;")
+            .unwrap();
+        db.meta_set("schema_version", &from.to_string()).unwrap();
+        db.conn
+            .execute("INSERT INTO session(id, tok_in) VALUES('s1', 5)", [])
+            .unwrap();
+    }
+    Connection::open(&path).unwrap()
+}
+
+#[test]
+fn migration_15_adds_the_usage_tables_from_13_and_from_14_and_keeps_every_row() {
+    for from in [13, 14] {
+        let tmp = tempfile::tempdir().unwrap();
+        let db = Db::init(index_without_usage(tmp.path(), from)).unwrap();
+        assert_eq!(
+            db.meta_get("schema_version").unwrap(),
+            Some(SCHEMA_VERSION.to_string())
+        );
+        assert_eq!(count_rows(&db, "usage_day"), 0);
+        assert_eq!(count_rows(&db, "usage_state"), 0);
+        assert_eq!(count_rows(&db, "session"), 1);
+        // nothing is re-read for them: the cursors are left alone
+        assert!(db.cursor_get("/none").unwrap().is_none());
+    }
+}
+
+fn count_rows(db: &Db, table: &str) -> i64 {
+    db.conn
+        .query_row(&format!("SELECT count(*) FROM {table}"), [], |r| r.get(0))
+        .unwrap()
+}
+
+#[test]
+fn migration_16_adds_night_run_from_15_and_keeps_every_row() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join("old.db");
+    {
+        let db = Db::open(&path).unwrap();
+        db.conn.execute_batch("DROP TABLE night_run;").unwrap();
+        db.meta_set("schema_version", "15").unwrap();
+        db.conn
+            .execute("INSERT INTO session(id, tok_in) VALUES('s1', 5)", [])
+            .unwrap();
+    }
+    let db = Db::init(Connection::open(&path).unwrap()).unwrap();
+    assert_eq!(
+        db.meta_get("schema_version").unwrap(),
+        Some(SCHEMA_VERSION.to_string())
+    );
+    // the migration to 16 ran: this test only asks that a later schema keeps its table
+    // the table is there and empty, and nothing else moved
+    assert_eq!(count_rows(&db, "night_run"), 0);
+    assert_eq!(count_rows(&db, "session"), 1);
+    assert!(crate::night::list(&db, false).unwrap().is_empty());
+    assert_eq!(crate::night::planned_count(&db).unwrap(), 0);
+}
+
+#[test]
+fn migration_17_adds_origin_from_16_and_keeps_every_row() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join("old.db");
+    {
+        let db = Db::open(&path).unwrap();
+        db.conn
+            .execute_batch("ALTER TABLE session DROP COLUMN origin; ALTER TABLE session DROP COLUMN origin_raw;")
+            .unwrap();
+        db.meta_set("schema_version", "16").unwrap();
+        db.conn
+            .execute("INSERT INTO session(id, tok_in) VALUES('s1', 5)", [])
+            .unwrap();
+    }
+    let db = Db::open(&path).unwrap();
+    assert_eq!(
+        db.meta_get("schema_version").unwrap(),
+        Some(SCHEMA_VERSION.to_string())
+    );
+    assert_eq!(SCHEMA_VERSION, 17);
+    // the columns are there and empty (the scan fills them), and nothing else moved
+    let s = db.session_by_id("s1").unwrap().unwrap();
+    assert_eq!((s.origin, s.origin_raw), (None, None));
+    assert_eq!(s.tokens.unwrap().input, 5);
+    assert_eq!(count_rows(&db, "session"), 1);
+}

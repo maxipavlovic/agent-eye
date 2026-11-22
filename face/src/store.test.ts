@@ -28,8 +28,10 @@ function source(over: Partial<Source> = {}): Source {
     search: async () => ({ results: [] }),
     ideas: async () => ({ ideas: [] }),
     agents: async () => ({ agents: [{ id: 'claude', name: 'Claude Code', short: 'Claude', default: true }] }),
+    usage: async () => { throw new Error('no usage'); },
     move: async (id) => card(id, 'done'),
     setHidden: async (id) => card(id, 'paused'),
+    forget: async () => {},
     conversation: async () => ({ messages: [], more: false, next_before: null }),
     resume: async () => ({ dry_run: false, mode: 'copy', command: 'x' }),
     addIdea: async () => card('idea:1', 'ideas'),
@@ -37,6 +39,16 @@ function source(over: Partial<Source> = {}): Source {
     startIdea: async () => ({ dry_run: false, mode: 'iterm', command: 'x', session_id: null, job: null }),
     folderCheck: async () => ({ state: 'ok', creatable: false, note: null }),
     remind: async (id) => card(id, 'paused'),
+    looseAct: async () => ({ ok: true, note: 'sent SIGTERM to x' }),
+    looseSend: async () => ({ dry_run: false, mode: 'copy', command: 'x' }),
+    night: async () => { throw new Error('no night'); },
+    nightSettings: async () => { throw new Error('no night'); },
+    nightPlan: async () => { throw new Error('no night'); },
+    nightCancel: async () => { throw new Error('no night'); },
+    nightLimit: async () => { throw new Error('no night'); },
+    nightDiscard: async () => ({ ok: true }),
+    nightOpen: async () => ({ ok: true }),
+    nightBring: async () => ({ ok: true }),
     remindSettings: async () => ({ notify: false, available: true }),
     setRemindSettings: async ({ notify }) => ({ notify, available: true }),
     subscribe: () => () => {},
@@ -153,7 +165,7 @@ describe('search', () => {
 
   it('ignores an older answer that arrives after a newer one', async () => {
     vi.useFakeTimers();
-    const hit = (t: string) => ({ results: [{ card: card(t, 'paused'), snippet: t, score: 0 }] });
+    const hit = (t: string) => ({ results: [{ card: card(t, 'paused'), snippet: t, score: 0, relevance: 0 }] });
     const resolvers: Record<string, (v: ReturnType<typeof hit>) => void> = {};
     const s = createStore(source({
       search: (q) => new Promise((r) => { resolvers[q] = r as never; }),
@@ -407,5 +419,39 @@ describe('remind', () => {
     await tick();
     await expect(store.remind('a', { when: 'soon' })).resolves.toBe(false);
     expect(store.toasts.value.at(-1)).toMatchObject({ tone: 'error', text: "cannot read 'soon'" });
+  });
+});
+
+describe('loose ends', () => {
+  it('sends the action and the key, says what was done, and reloads the board', async () => {
+    let boards = 0;
+    const looseAct = vi.fn(async () => ({ ok: true, note: 'sent SIGTERM to node (pid 5)' }));
+    const store = createStore(source({ board: async () => { boards++; return boardOf({ waiting: ['a'] }); }, looseAct }));
+    await tick();
+    await expect(store.looseAct('stop', 'proc:5:1')).resolves.toBe(true);
+    expect(looseAct).toHaveBeenCalledWith('stop', 'proc:5:1');
+    expect(boards).toBe(2);
+    expect(store.toasts.value.at(-1)!.text).toBe('sent SIGTERM to node (pid 5)');
+  });
+
+  it('shows the engine\'s refusal as it is, and reloads so the list is true again', async () => {
+    let boards = 0;
+    const store = createStore(source({
+      board: async () => { boards++; return boardOf({ waiting: ['a'] }); },
+      looseAct: async () => { throw new Error('fatal: contains modified or untracked files, use --force to delete it'); },
+    }));
+    await tick();
+    await expect(store.looseAct('remove', 'worktree:/w')).resolves.toBe(false);
+    expect(store.toasts.value.at(-1)).toMatchObject({ tone: 'error', text: 'fatal: contains modified or untracked files, use --force to delete it' });
+    expect(boards).toBe(2);
+  });
+
+  it('send back runs the plan for real, not a dry run', async () => {
+    const looseSend = vi.fn(async () => ({ dry_run: false, mode: 'iterm', command: 'x', note: 'opened in iTerm' }));
+    const store = createStore(source({ looseSend }));
+    await tick();
+    await expect(store.looseSend('a')).resolves.toBe(true);
+    expect(looseSend).toHaveBeenCalledWith('a', false);
+    expect(store.toasts.value.at(-1)!.text).toBe('opened in iTerm');
   });
 });

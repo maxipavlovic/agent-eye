@@ -40,6 +40,8 @@ pub struct App {
     pub paths: Option<Paths>,
     /// Who "you" is in next lines.
     pub user: UserCfg,
+    /// Prices for the usage line of the preview.
+    pub usage_cfg: crate::config::UsageCfg,
     /// The enabled agents: their names label the preview, and they read the conversations.
     pub agents: Agents,
     /// The preview pane shows the conversation instead of the summary (Ctrl-T).
@@ -50,6 +52,8 @@ pub struct App {
     pub(super) talk_cache: HashMap<String, Talk>,
     /// The one-line input for a reminder, while it is open (Ctrl-R).
     pub(super) remind: Option<super::remind::Input>,
+    /// The list of what the selected session left behind, while it is open (Ctrl-L).
+    pub(super) loose: Option<super::loose::List>,
 }
 
 impl App {
@@ -74,11 +78,13 @@ impl App {
             last_ms: 0.0,
             paths: None,
             user: UserCfg::default(),
+            usage_cfg: Default::default(),
             agents: Agents::default(),
             talk: false,
             talk_scroll: 0,
             talk_cache: HashMap::new(),
             remind: None,
+            loose: None,
         };
         a.research();
         a
@@ -87,7 +93,7 @@ impl App {
     /// Run the query again.
     pub fn research(&mut self) {
         let t = std::time::Instant::now();
-        self.results = pick::search(&self.db, &self.idx, &self.query, self.all, self.now);
+        self.results = pick::search(&self.db, &self.idx, &self.query, self.all);
         self.last_ms = t.elapsed().as_secs_f64() * 1000.0;
         self.sel = 0;
         self.msg = None;

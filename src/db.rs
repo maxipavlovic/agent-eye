@@ -1,11 +1,11 @@
 use crate::model::{Output, Session, Stamp, Stream};
 use crate::util::trim_front_bytes;
 use anyhow::{Context, Result};
-use rusqlite::{params, Connection, OptionalExtension, Row};
+use rusqlite::{params, Connection, OptionalExtension, Row, TransactionBehavior};
 use std::path::Path;
 
 /// The schema version this build writes; older databases are migrated on open.
-pub const SCHEMA_VERSION: i64 = 12;
+pub const SCHEMA_VERSION: i64 = 17;
 
 const SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS session(id TEXT PRIMARY KEY, agent TEXT NOT NULL DEFAULT 'claude', project_dir TEXT, cwd TEXT, repo_root TEXT, title TEXT, title_source TEXT,
@@ -35,10 +35,27 @@ CREATE TABLE IF NOT EXISTS jira_evidence(prefix TEXT, kind TEXT, session_id TEXT
 CREATE TABLE IF NOT EXISTS worked_hour(session_id TEXT, hour INTEGER, prompts INTEGER, events INTEGER, active_ms INTEGER,
   PRIMARY KEY(session_id, hour)) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS worked_state(session_id TEXT PRIMARY KEY, last_ts INTEGER, unreadable INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS loose(session_id TEXT, key TEXT PRIMARY KEY, kind TEXT, line TEXT, detail TEXT, since_ms INTEGER, found_at INTEGER);
+CREATE TABLE IF NOT EXISTS loose_ignore(key TEXT PRIMARY KEY, at INTEGER);
+CREATE INDEX IF NOT EXISTS idx_loose_session ON loose(session_id);
+CREATE TABLE IF NOT EXISTS night_run(id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, idea_id INTEGER, session_id TEXT,
+  agent TEXT NOT NULL, switch_ok INTEGER NOT NULL DEFAULT 0, folder TEXT NOT NULL, prompt TEXT NOT NULL, night TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'planned', why TEXT, limit_kind TEXT, limit_value INTEGER, run_session_id TEXT, pid INTEGER,
+  pid_start INTEGER, worktree TEXT, branch TEXT, base_ref TEXT, started_at INTEGER, ended_at INTEGER, report TEXT,
+  diff_stat TEXT, created_at INTEGER NOT NULL, isolation TEXT);
+CREATE INDEX IF NOT EXISTS idx_night_status ON night_run(status);
+CREATE INDEX IF NOT EXISTS idx_night_session ON night_run(run_session_id);
+CREATE TABLE IF NOT EXISTS usage_day(session_id TEXT NOT NULL, day TEXT NOT NULL, model TEXT NOT NULL,
+  tok_in INTEGER NOT NULL DEFAULT 0, tok_out INTEGER NOT NULL DEFAULT 0, tok_cw INTEGER NOT NULL DEFAULT 0, tok_cr INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY(session_id, day, model)) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS idx_usage_day_day ON usage_day(day);
+CREATE TABLE IF NOT EXISTS usage_state(session_id TEXT PRIMARY KEY, unreadable INTEGER NOT NULL DEFAULT 0);
 CREATE INDEX IF NOT EXISTS idx_stream_session ON stream(session_id);
 CREATE INDEX IF NOT EXISTS idx_output_session ON output(session_id);
 CREATE INDEX IF NOT EXISTS idx_event_session ON event(session_id);
-CREATE VIRTUAL TABLE IF NOT EXISTS session_fts USING fts5(session_id UNINDEXED, title, prompts, replies, extra);
+CREATE VIRTUAL TABLE IF NOT EXISTS session_fts USING fts5(session_id UNINDEXED, title, prompts, replies, extra,
+  tokenize='porter unicode61 remove_diacritics 2');
+CREATE VIRTUAL TABLE IF NOT EXISTS session_fts_vocab USING fts5vocab(session_fts, 'row');
 "#;
 
 /// The SQLite database of sessions, streams, outputs, ideas, events and read cursors.
@@ -208,6 +225,39 @@ impl Db {
         // v12: `worked_hour` and `worked_state` (the work timeline) are created with the schema
         // above. Nothing is read again for them: sessions without a timeline are counted by
         // `worked::backfill`, from their timestamps only.
+        // v13: `session_fts` stems words (`porter`), so "tokens" finds "token". An older table is
+        // copied into the new one, row for row; nothing is read from a transcript again. The
+        // `porter` tokenizer is part of SQLite, so 0.2.x still reads the result.
+        self.stem_session_fts()?;
+        // v14: `loose` and `loose_ignore` (what a session left behind) are created with the schema
+        // above; they start empty and the daemon fills `loose` at its next scan.
+        // v15: `usage_day` and `usage_state` (usage by day and model) are created with the schema
+        // above. Nothing is read again for them: sessions without usage are counted by
+        // `usage::backfill`, from the token fields of their transcripts only.
+        // v16: `night_run` (planned and finished night-shift runs) is created with the schema above;
+        // it starts empty and nothing is read again.
+        // v17 also gives `night_run` its `isolation` column (`worktree` or `copy`; NULL = worktree).
+        // `night_run` is new in this release, so the column joins schema 17 instead of a new
+        // version; a table made before it was added gets the column here.
+        let has_iso = self
+            .conn
+            .prepare("SELECT 1 FROM pragma_table_info('night_run') WHERE name='isolation'")?
+            .exists([])?;
+        if !has_iso {
+            self.add_column("night_run", "isolation TEXT")?;
+        }
+        // v17: where a session was started. Both columns are NULL until `scan::origin` has looked
+        // at the session (it reads the first lines of its transcript, nothing else); `origin_raw`
+        // is '' once looked at and nothing was found.
+        for col in ["origin", "origin_raw"] {
+            let has = self
+                .conn
+                .prepare("SELECT 1 FROM pragma_table_info('session') WHERE name=?1")?
+                .exists([col])?;
+            if !has {
+                self.add_column("session", &format!("{col} TEXT"))?;
+            }
+        }
         if cur == 1 || (cur > 0 && cur < 4) {
             // v2 keeps pending tool_use ids and Jira candidates, v4 token counts: re-read every
             // transcript once.
@@ -216,6 +266,43 @@ impl Db {
         if cur < SCHEMA_VERSION {
             self.meta_set("schema_version", &SCHEMA_VERSION.to_string())?;
         }
+        Ok(())
+    }
+
+    /// Move `session_fts` to the stemming tokenizer when it does not use it yet. The check and the
+    /// copy run in one write transaction, so a second process that opened the same old file waits,
+    /// sees the new table and does nothing.
+    fn stem_session_fts(&self) -> Result<()> {
+        let stems = |c: &Connection| -> Result<bool> {
+            let sql: Option<String> = c
+                .query_row(
+                    "SELECT sql FROM sqlite_master WHERE name='session_fts'",
+                    [],
+                    |r| r.get(0),
+                )
+                .optional()?;
+            Ok(sql.is_none_or(|s| s.contains("porter")))
+        };
+        if stems(&self.conn)? {
+            return Ok(());
+        }
+        let tx = rusqlite::Transaction::new_unchecked(&self.conn, TransactionBehavior::Immediate)?;
+        if stems(&tx)? {
+            return Ok(());
+        }
+        tx.execute_batch(
+            "DROP TABLE IF EXISTS session_fts_new;
+             CREATE VIRTUAL TABLE session_fts_new USING fts5(session_id UNINDEXED, title, prompts, replies, extra,
+               tokenize='porter unicode61 remove_diacritics 2');
+             INSERT INTO session_fts_new(rowid, session_id, title, prompts, replies, extra)
+               SELECT rowid, session_id, title, prompts, replies, extra FROM session_fts;
+             DROP TABLE IF EXISTS session_fts_vocab;
+             DROP TABLE session_fts;
+             ALTER TABLE session_fts_new RENAME TO session_fts;
+             CREATE VIRTUAL TABLE session_fts_vocab USING fts5vocab(session_fts, 'row');",
+        )
+        .context("moving session_fts to the stemming tokenizer")?;
+        tx.commit()?;
         Ok(())
     }
 
@@ -537,6 +624,10 @@ pub fn session_from_row(r: &Row) -> rusqlite::Result<Session> {
         transcript_state: r.get("transcript_state")?,
         archive_path: r.get("archive_path")?,
         git_branch: r.get("git_branch")?,
+        origin: r.get("origin")?,
+        origin_raw: r
+            .get::<_, Option<String>>("origin_raw")?
+            .filter(|o| !o.is_empty()),
         prompt_count: r.get::<_, Option<i64>>("prompt_count")?.unwrap_or(0),
         reply_count: r.get::<_, Option<i64>>("reply_count")?.unwrap_or(0),
         last_user_text: r.get("last_user_text")?,

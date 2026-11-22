@@ -8,12 +8,15 @@ mod cards;
 mod face;
 mod guard;
 mod idea_routes;
+mod loose_routes;
+mod night_routes;
 mod prefs;
 mod remind_routes;
 mod remind_settings;
 mod run;
 #[cfg(test)]
 mod test_support;
+mod usage_routes;
 
 pub use board::board_json;
 pub use card::{card_json, CardCtx};
@@ -88,26 +91,55 @@ pub fn router(state: Shared) -> Router {
             get(prefs::api_prefs).post(prefs::api_prefs_set),
         )
         .route("/api/archive", get(board::api_archive))
-        .route("/api/cards/:id", get(cards::api_card))
-        .route("/api/cards/:id/column", post(cards::api_move))
-        .route("/api/cards/:id/hidden", post(cards::api_hidden))
-        .route("/api/cards/:id/remind", post(remind_routes::api_remind))
+        .route("/api/cards/{id}", get(cards::api_card))
+        .route("/api/cards/{id}/column", post(cards::api_move))
+        .route("/api/cards/{id}/hidden", post(cards::api_hidden))
+        .route("/api/sessions/{id}/forget", post(cards::api_forget))
+        .route("/api/cards/{id}/remind", post(remind_routes::api_remind))
         .route(
             "/api/remind/settings",
             get(remind_settings::api_remind_settings)
                 .post(remind_settings::api_remind_settings_set),
         )
-        .route("/api/cards/:id/resume", post(cards::api_resume))
-        .route("/api/cards/:id/conversation", get(cards::api_conversation))
+        .route("/api/cards/{id}/resume", post(cards::api_resume))
+        .route("/api/cards/{id}/conversation", get(cards::api_conversation))
+        .route("/api/sessions/{id}/export", get(cards::api_export))
         .route("/api/search", get(cards::api_search))
         .route("/api/agents", get(agent_routes::api_agents))
+        .route("/api/usage", get(usage_routes::api_usage))
         .route(
             "/api/ideas",
             get(idea_routes::api_ideas).post(idea_routes::api_idea_add),
         )
-        .route("/api/ideas/:id", post(idea_routes::api_idea_edit))
-        .route("/api/ideas/:id/start", post(idea_routes::api_idea_start))
+        .route("/api/ideas/{id}", post(idea_routes::api_idea_edit))
+        .route("/api/ideas/{id}/start", post(idea_routes::api_idea_start))
         .route("/api/folder", get(idea_routes::api_folder))
+        .route("/api/loose", get(loose_routes::api_loose))
+        .route("/api/loose/stop", post(loose_routes::api_loose_stop))
+        .route("/api/loose/remove", post(loose_routes::api_loose_remove))
+        .route("/api/loose/ignore", post(loose_routes::api_loose_ignore))
+        .route("/api/loose/send", post(loose_routes::api_loose_send))
+        .route("/api/night", get(night_routes::api_night))
+        .route(
+            "/api/night/settings",
+            post(night_routes::api_night_settings),
+        )
+        .route("/api/night/plan", post(night_routes::api_night_plan))
+        .route(
+            "/api/night/session/{id}",
+            get(night_routes::api_night_of_session),
+        )
+        .route(
+            "/api/night/{id}/cancel",
+            post(night_routes::api_night_cancel),
+        )
+        .route("/api/night/{id}/limit", post(night_routes::api_night_limit))
+        .route(
+            "/api/night/{id}/discard",
+            post(night_routes::api_night_discard),
+        )
+        .route("/api/night/{id}/open", post(night_routes::api_night_open))
+        .route("/api/night/{id}/bring", post(night_routes::api_night_bring))
         .route("/api/events", get(run::api_events))
         .fallback(get(face::face_asset))
         .layer(axum::extract::DefaultBodyLimit::max(64 * 1024))

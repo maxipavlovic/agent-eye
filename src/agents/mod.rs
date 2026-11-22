@@ -4,6 +4,8 @@
 //! can be added without touching them. Claude Code is the first and the default agent. See
 //! `docs/agents.md`.
 
+/// Google's Antigravity CLI (`agy`).
+pub mod agy;
 /// Reading a session that is one append-only text file.
 pub mod append_only;
 /// Claude Code, the first and default agent.
@@ -14,6 +16,10 @@ pub mod codex;
 pub mod command_label;
 /// Adding eye's hooks to an agent's JSON hooks file and taking them out again.
 pub mod hooks_file;
+/// OpenCode.
+pub mod opencode;
+/// Where a session was started, mapped to a few words.
+pub mod origin;
 /// Finding Jira keys, pull requests and commits in transcript text, the same for every agent.
 pub mod outputs;
 /// Telling a reply that asks the user something from one that does not.
@@ -34,6 +40,14 @@ use serde_json::Value;
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+
+/// Is `path` below `root`, with no `..` in it? What an adapter checks before it deletes.
+pub fn is_inside(root: &Path, path: &Path) -> bool {
+    path.starts_with(root)
+        && !path
+            .components()
+            .any(|c| matches!(c, std::path::Component::ParentDir))
+}
 
 /// A shared handle to an agent adapter.
 pub type AgentRef = Arc<dyn Agent>;
@@ -68,9 +82,26 @@ pub trait Agent: Send + Sync + std::fmt::Debug {
     fn work_events(&self, _path: &Path) -> Result<Vec<WorkEvent>> {
         Ok(vec![])
     }
+    /// The token use of every message of the transcript at `path` (a session's own, or a
+    /// sub-agent's), with its time and model: the same messages `parse_transcript` reports in
+    /// `Delta::usage_msgs`, read from the whole file and nothing else (usage by day of a session
+    /// read before eye kept it). `path` exists. The default knows no usage.
+    fn usage_msgs(&self, _path: &Path) -> Result<Vec<UsageMsg>> {
+        Ok(vec![])
+    }
+    /// What the transcript at `path` says about where its session was started (the raw value
+    /// `Delta::origin_raw` carries), read from its first lines only. The default knows none.
+    fn origin_raw(&self, _path: &Path) -> Option<String> {
+        None
+    }
     /// True for a path that is one of the agent's transcripts (restoring an archived copy only
     /// writes there).
     fn owns_transcript(&self, path: &Path) -> bool;
+    /// Is the transcript at `path` there to read? The default asks the file system; an agent whose
+    /// transcript path names a session inside a shared database says so itself.
+    fn transcript_exists(&self, path: &Path) -> bool {
+        path.exists()
+    }
     /// Folders that are the agent's own and never show up as a session's output.
     fn own_dirs(&self) -> Vec<String> {
         vec![]
@@ -133,6 +164,22 @@ pub trait Agent: Send + Sync + std::fmt::Debug {
         crate::archive::decompress_file(copy, dest)
     }
 
+    /// Put a copy made by `archive` back into the agent itself, for an agent whose transcript is
+    /// not a file eye can write (a session inside the agent's database, put back by the agent's
+    /// own import). `dest` is the transcript path the session had. `None` is the default and means
+    /// the copy is restored as a file with `unarchive`; `Some` is the whole restore.
+    fn restore_archived(&self, _copy: &Path, _dest: &Path) -> Option<Result<()>> {
+        None
+    }
+
+    /// Remove the agent's own copy of session `session_id`, whose transcript is `path` (`eye forget
+    /// --transcript`). Returns what was removed, as lines for people (empty when nothing was left
+    /// to remove). `Ok(None)` is the default and means this adapter does not delete sessions. An
+    /// adapter must check that `path` is inside the agent's own folder before it removes anything.
+    fn delete_transcript(&self, _path: &Path, _session_id: &str) -> Result<Option<Vec<String>>> {
+        Ok(None)
+    }
+
     // ---- live state ----
 
     /// Sessions open right now (live status).
@@ -145,6 +192,12 @@ pub trait Agent: Send + Sync + std::fmt::Debug {
     /// is trusted as it is.
     fn live_status_shows_prompts(&self) -> bool {
         true
+    }
+    /// Folders where the agent's sessions keep scratch files, one per session below them (Claude
+    /// Code: `<tmp>/claude-<uid>/<project>/<session-id>/`). A process or worktree in there left by
+    /// a session is named by the session id in its path. The default: none.
+    fn scratch_roots(&self) -> Vec<PathBuf> {
+        vec![]
     }
     /// Background sessions.
     fn jobs(&self) -> Vec<Job> {
@@ -267,18 +320,25 @@ fn factory(id: &str) -> Option<Factory> {
     match id {
         claude::ID => Some(claude::build),
         codex::ID => Some(codex::build),
+        agy::ID => Some(agy::build),
+        opencode::ID => Some(opencode::build),
         _ => None,
     }
 }
 
 fn registered_ids() -> Vec<String> {
     let extra = EXTRA.lock().unwrap_or_else(|e| e.into_inner());
-    let mut ids = vec![claude::ID.to_string(), codex::ID.to_string()];
+    let mut ids = vec![
+        claude::ID.to_string(),
+        codex::ID.to_string(),
+        agy::ID.to_string(),
+        opencode::ID.to_string(),
+    ];
     ids.extend(
         extra
             .iter()
             .map(|(i, _)| i.clone())
-            .filter(|i| i != claude::ID && i != codex::ID),
+            .filter(|i| i != claude::ID && i != codex::ID && i != agy::ID && i != opencode::ID),
     );
     ids
 }
@@ -382,6 +442,21 @@ impl Agents {
     pub fn resume_line(&self, s: &Session) -> Option<String> {
         let (agent, cwd) = self.runnable(s).ok()?;
         Some(agent.resume(&s.id).shell_line(cwd))
+    }
+
+    /// The resume line with a first message for the agent: `cd '<folder>' && claude --resume <id>
+    /// '<message>'`. The message is quoted like any other argument. None when
+    /// [`Agents::runnable`] says no.
+    pub fn resume_line_with(&self, s: &Session, message: &str) -> Option<String> {
+        let (agent, cwd) = self.runnable(s).ok()?;
+        let mut inv = agent.resume(&s.id);
+        inv.args.push(message.to_string());
+        Some(inv.shell_line(cwd))
+    }
+
+    /// Where every enabled agent keeps scratch files (see `Agent::scratch_roots`).
+    pub fn scratch_roots(&self) -> Vec<PathBuf> {
+        self.0.iter().flat_map(|a| a.scratch_roots()).collect()
     }
 
     /// The same for a fork (None too when the agent cannot fork).

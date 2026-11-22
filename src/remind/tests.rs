@@ -1,6 +1,5 @@
 use super::*;
 use crate::ideas::{self, NewIdea};
-use chrono::Duration;
 
 const HOUR: i64 = 3_600_000;
 
@@ -325,8 +324,13 @@ fn an_old_database_gets_the_columns_and_keeps_its_rows() {
 #[test]
 fn labels_say_today_tomorrow_the_weekday_or_the_date() {
     let at = |days: i64, h: u32| {
-        let d = Local.with_ymd_and_hms(2026, 6, 10, h, 0, 0).unwrap() + Duration::days(days);
-        d.timestamp_millis()
+        let d = jiff::civil::date(2026, 6, 10)
+            .at(h.try_into().unwrap(), 0, 0, 0)
+            .to_zoned(jiff::tz::TimeZone::system())
+            .unwrap()
+            .checked_add(jiff::Span::new().days(days))
+            .unwrap();
+        d.timestamp().as_millisecond()
     };
     let now = at(0, 8);
     assert_eq!(label(at(0, 14), now), "today 14:00");

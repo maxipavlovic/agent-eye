@@ -201,8 +201,41 @@ impl Agent for Claude {
         work::read_events(path)
     }
 
+    fn usage_msgs(&self, path: &Path) -> Result<Vec<crate::usage::UsageMsg>> {
+        transcript::usage_msgs(path)
+    }
+
+    fn origin_raw(&self, path: &Path) -> Option<String> {
+        transcript::head_origin(path)
+    }
+
     fn owns_transcript(&self, path: &Path) -> bool {
         path.starts_with(self.dir.join("projects"))
+    }
+
+    /// The transcript file and the folder of the same name beside it (the sub-agents).
+    fn delete_transcript(&self, path: &Path, session_id: &str) -> Result<Option<Vec<String>>> {
+        anyhow::ensure!(
+            is_inside(&self.dir.join("projects"), path)
+                && path.file_name().and_then(|n| n.to_str())
+                    == Some(format!("{session_id}.jsonl").as_str()),
+            "{} is not the transcript of {session_id}",
+            path.display()
+        );
+        let mut gone = vec![];
+        let folder = path.with_extension("");
+        for p in [path.to_path_buf(), folder] {
+            let Ok(md) = std::fs::symlink_metadata(&p) else {
+                continue;
+            };
+            if md.is_dir() {
+                std::fs::remove_dir_all(&p)?;
+            } else {
+                std::fs::remove_file(&p)?;
+            }
+            gone.push(crate::util::show_path(&p));
+        }
+        Ok(Some(gone))
     }
 
     fn own_dirs(&self) -> Vec<String> {
@@ -276,10 +309,11 @@ impl Agent for Claude {
     ) -> Result<UsageRead> {
         let from = append_only::resume_offset(since, source.stamp);
         let last_id = last_id.filter(|_| from.is_some());
-        let (tokens, last_id, end) =
+        let (tokens, last_id, end, msgs) =
             transcript::parse_usage_file(&source.path, from.unwrap_or(0), last_id)?;
         Ok(UsageRead {
             tokens,
+            msgs,
             last_id,
             marker: end.to_string(),
             replaces: from.is_none(),
@@ -309,6 +343,19 @@ impl Agent for Claude {
 
     fn live_sessions(&self) -> Vec<LiveSession> {
         live::read_sessions(&self.dir.join("sessions"))
+    }
+
+    fn scratch_roots(&self) -> Vec<PathBuf> {
+        // `/private/tmp` is where macOS keeps `/tmp`; Linux has the folder in `/tmp` itself
+        let base = if cfg!(target_os = "macos") {
+            "/private/tmp"
+        } else {
+            "/tmp"
+        };
+        vec![PathBuf::from(format!(
+            "{base}/claude-{}",
+            crate::platform::uid()
+        ))]
     }
 
     fn jobs(&self) -> Vec<Job> {

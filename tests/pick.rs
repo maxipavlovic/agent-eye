@@ -50,6 +50,13 @@ impl Env {
             "Done for now",
         );
         std::fs::write(proj.join(format!("{S1}.jsonl")), t).unwrap();
+        // the test's sessions live in temp folders, which eye leaves out by default
+        std::fs::create_dir_all(tmp.path().join("home")).unwrap();
+        std::fs::write(
+            tmp.path().join("home/config.toml"),
+            "[exclude]\ntemp = false\n",
+        )
+        .unwrap();
         Env { tmp, work }
     }
 
@@ -331,6 +338,7 @@ fn picking_an_idea_makes_its_folder_only_when_told_to() {
     let root = e.tmp.path().join("root");
     std::fs::create_dir(&root).unwrap();
     let mut cfg = Config::with_claude_dir(&e.tmp.path().join("claude"));
+    cfg.exclude.temp = false;
     cfg.folder_root = Some(root.clone());
     let paths = Paths {
         home: e.tmp.path().join("home"),

@@ -167,6 +167,8 @@ pub fn card_json(
         "folder": s.cwd.as_deref().map(home_rel),
         "repo": s.repo_root.as_deref().map(home_rel),
         "branch": clean_branch(&s.git_branch),
+        "origin": s.origin,
+        "origin_raw": s.origin_raw,
         "column": column.as_str(),
         "auto_column": auto_column.as_str(),
         "manual": effective_manual(s).is_some(),
@@ -240,14 +242,19 @@ pub(super) fn idea_card(i: &Idea, agents: &Agents, cfg: &Config, now: i64) -> Va
 }
 
 pub(super) fn load_card(db: &Db, s: &Session, now: i64, cx: CardCtx) -> Result<Value> {
-    Ok(card_json(
+    let mut card = card_json(
         s,
         &db.streams_for(&s.id)?,
         &db.outputs_for(&s.id)?,
         now,
         false,
         cx,
-    ))
+    );
+    card["loose"] = json!(crate::loose::list(db, Some(&s.id), false)?.len());
+    if let Some(n) = super::board::night_chips(db)?.get(&s.id) {
+        card["night"] = n.clone();
+    }
+    Ok(card)
 }
 
 #[cfg(test)]

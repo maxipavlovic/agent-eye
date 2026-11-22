@@ -4,6 +4,8 @@ DEMO_DIR="${DEMO_DIR:-/tmp/agent-eye-demo}"
 sleep 7200 >/dev/null 2>&1 &! # stands in for the open session's process
 node scripts/demo-home.mjs "$DEMO_DIR" $! >/dev/null
 export HOME="$DEMO_DIR/home" EYE_HOME="$DEMO_DIR/eye" EYE_CLAUDE_DIR="$DEMO_DIR/claude"
+# the demo lives in a temp folder, which eye leaves out by default
+mkdir -p "$EYE_HOME" && printf '[exclude]\ntemp = false\n' > "$EYE_HOME/config.toml"
 # The fresh build as `agent-eye` and `eye`, and a stand-in `claude` that answers the summary calls.
 ln -s "$PWD/target/release/agent-eye" "$DEMO_DIR/bin/agent-eye"
 ln -s agent-eye "$DEMO_DIR/bin/eye"

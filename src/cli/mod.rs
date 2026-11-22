@@ -2,14 +2,20 @@
 //! subcommands.
 
 mod args;
+mod ask;
 mod backup;
 mod board;
 mod data;
+mod forget;
 mod ideas;
+mod loose;
+mod night;
+mod pack;
 mod pick;
 mod remind;
 mod setup;
 mod show;
+mod usage;
 
 pub use args::{Cli, Cmd};
 
@@ -97,6 +103,8 @@ fn session_json(s: &Session, col: Column, user: &UserCfg, agents: &Agents) -> Va
         "folder": s.cwd,
         "repo": s.repo_root,
         "branch": s.git_branch,
+        "origin": s.origin,
+        "origin_raw": s.origin_raw,
         "column": col.as_str(),
         "kind": s.kind,
         "started_at": s.started_at,
@@ -150,6 +158,25 @@ pub fn run() -> Result<()> {
             }
             Ok(())
         }
+        Cmd::Statusline { wrap } => {
+            // No config, no migration, no error: this runs on every status line refresh.
+            if let Ok(paths) = g.paths() {
+                let out = crate::usage::statusline::run(
+                    &paths.db_path(),
+                    wrap.as_deref(),
+                    std::io::stdin(),
+                );
+                let _ = std::io::Write::write_all(&mut std::io::stdout(), out.as_bytes());
+            }
+            Ok(())
+        }
+        Cmd::Usage {
+            days,
+            week: _,
+            month,
+            by,
+            json,
+        } => usage::run(&g, days.unwrap_or(if month { 30 } else { 7 }), &by, json),
         Cmd::Pick(a) => pick::run(&g, &a),
         Cmd::Init { shell, key } => {
             print!(
@@ -167,10 +194,11 @@ pub fn run() -> Result<()> {
         } => show::find(&g, &words, limit, all, json),
         Cmd::Ls {
             column,
+            origin,
             all,
             limit,
             json,
-        } => show::ls(&g, column.as_deref(), all, limit, json),
+        } => show::ls(&g, column.as_deref(), origin.as_deref(), all, limit, json),
         Cmd::Hide { id } => show::hide(&g, &id, true),
         Cmd::Unhide { id } => show::hide(&g, &id, false),
         Cmd::Show {
@@ -198,12 +226,28 @@ pub fn run() -> Result<()> {
             next,
         } => data::mark(&g, &args, current, next.as_deref()),
         Cmd::Remind { args, note, clear } => remind::run(&g, &args, note.as_deref(), clear),
+        Cmd::Loose { sub, session, json } => loose::run(&g, sub, session.as_deref(), json),
+        Cmd::Night { sub } => night::run(&g, sub),
         Cmd::Daemon { port, no_board } => setup::daemon(&g, port, no_board),
         Cmd::Install { a, board } => setup::install(&g, &a, board),
         Cmd::Uninstall { a, purge } => setup::uninstall(&g, &a, purge),
         Cmd::Doctor => setup::doctor(&g),
+        Cmd::Forget {
+            ids,
+            folder,
+            transcript,
+            yes,
+            dry_run,
+        } => forget::run(&g, &ids, folder.as_deref(), transcript, yes, dry_run),
         Cmd::Archive { id, all } => data::archive(&g, id.as_deref(), all),
         Cmd::Restore { id } => data::restore(&g, &id),
         Cmd::Backup { sub } => backup::run(&g, sub),
+        Cmd::Export {
+            session,
+            to,
+            html,
+            md,
+        } => pack::export(&g, session.as_deref(), to.as_deref(), html, md),
+        Cmd::Import { file, yes, dry_run } => pack::import(&g, &file, yes, dry_run),
     }
 }

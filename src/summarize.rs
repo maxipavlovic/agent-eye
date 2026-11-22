@@ -758,7 +758,9 @@ mod tests {
 
     #[test]
     fn skip_rules() {
-        let cfg = Config::default();
+        let mut cfg = Config::default();
+        // the fixture's folder is a temp one, which eye leaves out by default
+        cfg.exclude.temp = false;
         let mut s = fixture_session(Path::new("/x"));
         assert_eq!(skip_reason(&cfg, &s), None);
         s.prompt_count = 0;

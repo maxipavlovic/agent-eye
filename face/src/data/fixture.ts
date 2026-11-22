@@ -1,5 +1,6 @@
+import { demoUsage, emptyUsage } from './usageSample';
 import type {
-  Agent, ArchivePage, Board, Card, CardDetail, ColumnId, ConversationPage, FolderCheck, Idea, Message, SearchHit, Source, StartPlan, Tokens,
+  Agent, ArchivePage, NightRun, NightState, Board, Card, CardDetail, ColumnId, ConversationPage, FolderCheck, Idea, LooseEnd, Message, SearchHit, Source, StartPlan, Tokens,
 } from '../api/types';
 
 // fixtures/sample/ is synthetic: every build, test, screenshot and the site use it. fixtures/real/
@@ -18,6 +19,9 @@ function file<T>(name: string, fallback: T): T {
 
 /** The fixture's one agent; cards and ideas without agent fields (an old snapshot) get it. */
 const AGENT: Agent = { id: 'claude', name: 'Claude Code', short: 'Claude', default: true };
+
+/** The sample's second agent, so the board shows which agent a card belongs to. */
+const CODEX: Agent = { id: 'codex', name: 'Codex CLI', short: 'Codex', default: false };
 
 const delay = <T>(v: T, ms = 60) => new Promise<T>((r) => setTimeout(() => r(v), ms));
 
@@ -104,6 +108,86 @@ function whenOf(text: string, now = Date.now()): number {
   return at;
 }
 
+/** Local time `days` from now at `h:mm`. */
+function local(days: number, h: number, m = 0, now = Date.now()): number {
+  const d = new Date(now);
+  d.setDate(d.getDate() + days);
+  d.setHours(h, m, 0, 0);
+  return d.getTime();
+}
+
+/** The sample's demo states, set after its times move: reminders for tomorrow in every lane and on an idea,
+ *  and two sessions run by the second agent. A session's remote link and the one stopped on a prompt are in the JSON. */
+function demoStates(board: Board, details: Record<string, CardDetail>, ideas: Idea[]): void {
+  const remind: Array<[string, number, string | null]> = [
+    ['089be68b', local(1, 9), 'the contrast review'],
+    ['073b2574', local(1, 9, 30), null],
+    ['21743447', local(1, 9), "Sam's approval"],
+    ['7f270753', local(3, 14), 'after the rota change'],
+    ['a73427ab', local(1, 9), null],
+    ['idea:4', local(1, 9), 'before the docs freeze'],
+  ];
+  const codex = ['f3a379f4', '7f270753'];
+  const cards = [...board.columns.flatMap((c) => c.cards), ...Object.values(details)];
+  for (const c of cards) {
+    const r = remind.find(([id]) => c.id.startsWith(id));
+    if (r) Object.assign(c, { remind_at: r[1], remind_note: r[2], remind_due: false });
+    if (codex.some((id) => c.id.startsWith(id))) Object.assign(c, { agent: CODEX.id, agent_name: CODEX.short, next: c.next?.replace(/^Claude:/, 'Codex:') ?? c.next });
+  }
+  // long project names (two projects renamed) and a Remote chip on a few cards, so the meta row is seen under pressure
+  const rename: Array<[string, string]> = [['~/code/tasker', '~/code/agentic-layer-stack'], ['~/code/docs-site', '~/code/adobe-insights-multi-account']];
+  const remote = ['b38e7d98', '7f270753', '21743447'];
+  for (const c of cards) {
+    const r = rename.find(([from]) => c.folder === from || c.repo === from);
+    if (r) Object.assign(c, { folder: c.folder === r[0] ? r[1] : c.folder, repo: c.repo === r[0] ? r[1] : c.repo });
+    if (remote.some((id) => c.id.startsWith(id))) c.remote_url ??= 'https://claude.ai/code/session_01SampleSampleSample';
+    // what a session cost, in the panel's COST row
+    if (!('usage' in c) && c.kind !== 'idea') {
+      const total = 20_000_000 + (hash(c.id) % 160_000_000);
+      Object.assign(c, { usage: { input: 4_000, output: 300_000, cache_write: Math.round(total * 0.05), cache_read: Math.round(total * 0.95), total, cost_usd: Math.round(total / 2_500_000 * 100) / 100, unpriced_tokens: 0, estimate: 'API-equivalent estimate, not your bill' } });
+    }
+  }
+  // where a few sessions were started; the others are terminal sessions and show nothing
+  const sessionIds = board.columns.flatMap((c) => c.cards).filter((c) => !c.id.startsWith('idea:')).map((c) => c.id);
+  const origins: Array<[string | undefined, Card['origin'], string]> = [
+    [sessionIds[1], 'app', 'sdk-ts'],
+    [sessionIds[4], 'ide', 'claude-vscode'],
+    [sessionIds[6], 'night', 'sdk-cli'],
+  ];
+  for (const c of cards) {
+    const o = origins.find(([id]) => id === c.id);
+    if (o) Object.assign(c, { origin: o[1], origin_raw: o[2] });
+  }
+  for (const i of ideas) {
+    const r = remind.find(([id]) => id === `idea:${i.id}`);
+    if (r) Object.assign(i, { remind_at: r[1], remind_note: r[2] });
+  }
+}
+
+/** What two demo sessions left behind: two servers and a commit on no remote, and a scratch worktree. */
+function demoLoose(board: Board): Record<string, LooseEnd[]> {
+  const cards = board.columns.flatMap((c) => c.cards).filter((c) => c.kind !== 'idea');
+  const [a, b] = [cards.find((c) => c.column === 'waiting') ?? cards[0], cards.find((c) => c.column === 'running') ?? cards[1]];
+  const hour = 3_600_000;
+  const item = (c: Card, o: Partial<LooseEnd> & Pick<LooseEnd, 'key' | 'kind' | 'line' | 'what' | 'action'>): LooseEnd => ({
+    session_id: c.id, detail: o.what, since_ms: Date.now() - 20 * hour, confirm: null, command: null, ...o,
+  });
+  const out: Record<string, LooseEnd[]> = {};
+  if (a) {
+    out[a.id] = [
+      item(a, { key: 'proc:38090:1', kind: 'process', action: 'stop', what: 'node vite (pid 38090, port 4321)', line: 'node vite (pid 38090) is still serving port 4321, started 6d ago', confirm: 'Stop node vite (pid 38090, port 4321)?' }),
+      item(a, { key: 'proc:38112:1', kind: 'process', action: 'stop', what: 'node api (pid 38112, port 4350)', line: 'node api (pid 38112) is still serving port 4350, started 6d ago', confirm: 'Stop node api (pid 38112, port 4350)?' }),
+      item(a, { key: 'unpushed:/Users/you/code/web:abc1234', kind: 'unpushed', action: 'push', what: '3 commits in web', line: '3 commits in web are on no remote', command: "cd '/Users/you/code/web' && git push --all" }),
+    ];
+  }
+  if (b) {
+    out[b.id] = [
+      item(b, { key: 'worktree:/Users/you/code/web-retry', kind: 'worktree', action: 'remove', what: '/Users/you/code/web-retry', line: 'worktree /Users/you/code/web-retry of web: its folder is gone', confirm: 'Remove worktree /Users/you/code/web-retry?' }),
+    ];
+  }
+  return out;
+}
+
 /** A believable conversation from the stored prompts, long enough to page through. */
 function conversationOf(d: CardDetail): Message[] {
   const base = d.last_assistant_text ? 1 : 0;
@@ -129,7 +213,8 @@ function conversationOf(d: CardDetail): Message[] {
 }
 
 /** A Source over the bundled snapshot. Writes change only the in-memory copy. */
-export function fixtureSource(): Source {
+/** `demo`: the site's and the look's board, with the states that need showing (a second agent, reminders for tomorrow); the tests use the plain sample. */
+export function fixtureSource(demo = false): Source {
   const board = file<Board>('board.json', { columns: [], archive_count: 0, generated_at: Date.now() });
   const details = file<Record<string, CardDetail>>('cards.json', {});
   const archive = file<ArchivePage>('archive.json', { cards: [], total: 0, offset: 0 });
@@ -149,7 +234,10 @@ export function fixtureSource(): Source {
     const by = Date.now() - board.generated_at;
     for (const part of [board, details, archive, ideas, written]) shiftTimes(part, by);
     shiftWorked(details);
+    if (demo) demoStates(board, details, ideas.ideas);
   }
+  const left = demo && files === sample ? demoLoose(board) : {};
+  for (const c of [...board.columns.flatMap((x) => x.cards), ...Object.values(details)]) if (left[c.id]) c.loose = left[c.id]!.length;
   /** What the real engine would say about a folder: the ones on the board exist, a new one under `~` can be made. */
   const exists = (p: string) => p === '~' || allCards().some((c) => c.folder === p && c.folder_state !== 'missing');
   const folderCheck = (path: string): FolderCheck => {
@@ -167,7 +255,7 @@ export function fixtureSource(): Source {
     const f = folderCheck(path);
     return { folder_state: f.state, folder_creatable: f.creatable, folder_note: f.note };
   };
-  const agents: Agent[] = [AGENT];
+  const agents: Agent[] = demo && files === sample ? [AGENT, CODEX] : [AGENT];
   /** The desktop notice setting, off by default as in a new config. */
   const notice = { notify: false, available: true };
   const nameOf = (id: string | null | undefined) => (agents.find((a) => a.id === id) ?? agents.find((a) => a.default)!).short;
@@ -183,8 +271,41 @@ export function fixtureSource(): Source {
   const detailOf = (c: Card): CardDetail => {
     const d: CardDetail = details[c.id] ? { ...details[c.id]!, column: c.column, manual: c.manual } : { ...c, prompts: [], first_prompt: null, last_assistant_text: null, resume_mode: 'iterm' };
     const i = ideaOf(c);
-    return i ? { ...d, notes: i.notes || null, prompt: i.prompt ?? null } : d;
+    const withLoose = left[c.id] ? { ...d, loose: left[c.id]!.length, loose_ends: left[c.id] } : d;
+    return i ? { ...withLoose, notes: i.notes || null, prompt: i.prompt ?? null } : withLoose;
   };
+
+  /** The night shift: off, nothing planned; the demo has one finished run on a card. */
+  const nightState: NightState = { enabled: false, window: '01:00-07:00', parallel: 2, isolation: 'worktree', quiet_minutes: 20, in_window: false, planned: 0, open: [], recent: [] };
+  let nightSeq = 0;
+  const nightRun = (o: Partial<NightRun>): NightRun => ({
+    id: ++nightSeq, kind: 'idea', idea_id: null, session_id: null, agent: 'claude', switch: false, folder: '~/code/demo', prompt: 'Add a README line saying hello',
+    night: new Date().toISOString().slice(0, 10), status: 'planned', why: null, limit: null, run_session_id: null, worktree: null, branch: null, base_ref: null,
+    started_at: null, ended_at: null, duration_ms: null, report: null, diff_stat: null, created_at: Date.now(), isolation: 'worktree', ...o,
+  });
+  const nightLimit = (text: string): NightRun['limit'] => {
+    const t = text.trim();
+    if (!t) return null;
+    return { kind: t.endsWith('%') ? 'weekly' : /[mh]$/.test(t) ? 'minutes' : 'tokens', value: Number.parseFloat(t), text: t };
+  };
+  if (demo && files === sample) {
+    const c = board.columns.find((x) => x.id === 'needs_you')?.cards.find((x) => x.kind !== 'idea');
+    if (c) {
+      const t = Date.now() - 6 * 3600_000;
+      const run = nightRun({
+        status: 'done', run_session_id: c.id, started_at: t, ended_at: t + 41 * 60_000, duration_ms: 41 * 60_000, tokens: 182_000, uncommitted: false,
+        worktree: '~/.agent-eye/night/1/wt', branch: 'night/20261121-add-a-readme-line', base_ref: 'abc1234', limit: { kind: 'minutes', value: 90, text: '90 minutes' },
+        report: 'Added the README line and a test for it. Tests pass. Nothing is pushed.',
+        diff_stat: ' README.md      | 2 ++\n tests/readme.rs | 9 +++++++++\n 2 files changed, 11 insertions(+)',
+      });
+      c.night = { id: run.id, status: run.status };
+      const d = details[c.id];
+      if (d) d.night_run = run;
+      nightState.recent.push(run);
+    }
+  }
+  const nightClone = () => structuredClone(nightState);
+  const nightCount = () => { nightState.planned = nightState.open.filter((r) => r.status === 'planned').length; };
 
   return {
     name: 'fixture',
@@ -203,13 +324,15 @@ export function fixtureSource(): Source {
         const hay = fields.join('\n').toLowerCase();
         if (!words.every((w) => hay.includes(w))) continue;
         const snippet = fields.map((f) => snippetOf(f, words)).find(Boolean) ?? c.title;
-        hits.push({ card: c, snippet, score: -words.length - (c.title.toLowerCase().includes(words[0]!) ? 5 : 0) });
+        const relevance = words.length + (c.title.toLowerCase().includes(words[0]!) ? 5 : 0);
+        hits.push({ card: c, snippet, score: -relevance, relevance });
       }
-      hits.sort((a, b) => a.score - b.score);
+      hits.sort((a, b) => b.relevance - a.relevance);
       return delay({ results: hits.slice(0, 30) }, 120);
     },
     ideas: () => delay(structuredClone(ideas)),
     agents: () => delay({ agents: structuredClone(agents) }),
+    usage: (days) => delay(demo ? demoUsage(days) : emptyUsage(days)),
     move: (id, to) => {
       const c = find(id);
       if (!c) return Promise.reject(new Error(`No card ${id}`));
@@ -220,6 +343,13 @@ export function fixtureSource(): Source {
       else { archive.cards.unshift(moved); board.archive_count++; }
       changed();
       return delay(moved);
+    },
+    forget: (id) => {
+      const col = board.columns.find((x) => x.cards.some((c) => c.id === id || c.id.startsWith(id)));
+      if (!col) return Promise.reject(new Error(`No card ${id}`));
+      col.cards = col.cards.filter((c) => !(c.id === id || c.id.startsWith(id)));
+      changed();
+      return delay(undefined);
     },
     setHidden: (id, hide) => {
       const stashed = [...hidden.values()].find((h) => h.card.id === id || h.card.id.startsWith(id));
@@ -329,6 +459,65 @@ export function fixtureSource(): Source {
         return Promise.reject(e);
       }
     },
+    looseAct: (action, key) => {
+      const sid = Object.keys(left).find((id) => left[id]!.some((x) => x.key === key));
+      if (!sid) return Promise.reject(new Error(`no such loose end: ${key}`));
+      left[sid] = left[sid]!.filter((x) => x.key !== key);
+      for (const x of allCards().filter((c) => c.id === sid)) x.loose = left[sid]!.length;
+      changed();
+      return delay({ ok: true, note: action === 'ignore' ? 'ignored' : action === 'stop' ? 'sent SIGTERM (fixture)' : 'removed (fixture)' });
+    },
+    looseSend: (session, _dry) => delay({
+      dry_run: true, mode: 'iterm', command: `claude --resume ${session} 'Before you call this finished, please deal with what this session left behind'`,
+      note: 'Fixture: would open the session with the list',
+    }),
+    night: () => delay(nightClone()),
+    nightSettings: (input) => {
+      if (input.window !== undefined) {
+        if (!/^([01]\d|2[0-3]):[0-5]\d-([01]\d|2[0-3]):[0-5]\d$/.test(input.window) || input.window.slice(0, 5) === input.window.slice(6)) return Promise.reject(new Error(`'${input.window}' is not a window: write it as 01:00-07:00`));
+        nightState.window = input.window;
+      }
+      if (input.parallel !== undefined) nightState.parallel = input.parallel;
+      if (input.enabled !== undefined) nightState.enabled = input.enabled;
+      return delay(nightClone());
+    },
+    nightPlan: (input) => {
+      if (input.session_id && !input.prompt?.trim()) return Promise.reject(new Error('continue tonight needs a prompt: say what the session should do tonight'));
+      const idea = input.idea_id == null ? undefined : ideas.ideas.find((i) => i.id === input.idea_id);
+      if (input.idea_id != null && !idea?.prompt) return Promise.reject(new Error('this idea has no prompt: write what the agent should do (the idea\'s prompt), then plan it'));
+      if (input.idea_id != null && !idea?.folder) return Promise.reject(new Error('this idea has no folder: add the folder the run should work on, then plan it'));
+      if (input.limit?.trim().endsWith('%')) return Promise.reject(new Error('eye has no weekly plan data for Claude Code, so a weekly limit cannot be checked. Run `eye install` so Claude Code reports its limits, then plan again.'));
+      const run = nightRun({
+        kind: input.session_id ? 'session' : 'idea', idea_id: input.idea_id ?? null, session_id: input.session_id ?? null, agent: input.agent ?? 'claude',
+        switch: !!input.switch, prompt: (input.prompt ?? idea?.prompt ?? '').trim(), folder: idea?.folder ?? '~/code/demo', limit: nightLimit(input.limit ?? ''), isolation: input.isolation ?? nightState.isolation,
+      });
+      nightState.open.push(run);
+      nightCount();
+      return delay(structuredClone(run));
+    },
+    nightCancel: (id) => {
+      nightState.open = nightState.open.filter((r) => r.id !== id);
+      nightCount();
+      return delay(nightClone());
+    },
+    nightLimit: (id, limit) => {
+      const r = nightState.open.find((x) => x.id === id);
+      if (!r) return Promise.reject(new Error('no such run'));
+      r.limit = nightLimit(limit);
+      return delay(nightClone());
+    },
+    nightDiscard: (id, _lose) => {
+      for (const r of nightState.recent.filter((x) => x.id === id)) { r.worktree = null; r.branch = null; }
+      for (const d of Object.values(details)) if (d.night_run?.id === id) { d.night_run.worktree = null; d.night_run.branch = null; }
+      changed();
+      return delay({ ok: true, note: 'removed (fixture)' });
+    },
+    nightBring: (id) => {
+      const r = [...nightState.open, ...nightState.recent].find((x) => x.id === id);
+      if (!r || r.isolation !== 'copy' || !r.branch) return Promise.reject(new Error('only the copy of a git repo has a branch to bring into your repo'));
+      return delay({ ok: true, note: `branch ${r.branch} is now in ${r.folder} (fixture)` });
+    },
+    nightOpen: () => delay({ ok: true }),
     remindSettings: () => delay({ ...notice }),
     setRemindSettings: (input) => {
       notice.notify = input.notify;

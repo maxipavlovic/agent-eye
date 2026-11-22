@@ -4,6 +4,7 @@ import { Pix } from '../../pixel/Pix';
 import type { Store } from '../../store';
 import type { Column } from '../../api/types';
 import { projects, tagOf } from './model';
+import { KeyHelpHost } from './KeyHelp';
 import { CardMenu } from './CardMenu';
 import { EMPTY, INK } from './art';
 import { ORDER, type BoardCtx } from './columns';
@@ -11,12 +12,15 @@ import { Detail } from './Detail';
 import { Grid } from './Grid';
 import { Header, ProjectBar } from './Header';
 import { IdeaFormHost } from './IdeaForm';
+import { ForgetHost } from './Forget';
 import { RemindFormHost } from './Remind';
 import { useKeys } from './keys';
 import { Lanes } from './Lanes';
 import { useLayout } from './layout';
 import { Results } from './Results';
 import { Toasts } from './Toasts';
+import { NightHost } from './Night';
+import { UsageHost } from './Usage';
 import { useWalk } from './walk';
 import { Welcome } from './Welcome';
 
@@ -97,6 +101,10 @@ export function Root({ store }: { store: Store }) {
       )}
       <IdeaFormHost store={store} />
       <RemindFormHost store={store} />
+      <ForgetHost store={store} />
+      <UsageHost store={store} />
+      <NightHost store={store} />
+      <KeyHelpHost />
       <CardMenu store={store} />
       <Toasts store={store} />
     </div>

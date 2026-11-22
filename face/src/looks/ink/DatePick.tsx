@@ -93,9 +93,12 @@ export function DatePicker({ value, min, onChange, labelId }: { value: string; m
     moved.current = null;
     grid.current?.querySelector<HTMLButtonElement>('button[tabindex="0"]')?.focus();
   }, [cursor]);
+  // the newest day, also for a second key pressed before the grid is drawn again
+  const latest = useRef(cursor);
   const go = (iso: string, focus: boolean) => {
     const to = iso < min ? min : iso;
     moved.current = focus ? to : null;
+    latest.current = to;
     setCursor(to);
   };
   const onKey = (e: KeyboardEvent) => {
@@ -104,7 +107,7 @@ export function DatePicker({ value, min, onChange, labelId }: { value: string; m
     // the board's own arrow keys walk the cards; here they move the day
     e.preventDefault();
     e.stopPropagation();
-    go(step(cursor), true);
+    go(step(latest.current), true);
   };
   const month = parse(cursor).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }).toUpperCase();
   const today = dateValue(new Date());

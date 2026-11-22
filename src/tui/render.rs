@@ -148,6 +148,17 @@ pub(super) fn row_line<'a>(
         .filter(|_| width >= 60)
         .map(|s| activity::marker(s, now))
         .unwrap_or_default();
+    // a session a night run made says so, in plain words
+    let marks = if r
+        .session
+        .as_ref()
+        .is_some_and(|s| s.origin.as_deref() == Some("night"))
+        && width >= 60
+    {
+        format!("{marks} night").trim().to_string()
+    } else {
+        marks
+    };
     let marks_w = if marks.is_empty() {
         0
     } else {
@@ -343,7 +354,21 @@ pub fn draw(f: &mut Frame, app: &mut App) {
             width: inner.width.saturating_sub(if wide { 1 } else { 0 }),
             ..inner
         };
-        if app.talk {
+        if let Some(l) = app.loose.as_ref() {
+            let lines: Vec<Line> = super::loose::lines(l)
+                .into_iter()
+                .enumerate()
+                .map(|(i, t)| {
+                    // the title line and the selected item stand out
+                    if i == 0 || t.starts_with('›') {
+                        Line::styled(t, pal.bold())
+                    } else {
+                        Line::raw(t)
+                    }
+                })
+                .collect();
+            f.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }), inner);
+        } else if app.talk {
             app.ensure_talk();
             let lines = talk_lines(app, inner.width as usize, inner.height as usize, &pal);
             f.render_widget(Paragraph::new(lines), inner);
@@ -357,9 +382,9 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     }
 
     // hint / message
-    let hint_full = "↑↓ move   Enter resume   Ctrl-F fork   Ctrl-T talk   Ctrl-R remind   Ctrl-Y copy   Ctrl-X hide   Tab preview   Ctrl-A hidden+archive   Esc quit";
+    let hint_full = "↑↓ move   Enter resume   Ctrl-F fork   Ctrl-T talk   Ctrl-R remind   Ctrl-L leftovers   Ctrl-Y copy   Ctrl-X hide   Tab preview   Ctrl-A hidden+archive   Esc quit";
     let hint_mid =
-        "↑↓  Enter resume  ^F fork  ^T talk  ^R remind  ^Y copy  ^X hide  Tab preview  ^A all  Esc quit";
+        "↑↓  Enter resume  ^F fork  ^T talk  ^R remind  ^L leftovers  ^Y copy  ^X hide  Tab preview  Esc quit";
     let hint_short = "Enter resume  ^F fork  ^T talk  ^Y copy  ^X hide  Esc quit";
     let hint_min = "Enter resume  ^F fork  ^T talk  Esc quit";
     let w = foot.width as usize;
@@ -373,6 +398,7 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     let text = match (&remind_text, &app.msg) {
         (Some(t), _) => t.clone(),
         (None, Some(m)) => m.clone(),
+        (None, None) if app.loose.is_some() => super::loose::HINT.into(),
         (None, None) if hint_full.width() <= w => hint_full.into(),
         (None, None) if hint_mid.width() <= w => hint_mid.into(),
         (None, None) if hint_short.width() <= w => hint_short.into(),

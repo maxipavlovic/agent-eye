@@ -3,7 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { h, render } from 'preact';
 import type { CardDetail, Worked } from '../../api/types';
 import { fixtureSource } from '../../data/fixture';
-import { Where } from './Sections';
+import { keepPrefsLocal } from '../../prefs';
+import { openFold, resetFolds, Where } from './Sections';
 import { activeText, dayName, dayNumber, stripCells, workedText } from './worked';
 
 const MIN = 60_000;
@@ -67,9 +68,12 @@ describe('the WHERE section', () => {
   let box: HTMLElement | null = null;
   // The sample data is dated from the clock; a run just after midnight would move "today".
   beforeEach(() => { vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date(2026, 10, 12, 12, 0)); });
-  afterEach(() => { if (box) render(null, box); box?.remove(); box = null; vi.useRealTimers(); });
+  afterEach(() => { if (box) render(null, box); box?.remove(); box = null; vi.useRealTimers(); localStorage.clear(); resetFolds(); });
 
+  // WHERE is folded in the panel: these look inside it, opened
   const show = (d: Partial<CardDetail>): HTMLElement => {
+    keepPrefsLocal();
+    openFold('where');
     box = document.createElement('div');
     document.body.append(box);
     render(h(Where, { d: { started_at: 1, ...d } as CardDetail }), box);

@@ -50,11 +50,23 @@ pub(super) async fn api_card(State(st): State<Shared>, Path(id): Path<String>) -
         )
         .collect::<Vec<_>>());
     v["topics_more"] = json!(0);
+    let left = crate::loose::list(&db, Some(&id), false)?;
+    v["loose"] = json!(left.len());
+    v["night_run"] = super::night_routes::run_of_session(&db, &id)?;
+    v["loose_ends"] = json!(left
+        .iter()
+        .map(crate::loose::LooseEnd::to_json)
+        .collect::<Vec<_>>());
+    v["loose_summary"] = json!(crate::loose::summary_text(&left));
     v["worked"] = json!(crate::worked::summary::of_session(
         &db.conn,
         &id,
         &crate::worked::summary::local_offset_ms
     )?);
+    v["usage"] = match crate::usage::report::of_session(&db.conn, &st.cfg.usage, &id)? {
+        Some(sum) => crate::usage::report::session_json(&sum),
+        None => Value::Null,
+    };
     // Stored prompt lines include commands and paste tags; the agent says what is worth showing.
     let readable = |l: &str| st.agents.display_prompt(&s, l);
     let lines = db.prompt_lines(&id)?;
@@ -170,6 +182,65 @@ pub(super) async fn api_hidden(
 
 #[derive(Deserialize, Default)]
 #[serde(default)]
+pub(super) struct ForgetBody {
+    /// The person said yes after the page told them what goes.
+    confirm: bool,
+    /// Also remove the agent's own copy of the transcript.
+    transcript: bool,
+}
+
+/// Same as `eye forget <id> [--transcript] --yes`, behind the guard and only with `confirm: true`.
+pub(super) async fn api_forget(
+    State(st): State<Shared>,
+    Path(id): Path<String>,
+    Json(b): Json<ForgetBody>,
+) -> ApiResult {
+    use crate::forget::{self, OwnCopy};
+    if id.starts_with("idea:") {
+        return Err(ApiError::bad(
+            "ideas are not forgotten; archive them instead",
+        ));
+    }
+    if !b.confirm {
+        return Err(ApiError::bad(
+            "forgetting needs the person's confirmation (confirm: true)",
+        ));
+    }
+    blocking(move || {
+        let db = open_db(&st)?;
+        let id = resolve(&db, &id)?;
+        let s = db
+            .session_by_id(&id)?
+            .ok_or_else(|| ApiError::not_found("no such session"))?;
+        if forget::is_open(&s) {
+            return Err(ApiError::conflict(
+                "open_now",
+                "this session is open now: close it first",
+            ));
+        }
+        let done = forget::forget(&db, &st.paths, &st.cfg, &st.agents, &[s], b.transcript)?;
+        let o = &done.outcomes[0];
+        let (own, detail) = match &o.own {
+            OwnCopy::Kept => ("kept", vec![]),
+            OwnCopy::Removed(g) => ("removed", g.clone()),
+            OwnCopy::Unsupported(w) => ("unsupported", vec![w.clone()]),
+            OwnCopy::Failed(e) => ("failed", vec![e.clone()]),
+        };
+        if !o.forgotten {
+            return Err(ApiError::conflict(
+                "not_done",
+                detail.first().cloned().unwrap_or_default(),
+            ));
+        }
+        Ok(Json(serde_json::json!({
+            "ok": true, "id": o.id, "agent_copy": own, "detail": detail,
+        })))
+    })
+    .await
+}
+
+#[derive(Deserialize, Default)]
+#[serde(default)]
 pub(super) struct ResumeBody {
     dry_run: Option<bool>,
     /// Branch a new session from this one (`--fork-session`).
@@ -265,6 +336,55 @@ pub(super) async fn api_conversation(
 }
 
 #[derive(Deserialize)]
+pub(super) struct ExportQ {
+    format: Option<String>,
+}
+
+/// One session as a download: a self-contained HTML page (or Markdown with `format=md`), secrets
+/// masked, made from the archive copy when the agent deleted the transcript.
+pub(super) async fn api_export(
+    State(st): State<Shared>,
+    Path(id): Path<String>,
+    Query(q): Query<ExportQ>,
+) -> Result<axum::response::Response, ApiError> {
+    use crate::pack::{export_session, Format};
+    use axum::http::header;
+    use axum::response::IntoResponse;
+    let (format, mime) = match q.format.as_deref().unwrap_or("html") {
+        "html" => (Format::Html, "text/html; charset=utf-8"),
+        "md" => (Format::Markdown, "text/markdown; charset=utf-8"),
+        other => {
+            return Err(ApiError::bad(format!(
+                "unknown format '{other}' (html or md)"
+            )))
+        }
+    };
+    let db = open_db(&st)?;
+    if id.starts_with("idea:") {
+        return Err(ApiError::bad("ideas have no conversation to export"));
+    }
+    let id = resolve(&db, &id)?;
+    let (name, text) = export_session(&db, &st.paths, &st.agents, &id, format)?;
+    Ok((
+        [
+            (header::CONTENT_TYPE, mime.to_string()),
+            (
+                header::CONTENT_DISPOSITION,
+                format!("attachment; filename=\"{name}\""),
+            ),
+            (header::CACHE_CONTROL, "no-store".to_string()),
+            (header::X_CONTENT_TYPE_OPTIONS, "nosniff".to_string()),
+            (
+                header::CONTENT_SECURITY_POLICY,
+                "default-src 'none'; style-src 'unsafe-inline'; sandbox".to_string(),
+            ),
+        ],
+        text,
+    )
+        .into_response())
+}
+
+#[derive(Deserialize)]
 pub(super) struct SearchQ {
     q: Option<String>,
     limit: Option<usize>,
@@ -278,7 +398,7 @@ pub(super) async fn api_search(State(st): State<Shared>, Query(q): Query<SearchQ
             .split_whitespace()
             .map(String::from)
             .collect();
-    if search::build_query(&words, " ").is_none() {
+    if !search::has_terms(&words) {
         return Ok(Json(json!({"results": []})));
     }
     let now = now_ms();
@@ -296,7 +416,9 @@ pub(super) async fn api_search(State(st): State<Shared>, Query(q): Query<SearchQ
         out.push(json!({
             "card": load_card(&db, &h.session, now, st.card_ctx())?,
             "snippet": h.snippet,
-            "score": h.score,
+            // `score` keeps 0.2's order (lower is better); `relevance` is the same number turned around
+            "score": -h.score,
+            "relevance": h.score,
         }));
     }
     Ok(Json(json!({"results": out})))
@@ -375,6 +497,60 @@ mod tests {
         .await;
         assert_eq!(st, StatusCode::BAD_REQUEST);
         assert_eq!(c["error"], "sessions cannot be moved to Ideas");
+    }
+
+    #[tokio::test]
+    async fn forget_endpoint_needs_a_confirm_and_refuses_an_open_session() {
+        let e = env();
+        add_session(&e.db, "aaaaaaaa-1", "t", None, 5, now_ms());
+        add_session(&e.db, "bbbbbbbb-2", "u", None, 5, now_ms());
+        let uri = "/api/sessions/aaaaaaaa-1/forget";
+        let here = |id: &str| e.db.session_by_id(id).unwrap().is_some();
+        for body in [json!({}), json!({"confirm": false, "transcript": true})] {
+            let (st, v) = call(&e, req("POST", uri, Some(body))).await;
+            assert_eq!(st, StatusCode::BAD_REQUEST);
+            assert!(v["error"].as_str().unwrap().contains("confirm"));
+            assert!(here("aaaaaaaa-1"), "nothing goes without the confirm");
+        }
+        e.db.conn
+            .execute(
+                "UPDATE session SET live_status='idle' WHERE id='aaaaaaaa-1'",
+                [],
+            )
+            .unwrap();
+        let (st, v) = call(&e, req("POST", uri, Some(json!({"confirm": true})))).await;
+        assert_eq!(st, StatusCode::CONFLICT);
+        assert_eq!(v["code"], "open_now");
+        assert!(here("aaaaaaaa-1"));
+        let (st, _) = call(
+            &e,
+            req(
+                "POST",
+                "/api/sessions/idea:1/forget",
+                Some(json!({"confirm": true})),
+            ),
+        )
+        .await;
+        assert_eq!(st, StatusCode::BAD_REQUEST);
+        let mut r = req(
+            "POST",
+            "/api/sessions/bbbbbbbb-2/forget",
+            Some(json!({"confirm": true})),
+        );
+        r.headers_mut().remove("x-eye-token");
+        assert_eq!(call(&e, r).await.0, StatusCode::UNAUTHORIZED);
+        assert!(here("bbbbbbbb-2"));
+        let (st, v) = call(
+            &e,
+            req(
+                "POST",
+                "/api/sessions/bbbbbbbb-2/forget",
+                Some(json!({"confirm": true, "transcript": true})),
+            ),
+        )
+        .await;
+        assert_eq!((st, v["ok"].as_bool()), (StatusCode::OK, Some(true)));
+        assert!(!here("bbbbbbbb-2") && here("aaaaaaaa-1"));
     }
 
     #[tokio::test]
@@ -521,6 +697,82 @@ mod tests {
         assert_eq!(st, StatusCode::NOT_FOUND);
         assert!(v["error"].as_str().unwrap().contains("no transcript"));
         let mut r = get("/api/cards/aaaaaaaa-1/conversation");
+        r.headers_mut().remove("x-eye-token");
+        assert_eq!(call(&e, r).await.0, StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn export_downloads_one_page_even_when_the_agent_deleted_the_transcript() {
+        use crate::paths::Paths;
+        use crate::server::test_support::raw;
+        let e = env();
+        add_session(&e.db, "aaaaaaaa-1", "Fix the thing", None, 1, now_ms());
+        let secret = "ghp_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+        let t = e._tmp.path().join("aaaaaaaa-1.jsonl");
+        std::fs::write(
+            &t,
+            format!("{{\"type\":\"user\",\"timestamp\":\"2026-11-08T10:00:00.000Z\",\"message\":{{\"content\":\"token {secret} please\"}}}}\n{{\"type\":\"assistant\",\"timestamp\":\"2026-11-08T10:00:05.000Z\",\"message\":{{\"content\":[{{\"type\":\"text\",\"text\":\"all done\"}}]}}}}\n"),
+        )
+        .unwrap();
+        e.db.conn
+            .execute(
+                "UPDATE session SET transcript_path=?1, project_dir='-tmp-demo' WHERE id='aaaaaaaa-1'",
+                [t.to_string_lossy()],
+            )
+            .unwrap();
+        // archived, then deleted by the agent: the page is made from the archive copy
+        let paths = Paths {
+            home: e._tmp.path().join("home"),
+        };
+        let cfg = crate::config::Config::with_claude_dir(&e._tmp.path().join("claude"));
+        crate::archive::archive_session(&e.db, &paths, &crate::agents::enabled(&cfg), "aaaaaaaa-1")
+            .unwrap();
+        std::fs::remove_file(&t).unwrap();
+        let (st, h, body) = raw(
+            &e,
+            req("GET", "/api/sessions/aaaaaaaa/export?format=html", None),
+        )
+        .await;
+        assert_eq!(st, StatusCode::OK, "{body}");
+        assert!(h["content-type"].to_str().unwrap().starts_with("text/html"));
+        let cd = h["content-disposition"].to_str().unwrap();
+        assert!(
+            cd.starts_with("attachment; filename=\"eye-aaaaaaaa-fix-the-thing.html"),
+            "{cd}"
+        );
+        assert!(
+            body.contains("all done") && body.contains("[masked]"),
+            "{body}"
+        );
+        assert!(!body.contains(secret));
+        let (st, h, body) = raw(
+            &e,
+            req("GET", "/api/sessions/aaaaaaaa-1/export?format=md", None),
+        )
+        .await;
+        assert_eq!(st, StatusCode::OK);
+        assert!(h["content-type"]
+            .to_str()
+            .unwrap()
+            .starts_with("text/markdown"));
+        assert!(body.starts_with("# Fix the thing"));
+        // errors: unknown session, idea, bad format, no token
+        let get = |u: &str| req("GET", u, None);
+        assert_eq!(
+            call(&e, get("/api/sessions/zzzzzzzz/export")).await.0,
+            StatusCode::NOT_FOUND
+        );
+        assert_eq!(
+            call(&e, get("/api/sessions/idea:1/export")).await.0,
+            StatusCode::BAD_REQUEST
+        );
+        assert_eq!(
+            call(&e, get("/api/sessions/aaaaaaaa-1/export?format=pdf"))
+                .await
+                .0,
+            StatusCode::BAD_REQUEST
+        );
+        let mut r = get("/api/sessions/aaaaaaaa-1/export");
         r.headers_mut().remove("x-eye-token");
         assert_eq!(call(&e, r).await.0, StatusCode::UNAUTHORIZED);
     }

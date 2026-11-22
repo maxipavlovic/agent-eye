@@ -21,6 +21,9 @@ impl App {
         if self.remind.is_some() {
             return self.remind_key(k);
         }
+        if self.loose.is_some() {
+            return self.loose_key(k);
+        }
         let ctrl = k.modifiers.contains(KeyModifiers::CONTROL);
         let alt = k.modifiers.contains(KeyModifiers::ALT);
         let shift = k.modifiers.contains(KeyModifiers::SHIFT);
@@ -115,6 +118,7 @@ impl App {
             }
             KeyCode::Char('x') if ctrl => self.toggle_hidden(),
             KeyCode::Char('r') if ctrl => self.start_remind(),
+            KeyCode::Char('l') if ctrl => self.start_loose(),
             KeyCode::Char('y') if ctrl => {
                 self.msg = Some(match self.current() {
                     Some(r) if r.kind == Kind::Session && pick::actionable(r) => {

@@ -43,7 +43,7 @@ pub fn run(g: &Global, a: &PickArgs) -> Result<()> {
     let idx = pick::Index::load(&env.db, &env.cfg, now)?;
     let query = a.filter.clone().unwrap_or_else(|| a.words.join(" "));
     if a.filter.is_some() || a.first || !tui::have_tty() {
-        let res = pick::search(&env.db, &idx, &query, a.all, now);
+        let res = pick::search(&env.db, &idx, &query, a.all);
         if a.first {
             let Some(&i) = res.first() else {
                 anyhow::bail!("no session matches");
@@ -76,6 +76,7 @@ pub fn run(g: &Global, a: &PickArgs) -> Result<()> {
     let mut app = tui::App::new(db, idx, &query, color, now);
     app.paths = Some(paths.clone());
     app.user = cfg.user.clone();
+    app.usage_cfg = cfg.usage.clone();
     app.agents = agents.clone();
     app.all = a.all;
     if a.all {
@@ -84,6 +85,40 @@ pub fn run(g: &Global, a: &PickArgs) -> Result<()> {
     let out = tui::run(&mut app)?;
     match out.clone() {
         tui::Outcome::Quit => Ok(()),
+        tui::Outcome::SendBack(id) => {
+            let row = app
+                .idx
+                .rows
+                .iter()
+                .find(|r| r.id == id)
+                .context("row vanished")?
+                .clone();
+            let items = crate::loose::list(&app.db, Some(&id), false)?;
+            let env = super::Env {
+                paths,
+                cfg,
+                db: app.db,
+                agents,
+            };
+            let mut l = pick::prepare(
+                &env.db,
+                &env.paths,
+                &env.agents,
+                &env.cfg,
+                &row,
+                LaunchOpts::default(),
+            )?;
+            // the same resume as Enter, with the list of what was left as its first message
+            let msg = crate::loose::send_prompt(&items);
+            l.command = format!("{} {}", l.command, crate::util::shell_word(&msg));
+            l.args.push(msg);
+            if a.print {
+                println!("{}", l.command);
+                Ok(())
+            } else {
+                Err(pick::exec(&env.db, &l))
+            }
+        }
         tui::Outcome::Pick(id) | tui::Outcome::Fork(id) => {
             let fork = matches!(out, tui::Outcome::Fork(_));
             let row = app

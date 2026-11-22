@@ -24,7 +24,7 @@ pub const EVENTS: [&str; 8] = [
     "SubagentStop",
     "SessionEnd",
 ];
-const SKILL_MD: &str = include_str!("../../../skill/SKILL.md");
+pub(crate) const SKILL_MD: &str = include_str!("../../../skill/SKILL.md");
 
 /// What Claude Code's `settings.json` looks like to eye: one group per event, the hook command
 /// without an agent argument (the form installed before there were several agents).

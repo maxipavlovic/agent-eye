@@ -27,6 +27,20 @@ describe('liveSource requests', () => {
     expect(f).toHaveBeenCalledWith('/api/board', { credentials: 'same-origin' });
   });
 
+  it('sends confirm: true with a stop or remove, and not with an ignore', async () => {
+    const f = vi.fn().mockResolvedValue(json(200, { ok: true }));
+    vi.stubGlobal('fetch', f);
+    const s = liveSource();
+    await s.looseAct('stop', 'proc:5:1');
+    await s.looseAct('remove', 'worktree:/w');
+    await s.looseAct('ignore', 'proc:5:1');
+    const body = (i: number) => JSON.parse((f.mock.calls[i]![1] as { body: string }).body);
+    expect(f.mock.calls[0]![0]).toBe('/api/loose/stop');
+    expect(body(0)).toEqual({ key: 'proc:5:1', confirm: true });
+    expect(body(1)).toEqual({ key: 'worktree:/w', confirm: true });
+    expect(body(2)).toEqual({ key: 'proc:5:1' });
+  });
+
   it('encodes ids and queries', async () => {
     const f = vi.fn().mockResolvedValue(json(200, { results: [] }));
     vi.stubGlobal('fetch', f);
@@ -82,6 +96,14 @@ describe('liveSource requests', () => {
     const r = await liveSource().agents();
     expect(r.agents[0]!.short).toBe('Claude');
     expect(f).toHaveBeenCalledWith('/api/agents', { credentials: 'same-origin' });
+  });
+
+  it('asks for usage over a number of days', async () => {
+    const f = vi.fn().mockResolvedValue(json(200, { days: 30, rows: [] }));
+    vi.stubGlobal('fetch', f);
+    const r = await liveSource().usage(30);
+    expect(r.days).toBe(30);
+    expect(f).toHaveBeenCalledWith('/api/usage?days=30', { credentials: 'same-origin' });
   });
 
   it('sends the idea agent when one is chosen', async () => {

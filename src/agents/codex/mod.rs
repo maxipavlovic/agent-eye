@@ -16,6 +16,7 @@ mod live;
 mod results;
 mod rollout;
 mod script;
+mod usage;
 mod work;
 
 use super::*;
@@ -41,11 +42,15 @@ pub struct Codex {
     /// What the last look at the folder found (see [`Agent::transcripts`]): where each session is
     /// and which sub-agents a session started.
     index: Mutex<files::Index>,
+    /// `<eye home>/night`, to tell a night run's `codex exec` rollout from any other.
+    night_dir: Option<PathBuf>,
 }
 
 /// The factory the registry uses.
 pub fn build(cfg: &AgentCfg) -> AgentRef {
-    Arc::new(Codex::new(resolve_dir(cfg)))
+    let mut c = Codex::new(resolve_dir(cfg));
+    c.night_dir.clone_from(&cfg.night_dir);
+    Arc::new(c)
 }
 
 /// Where Codex keeps its files: `[agents.codex] dir`, then `$CODEX_HOME`, then `~/.codex`.
@@ -75,6 +80,7 @@ impl Codex {
             dir,
             exe: None,
             index: Mutex::default(),
+            night_dir: None,
         }
     }
 
@@ -119,7 +125,7 @@ impl Codex {
     fn index(&self) -> std::sync::MutexGuard<'_, files::Index> {
         let mut index = self.index.lock().unwrap_or_else(|e| e.into_inner());
         if index.sessions.is_empty() {
-            *index = files::scan(&self.dir).1;
+            *index = files::scan(&self.dir, self.night_dir.as_deref()).1;
         }
         index
     }
@@ -157,7 +163,7 @@ impl Agent for Codex {
     /// left out (a sub-agent is a child stream of its parent). A session renamed after its last
     /// message shows the time of the rename as its change time, so it is read again.
     fn transcripts(&self) -> Vec<Transcript> {
-        let (found, index) = files::scan(&self.dir);
+        let (found, index) = files::scan(&self.dir, self.night_dir.as_deref());
         *self.index.lock().unwrap_or_else(|e| e.into_inner()) = index;
         found
     }
@@ -195,10 +201,30 @@ impl Agent for Codex {
         work::read_events(path)
     }
 
+    fn usage_msgs(&self, path: &Path) -> Result<Vec<UsageMsg>> {
+        usage::read_msgs(path)
+    }
+
+    fn origin_raw(&self, path: &Path) -> Option<String> {
+        let name = path.file_name()?.to_str()?;
+        let (_, thread) = files::parse_file_name(name)?;
+        files::head(path, &thread)?.origin
+    }
+
     fn owns_transcript(&self, path: &Path) -> bool {
         [files::SESSIONS_DIR, files::ARCHIVED_DIR]
             .iter()
             .any(|d| path.starts_with(self.dir.join(d)))
+    }
+
+    /// Every rollout file of the thread (live and archived), and its line in `session_index.jsonl`.
+    fn delete_transcript(&self, path: &Path, session_id: &str) -> Result<Option<Vec<String>>> {
+        anyhow::ensure!(
+            self.owns_transcript(path) && is_inside(&self.dir, path),
+            "{} is not a rollout of Codex",
+            path.display()
+        );
+        files::delete_thread(&self.dir, session_id).map(Some)
     }
 
     fn own_dirs(&self) -> Vec<String> {
@@ -242,6 +268,7 @@ impl Agent for Codex {
     ) -> Result<UsageRead> {
         Ok(UsageRead {
             tokens: rollout::last_total(&source.path)?.tokens(),
+            msgs: usage::read_msgs(&source.path)?,
             last_id,
             marker: source.stamp.size.to_string(),
             replaces: true,

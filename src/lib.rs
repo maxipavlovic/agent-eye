@@ -24,6 +24,7 @@ pub mod db;
 pub mod files;
 /// Whether an idea's folder exists and may be created.
 pub mod folder;
+pub mod forget;
 /// Sessions that are left out of lists.
 pub mod hide;
 /// The hook entry point.
@@ -32,11 +33,17 @@ pub mod hook;
 pub mod ideas;
 /// Install, uninstall and doctor.
 pub mod install;
+/// What a session left behind: servers still running, commits on no remote, and the like.
+pub mod loose;
 /// Putting a session in a column by hand.
 pub mod mark;
 /// The data types: sessions, streams, outputs, ideas, columns.
 pub mod model;
+/// Planned runs that start by themselves inside a time window, each in its own worktree.
+pub mod night;
 /// Where eye keeps its data.
+/// One portable file with everything eye knows (`eye export`, `eye import`), and one session as a page.
+pub mod pack;
 pub mod paths;
 /// The picker's index, ranking and launching.
 pub mod pick;
@@ -58,7 +65,9 @@ pub mod server;
 pub mod summarize;
 /// The terminal picker screen.
 pub mod tui;
+/// The days a session was worked on.
+/// Usage by day and model, the cost estimate, and the plan limits.
+pub mod usage;
 /// Small helpers.
 pub mod util;
-/// The days a session was worked on.
 pub mod worked;

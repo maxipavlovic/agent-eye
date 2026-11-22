@@ -77,7 +77,9 @@ pub fn find(g: &Global, words: &[String], limit: usize, all: bool, json: bool) -
             .map(|h| {
                 let mut v = session_json(&h.session, h.column, &env.cfg.user, &env.agents);
                 v["snippet"] = json!(h.snippet);
-                v["score"] = json!(h.score);
+                // `score` keeps 0.2's order (lower is better); `relevance` is the same number turned around
+                v["score"] = json!(-h.score);
+                v["relevance"] = json!(h.score);
                 v
             })
             .collect();
@@ -110,7 +112,22 @@ pub fn find(g: &Global, words: &[String], limit: usize, all: bool, json: bool) -
     Ok(())
 }
 
-pub fn ls(g: &Global, column: Option<&str>, all: bool, limit: usize, json: bool) -> Result<()> {
+pub fn ls(
+    g: &Global,
+    column: Option<&str>,
+    origin: Option<&str>,
+    all: bool,
+    limit: usize,
+    json: bool,
+) -> Result<()> {
+    if let Some(o) = origin {
+        if !crate::agents::origin::ORIGINS.contains(&o) {
+            anyhow::bail!(
+                "unknown origin '{o}' (one of {})",
+                crate::agents::origin::ORIGINS.join(", ")
+            );
+        }
+    }
     let env = g.open()?;
     let now = now_ms();
     let hidden = if all {
@@ -128,6 +145,7 @@ pub fn ls(g: &Global, column: Option<&str>, all: bool, limit: usize, json: bool)
         .all_sessions()?
         .into_iter()
         .filter(|s| !hidden.contains(&s.id))
+        .filter(|s| origin.is_none_or(|o| s.origin.as_deref() == Some(o)))
         .map(|s| {
             let c = columns::compute(&columns::Input::from_session(
                 &s,
@@ -167,10 +185,13 @@ pub fn ls(g: &Global, column: Option<&str>, all: bool, limit: usize, json: bool)
             );
         }
         if rows.is_empty() {
-            println!(
-                "no sessions (run `{} scan` first?)",
-                crate::pick::bin_name()
-            );
+            match origin {
+                Some(o) => println!("no sessions started from '{o}'"),
+                None => println!(
+                    "no sessions (run `{} scan` first?)",
+                    crate::pick::bin_name()
+                ),
+            }
         }
     }
     Ok(())
@@ -289,6 +310,13 @@ pub fn show(g: &Global, id: &str, json: bool, conversation: bool, n: usize) -> R
     }
     if let Some(line) = worked::summary::session_line(&env.db.conn, &s.id, now) {
         println!("worked:   {}", printable(&line));
+    }
+    if let Some(sum) = crate::usage::report::of_session(&env.db.conn, &env.cfg.usage, &s.id)? {
+        println!(
+            "usage:    {} ({})",
+            crate::usage::report::session_line(&sum),
+            crate::usage::prices::LABEL
+        );
     }
     for t in activity::tasks(&s, now) {
         println!(

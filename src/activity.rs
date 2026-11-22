@@ -200,11 +200,13 @@ pub fn marker(s: &Session, now: i64) -> String {
     marks.join(" ")
 }
 
-/// The link to the session on the web, when its Remote Control is on and it is open.
+/// The link to the session on the web, when its Remote Control is on and it is open. Only
+/// `https://claude.ai/` links are kept; the value comes from a file on disk, so any other host
+/// gives no link.
 pub fn remote_url(s: &Session) -> Option<&str> {
     s.remote_url
         .as_deref()
-        .filter(|u| s.live_status.is_some() && u.starts_with("https://"))
+        .filter(|u| s.live_status.is_some() && u.starts_with("https://claude.ai/"))
 }
 
 /// What a live `waiting` asks of the user, None when it is only a dialog the user opened or the
@@ -389,6 +391,20 @@ mod tests {
         s.remote_url = Some("https://claude.ai/code/session_01".into());
         s.live_status = None;
         assert_eq!(remote_url(&s), None);
+    }
+
+    #[test]
+    fn a_remote_link_must_be_on_claude_ai() {
+        let mut s = open(Signals::default());
+        for (u, kept) in [
+            ("https://claude.ai/code/session_01", true),
+            ("https://evil.example/code/session_01", false),
+            ("http://claude.ai/code/session_01", false),
+            ("https://claude.ai.evil.example/code/session_01", false),
+        ] {
+            s.remote_url = Some(u.into());
+            assert_eq!(remote_url(&s).is_some(), kept, "{u}");
+        }
     }
 
     #[test]

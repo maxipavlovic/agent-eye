@@ -5,6 +5,7 @@ mod children;
 mod history;
 mod jira;
 mod live;
+mod origin;
 mod transcript;
 
 use crate::agents::{self, Agent, Delta, LastRead, ParseOpts};
@@ -71,6 +72,7 @@ pub fn scan(db: &mut Db, cfg: &Config, full: bool) -> Result<ScanStats> {
     for agent in agents.iter() {
         scan_agent(db, agent.as_ref(), cfg, full, &mut repo_cache, &mut stats)?;
     }
+    origin::backfill(db, &agents, cfg.night_dir.as_deref())?;
     let tx = db
         .conn
         .transaction_with_behavior(TransactionBehavior::Immediate)?;
@@ -199,6 +201,16 @@ fn scan_agent(
         transcript::apply(&tx, agent, f, &d, reset, cfg, repo_cache)
             .with_context(|| format!("indexing {}", f.path.display()))?;
         crate::worked::store::record(&tx, &f.session_id, &d.events, reset)?;
+        // A read that starts over leaves the session to the usage backfill (its sub-agents are
+        // counted there too); a read that goes on adds what is new.
+        if reset {
+            crate::usage::store::invalidate(&tx, &f.session_id)?;
+        } else {
+            crate::usage::store::add(&tx, &f.session_id, &d.usage_msgs)?;
+        }
+        if let Some(l) = &d.limits {
+            crate::usage::limits::record(&tx, agent.id(), l)?;
+        }
         match &d.carry {
             Some(c) => meta_set(&tx, &carry_key, &c.to_string())?,
             None => {

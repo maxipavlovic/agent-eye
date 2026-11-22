@@ -55,6 +55,9 @@ impl Env {
         };
         paths.ensure_home().unwrap();
         let mut cfg = Config::load_or_create(&paths.config_path()).unwrap();
+        // the test's sessions live in temp folders, which eye leaves out by default
+        index_temp(&paths.config_path());
+        cfg.exclude.temp = false;
         cfg.override_agent_dir("claude", claude);
         let db = Db::open(&paths.db_path()).unwrap();
         Env {
@@ -332,4 +335,10 @@ fn a_hidden_or_archived_session_keeps_its_hours() {
         .unwrap();
     e.scan();
     assert_eq!(e.totals(), (15 * MIN, 3, 5));
+}
+
+/// Let eye index sessions in temp folders, in the config file a CLI run reads (`[exclude] temp`).
+fn index_temp(config: &std::path::Path) {
+    let t = std::fs::read_to_string(config).unwrap();
+    std::fs::write(config, t.replacen("temp = true", "temp = false", 1)).unwrap();
 }

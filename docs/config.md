@@ -9,8 +9,8 @@ they start: after a change, `eye board off && eye board on` or restart the daemo
 
 | Key | Default | Meaning |
 |---|---|---|
-| `enabled` | `["claude"]`; `eye install` sets it to the agents it finds | The agents eye follows, in order: `"claude"` (Claude Code), `"codex"` (Codex CLI). The first is the default agent (new ideas start in it, summaries are written by it). A config that has no `enabled` key means Claude Code only, so older files keep working; `install` fills the key in from what is on the machine, and mentions an agent it finds that the key leaves out. `[]` turns every agent off: eye still runs, with an empty board. An id nobody registered is reported by `eye doctor`. |
-| `[agents.<id>] dir` | the agent's usual folder | Where that agent keeps its files, for example `[agents.claude] dir = "/Volumes/work/claude"`. A leading `~` is your home folder. For Claude Code the environment variable `EYE_CLAUDE_DIR` beats this key. For Codex CLI this key beats `CODEX_HOME`, which beats `~/.codex`. |
+| `enabled` | `["claude"]`; `eye install` sets it to the agents it finds | The agents eye follows, in order: `"claude"` (Claude Code), `"codex"` (Codex CLI), `"agy"` (Antigravity CLI), `"opencode"` (OpenCode). The first is the default agent (new ideas start in it, summaries are written by it). A config that has no `enabled` key means Claude Code only, so older files keep working; `install` fills the key in from what is on the machine, and mentions an agent it finds that the key leaves out. `[]` turns every agent off: eye still runs, with an empty board. An id nobody registered is reported by `eye doctor`. |
+| `[agents.<id>] dir` | the agent's usual folder | Where that agent keeps its files, for example `[agents.claude] dir = "/Volumes/work/claude"`. A leading `~` is your home folder. For Claude Code the environment variable `EYE_CLAUDE_DIR` beats this key. For Codex CLI this key beats `CODEX_HOME`, which beats `~/.codex`. For Antigravity CLI the folder is `~/.gemini/antigravity-cli`. For OpenCode this key beats `$XDG_DATA_HOME/opencode`, which beats `~/.local/share/opencode`. |
 
 Sessions and ideas of an agent that is not enabled are left out of every list. They stay in the
 database and come back when the agent is enabled again.
@@ -21,7 +21,7 @@ database and come back when the agent is enabled again.
 |---|---|---|
 | `enabled` | `true` | Write the state and next step of quiet sessions. `false` turns summaries off completely; nothing is sent anywhere. |
 | `agent` | `""` | The agent that writes summaries, for example `"codex"`. Empty: the first enabled agent. It must be enabled. The summaries count against that agent's plan. |
-| `model` | `""` | The model name handed to that agent. Empty: the agent's own cheap model, `haiku` for Claude Code and `gpt-6-luna` for Codex CLI. Model names belong to an agent, so change this when you change `agent`; an account that has no `gpt-6-luna` needs a model it has here. |
+| `model` | `""` | The model name handed to that agent. Empty: the agent's own cheap model, `haiku` for Claude Code, `gpt-6-luna` for Codex CLI, `gemini-3.8-flash-low` for agy and `free` for OpenCode. Model names belong to an agent, so change this when you change `agent`; an account that has no `gpt-6-luna` needs a model it has here. |
 | `quiet_minutes` | `10` | A session is summarized after this many minutes without activity (or when it ended). |
 | `concurrency` | `2` | How many summaries run at the same time. |
 | `auto_days` | `3` | The daemon only summarizes sessions that were active within this many days (`eye summarize` can do older ones). |
@@ -49,6 +49,32 @@ database and come back when the agent is enabled again.
 
 Why macOS once showed a notice without asking: `osascript` posts it as "Script Editor", an app macOS lets show notices without a permission prompt, so no prompt ever appeared for eye. To silence a notice you do not want, set `notify = false` here, or turn Script Editor off in System Settings > Notifications.
 
+## `[night]`
+
+Runs that start by themselves inside a time window. Off until you switch it on. See `night.md`.
+
+| Key | Default | Meaning |
+|---|---|---|
+| `enabled` | `false` | Nothing runs unless this is `true` and a run is planned. `eye night on\|off` and the Tonight list on the board change it. |
+| `window` | `"01:00-07:00"` | Local time, `HH:MM-HH:MM`. New runs start only inside it; one already going may finish. An end before the start crosses midnight (`23:00-05:00`). `eye night window` and the board change it. |
+| `quiet_minutes` | `20` | A run starts only when no session you work in (live, interactive, not a night run) has been busy or touched for this long. |
+| `parallel` | `2` | How many runs go at once (1 to 8). |
+| `isolation` | `"worktree"` | How a run keeps your folder safe: `"worktree"` (a git worktree of the repo; fast; a command that builds a path in an unusual way can add a new top-level file in your folder) or `"copy"` (a separate local clone; your folder is locked completely). `eye night add --isolation` and the board's **Work in** choice override it per run. A plain folder is always a copy. See `night.md`. |
+| `claude_permission` | `"auto"` | Claude's permission mode for night runs: `auto`, or `acceptEdits` (then only the build and test commands in `night.md` are allowed). |
+| `claude_model` | `""` | A model for Claude night runs (an alias such as `haiku`); empty is Claude's default. |
+| `codex_model` | `""` | A model for Codex night runs; empty is Codex's default. |
+| `opencode_model` | `""` | A model (`provider/model`) for OpenCode night runs; empty is OpenCode's default. |
+| `network` | the package registries | The only hosts a sandboxed Claude night run may reach from Bash: `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`, `crates.io`, `index.crates.io`, `static.crates.io`, `proxy.golang.org`. Setting it replaces the list. `github.com`, `gitlab.com` and `bitbucket.org` are always refused. Not applied without the sandbox. |
+| `agy_model` | `""` | A model for Antigravity (agy) night runs; empty is agy's default. |
+| `allow_unsandboxed` | `false` | Antigravity and OpenCode night runs are not started without it: eye could not verify that `agy --sandbox` keeps a run in its folder, and OpenCode has no sandbox (see `night.md`). Claude night runs need Claude Code's sandbox (built in on macOS; `bubblewrap` and `socat` on Linux) and refuse to start without it. `true` starts them anyway; the deny rules stay, Bash is then not confined. See `night.md`. |
+
+## `[loose]`
+
+| Key | Default | Meaning |
+|---|---|---|
+| `enabled` | `true` | Look for what sessions left behind: servers and shells still running, containers, git worktrees in a scratchpad or with no folder, commits on no remote, modified files nobody committed. On by default because it never changes repos or processes; it keeps what it found in eye's database (the `loose` table). The daemon looks every 5 minutes and shortly after a session stops or ends (at most once in 20 seconds); `eye loose` looks at once. `false` stops the daemon's scans, hides the card's leftovers box, the panel's LEFTOVERS block and the picker line, and makes `eye loose` say it is off. Stored results stay until the next scan that is allowed. |
+| `days` | `30` | Only the folders and repos of sessions active in the last this many days are looked at. A scan reads `ps` and `lsof` (macOS) or `/proc` (Linux), `docker ps` when docker is installed (2 s limit) and a few read-only git commands per repo, each with a time limit. |
+
 ## `[hide]`
 
 Throw-away sessions ("/clear", "exit", "cd ..") are left out of the board, search and lists. See
@@ -66,6 +92,7 @@ Throw-away sessions ("/clear", "exit", "cd ..") are left out of the board, searc
 | Key | Default | Meaning |
 |---|---|---|
 | `paths` | `[]` | Folder prefixes eye ignores completely: sessions started there are never indexed. |
+| `temp` | `true` | Sessions started in a temp folder (`/tmp`, `/var/tmp`, the system temp folder; Claude Code's scratchpads live there) are not indexed, so test and scratch runs stay off the board. `false` indexes them, e.g. for testing. Sessions indexed before stay until you forget them (`eye forget --folder /tmp`). |
 
 ## `[outputs]`
 
@@ -86,6 +113,14 @@ Snapshots of the database (see `backups.md`). Every key is optional.
 | `mirror` | `""` | An absolute path (or one that starts with `~`) to a folder that **already exists** (an external disk, a synced folder): each snapshot is copied there too, with the same rotation. A folder that is not there is skipped, never created, and `eye doctor` says so. A leading `~` is your home folder. Empty: off. |
 | `mirror_archive` | `false` | Also copy the transcript archive (`~/.agent-eye/archive/`) into `<mirror>/archive`: only files whose size or time changed, and nothing is ever deleted there. |
 
+## `[usage]`
+
+The cost estimate (see `usage.md`). Every key is optional.
+
+| Key | Default | Meaning |
+|---|---|---|
+| `[usage.prices."<model>"]` | the built-in table | Prices in USD per million tokens for a model, to add one or override a built-in price: `input`, `output`, `cache_write`, `cache_read` (each defaults to 0). The model id matches with its date and `[1m]` tag left off. A model named here is priced from this table alone; a model in neither table has no cost, only tokens. |
+
 ## Environment
 
 | Variable | Meaning |
@@ -95,6 +130,7 @@ Snapshots of the database (see `backups.md`). Every key is optional.
 | `EYE_CLAUDE_BIN` | The program to run instead of `claude` (used by tests). |
 | `CODEX_HOME` | Codex CLI's folder (default `~/.codex`), as Codex itself reads it. |
 | `EYE_CODEX_BIN` | The program to run instead of `codex` (used by tests). |
+| `EYE_AGY_BIN`, `EYE_OPENCODE_BIN` | The program to run instead of `agy` or `opencode` (used by tests). |
 | `EYE_FACE_DIR` | Serve the board's web files from this folder (development). |
 | `NO_COLOR` | Turn colours off in the picker. |
 | `EYE_PICK_TIMING` | Show the search time in the picker's corner. |

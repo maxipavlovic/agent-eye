@@ -4,7 +4,7 @@ import { pushPref } from './prefs';
 import { signal, computed, effect, batch, type Signal, type ReadonlySignal } from '@preact/signals';
 import type {
   Agent, ArchivePage, Board, Card, CardDetail, ColumnId, Connection, ConversationPage, IdeaInput, MoveTarget,
-  FolderCheck, RemindInput, RemindSettings, ResumePlan, SearchHit, Source, StartPlan,
+  FolderCheck, LooseAct, NightPlanInput, NightState, RemindInput, RemindSettings, ResumePlan, SearchHit, Source, StartPlan, UsageReport,
 } from './api/types';
 
 export type ThemePref = 'auto' | 'light' | 'dark';
@@ -50,18 +50,43 @@ export interface Store {
   move(id: string, to: MoveTarget): Promise<void>;
   /** Hides (or shows again) a session; hidden ones are left out of the board and search. */
   setHidden(id: string, hidden: boolean): Promise<void>;
+  /** Removes a session from eye (and with `transcript` from its agent); true when it went, else a toast says why. */
+  forget(id: string, transcript: boolean): Promise<boolean>;
   /** Runs the resume plan for real on the live source (opens iTerm); returns the plan. */
   resume(id: string, fork?: boolean): Promise<ResumePlan | null>;
+  /** Usage over the last `days` days; null (quietly) when the engine cannot say. */
+  usage(days: number): Promise<UsageReport | null>;
   /** Messages of a session, newest page first; null (quietly) when they cannot be had. */
   conversation(id: string, before?: number | null, limit?: number): Promise<ConversationPage | null>;
   /** True when saved; on failure a toast says why and the caller keeps the form open. */
-  addIdea(input: IdeaInput): Promise<boolean>;
+  /** The saved idea's card (its `idea_id` plans it for tonight), or null after a toast says why. */
+  addIdea(input: IdeaInput): Promise<Card | null>;
   editIdea(ideaId: number, input: Partial<IdeaInput>): Promise<boolean>;
   startIdea(card: Card, background: boolean): Promise<StartPlan | null>;
   /** What a typed folder is (the idea form's hint); rejects when the engine cannot say. */
   folderCheck(path: string): Promise<FolderCheck>;
   /** Sets (`when`, in the words of `eye remind`) or clears a reminder; true when saved, else a toast says why. */
   remind(id: string, input: RemindInput): Promise<boolean>;
+  /** Stops, removes or ignores one thing a session left behind; the page asked first. True when done, else a toast says why. */
+  looseAct(action: LooseAct, key: string): Promise<boolean>;
+  /** Opens the session with a message that lists what it left behind. */
+  looseSend(id: string): Promise<boolean>;
+  /** Several leftover actions in a row (REMOVE ALL, IGNORE ALL), with one toast and one refresh; true when all worked. */
+  looseActAll(acts: { action: LooseAct; key: string }[]): Promise<boolean>;
+  /** The night shift: null until loaded, and when the engine has none (the chip and sections stay hidden). */
+  night: ReadonlySignal<NightState | null>;
+  loadNight(): void;
+  /** Switch on or off, the window, `parallel`; true when saved, else a toast says why. */
+  nightSettings(input: { enabled?: boolean; window?: string; parallel?: number }): Promise<boolean>;
+  /** Plans a run for tonight; true when planned, else a toast says why (a missing prompt, a limit eye cannot check). */
+  nightPlan(input: NightPlanInput): Promise<boolean>;
+  nightCancel(id: number): Promise<boolean>;
+  nightLimit(id: number, limit: string): Promise<boolean>;
+  /** Removes the run's worktree and branch (or copy); the page asked first. */
+  nightDiscard(id: number, loseChanges: boolean): Promise<boolean>;
+  nightOpen(id: number): Promise<boolean>;
+  /** Puts a repo copy's night branch into the original repo; the page asked first. */
+  nightBring(id: number): Promise<boolean>;
   /** Reads the desktop notice setting into `notice`; an engine without it leaves `notice` null, quietly. */
   loadNotice(): void;
   /** Turns the desktop notice for every reminder on or off; a toast says why when it cannot. */
@@ -123,6 +148,7 @@ export function createStore(src: Source, { defaultTheme = 'auto' }: { defaultThe
   const themePref = signal<ThemePref>(readPref(defaultTheme));
   const agents = signal<Agent[]>([]);
   const notice = signal<RemindSettings | null>(null);
+  const night = signal<NightState | null>(null);
 
   const mq = typeof matchMedia === 'function' ? matchMedia('(prefers-color-scheme: dark)') : null;
   const systemDark = signal(mq?.matches ?? false);
@@ -160,6 +186,7 @@ export function createStore(src: Source, { defaultTheme = 'auto' }: { defaultThe
     try {
       const b = await src.board();
       batch(() => { board.value = b; error.value = null; });
+      loadNight();
       const id = selected.value;
       if (id) detail.value = await src.card(id);
     } catch (e) {
@@ -254,6 +281,28 @@ export function createStore(src: Source, { defaultTheme = 'auto' }: { defaultThe
     }
   }
 
+  async function forget(id: string, transcript: boolean) {
+    try {
+      await src.forget(id, transcript);
+      if (selected.value === id) close();
+      toast(transcript ? 'Forgotten, with its transcript' : 'Forgotten');
+      await refresh();
+      return true;
+    } catch (e) {
+      fail(e);
+      await refresh();
+      return false;
+    }
+  }
+
+  async function usage(days: number) {
+    try {
+      return await src.usage(days);
+    } catch {
+      return null;
+    }
+  }
+
   async function conversation(id: string, before: number | null = null, limit = 10) {
     try {
       return await src.conversation(id, limit, before);
@@ -274,13 +323,13 @@ export function createStore(src: Source, { defaultTheme = 'auto' }: { defaultThe
 
   async function addIdea(input: IdeaInput) {
     try {
-      await src.addIdea(input);
+      const card = await src.addIdea(input);
       toast('Idea saved');
       await refresh();
-      return true;
+      return card;
     } catch (e) {
       fail(e);
-      return false;
+      return null;
     }
   }
 
@@ -327,6 +376,70 @@ export function createStore(src: Source, { defaultTheme = 'auto' }: { defaultThe
     }
   }
 
+  async function looseAct(action: LooseAct, key: string) {
+    try {
+      const r = await src.looseAct(action, key);
+      toast(r.note || (action === 'ignore' ? 'Ignored' : 'Done'));
+      await refresh();
+      return true;
+    } catch (e) {
+      fail(e);
+      await refresh();
+      return false;
+    }
+  }
+
+  async function looseActAll(acts: { action: LooseAct; key: string }[]) {
+    let done = 0;
+    const failed: string[] = [];
+    for (const a of acts) {
+      try { await src.looseAct(a.action, a.key); done++; } catch (e) { failed.push(e instanceof Error ? e.message : String(e)); }
+    }
+    if (failed.length) toast(`${done} done, ${failed.length} not: ${failed[0]}`, 'error');
+    else toast(acts.every((a) => a.action === 'ignore') ? `Ignored ${done}` : `Done: ${done}`);
+    await refresh();
+    return failed.length === 0;
+  }
+
+  async function looseSend(id: string) {
+    try {
+      const plan = await src.looseSend(id, false);
+      toast(await planNote(plan, 'Opening'));
+      return true;
+    } catch (e) {
+      fail(e);
+      return false;
+    }
+  }
+
+  function loadNight() {
+    src.night().then((s) => { night.value = s; }, () => { night.value = null; });
+  }
+
+  /** Runs a night call; on success the state it answers with replaces `night`. */
+  async function nightCall<T>(call: () => Promise<T>, said: string, state?: (r: T) => NightState | undefined) {
+    try {
+      const r = await call();
+      const s = state?.(r);
+      if (s) night.value = s; else loadNight();
+      toast(said);
+      await refresh();
+      return true;
+    } catch (e) {
+      fail(e);
+      return false;
+    }
+  }
+  const nightSettings = (input: { enabled?: boolean; window?: string; parallel?: number }) =>
+    nightCall(() => src.nightSettings(input), input.enabled === undefined ? 'Night settings saved' : input.enabled ? 'Night shift on' : 'Night shift off', (s) => s);
+  const nightPlan = (input: NightPlanInput) =>
+    nightCall(() => src.nightPlan(input), night.value?.enabled === false ? 'Planned for tonight. The night shift is off: switch it on in the Tonight list' : 'Planned for tonight');
+  const nightCancel = (id: number) => nightCall(() => src.nightCancel(id), 'Cancelled', (s) => s);
+  const nightLimit = (id: number, limit: string) => nightCall(() => src.nightLimit(id, limit), limit.trim() ? 'Limit changed' : 'Limit removed', (s) => s);
+  const nightDiscard = (id: number, lose: boolean) => nightCall(() => src.nightDiscard(id, lose), 'Discarded');
+  const nightBring = (id: number) => nightCall(() => src.nightBring(id), 'Branch brought into your repo');
+  const nightOpen = (id: number) => nightCall(() => src.nightOpen(id), 'Opening the folder');
+
   function loadNotice() {
     src.remindSettings().then((s) => { notice.value = s; }, () => { notice.value = null; });
   }
@@ -350,8 +463,8 @@ export function createStore(src: Source, { defaultTheme = 'auto' }: { defaultThe
 
   return {
     source: src.name,
-    board, selected, detail, query, results, searching, connection, themePref, accent, theme, toasts, agents, notice, needsYou, error,
-    open, close, search, move, setHidden, resume, conversation, addIdea, editIdea, startIdea, folderCheck: (path) => src.folderCheck(path), remind, loadNotice, setNotice,
+    board, selected, detail, query, results, searching, connection, themePref, accent, theme, toasts, agents, notice, night, needsYou, error,
+    open, close, search, move, setHidden, forget, resume, usage, conversation, addIdea, editIdea, startIdea, folderCheck: (path) => src.folderCheck(path), remind, looseAct, looseActAll, looseSend, loadNotice, setNotice, loadNight, nightSettings, nightPlan, nightCancel, nightLimit, nightDiscard, nightOpen, nightBring,
     archive: (offset, limit = 50) => src.archive(offset, limit),
     setTheme, setAccent, toast, dismissToast, refresh,
   };

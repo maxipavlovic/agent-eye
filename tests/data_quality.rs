@@ -318,3 +318,45 @@ fn live_entries_without_transcript_never_become_cards() {
         .live_status
         .is_none());
 }
+
+#[test]
+fn a_continued_night_run_lives_in_its_own_folder_not_in_the_one_its_copied_start_names() {
+    let mut e = Env::new();
+    // continue tonight: Claude's fork starts with the copied conversation of /work/p, then the run's
+    // own turn in the worktree; the session lives (and resumes) in the worktree
+    e.db.conn
+        .execute(
+            "INSERT INTO night_run(kind, session_id, agent, folder, prompt, night, status, created_at,
+                                   run_session_id, worktree)
+             VALUES('session', ?1, 'claude', '/work/p', 'go on', '2026-11-22', 'running', 0, ?2,
+                    '/eye/night/5/wt')",
+            [T, S],
+        )
+        .unwrap();
+    let mut night = user(S, "2026-11-22T01:00:00Z", "go on");
+    night["cwd"] = json!("/eye/night/5/wt");
+    e.append(
+        S,
+        &[user(S, "2026-11-01T10:00:00Z", "the old start"), night],
+    );
+    // a session of the folder itself keeps it
+    e.append(T, &[user(T, "2026-11-01T09:00:00Z", "the original")]);
+    e.scan();
+    let cwd = |id: &str| -> String {
+        e.db.conn
+            .query_row("SELECT cwd FROM session WHERE id=?1", [id], |r| r.get(0))
+            .unwrap()
+    };
+    assert_eq!(cwd(S), "/eye/night/5/wt");
+    assert_eq!(cwd(T), "/work/p");
+    // and it belongs to the project it was planned for, not to a project called "wt"
+    let root = |id: &str| -> Option<String> {
+        e.db.conn
+            .query_row("SELECT repo_root FROM session WHERE id=?1", [id], |r| {
+                r.get(0)
+            })
+            .unwrap()
+    };
+    assert_eq!(root(S).as_deref(), Some("/work/p"));
+    assert_eq!(root(T), None);
+}

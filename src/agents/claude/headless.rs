@@ -40,27 +40,35 @@ fn drain<R: Read + Send + 'static>(r: R) -> std::thread::JoinHandle<Vec<u8>> {
     })
 }
 
+/// The command line of a summary call. `--no-session-persistence` keeps the run from leaving a
+/// transcript: a summary is never a session (its entrypoint would be `sdk-cli`) on the board.
+fn args(req: &HeadlessRequest) -> Vec<String> {
+    [
+        "-p",
+        "--model",
+        req.model,
+        "--no-session-persistence",
+        "--tools",
+        "",
+        "--strict-mcp-config",
+        "--settings",
+        r#"{"disableAllHooks":true,"autoMemoryEnabled":false}"#,
+        "--output-format",
+        "json",
+        "--json-schema",
+        &req.schema.to_string(),
+        "--system-prompt",
+        req.system,
+        req.input,
+    ]
+    .map(String::from)
+    .to_vec()
+}
+
 /// Run `claude -p` on a request and return what it printed.
 fn run(c: &Claude, req: &HeadlessRequest) -> Result<String> {
     let mut child = Command::new(c.executable_path())
-        .args([
-            "-p",
-            "--model",
-            req.model,
-            "--no-session-persistence",
-            "--tools",
-            "",
-            "--strict-mcp-config",
-            "--settings",
-            r#"{"disableAllHooks":true,"autoMemoryEnabled":false}"#,
-            "--output-format",
-            "json",
-            "--json-schema",
-            &req.schema.to_string(),
-            "--system-prompt",
-            req.system,
-            req.input,
-        ])
+        .args(args(req))
         .current_dir(req.work_dir)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -123,5 +131,19 @@ mod tests {
         assert!(parse_reply(r#"{"type":"result"}"#).is_err());
         let free = parse_reply(r#"{"type":"result","structured_output":{}}"#).unwrap();
         assert_eq!(free.cost_usd, None, "no cost said is no cost, not zero");
+    }
+
+    #[test]
+    fn a_summary_call_never_persists_a_session() {
+        let schema = serde_json::json!({});
+        let req = HeadlessRequest {
+            model: "m",
+            system: "sys",
+            input: "in",
+            schema: &schema,
+            work_dir: std::path::Path::new("/tmp"),
+            timeout: std::time::Duration::from_secs(1),
+        };
+        assert!(args(&req).iter().any(|a| a == "--no-session-persistence"));
     }
 }

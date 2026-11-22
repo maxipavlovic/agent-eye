@@ -10,7 +10,10 @@ mod restore;
 
 pub use check::checks;
 pub use names::{Entry, Reason};
-pub use restore::{apply, find, prepare, Applied, Prepared};
+pub use restore::{
+    apply, find, pre_restore_copy, prepare, quick_check, replace_with, schema_of, while_stopped,
+    Applied, Prepared,
+};
 
 use crate::archive::compress_file;
 use crate::config::{BackupCfg, Config};
@@ -81,7 +84,7 @@ pub fn snapshot(conn: &Connection, dir: &Path, reason: &Reason) -> Result<Snapsh
     let tag = format!(
         "{}-{}",
         std::process::id(),
-        chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default()
+        jiff::Timestamp::now().as_nanosecond()
     );
     let raw = dir.join(format!(".eye-{tag}.db.tmp"));
     let packed = dir.join(format!(".eye-{tag}.zst.tmp"));
@@ -90,7 +93,13 @@ pub fn snapshot(conn: &Connection, dir: &Path, reason: &Reason) -> Result<Snapsh
         .context("copying the database")?;
     compress_file(&raw, &packed).context("compressing the snapshot")?;
     let schema = restore::schema_of(conn).ok();
-    let name = names::file_name(chrono::Utc::now().naive_utc(), reason, schema);
+    let name = names::file_name(
+        jiff::Timestamp::now()
+            .to_zoned(jiff::tz::TimeZone::UTC)
+            .datetime(),
+        reason,
+        schema,
+    );
     let path = dir.join(name);
     std::fs::rename(&packed, &path).with_context(|| format!("writing {}", path.display()))?;
     let bytes = std::fs::metadata(&path)?.len();

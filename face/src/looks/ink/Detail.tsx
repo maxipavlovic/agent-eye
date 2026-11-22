@@ -1,18 +1,24 @@
 import { useEffect, useRef } from 'preact/hooks';
+import { useSignal } from '@preact/signals';
 import type { Store } from '../../store';
 import type { CardDetail, ColumnId } from '../../api/types';
-import { ago, isBusy, resumeLabel, snippetParts } from '../../format';
+import { ago, isBusy, resumeLabel, snippetParts, tok } from '../../format';
 import { LANE_LABEL } from './columns';
 import { copy } from './copy';
 import { folderMissing, startButton } from './folder';
 import { Conversation } from './Conversation';
+import { openForget } from './Forget';
 import { Hl, HlWords, hlPattern } from './highlight';
 import { ideaForm } from './IdeaForm';
-import { MoveMenu, QuickMove } from './Move';
+import { keyHelp } from './KeyHelp';
+import { hideSession, Keyed, MoveMenu, QuickMove } from './Move';
 import { Next } from './Card';
-import { RemindPanel } from './Remind';
-import { Sigil } from './pieces';
-import { Kids, Outputs, Remote, Running, Sec, TokenSec, Topics, Where } from './Sections';
+import { Leftovers } from './Loose';
+import { canContinueTonight, ContinueTonight, NightRunLine, NightRunSection, TonightButton, TonightIdea, tonightOpen } from './Night';
+import { openRemind, RemindPanel, RemindRow } from './Remind';
+import { originChip, RemoteMark, Sigil } from './pieces';
+import { Kids, Outputs, Running, Sec, TokenSec, Topics, Where } from './Sections';
+import { projectKey, projectLabel } from './model';
 import type { Walk } from './walk';
 
 /** The torn-edge outline of the resume receipt. */
@@ -35,7 +41,11 @@ function IdeaBody({ d, store }: { d: CardDetail; store: Store }) {
         <button class="btn" disabled={!!start.blocked} title={d.prompt ? `${d.agent_name} works on it without you` : 'Needs a prompt first'} onClick={() => (d.prompt ? void store.startIdea(d, true) : edit('prompt'))}>IN BACKGROUND</button>
         <button class="btn" onClick={() => edit()}>EDIT</button>
       </div>
+      {store.night.value && <TonightIdea d={d} store={store} />}
       {(start.blocked || folderMissing(d)) && <p class="fnote" role="status">{start.blocked ?? d.folder_note}</p>}
+      <div class="acts">
+        <button class="btn ghost" onClick={() => { void store.move(d.id, 'archive').then(() => store.close()); }}>ARCHIVE</button>
+      </div>
       <Sec t="NOTES">{d.notes ? <p class="notes"><Hl s={d.notes} /></p> : <p class="dim">None.</p>}</Sec>
       <Sec t={`PROMPT FOR ${d.agent_name.toUpperCase()}`}>
         {d.prompt ? <blockquote class="prompt first"><Hl s={d.prompt} /></blockquote> : <p class="dim">None: START opens {d.agent_name} in the folder and waits for you.</p>}
@@ -55,7 +65,7 @@ function WalkNav({ walk }: { walk: Walk }) {
   );
 }
 
-/** The command that resumes the session, printed like a till receipt. */
+/** The command that resumes the session, printed like a till receipt: with the action row, the panel's end. */
 function Receipt({ d }: { d: CardDetail }) {
   if (!d.resumable || !d.resume_cmd) return null;
   const { label, via } = resumeLabel(d.resume_mode, d.resume_terminal);
@@ -68,13 +78,78 @@ function Receipt({ d }: { d: CardDetail }) {
   );
 }
 
+/** The action row that ends the panel: RESUME, and the other actions with their keys (MORE at the top has them too). */
 function Actions({ d, store }: { d: CardDetail; store: Store }) {
+  // an idea has START, EDIT and ARCHIVE in its own row
+  if (d.kind === 'idea') return null;
   return (
     <div class="acts end">
-      {d.resumable && <button class="btn big" onClick={() => void store.resume(d.id)}>RESUME</button>}
-      {d.resumable && d.resume_cmd && <button class="btn" title="Resume as a new session branched from this one" onClick={() => void store.resume(d.id, true)}>FORK</button>}
-      {d.resume_cmd && <button class="btn" onClick={() => copy(d.resume_cmd!, store)}>COPY</button>}
-      {d.kind !== 'idea' ? <MoveMenu d={d} store={store} /> : <button class="btn ghost" onClick={() => { void store.move(d.id, 'archive').then(() => store.close()); }}>ARCHIVE</button>}
+      {d.resumable && <button class="btn big" aria-keyshortcuts="R" title="Resume (R)" onClick={() => void store.resume(d.id)}>RESUME</button>}
+      {d.resumable && d.resume_cmd && <button class="btn" aria-keyshortcuts="F" title="Resume as a new session branched from this one (F)" onClick={() => void store.resume(d.id, true)}><Keyed label="FORK" k="f" /></button>}
+      {d.resume_cmd && <button class="btn" aria-keyshortcuts="C" title="Copy the resume command (C)" onClick={() => copy(d.resume_cmd!, store)}><Keyed label="COPY" k="c" /></button>}
+      <a class="btn" aria-keyshortcuts="E" href={`/api/sessions/${encodeURIComponent(d.id)}/export?format=html`} download title="Save this session as one readable page; secrets are masked (E)"><Keyed label="EXPORT" k="e" /></a>
+      <TonightButton d={d} store={store} />
+      <button class="btn ghost" aria-keyshortcuts="H" title="Hide this session from the board (H)" onClick={() => hideSession(store, d.id)}><Keyed label="HIDE" k="h" /></button>
+      <button class="btn ghost" aria-keyshortcuts="X" title="Remove this session from eye, and optionally from its agent (X)" onClick={() => openForget(d)}>FORGET…</button>
+      <MoveMenu d={d} store={store} />
+    </div>
+  );
+}
+
+/** Save the session as one readable page (E, and EXPORT in MORE): secrets are masked. */
+export function exportSession(id: string) {
+  const a = document.createElement('a');
+  a.href = `/api/sessions/${encodeURIComponent(id)}/export?format=html`;
+  a.download = '';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+/** One action in MORE, with the key that does the same. */
+interface MoreItem { label: string; key?: string; title: string; run: () => void }
+
+/** What a session can do besides moving and RESUME, each with its key: MORE opens them under the action row. */
+function moreItems(d: CardDetail, store: Store): MoreItem[] {
+  const out: MoreItem[] = [];
+  if (d.resumable && d.resume_cmd) out.push({ label: 'FORK', key: 'F', title: 'Resume as a new session branched from this one', run: () => void store.resume(d.id, true) });
+  if (d.resume_cmd) out.push({ label: 'COPY RESUME COMMAND', key: 'C', title: 'Copy the command that resumes it', run: () => copy(d.resume_cmd!, store) });
+  out.push({ label: 'EXPORT', key: 'E', title: 'Save this session as one readable page; secrets are masked', run: () => exportSession(d.id) });
+  if (canContinueTonight(d, store)) out.push({ label: 'CONTINUE TONIGHT…', key: 'T', title: 'Fork this session tonight, in its own worktree, with a prompt you write now', run: () => { tonightOpen.value = d.id; } });
+  out.push({ label: 'REMIND ME…', key: 'M', title: 'Pick when eye moves it to Needs you', run: () => openRemind(d.id) });
+  out.push({ label: 'HIDE', key: 'H', title: 'Hide this session from the board', run: () => hideSession(store, d.id) });
+  out.push({ label: 'FORGET…', key: 'X', title: 'Remove this session from eye, and optionally from its agent', run: () => openForget(d) });
+  out.push({ label: 'ARCHIVE', title: 'Out of the lanes, into the archive', run: () => { void store.move(d.id, 'archive').then(() => store.close()); } });
+  return out;
+}
+
+/** MORE ▾: the session's other actions in a small menu in the panel's top bar; a click elsewhere, or Esc, closes it. */
+function More({ d, store }: { d: CardDetail; store: Store }) {
+  const open = useSignal(false);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open.value) return;
+    const away = (e: PointerEvent) => { if (!box.current?.contains(e.target as Node)) open.value = false; };
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); open.value = false; } };
+    addEventListener('pointerdown', away, true);
+    addEventListener('keydown', esc, true);
+    box.current?.querySelector<HTMLElement>('[role=menuitem]')?.focus({ preventScroll: true });
+    return () => { removeEventListener('pointerdown', away, true); removeEventListener('keydown', esc, true); };
+  }, [open.value]);
+  return (
+    <div class="move more" ref={box}>
+      <button class="btn" aria-haspopup="menu" aria-expanded={open.value} onClick={() => (open.value = !open.value)}>MORE ▾</button>
+      {open.value && (
+        <ul class="menu" role="menu" aria-label="More actions">
+          {moreItems(d, store).map((m) => (
+            <li key={m.label}>
+              <button role="menuitem" title={m.title} onClick={() => { open.value = false; m.run(); }}>
+                <span>{m.label}</span>{m.key && <kbd>{m.key}</kbd>}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
@@ -85,6 +160,8 @@ export function Detail({ store, walk }: { store: Store; walk: Walk }) {
   const id = store.selected.value!;
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => { ref.current?.scrollTo(0, 0); }, [id]);
+  // a CONTINUE TONIGHT form open for this card closes with it
+  useEffect(() => () => { if (tonightOpen.peek() === id) tonightOpen.value = null; }, [id]);
   if (!d) {
     return <div class="page ld" ref={ref}><button class="x" onClick={() => store.close()}>ESC</button><p class="state">Loading…<i class="dots" /></p></div>;
   }
@@ -97,10 +174,25 @@ export function Detail({ store, walk }: { store: Store; walk: Walk }) {
   const q = store.query.value.trim();
   const re = q ? hlPattern(q) : null;
   const snip = q ? store.results.value?.find((h) => h.card.id === d.id)?.snippet ?? null : null;
+  // the facts in one line of plain words: project, agent (when there is more than one), where it was started, age, kind, tokens
+  const proj = projectKey(d);
+  const facts = [
+    proj ? projectLabel(proj) : null,
+    store.agents.value.length > 1 ? d.agent_name : null,
+    originChip(d.origin),
+    ago(d.last_activity_at),
+    d.kind.replace('_', ' '),
+    d.tokens ? `${tok(d.tokens.total)} tokens` : null,
+  ].filter((x): x is string => !!x);
   return (
     <HlWords.Provider value={re}>
       <div class="page" ref={ref}>
-        <button class="x" onClick={() => store.close()} aria-label="Close (Esc)">ESC ✕</button>
+        {/* the top bar's right end: MORE (a session's other actions), the keys list and close */}
+        <div class="ptop">
+          {session && <More d={d} store={store} />}
+          <button class="x qk" onClick={() => { keyHelp.value = true; }} aria-label="Keyboard shortcuts (?)" title="Keyboard shortcuts (?)">?</button>
+          <button class="x" onClick={() => store.close()} aria-label="Close (Esc)">ESC ✕</button>
+        </div>
         <WalkNav walk={walk} />
         <header class="dh">
           <Sigil id={d.id} big />
@@ -110,18 +202,23 @@ export function Detail({ store, walk }: { store: Store; walk: Walk }) {
               {!session && <span class={`tag${need ? ' hot' : ''}`}>{LANE_LABEL[colId]?.name ?? colId}</span>}
               {isBusy(d) && <span class="tag live">LIVE</span>}
               {d.manual && <span class="tag">PINNED</span>}
-              {store.agents.value.length > 1 && <span class="tag agent-tag">{d.agent_name}</span>}
-              <span>{ago(d.last_activity_at)}</span>
-              <span>{d.kind.replace('_', ' ')}</span>
+              <span class="facts">{facts.join(' · ')}</span>
+              {d.remote_url && <RemoteMark url={d.remote_url} />}
             </p>
           </div>
         </header>
-        {session && <QuickMove d={d} store={store} />}
+        {/* 1. now: what to do, the next step, and the forms you open (continue tonight, remind) */}
+        {session && <div class="dbar"><QuickMove d={d} store={store} /></div>}
+        <RemindRow c={d} store={store} />
+        {/* opened from the menu, T or MORE: at the top, where nothing that loads later can push it away */}
+        <ContinueTonight d={d} store={store} />
         {snip && <p class="match"><b>MATCH</b><span>{snippetParts(snip).map((p, j) => (p.hit ? <mark key={j}>{p.text}</mark> : p.text))}</span></p>}
         {session && d.state && <p class="lead"><Hl s={d.state} /></p>}
         <Next c={d} hot={need} />
+        <NightRunLine d={d} />
+        <Leftovers key={d.id} d={d} store={store} />
         <Running d={d} />
-        <Remote d={d} />
+        {/* 2. what happened */}
         {d.kind === 'idea' && d.idea_id != null && <IdeaBody d={d} store={store} />}
         {d.recap && <Sec t="RECAP"><p class="recap"><Hl s={d.recap} /></p></Sec>}
         {d.idea?.notes && <Sec t="IDEA NOTES"><p class="notes"><Hl s={d.idea.notes} /></p></Sec>}
@@ -133,10 +230,15 @@ export function Detail({ store, walk }: { store: Store; walk: Walk }) {
         )}
         <Outputs key={d.id} outputs={d.outputs} />
         {d.first_prompt && <Sec t="FIRST PROMPT"><blockquote class="prompt first"><Hl s={d.first_prompt} /></blockquote></Sec>}
-        {session && <Conversation store={store} id={d.id} agent={d.agent_name} fallback={prompts} />}
-        {d.tokens && <TokenSec key={d.id} t={d.tokens} />}
         <Where d={d} />
-        <RemindPanel c={d} store={store} />
+        {/* 3. the long or seldom needed parts, folded to one line until you open them (eye remembers which) */}
+        <div class="details">
+          <NightRunSection d={d} store={store} />
+          {session && <Conversation store={store} id={d.id} agent={d.agent_name} fallback={prompts} />}
+          {d.tokens && <TokenSec key={d.id} t={d.tokens} />}
+          <RemindPanel c={d} store={store} />
+        </div>
+        {/* the end: how to resume it, and the actions */}
         <Receipt d={d} />
         <Actions d={d} store={store} />
       </div>

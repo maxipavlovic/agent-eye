@@ -32,7 +32,8 @@ leaves the machine except the excerpts sent to your agent for summaries (see `se
    prints nothing and always succeeds.
 4. **The daemon** (`src/daemon.rs`, kept running by a launch agent on macOS and a systemd user service on Linux) drains the queue (who waits on you, what they
    ask), keeps live status fresh, writes summaries for quiet sessions, keeps compressed copies of
-   transcripts, and serves the board when it is turned on.
+   transcripts, looks for leftovers every 5 minutes, counts usage by day (and the older sessions in
+   the background), starts night runs in their window, and serves the board when it is turned on.
 5. **Views**: the picker (`src/tui/`, `src/pick.rs`), the CLI (`src/cli/`) and the board server
    (`src/server/`, JSON API in `api.md`, the web face in `face/` embedded in the binary).
 
@@ -40,16 +41,21 @@ leaves the machine except the excerpts sent to your agent for summaries (see `se
 
 | Module | Does |
 |---|---|
-| `agents/` | The `Agent` trait, the common model (`Delta`, `LiveSession`, `Job`, `Invocation` ...), the registry, and `append_only`, the helpers for a session that is one growing file. `agents/claude/` is the Claude Code adapter and `agents/codex/` the Codex CLI one. See `agents.md`. |
+| `agents/` | The `Agent` trait, the common model (`Delta`, `LiveSession`, `Job`, `Invocation` ...), the registry, and `append_only`, the helpers for a session that is one growing file. `agents/claude/` is the Claude Code adapter, `agents/codex/` the Codex CLI one, `agents/agy/` the Antigravity CLI one and `agents/opencode/` the OpenCode one. See `agents.md`. |
 | `scan/` | Walks transcripts with cursors (stamp and marker); stores sessions, sub-agents and tokens, history-only sessions, jobs and live status, Jira keys. |
 | `db.rs`, `model.rs` | SQLite schema with migrations; the session, idea, stream and output types. |
 | `columns.rs`, `hide.rs` | Which column a session is in; which sessions are throw-away or belong to a switched-off agent. |
-| `search.rs`, `pick.rs` | Full-text search and ranking; the picker's index, ranking and launching. |
+| `search/`, `pick.rs` | One search engine for the picker, `eye find` and the board: `query.rs` reads what was typed, `typo.rs` fixes a mistyped word, `score.rs` weighs each word by how rare it is and where it is found (SQLite FTS5 with word stemming). `pick.rs` holds the picker's index, ideas, launching. |
 | `summarize.rs`, `summarize_prompt.txt` | Builds the masked excerpt of a session, asks the summary agent, stores the answer. |
 | `remind/` | "Check on this" reminders: the reading of a time (`when.rs`: `tomorrow`, `mon`, `4h`, `2026-11-20 14:00`, in local time), when one is due, setting, clearing, listing, and telling about due ones once. The column rule is in `columns.rs`; the notice itself is in `platform/notify.rs`. |
 | `worked/` | The days a session was worked on: adapters report the time of every message (`Delta::events`), `store.rs` adds them into UTC hours (`worked_hour`) with the 15-minute away rule, `summary.rs` turns hours into local days for the card and the terminal, and `backfill.rs` counts sessions read before eye kept hours, from their timestamps only. |
+| `night/` | The night shift (`night.md`): `clock.rs` (the window, which night a moment belongs to, local dates: all the time logic), `mod.rs` (the `night_run` table, limits, planning), `iso.rs` (the worktree or copy a run works in, its diff, discarding), `launch.rs` (each agent's command line, starting a run detached) and `sched.rs` (the once-a-minute pass the daemon makes: start, watch, stop, finish; everything that touches the machine goes through the `Sys` trait). |
+| `loose/` | Leftovers: `find.rs` and `gitscan.rs` find what sessions left (processes, containers, worktrees, commits on no remote, modified files) through `probe.rs`; `store.rs` keeps them in the `loose` table and builds the summary line; `act.rs` stops, removes, ignores or sends a session back, after the checks in "Leftovers" in `security.md`. |
+| `usage/` | Tokens by day and model (`usage_day`), the backfill of older sessions, plan limits, prices with their sources, and the report behind `eye usage` and the USAGE panel. |
+| `pack/` | `eye export` and `eye import`: the `.eyepack` file (database, archive, transcripts), path remapping between machines, merging, and one session as a readable page. |
 | `ideas.rs`, `mark.rs` | Parked ideas and starting them; putting a session in a column by hand. |
 | `folder.rs` | Whether an idea's folder exists, and the one rule for making it: only inside the home folder. |
+| `forget.rs` | `eye forget`: removes a session's rows, search text and archive copy (the tables are found from the schema), after a `manual` snapshot, and asks the adapter to remove the agent's own copy (`Agent::delete_transcript`). Refuses a session that is open now. |
 | `archive.rs`, `conversation.rs` | Where and when sessions are copied to the archive and put back (how is the adapter's call); reading a conversation from the session or from a temporary copy of the archive. |
 | `hook.rs`, `daemon.rs`, `install/`, `report.rs` | The hook entry point; the background process; install, uninstall and doctor (`install/` also holds the choice of agents and what is said about the daemon's service); the one-line-per-area summary that install, uninstall and `board on\|off` print. |
 | `platform/` | Everything that differs between macOS and Linux, and nothing else does: the service manager (`service.rs` builds the launchd plist or the systemd unit, knows their commands and runs them, `launchd.rs`, `systemd.rs`), opening a URL, the clipboard tools, the desktop notice (`notify.rs`), and the terminal a resume opens (`terminal.rs`: what `[board] resume` comes to on this machine, and the `.command` file or terminal program that runs the command). See "Platforms" below. |
@@ -59,7 +65,7 @@ leaves the machine except the excerpts sent to your agent for summaries (see `se
 
 ## Storage
 
-Everything is under `~/.agent-eye` (mode 0700): `eye.db` (SQLite, WAL), `archive/`, `queue/`,
+Everything is under `~/.agent-eye` (mode 0700): `eye.db` (SQLite, WAL), `archive/`, `night/` (the night runs' worktrees, copies and logs), `backups/`, `queue/`,
 `logs/`, `config.toml`, `board.token`, `ui.json`, `daemon.lock`, `work/` (an empty folder the
 summaries run in), `tmp/` (a copy of an archived session, only while its conversation is read; the `.command` files Resume opens in Terminal on macOS, removed after a day). The
 database holds one row per session (with the agent that owns it), streams (sub-agents, background

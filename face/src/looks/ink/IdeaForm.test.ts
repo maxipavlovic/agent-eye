@@ -8,6 +8,20 @@ describe('recentFolders', () => {
   });
 });
 
+describe('recentFolders, the suggestions', () => {
+  it('leaves out temp and scratch folders and folders the engine says are gone', () => {
+    const c = (folder: string, last: number, state?: string) => ({ folder, last_activity_at: last, kind: 'interactive', folder_state: state }) as never;
+    const cards = [
+      c('/private/tmp/claude-501/x/scratchpad/live/eyehome/night/4/work', 9),
+      c('/tmp/play', 8),
+      c('~/code/gone', 7, 'missing'),
+      c('~/code/app', 6, 'ok'),
+      c('~/code/lib', 5),
+    ];
+    expect(recentFolders(cards)).toEqual(['~/code/app', '~/code/lib']);
+  });
+});
+
 describe('folderChoices', () => {
   it('offers six recent folders, then only the ones matching what is typed', () => {
     const all = ['/Users/you/code/a', '/Users/you/code/eye', '/Users/you/notes', '~/code/b', '/x/5', '/x/6', '/x/7'];

@@ -1,0 +1,159 @@
+{
+  "info": {
+    "id": "ses_dffe693daffeghURc2ZwZWWZKi",
+    "projectID": "global",
+    "model": {
+      "id": "deepseek-v4.1-flash-free",
+      "providerID": "opencode",
+      "variant": "default"
+    },
+    "cost": 0,
+    "tokens": {
+      "input": 303,
+      "output": 57,
+      "reasoning": 115,
+      "cache": {
+        "read": 17024,
+        "write": 0
+      }
+    },
+    "outcome": "succeeded",
+    "time": {
+      "created": 1795297995814,
+      "updated": 1795297998638,
+      "busy": 1795297995822,
+      "idle": 1795297998641
+    },
+    "title": "Writing hello to out.txt",
+    "location": {
+      "directory": "/work/demo"
+    }
+  },
+  "messages": [
+    {
+      "id": "msg_200196c2a001ormksrCly5LNYB",
+      "time": {
+        "created": 1795297995825
+      },
+      "text": "Use the bash tool to run exactly: echo hello > out.txt   Then say done.",
+      "files": [],
+      "type": "user"
+    },
+    {
+      "id": "msg_200196c38001zQ2i894sADzyzE",
+      "time": {
+        "created": 1795297995834,
+        "firstToken": 1795297996627,
+        "streamed": 1795297996758,
+        "completed": 1795297997083
+      },
+      "type": "assistant",
+      "agent": "build",
+      "model": {
+        "id": "deepseek-v4.1-flash-free",
+        "providerID": "opencode",
+        "variant": "default"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "I'll run that command.\n\n"
+        },
+        {
+          "type": "tool",
+          "id": "call-a91c536c-1a88-413c-b5e9-0a1580dda8bc",
+          "name": "shell",
+          "executed": false,
+          "state": {
+            "status": "completed",
+            "input": {
+              "command": "echo hello > out.txt"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "(no output)"
+              }
+            ],
+            "metadata": {
+              "status": "completed",
+              "truncated": false,
+              "exit": 0
+            }
+          },
+          "time": {
+            "created": 1795297996748,
+            "ran": 1795297996755,
+            "completed": 1795297997012
+          }
+        }
+      ],
+      "snapshot": {
+        "start": "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+        "end": "34371aaf1e2721cae4b64c786c074c40a6218826",
+        "files": [
+          "out.txt"
+        ]
+      },
+      "finish": "tool-calls",
+      "rawFinish": "tool_calls",
+      "cost": 0,
+      "tokens": {
+        "input": 72,
+        "output": 47,
+        "reasoning": 0,
+        "cache": {
+          "read": 8320,
+          "write": 0
+        }
+      }
+    },
+    {
+      "id": "msg_200197120001P6jMS7FMcAgj9p",
+      "time": {
+        "created": 1795297997090,
+        "firstToken": 1795297998611,
+        "streamed": 1795297998616,
+        "completed": 1795297998638
+      },
+      "type": "assistant",
+      "agent": "build",
+      "model": {
+        "id": "deepseek-v4.1-flash-free",
+        "providerID": "opencode",
+        "variant": "default"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "done"
+        }
+      ],
+      "snapshot": {
+        "start": "34371aaf1e2721cae4b64c786c074c40a6218826",
+        "end": "34371aaf1e2721cae4b64c786c074c40a6218826",
+        "files": []
+      },
+      "finish": "stop",
+      "rawFinish": "stop",
+      "cost": 0,
+      "tokens": {
+        "input": 132,
+        "output": 3,
+        "reasoning": 0,
+        "cache": {
+          "read": 8320,
+          "write": 0
+        }
+      }
+    },
+    {
+      "id": "msg_200197731001aW4DAf0r8GXQe9",
+      "time": {
+        "created": 1795297998641
+      },
+      "type": "idle",
+      "outcome": "succeeded"
+    }
+  ]
+}

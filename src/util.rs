@@ -1,4 +1,29 @@
-use chrono::{DateTime, Local, TimeZone};
+use jiff::{
+    civil::DateTime,
+    tz::{AmbiguousOffset, TimeZone},
+    Timestamp, Zoned,
+};
+
+/// Is `p` in one of the system's temp and scratch folders (`/tmp`, `/var/tmp`, the per-user temp folder;
+/// Claude Code's scratchpads live there)?
+pub fn is_temp_folder(p: &str) -> bool {
+    let t = std::env::temp_dir();
+    let t = t.to_string_lossy();
+    let t = t.trim_end_matches('/');
+    let under = |root: &str| !root.is_empty() && (p == root || p.starts_with(&format!("{root}/")));
+    [
+        "/tmp",
+        "/private/tmp",
+        "/var/tmp",
+        "/private/var/tmp",
+        "/var/folders",
+        "/private/var/folders",
+    ]
+    .iter()
+    .any(|r| under(r))
+        || under(t)
+        || under(t.strip_prefix("/private").unwrap_or(t))
+}
 
 /// Shell-quote with single quotes: `it's` becomes `'it'\''s'`.
 pub fn shell_quote(s: &str) -> String {
@@ -66,9 +91,7 @@ pub fn new_uuid() -> std::io::Result<String> {
 
 /// An RFC 3339 time as Unix ms.
 pub fn iso_to_ms(s: &str) -> Option<i64> {
-    DateTime::parse_from_rfc3339(s)
-        .ok()
-        .map(|d| d.timestamp_millis())
+    s.parse::<Timestamp>().ok().map(|t| t.as_millisecond())
 }
 
 /// First `max` chars.
@@ -112,22 +135,51 @@ pub fn hex(b: &[u8]) -> String {
 }
 
 /// Now, in Unix ms.
+#[cfg(not(feature = "fixed-clock"))]
 pub fn now_ms() -> i64 {
-    chrono::Utc::now().timestamp_millis()
+    Timestamp::now().as_millisecond()
+}
+
+/// Now, in Unix ms; `EYE_FIXED_NOW_MS` replaces the clock (the end-to-end suite's build only).
+#[cfg(feature = "fixed-clock")]
+pub fn now_ms() -> i64 {
+    std::env::var("EYE_FIXED_NOW_MS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or_else(|| Timestamp::now().as_millisecond())
+}
+
+/// A Unix ms time on the wall clock of this machine; None when it is out of range.
+pub fn local_time(ms: i64) -> Option<Zoned> {
+    Some(
+        Timestamp::from_millisecond(ms)
+            .ok()?
+            .to_zoned(TimeZone::system()),
+    )
+}
+
+/// A wall-clock time in a zone: the first one when the clocks go back and it happens twice, None
+/// when they go forward and it never happens.
+pub fn wall_earliest(tz: &TimeZone, wall: DateTime) -> Option<Zoned> {
+    let amb = tz.to_ambiguous_zoned(wall);
+    if matches!(amb.offset(), AmbiguousOffset::Gap { .. }) {
+        return None;
+    }
+    amb.earlier().ok()
 }
 
 /// A Unix ms time as local `YYYY-MM-DD HH:MM`.
 pub fn fmt_ts(ms: i64) -> String {
-    match Local.timestamp_millis_opt(ms).single() {
-        Some(d) => d.format("%Y-%m-%d %H:%M").to_string(),
+    match local_time(ms) {
+        Some(d) => d.strftime("%Y-%m-%d %H:%M").to_string(),
         None => "?".into(),
     }
 }
 
 /// A Unix ms time as local `HH:MM`.
 pub fn fmt_clock(ms: i64) -> String {
-    match Local.timestamp_millis_opt(ms).single() {
-        Some(d) => d.format("%H:%M").to_string(),
+    match local_time(ms) {
+        Some(d) => d.strftime("%H:%M").to_string(),
         None => "?".into(),
     }
 }

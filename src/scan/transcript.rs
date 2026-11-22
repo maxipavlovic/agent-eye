@@ -38,6 +38,32 @@ pub(super) fn prompt_title(p: &str) -> String {
     head_chars(&p.split_whitespace().collect::<Vec<_>>().join(" "), 80)
 }
 
+/// The night run that made `sid`: its worktree or copy (gone after DISCARD) and the folder it was
+/// planned for.
+fn night_run_of(tx: &Connection, sid: &str) -> Option<(Option<String>, String)> {
+    tx.query_row(
+        "SELECT worktree, folder FROM night_run WHERE run_session_id=?1 ORDER BY id DESC LIMIT 1",
+        [sid],
+        |r| Ok((r.get(0)?, r.get(1)?)),
+    )
+    .optional()
+    .ok()?
+}
+
+/// A night run's session lives (and resumes) where the run worked. A continued session's fork starts
+/// with the copied conversation of the original folder, so its transcript names that folder first.
+fn night_cwd(wt: &str, cwd: Option<String>) -> Option<String> {
+    let w = wt.trim_end_matches('/');
+    let inside = cwd
+        .as_deref()
+        .is_some_and(|c| c == w || c.starts_with(&format!("{w}/")));
+    if inside {
+        cwd
+    } else {
+        Some(wt.to_string())
+    }
+}
+
 /// Store what one parse of a transcript found: the session row, its tokens, outputs and search text.
 pub(super) fn apply(
     tx: &Connection,
@@ -81,10 +107,19 @@ pub(super) fn apply(
     } else {
         ex.cwd.clone().or(d.cwd.clone())
     };
+    let night = night_run_of(tx, sid);
+    let cwd = match night.as_ref().and_then(|n| n.0.as_deref()) {
+        Some(wt) => night_cwd(wt, cwd),
+        None => cwd,
+    };
     if cwd.as_deref().is_some_and(|c| cfg.is_excluded(c)) {
         return Ok(());
     }
-    let root = cwd.as_deref().and_then(|c| super::repo_root(c, repo_cache));
+    let root = match &night {
+        // a night run's session belongs to the project it was planned for, not to its worktree or copy
+        Some((_, folder)) => super::repo_root(folder, repo_cache).or(Some(folder.clone())),
+        None => cwd.as_deref().and_then(|c| super::repo_root(c, repo_cache)),
+    };
 
     let (mut title, mut tsrc) = if reset {
         (None, None)
@@ -170,6 +205,32 @@ pub(super) fn apply(
             recap.map(|r| r.0),
         ],
     )?;
+
+    // Where the session was started: set by the first read that finds it, kept after that. A night
+    // run is told by its folder, which a read without the entrypoint line can still see.
+    {
+        let (raw, cwd) = tx.query_row(
+            "SELECT origin_raw, cwd FROM session WHERE id=?1",
+            [sid],
+            |r| {
+                Ok((
+                    r.get::<_, Option<String>>(0)?,
+                    r.get::<_, Option<String>>(1)?,
+                ))
+            },
+        )?;
+        let raw = d.origin_raw.clone().or(raw.filter(|r| !r.is_empty()));
+        let origin = crate::agents::origin::of_session(
+            agent.id(),
+            raw.as_deref(),
+            cwd.as_deref(),
+            cfg.night_dir.as_deref(),
+        );
+        tx.execute(
+            "UPDATE session SET origin=?2, origin_raw=?3 WHERE id=?1",
+            params![sid, origin, raw.unwrap_or_default()],
+        )?;
+    }
 
     // Token counts: the delta on top of what is stored, from zero after a reset.
     if let Some(signals) = &d.signals {

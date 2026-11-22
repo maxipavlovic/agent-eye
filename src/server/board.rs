@@ -60,11 +60,14 @@ pub fn board_json(db: &Db, cfg: &Config, agents: &Agents, now: i64, all: bool) -
     let mut buckets: HashMap<&'static str, Vec<Place>> = HashMap::new();
     let mut archive_count = 0usize;
     let hidden = hidden_set(db, cfg, all)?;
+    // what each session left behind, not counting what was ignored
+    let loose = crate::loose::counts(db)?;
+    let night = night_chips(db)?;
     for s in db.all_sessions()? {
         if hidden.contains(&s.id) {
             continue;
         }
-        let card = card_json(
+        let mut card = card_json(
             &s,
             streams.get(&s.id).unwrap_or(&empty_s),
             outputs.get(&s.id).unwrap_or(&empty_o),
@@ -72,6 +75,10 @@ pub fn board_json(db: &Db, cfg: &Config, agents: &Agents, now: i64, all: bool) -
             false,
             cx,
         );
+        card["loose"] = json!(loose.get(&s.id).copied().unwrap_or(0));
+        if let Some(n) = night.get(&s.id) {
+            card["night"] = n.clone();
+        }
         let col = card["column"].as_str().unwrap_or("paused");
         if col == "archive" || aged_out(col, s.last_activity_at.unwrap_or(0), now, cfg) {
             archive_count += 1;
@@ -174,6 +181,26 @@ pub(super) async fn api_archive(State(st): State<Shared>, Query(q): Query<Archiv
     Ok(Json(
         json!({"cards": cards, "total": total, "offset": offset}),
     ))
+}
+
+/// The runs that made sessions: `{id, status}` by session id, for the NIGHT chip on a card.
+pub(super) fn night_chips(db: &Db) -> anyhow::Result<HashMap<String, Value>> {
+    let mut st = db.conn.prepare(
+        "SELECT run_session_id, id, status FROM night_run WHERE run_session_id IS NOT NULL ORDER BY id",
+    )?;
+    let rows = st.query_map([], |r| {
+        Ok((
+            r.get::<_, String>(0)?,
+            r.get::<_, i64>(1)?,
+            r.get::<_, String>(2)?,
+        ))
+    })?;
+    let mut out = HashMap::new();
+    for row in rows {
+        let (sid, id, status) = row?;
+        out.insert(sid, json!({"id": id, "status": status}));
+    }
+    Ok(out)
 }
 
 #[cfg(test)]
@@ -426,5 +453,10 @@ mod tests {
         assert_eq!(r["results"].as_array().unwrap().len(), 0);
         let (_, r) = call(&e, req("GET", "/api/search?q=exirt&all=1", None)).await;
         assert_eq!(r["results"].as_array().unwrap().len(), 1);
+        // score keeps 0.2's lower-is-better order; relevance is the same number turned around
+        let hit = &r["results"][0];
+        let relevance = hit["relevance"].as_f64().unwrap();
+        assert!(relevance > 0.0, "{hit}");
+        assert_eq!(hit["score"].as_f64().unwrap(), -relevance);
     }
 }

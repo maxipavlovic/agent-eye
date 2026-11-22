@@ -2,9 +2,10 @@
 
 eye follows coding agents through adapters. An adapter is one Rust type that implements the `Agent`
 trait in `src/agents/mod.rs`. Everything else (the scanner, database, picker, board, daemon, archive
-and search) talks to that trait and knows nothing about a particular agent. Claude Code (the default)
-and Codex CLI are the two real adapters; `src/agents/claude/` and `src/agents/codex/` are the worked
-examples.
+and search) talks to that trait and knows nothing about a particular agent. Claude Code (the default),
+Codex CLI, Antigravity CLI (`agy`) and OpenCode are the real adapters; `src/agents/claude/` and
+`src/agents/codex/` are the worked examples, `src/agents/agy/` and `src/agents/opencode/` show a session
+that is a folder with a database and one that is a row in a shared database.
 
 ## What an adapter provides
 
@@ -16,12 +17,15 @@ are the ones for a session that is one text file which only grows (see "Storage 
 |---|---|---|
 | Identity | `id`, `name`, `short_name`, `detect` | `id` is stored in the database and used in config and the API (`"claude"`). `short_name` is used in sentences and as the owner in `next` lines (`Claude: fix the test`). `detect` also decides whether `eye install` turns the agent on. |
 | Sessions on disk | `transcripts`, `parse_transcript`, `owns_transcript` | `transcripts` lists what holds each session (a file, a folder, a database) with a change stamp. `parse_transcript(transcript, opts)` reads a session, all of it or what is new since the last read, and returns a `Delta` (see below). |
+| Usage by day | `usage_msgs`, `Delta::usage_msgs`, `UsageRead::msgs`, `Delta::limits` | Optional (the default reports none). The token use of every assistant message with its time and model, which the core adds into days per model (`usage.md`); `Delta::limits` carries the plan limits a transcript reports, newest line wins. `usage_msgs(path)` reads a whole transcript (a session's or a sub-agent's) for the backfill and must add up to the same tokens as `parse_transcript`. |
 | Sub-agents, tokens, history | `subagents`, `read_usage`, `history_source`, `read_history`, `parse_history_line`, `own_dirs` | Optional. Sub-agents become child streams on the card; `read_usage` counts their tokens; the history keeps prompts of sessions whose transcripts were deleted. `read_usage` and `read_history` continue from a marker like `parse_transcript` does. |
 | Live state | `live_sessions`, `live_status_shows_prompts`, `jobs` | Optional. Which sessions are open now (busy, idle, waiting, with why it waits, its remote control link and the loops its live state shows) and which run in the background. `live_status_shows_prompts` defaults to yes; an agent whose live status stays `busy` while it waits on a permission prompt returns no, and then a prompt a hook recorded makes the session `waiting` instead of `busy` until a hook says it was answered. |
+| Leftovers | `scratch_roots` | Optional. Folders where the agent keeps one scratch folder per session (Claude Code: `<tmp>/claude-<uid>/<project>/<session-id>/`). A process, container or git worktree in one is the named session's, found by the session id in its path. Default: none; Codex has no scratchpad, so what it leaves is found by working folder and active hour only. |
 | Hooks | `queue_line`, `wait_effect` | Optional. `queue_line` turns a hook payload into one short stored line; `wait_effect` says whether that event makes a session wait on you, and what it asks. A `Wait` with `only_if_prompt` set changes the wait only while it is a prompt (an event that shows a prompt was answered). |
 | Text | `display_prompt`, `clean_recap` | Optional. `display_prompt` says how a stored prompt line is shown, or that it is not a prompt (a built-in command, a paste tag with nothing in it); the default only trims. `clean_recap` takes out what the agent adds to every recap; the scanner stores recaps through it. |
 | Reading | `read_conversation`, `conversation_tail`, `ask`, `default_summary_model` | Conversation for the board and picker, the tail of a transcript for the summary excerpt, and a one-shot structured question to the agent (summaries). The first two get a path that exists: the session itself, or a temporary copy eye made from the archive. Without `ask` the agent cannot write summaries. `default_summary_model` is the model `ask` gets when `[summary] model` is empty. |
-| Archive | `transcript_stamp`, `archive_name`, `archive`, `unarchive` | Optional. How a session is copied to eye's archive and put back; see below. The defaults make one zstd file per session. |
+| Forget | `delete_transcript` | Optional (the default says the agent does not support it). Remove the agent's own copy of a session for `eye forget --transcript` and return what went, as lines for people. Check that the path is inside the agent's folder first. Claude Code: the transcript file and the folder of the same name (sub-agents). Codex: every rollout of the thread and its line in `session_index.jsonl`. agy: the conversation's `brain/<id>/` folder, its database with `-shm` and `-wal`, and its row in `conversation_summaries.db`. OpenCode: the session's rows (and its sub-agents' rows) in `opencode.db`, or its JSON files. |
+| Archive | `transcript_stamp`, `transcript_exists`, `archive_name`, `archive`, `unarchive` | Optional. How a session is copied to eye's archive and put back; see below. The defaults make one zstd file per session. `transcript_exists` says whether the transcript path is there to read; the default asks the file system, an agent whose path names a session inside a database answers itself. |
 | Commands | `executable`, `resume`, `fork`, `start`, `background_job_id` | Return an `Invocation` (program and arguments). eye adds the folder, quotes every argument and decides how to run it. `fork` is optional. `start` may return no session id when the agent cannot choose one; eye then links the idea to the first session of that agent that begins in its folder. |
 | Setup | `preflight`, `install`, `uninstall`, `doctor`, `daemon_env`, `executable_dir` | Install hooks and a skill (or whatever the agent has), remove them again, and check that the agent's files still look as eye expects. `install` and `uninstall` return a `Report`: one row for the agent (`hooks added (6 events) to ~/.codex/hooks.json, skill added`), the file diff as that row's detail, and a `next` line when the user has to do something (Codex's `/hooks` trust). `install` must leave other tools' entries alone and must not create files for an agent that is not there. |
 
@@ -110,11 +114,121 @@ INTO` or the backup API, then compress it. `tests/support/folder_agent.rs` does 
 - **Hooks.** `hooks.json` has the shape of Claude's `settings.json`, so both adapters use `hooks_file.rs` with their own events and command. Codex runs a hook only after the user trusts it once; eye can say so and cannot see it. `PostToolUse` runs after every tool call and carries its output, so its queue line keeps only the session id.
 - **Summaries.** `ask` runs `codex exec` with the flags that keep it from leaving a session behind or running the user's own hooks, checks once with `--help` that this version has them, and hands over the schema in the strict form Codex wants (`additionalProperties: false`, every property required).
 
+## Where a session was started
+
+Each session has an `origin` (schema 17): `terminal`, `headless`, `app`, `desktop`, `ide`, `web`, `night`, or none when unknown, and the `origin_raw` it came from. The board names it in the card's top line and the panel's facts line for everything but `terminal`, the picker preview says "started from: an app (sdk-ts)", and `eye ls --origin app` filters. `Delta::origin_raw` carries the raw value from the first line that has it, `Agent::origin_raw(path)` reads it from the first lines of a transcript (the backfill for sessions indexed before), and `agents/origin.rs` maps raw values to words in one place. A session whose folder is under `<eye home>/night/` is `night`, whatever it wrote. Summaries run with `--no-session-persistence`, so they leave no session behind to label.
+
+| Agent | What it writes | Maps to |
+|---|---|---|
+| Claude Code | `entrypoint` on its lines | `cli` terminal; `sdk-cli`, `claude-code-github-action` headless; `sdk-ts`, `sdk-py`, `mcp` app; `claude-desktop`, `claude-desktop-3p`, `local-agent`, `claude-coworker*` desktop; `claude-vscode` ide; `remote*`, `ssh-remote`, `claude-in-slack`, `claude-in-teams` web |
+| Codex | `originator` and `source` of `session_meta`, joined as `originator/source` | the source first: `vscode` ide, `exec` headless, `mcp` app, `custom:atlas` and `custom:chatgpt` desktop; else the originator: `codex_cli_rs`, `codex-tui` terminal, `codex_exec` headless, `codex_vscode` ide, `codex_atlas`, `codex_chatgpt_desktop` and `Codex …` desktop |
+| agy | `source` of the summaries row (empty in every conversation seen on agy 1.5.14); and its own process log, `Print mode: conversation=<id>`, for a `-p` run, which eye stores as `print-mode` | `print-mode` headless; `CORTEX_TRAJECTORY_SOURCE_CLI` terminal, `_SDK`, `_PYTHON_SDK`, `_AGENT_API` app, `_VSCODE` ide, `_ASYNC_*` web (the enum of agy's binary; none of these was seen on disk); a terminal conversation has none |
+| OpenCode | nothing | none (OpenCode keeps no origin on a session: its row has no field for it) |
+
+The Claude Code values are the ones its 2.1.311 binary knows (`CLAUDE_CODE_ENTRYPOINT`); the docs do not list them. The Codex ones are from its `default_client.rs` and from rollouts. A value that is not in the table is stored raw and maps to none.
+
+## Antigravity CLI and OpenCode
+
+What works for each (a dash is "not offered"):
+
+| | Claude Code | Codex CLI | Antigravity CLI (`agy`) | OpenCode |
+|---|---|---|---|---|
+| Sessions on the board, picker, search, usage | yes | yes | yes | yes |
+| Read incrementally | byte offset | byte offset | byte offset of the JSON log | no: a session is read whole when its stamp moves |
+| Prompt history of deleted sessions | yes | none | `history.jsonl` | not possible: `prompt-history.jsonl` keeps only `text` and `pasted`, no session id, time or folder |
+| Conversation, summary tail | yes | yes | yes | yes |
+| Resume | `claude --resume` | `codex resume` | `agy --conversation <id>` | `opencode --session <id>` |
+| Fork | yes | yes | not possible (agy has no fork flag or command outside its TUI) | not possible: only `opencode run --fork`, which is headless; the terminal UI has no `--fork` flag |
+| Start an idea | yes | yes (no session id up front) | `agy -i <prompt>` (no id up front) | `opencode --prompt <text>` (no id up front) |
+| Tokens and usage by model | yes | yes | yes (model from the database) | yes |
+| Live status | status files | writer lock + hooks | presence lock + summaries row + database (busy, idle, waiting) | turn times on the session row + plugin (running, idle, waiting on a permission) |
+| Hooks installed | yes | yes | yes: a plugin of eye's (`SessionStart`, `Stop`) | yes: a plugin in `~/.config/opencode/plugins/` |
+| Summaries (`ask`) | `claude -p` | `codex exec` | `agy -p --output-format json --json-schema` | `opencode run --format json --archived` with a JSON-only prompt, validated, one retry |
+| Archive | one file | one file | folder: database snapshot + summaries row + the conversation's folder; a restore is resumable | one file with eye's reading and `opencode session export`; restored with `opencode session import` |
+| Sub-agents | child streams | child streams | child streams (`parent_conversation_id`) | left out |
+| `/eye` skill | yes | yes | yes (`~/.gemini/config/skills/eye`) | yes, as a command (`~/.config/opencode/commands/eye.md`) |
+| Plan limits | yes | yes | not possible: agy keeps none on disk | not possible: OpenCode keeps none on disk |
+| Night shift | yes | yes | only with `allow_unsandboxed` (its `--sandbox` is unverified); no fork | only with `allow_unsandboxed` (no sandbox); ideas only (no fork) |
+| Cost estimate | yes | yes | yes (Gemini prices; GPT-OSS has none) | yes (free models cost 0; Anthropic and OpenAI models priced) |
+| Remote Control link | yes | no | yes, from agy's process log | no |
+| Forget `--transcript` | yes | yes | yes, also its history lines and cache entries | yes |
+
+**Antigravity CLI.** Built on a real install (agy 1.5.1, rechecked on 1.5.14). A conversation is `conversations/<id>.db`, a SQLite file of
+protobuf blobs, with a folder `brain/<id>/` beside it. eye reads the plain JSON log agy keeps there
+(`.system_generated/logs/transcript_full.jsonl`: one line per step, with the prompt, reply, tool calls and the
+tokens and (from 1.5.14) the model of each model call), the model of older calls from the database (the one protobuf field eye decodes), titles
+and folders from `conversation_summaries.db` and prompts from `history.jsonl`. The session is the folder
+`brain/<id>/`; its stamp folds in the database, its write-ahead log and the summaries row, so a title that agy
+writes later is noticed. agy's databases are in WAL mode and SQLite cannot open one read-only once agy has exited (no `-wal`, no `-shm`); eye then opens it as it is (`immutable=1`). Conversations without a log and the ones eye starts for summaries
+(a folder named `eye-ask-<uuid>`; agy has no flag to leave nothing behind) are not sessions.
+
+- **Live status** (`live.rs`). agy holds an exclusive `flock` on `presence/<id>.lock` while a conversation is open (held from the start, released on quit; the files stay behind, so a lock that can be taken means closed). The summaries row says `CASCADE_RUN_STATUS_RUNNING` while a turn runs and `..._IDLE` after: busy and idle. A tool call that waits for approval is the last row of the conversation's `steps` table with status 9 (`CORTEX_STEP_STATUS_WAITING`, 3 is done): `waiting`, "permission prompt". It is in the database only; the JSON log writes a step when it is done. A step waiting for something other than a tool approval is shown as "a question" (not seen, so not verified). Checked in a real session with `rm`, which agy asks to approve.
+- **Remote Control** (`--remote-control`, `/remote-control`). The link is not in the database or in presence. agy's process log (`log/cli-<time>.log`, one per `agy` process) has `[remote-control-<uuid>-v2] ... Connection status: Connected`, and the person is shown `https://antigravity.google.com/r/<uuid>-v2`; `Created conversation <id>` in the same log ties it to the conversation. eye sets `remote_url` while that connection is up. It is the process's link, so it covers every conversation that process opened. The same logs have `Print mode: conversation=<id>` for a `-p` run: that is how eye knows it was headless (a live `-p` run reports the entrypoint `sdk-cli`).
+- **Sub-agents.** agy's `invoke_subagent` makes a conversation of its own: a row with `parent_conversation_id`, `agent_name` (`self`) and `nesting_depth`, its own `brain/<id>/` log (and no presence lock), and `brain/<parent>/.system_generated/subagents/<id>.json` with the role the parent gave. eye shows them as child streams of the parent (title = role, detail = kind, finished when its turn is not running) and counts their tokens apart.
+- **Hooks.** agy reads `hooks.json` from a workspace's `.agents/` folder and from a plugin; there is no global hooks file, but a plugin in the global folder `~/.gemini/config/plugins/<name>/` is loaded in every conversation (checked: `agy plugin list` shows it and its hooks ran in a real session). `eye install` writes the plugin `agent-eye` there (`plugin.json`, `hooks.json` with `SessionStart` and `Stop`); nothing of another tool is touched, and `uninstall` removes only it. agy waits for each hook and a `PreToolUse` hook that prints no decision can block the tool, so eye listens to no tool event and every command ends in `echo '{}'`, an empty decision, whatever eye did. `Stop` hooks were not seen in a `-p` run; the file-based status does not need them. The hook payload is camelCase JSON with `conversationId`, `cwd` and `transcriptPath`; the queue line keeps the session, the folder and the end of the last reply (to tell a question from a finished job).
+- **The `/eye` skill** is `~/.gemini/config/skills/eye/SKILL.md` (`skill/SKILL.agy.md`, the Codex text with Antigravity's name; it says agy cannot fork). `eye install` updates it after an upgrade, like the others.
+- **Cost.** The log names the model of each call (`gemini-3.8-flash-low`) and the database a display name (`Gemini 3.8 Flash (High)`); both are priced (see `usage.md`).
+- **The archive copy** is a folder (`eye-conversation.db.zst`, a `VACUUM INTO` snapshot, `eye-summary.json.zst`, the conversation's row, and every file of `brain/<id>/` compressed under `files/`, without `scratch/` and files over 8 MiB). Restoring into agy's own folder puts the snapshot at `conversations/<id>.db` and the row back, so `agy --conversation <id>` opens the conversation after agy deleted it (checked on a real conversation: deleted, restored, resumed with `agy -p --conversation`). A copy read for the board keeps its snapshot beside it.
+- **Forgetting** (`eye forget --transcript`) removes the folder, the database and its `-wal`/`-shm`, the presence lock, `annotations/<id>.pbtxt`, the row (zeroed: `secure_delete`), the conversation's lines in `history.jsonl` (so nothing is left in agy's up-arrow history) and its entries in `cache/last_conversations.json` and `cache/conversation_metadata.json`. agy's process logs under `log/` name the id and are left alone.
+- **Not possible.** Fork: no flag or command outside the TUI. Plan limits: agy keeps none on disk. Origin of a terminal conversation: `source` is empty in every row seen. A `-p` night run is not confined by anything eye could verify (see `night.md`). Not read: commits and folders as outputs, background tasks.
+
+**OpenCode** (checked on a real OpenCode 2.3.2, run with `XDG_*` folders of its own and free models). The adapter
+follows the structs of sst/opencode v2.3.2 (and v1.1.1 for the older files) and is tested in all three layouts: the
+`session_v2` tables, the older `session`/`message`/`part` tables (both in `opencode.db`, found in
+`$XDG_DATA_HOME/opencode` or `~/.local/share/opencode`) and the JSON files of v1.0 and v1.1
+(`storage/session|message|part`). A session of a database is no file, so its transcript path is `<db>#<id>` and
+`transcript_exists` asks the database. Sub-agent sessions (with a parent) and sessions created `--archived` are left
+out. The older table and JSON layouts are tested on synthetic data only. What is on a par with Codex, and what is not:
+
+- **Live status.** OpenCode runs its sessions in a background service, so there is no lock or process per session.
+  Its session row has `time_busy` (a turn started) and `time_idle` (it ended): a turn is open while the last one is
+  `time_busy`, and a session whose turn ended less than 10 minutes ago still shows as idle (`live.rs`). A permission
+  prompt is on no disk; the plugin sees it (below), so `live_status_shows_prompts` is false and a prompt the plugin
+  recorded turns `busy` into `waiting` (Needs you, with `allow shell: <command>`) until the plugin says it was
+  answered (`permission.replied`, which is exact, unlike Codex's next `PostToolUse`). Checked with the real terminal
+  UI: running, then waiting with the command, then idle after the answer.
+- **The plugin** (`plugin.js`, installed by `eye install` as `<config>/plugins/agent-eye.js`, removed by `eye
+  uninstall`, checked by `eye doctor`, updated by `eye install` after an upgrade). It subscribes to OpenCode's
+  events and, for `session.created`, `session.execution.started`, `permission.asked`, `permission.replied` and
+  `session.execution.succeeded|failed|interrupted`, runs `agent-eye hook <Event> --agent opencode` with a small JSON
+  payload (one hook at a time, in order: two hooks racing wrote a reply before its question). It never changes what
+  OpenCode does, never waits for eye and fails silently. OpenCode loads it at its next start (`opencode reload`). A file
+  named `agent-eye.js` that is not eye's is never overwritten or removed, and OpenCode's other plugins, commands and
+  `opencode.json` are never touched.
+- **Summaries** (`headless.rs`). `opencode run --format json` cannot answer with a schema, so the prompt asks for one
+  JSON object, the last message's text is validated against the summary schema, and an invalid answer is asked again
+  once. The run is `--standalone` (a private server: eye never starts OpenCode's background service), `--archived`
+  (out of its lists) and its session is deleted afterwards, so nothing shows in eye or OpenCode. The default model
+  (`default_summary_model`) is `free`: the small `-free` model that `opencode models` lists (their names change);
+  `[summary] model` names another.
+- **`/eye`.** `eye install` writes `<config>/commands/eye.md` (the skill, adapted, with the `/eye`-alone overview);
+  OpenCode's terminal UI and API expand it (`opencode run "/eye"` does not: it sends the text as a message). The
+  command is read at OpenCode's next start. Checked through the API: it ran `eye ls ...` and answered.
+- **Archive and restore.** The archive keeps what eye reads and `opencode session export`. Restoring runs `opencode
+  session import` (the session keeps its id and `opencode --session <id>` resumes it); a copy made without OpenCode
+  there reads but is not put back, and says so. eye never writes OpenCode's database. `eye forget --transcript`
+  removes a session's rows (also of a fork or an archived one; a fork is a session of its own, its parent stays).
+- **Prices.** A model named `…-free` (or `…:free`) costs 0; a `provider/` prefix is ignored (`anthropic/claude-…`,
+  `openai/gpt-…`), so the Claude and OpenAI lists apply. Google's models have no price here: an unknown model shows no
+  cost, never a guess.
+- **Plan limits: not possible.** They are the provider's and OpenCode writes none to disk (a weekly limit on a night
+  run is refused with that reason).
+- **Origin: not possible.** A session row, its messages and its events carry no field for how it started (terminal,
+  `run`, server, web).
+- **Night shift.** `opencode run --standalone --auto` in the run's folder, with a permission config for that run only
+  (`OPENCODE_CONFIG_CONTENT`, which only a private server reads): `bash` allowed except `git push`, `git remote`,
+  `gh`, `ssh`, `scp` and the publish commands, edits allowed, `external_directory` denied. These rules match the text
+  of a call; a shell command can still write anywhere, so a run is refused (in the plan, with the reason) unless `[night]
+  allow_unsandboxed = true`. `[night] opencode_model` picks a model. "Continue tonight" needs a fork, which OpenCode does
+  not offer from its terminal UI, so only ideas run.
+- **Fork: not possible** in the terminal UI (`opencode --session <id> --fork` is "Unrecognized flag"). `opencode run
+  --fork --session <id> <message>` forks headlessly; eye does not offer it as a board action.
+
 ## Adding an agent
 
 1. Make `src/agents/<id>/mod.rs` with a type that implements `Agent`. Start with the required
    methods and a `build(&AgentCfg) -> AgentRef` function that reads `[agents.<id>] dir`.
-2. Add the id to `factory()` and `registered_ids()` in `src/agents/mod.rs`, next to `claude` and `codex`.
+2. Add the id to `factory()` and `registered_ids()` in `src/agents/mod.rs`, next to `claude`, `codex`, `agy` and `opencode`.
 3. Turn it on in `config.toml`: `[agents] enabled = ["claude", "<id>"]` and, if its files are not in
    the usual place, `[agents.<id>] dir = "..."`. `eye install` does the first part for an agent
    whose `detect` finds it.

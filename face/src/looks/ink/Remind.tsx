@@ -3,10 +3,10 @@ import { signal, useSignal } from '@preact/signals';
 import { Pix } from '../../pixel/Pix';
 import type { Store } from '../../store';
 import type { Card } from '../../api/types';
-import { remindText } from '../../format';
-import { ICONS, INK } from './art';
+import { remindReason, remindShort, remindText, remindTitle } from '../../format';
+import { CLOCK, ICONS, INK } from './art';
 import { addDays, dateValue, DatePicker, parseTime, TimeField } from './DatePick';
-import { Sec } from './Sections';
+import { Fold } from './Sections';
 
 /** The card whose reminder form is open (a date, a time and a note), or null. */
 export const remindForm = signal<string | null>(null);
@@ -137,15 +137,33 @@ export function RemindFormHost({ store }: { store: Store }) {
 export function RemindPanel({ c, store }: { c: Card; store: Store }) {
   const summary = remindSummary(c);
   return (
-    <Sec t="REMINDER">
+    <Fold name="reminder" t="REMINDER" sum={summary ?? 'none'}>
       <p class="notes">{summary ?? 'No reminder.'}</p>
       {!summary && <p class="rhint">eye moves this card to Needs you at the time you pick.</p>}
       <div class="acts">
         {REMIND_PRESETS.map((p) => <button key={p.when} class="btn sm" onClick={() => void store.remind(c.id, { when: p.when })}>{p.label}</button>)}
-        <button class="btn sm" onClick={() => openRemind(c.id)}>PICK A DATE…</button>
+        <button class="btn sm" aria-keyshortcuts="M" title="Pick a date (M)" onClick={() => openRemind(c.id)}>PICK A DATE…</button>
         {c.remind_at && <button class="btn sm ghost" onClick={() => void store.remind(c.id, { clear: true })}>CLEAR</button>}
       </div>
       <NoticeSwitch store={store} />
-    </Sec>
+    </Fold>
+  );
+}
+
+/** A set reminder at the top of the panel, in the status row: the accent clock, when, the note (or, once due,
+ *  why the session is yours), and CHANGE / CLEAR. Nothing when no reminder is set. */
+export function RemindRow({ c, store }: { c: Card; store: Store }) {
+  const when = remindShort(c);
+  if (!c.remind_at || !when) return null;
+  const title = remindTitle(c) ?? undefined;
+  const note = c.remind_due ? remindReason(c) : c.remind_note;
+  return (
+    <p class={`rrow${c.remind_due ? ' due' : ''}`} title={title}>
+      <span class="rclock" role="img" aria-label={title}><Pix rows={CLOCK} pal={{ '#': 'var(--accent)' }} scale={2} /></span>
+      <b>{c.remind_due ? `Due ${when.toLowerCase()}` : when}</b>
+      {note && <span class="wn"> · {note}</span>}
+      <button class="lnk" aria-keyshortcuts="M" title="Change the reminder (M)" onClick={() => openRemind(c.id)}>CHANGE</button>
+      <button class="lnk" onClick={() => void store.remind(c.id, { clear: true })}>CLEAR</button>
+    </p>
   );
 }

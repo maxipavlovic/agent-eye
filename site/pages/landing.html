@@ -3,8 +3,8 @@
     <div class="hero-eye" data-track aria-hidden="true">{{eye}}</div>
     <div class="hero-text">
       <p class="label">A BOARD FOR YOUR CODING AGENTS</p>
-      <h1>Every coding-agent session on your machine: <mark>found, sorted, resumable.</mark></h1>
-      <p class="pitch">agent-eye keeps a local list of every session, shows where each one stands and what needs you, and puts you back in it with one key. Works with Claude Code and Codex CLI, built for more agents.</p>
+      <h1>Find, sort, resume and finish your coding-agent sessions, <mark>even overnight.</mark></h1>
+      <p class="pitch">agent-eye keeps a local list of every session on your machine, shows where each one stands and what needs you, and puts you back in it with one key. It lists each session's leftovers, and can run planned work while you sleep. Works with Claude Code, Codex, Antigravity and OpenCode.</p>
       <div class="cta">
         <a class="btn big" href="#install">INSTALL</a>
         <a class="btn" href="#demo">TRY THE DEMO</a>
@@ -43,29 +43,44 @@
         <p>It reads the session files your agent already writes. Nothing to wrap, nothing to log by hand. New sessions show up on their own.</p>
       </li>
       <li class="tile">
-        {{sprite:needs_you:4}}
-        <h3>What needs you, on top</h3>
-        <p>Running, Needs you, Waiting on others, Paused, Done. A session stopped on a permission prompt or a question is the first card you see.</p>
-      </li>
-      <li class="tile">
-        {{sprite:note:4}}
-        <h3>State and next step</h3>
-        <p>One line on where each session stands and one on who acts next, plus its pull requests, commits and tickets. Read the board, skip the scrollback.</p>
-      </li>
-      <li class="tile">
         {{sprite:search:4}}
-        <h3>Search all of it</h3>
-        <p>Titles, prompts, replies, PR links and folders. From the board, from the terminal (<code>eye</code> or Ctrl-G), or by asking your agent.</p>
+        <h3>Search that understands you</h3>
+        <p>Word forms, typos, and the PR and ticket links in a session. From the board, from the terminal (<code>eye</code> or Ctrl-G), or by asking your agent.</p>
       </li>
       <li class="tile">
         {{sprite:resume:4}}
         <h3>Back in one move</h3>
-        <p>Enter, or one click, resumes the session where you left it, or forks it. When your agent has already deleted an old transcript, agent-eye puts its own copy back first.</p>
+        <p>Ctrl-G, a few words, Enter: the session resumes where you left it, or forks. When your agent has already deleted an old transcript, agent-eye puts its own copy back first.</p>
       </li>
       <li class="tile">
-        {{sprite:ideas:4}}
-        <h3>Ideas wait as cards</h3>
-        <p>Park an idea with notes and a first prompt. Start it later as a real session, in the right folder, with one click.</p>
+        {{sprite:keep:4}}
+        <h3>Nothing lost</h3>
+        <p>A compressed copy of every transcript. <code>eye export</code> writes one file to take it all to another machine.</p>
+      </li>
+      <li class="tile">
+        {{sprite:needs_you:4}}
+        <h3>Know what needs you</h3>
+        <p>Running, Needs you, Waiting on others, Paused, Done. A session stopped on a permission prompt or a question is the first card you see, with its state and next step.</p>
+      </li>
+      <li class="tile">
+        {{sprite:tidy:4}}
+        <h3>Leftovers, cleaned up</h3>
+        <p>Servers still running, commits on no remote. You stop, remove or copy, and agent-eye asks first. <code>eye forget</code> removes a session for good.</p>
+      </li>
+      <li class="tile">
+        {{sprite:moon:4}}
+        <h3>Night shift</h3>
+        <p>Plan an idea or a session for tonight. It runs while you sleep, in its own worktree or copy, inside your plan, and never pushes. Off until you switch it on.</p>
+      </li>
+      <li class="tile">
+        {{sprite:coin:4}}
+        <h3>What it costs</h3>
+        <p>Tokens and an API-equivalent estimate per session, project and agent, plus where your plan limits stand.</p>
+      </li>
+      <li class="tile">
+        {{sprite:terminal:4}}
+        <h3>Works with your agents</h3>
+        <p>Claude Code, Codex, Antigravity and OpenCode, and alongside T3 Code and <code>claude agents</code>. Local only: no account, no telemetry.</p>
       </li>
     </ul>
   </div>
@@ -78,7 +93,7 @@
       <div class="node">
         <p class="label">YOUR AGENT</p>
         <p>writes every session to disk</p>
-        <code>~/.claude · ~/.codex</code>
+        <code>~/.claude · ~/.codex · …</code>
       </div>
       <div class="arrow" aria-hidden="true">{{sprite:arrow:4}}</div>
       <div class="node core">
@@ -104,7 +119,7 @@
 <section id="install" class="install">
   <div class="wrap">
     <h2 class="sec-h"><span>INSTALL</span></h2>
-    <p class="sec-lead">Pick one. Each puts <code>agent-eye</code> on your PATH. Homebrew works on macOS and Linux. You need macOS 11 or newer, or Linux with glibc 2.35 or newer, and Claude Code or Codex CLI.</p>
+    <p class="sec-lead">Pick one. Each puts <code>agent-eye</code> on your PATH. Homebrew works on macOS and Linux. You need macOS 11 or newer, or Linux with glibc 2.35 or newer, and Claude Code, Codex, Antigravity or OpenCode.</p>
     <div class="blocks">
       <div class="block">
         <p class="label">HOMEBREW</p>
@@ -154,10 +169,10 @@
       <h2 class="sec-h"><span>AGENTS</span></h2>
     </div>
     <div class="text">
-      <p class="lede">Claude Code and Codex CLI. Built for more.</p>
-      <p>agent-eye reads the files each agent already writes, so it works with the Claude Code and Codex CLI you already use. It follows the ones it finds on your machine. Those files are not a public API and can change; if one does, agent-eye may need an update.</p>
-      <p>Codex runs hooks only after you trust them once: open Codex and approve them with <code>/hooks</code>. The code keeps each agent behind one layer, so others such as Gemini CLI can be added, and any of them can be switched off.</p>
-      <p class="fine">agent-eye is an independent project. It is not affiliated with Anthropic or OpenAI.</p>
+      <p class="lede">Claude Code, Codex, Antigravity and OpenCode.</p>
+      <p>agent-eye reads the files each agent already writes, so it works with the agents you already use, and alongside T3 Code and <code>claude agents</code>: the sessions they run are listed like any other, and each card says where it was started (App, Headless, IDE…). It follows the ones it finds on your machine. Those files are not a public API and can change; if one does, agent-eye may need an update.</p>
+      <p>Codex runs hooks only after you trust them once: open Codex and approve them with <code>/hooks</code>. The code keeps each agent behind one layer, so any of them can be switched off.</p>
+      <p class="fine">agent-eye is an independent project. It is not affiliated with Anthropic, OpenAI, Google or OpenCode.</p>
     </div>
   </div>
 </section>
