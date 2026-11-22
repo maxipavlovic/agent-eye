@@ -349,4 +349,14 @@ fn a_continued_night_run_lives_in_its_own_folder_not_in_the_one_its_copied_start
     };
     assert_eq!(cwd(S), "/eye/night/5/wt");
     assert_eq!(cwd(T), "/work/p");
+    // and it belongs to the project it was planned for, not to a project called "wt"
+    let root = |id: &str| -> Option<String> {
+        e.db.conn
+            .query_row("SELECT repo_root FROM session WHERE id=?1", [id], |r| {
+                r.get(0)
+            })
+            .unwrap()
+    };
+    assert_eq!(root(S).as_deref(), Some("/work/p"));
+    assert_eq!(root(T), None);
 }

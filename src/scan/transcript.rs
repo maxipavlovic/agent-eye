@@ -38,24 +38,30 @@ pub(super) fn prompt_title(p: &str) -> String {
     head_chars(&p.split_whitespace().collect::<Vec<_>>().join(" "), 80)
 }
 
-/// The worktree or copy of the night run that made `sid`, when the transcript names a folder outside it.
-/// A continued session's fork starts with the copied conversation of the original folder, but it lives
-/// (and resumes) where the run worked.
-fn night_folder(tx: &Connection, sid: &str, cwd: Option<&str>) -> Option<String> {
-    let wt: String = tx
-        .query_row(
-            "SELECT worktree FROM night_run WHERE run_session_id=?1 AND worktree IS NOT NULL
-             ORDER BY id DESC LIMIT 1",
-            [sid],
-            |r| r.get(0),
-        )
-        .optional()
-        .ok()??;
-    let inside = cwd.is_some_and(|c| {
-        let w = wt.trim_end_matches('/');
-        c == w || c.starts_with(&format!("{w}/"))
-    });
-    (!inside).then_some(wt)
+/// The night run that made `sid`: its worktree or copy (gone after DISCARD) and the folder it was
+/// planned for.
+fn night_run_of(tx: &Connection, sid: &str) -> Option<(Option<String>, String)> {
+    tx.query_row(
+        "SELECT worktree, folder FROM night_run WHERE run_session_id=?1 ORDER BY id DESC LIMIT 1",
+        [sid],
+        |r| Ok((r.get(0)?, r.get(1)?)),
+    )
+    .optional()
+    .ok()?
+}
+
+/// A night run's session lives (and resumes) where the run worked. A continued session's fork starts
+/// with the copied conversation of the original folder, so its transcript names that folder first.
+fn night_cwd(wt: &str, cwd: Option<String>) -> Option<String> {
+    let w = wt.trim_end_matches('/');
+    let inside = cwd
+        .as_deref()
+        .is_some_and(|c| c == w || c.starts_with(&format!("{w}/")));
+    if inside {
+        cwd
+    } else {
+        Some(wt.to_string())
+    }
 }
 
 /// Store what one parse of a transcript found: the session row, its tokens, outputs and search text.
@@ -101,11 +107,19 @@ pub(super) fn apply(
     } else {
         ex.cwd.clone().or(d.cwd.clone())
     };
-    let cwd = night_folder(tx, sid, cwd.as_deref()).or(cwd);
+    let night = night_run_of(tx, sid);
+    let cwd = match night.as_ref().and_then(|n| n.0.as_deref()) {
+        Some(wt) => night_cwd(wt, cwd),
+        None => cwd,
+    };
     if cwd.as_deref().is_some_and(|c| cfg.is_excluded(c)) {
         return Ok(());
     }
-    let root = cwd.as_deref().and_then(|c| super::repo_root(c, repo_cache));
+    let root = match &night {
+        // a night run's session belongs to the project it was planned for, not to its worktree or copy
+        Some((_, folder)) => super::repo_root(folder, repo_cache).or(Some(folder.clone())),
+        None => cwd.as_deref().and_then(|c| super::repo_root(c, repo_cache)),
+    };
 
     let (mut title, mut tsrc) = if reset {
         (None, None)
