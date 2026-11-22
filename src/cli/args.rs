@@ -427,7 +427,7 @@ pub enum Cmd {
         #[arg(long)]
         clear: bool,
     },
-    /// What sessions left behind: servers still running, commits on no remote, ...
+    /// Leftovers: what sessions left behind (servers still running, commits on no remote, ...)
     /// `loose [<session>]` lists them; `loose stop|remove|ignore <key>` and `loose send <session>` act
     #[command(args_conflicts_with_subcommands = true)]
     Loose {

@@ -21,7 +21,7 @@ database and come back when the agent is enabled again.
 |---|---|---|
 | `enabled` | `true` | Write the state and next step of quiet sessions. `false` turns summaries off completely; nothing is sent anywhere. |
 | `agent` | `""` | The agent that writes summaries, for example `"codex"`. Empty: the first enabled agent. It must be enabled. The summaries count against that agent's plan. |
-| `model` | `""` | The model name handed to that agent. Empty: the agent's own cheap model, `haiku` for Claude Code and `gpt-6-luna` for Codex CLI. Model names belong to an agent, so change this when you change `agent`; an account that has no `gpt-6-luna` needs a model it has here. |
+| `model` | `""` | The model name handed to that agent. Empty: the agent's own cheap model, `haiku` for Claude Code, `gpt-6-luna` for Codex CLI, `gemini-3.8-flash-low` for agy and `free` for OpenCode. Model names belong to an agent, so change this when you change `agent`; an account that has no `gpt-6-luna` needs a model it has here. |
 | `quiet_minutes` | `10` | A session is summarized after this many minutes without activity (or when it ended). |
 | `concurrency` | `2` | How many summaries run at the same time. |
 | `auto_days` | `3` | The daemon only summarizes sessions that were active within this many days (`eye summarize` can do older ones). |
@@ -72,7 +72,7 @@ Runs that start by themselves inside a time window. Off until you switch it on. 
 
 | Key | Default | Meaning |
 |---|---|---|
-| `enabled` | `true` | Look for what sessions left behind: servers and shells still running, containers, git worktrees in a scratchpad or with no folder, commits on no remote, modified files nobody committed. On by default because it never changes repos or processes; it keeps what it found in eye's database (the `loose` table). The daemon looks every 5 minutes and shortly after a session stops or ends (at most once in 20 seconds); `eye loose` looks at once. `false` stops the daemon's scans, hides the card chip, the panel section and the picker line, and makes `eye loose` say it is off. Stored results stay until the next scan that is allowed. |
+| `enabled` | `true` | Look for what sessions left behind: servers and shells still running, containers, git worktrees in a scratchpad or with no folder, commits on no remote, modified files nobody committed. On by default because it never changes repos or processes; it keeps what it found in eye's database (the `loose` table). The daemon looks every 5 minutes and shortly after a session stops or ends (at most once in 20 seconds); `eye loose` looks at once. `false` stops the daemon's scans, hides the card's leftovers box, the panel's LEFTOVERS block and the picker line, and makes `eye loose` say it is off. Stored results stay until the next scan that is allowed. |
 | `days` | `30` | Only the folders and repos of sessions active in the last this many days are looked at. A scan reads `ps` and `lsof` (macOS) or `/proc` (Linux), `docker ps` when docker is installed (2 s limit) and a few read-only git commands per repo, each with a time limit. |
 
 ## `[hide]`
@@ -92,6 +92,7 @@ Throw-away sessions ("/clear", "exit", "cd ..") are left out of the board, searc
 | Key | Default | Meaning |
 |---|---|---|
 | `paths` | `[]` | Folder prefixes eye ignores completely: sessions started there are never indexed. |
+| `temp` | `true` | Sessions started in a temp folder (`/tmp`, `/var/tmp`, the system temp folder; Claude Code's scratchpads live there) are not indexed, so test and scratch runs stay off the board. `false` indexes them, e.g. for testing. Sessions indexed before stay until you forget them (`eye forget --folder /tmp`). |
 
 ## `[outputs]`
 

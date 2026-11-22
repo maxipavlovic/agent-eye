@@ -16,7 +16,7 @@ interface Options {
 }
 
 const LANDING = {
-  title: 'agent-eye: every coding-agent session on your machine, found, sorted, resumable',
+  title: 'agent-eye: find, sort, resume and finish your coding-agent sessions, even overnight',
   description: 'Find, sort, resume and finish your coding-agent sessions, even overnight: a local board and terminal picker that show what is running, what needs you and what was left behind. Works with Claude Code, Codex, Antigravity and OpenCode. Open source, local only.',
 };
 

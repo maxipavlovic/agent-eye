@@ -128,13 +128,14 @@ terminal UI does not have, so only ideas run on OpenCode.
 
 - **Claude:** eye copies the session's transcript (restoring it from the archive when Claude deleted it) into the project folder Claude uses for the worktree or the copy, then runs `claude -p <prompt> --resume <id> --fork-session --session-id <new uuid>`. `--session-id` names the fork, so the new session is known at once. The original session is untouched.
 - **agy:** not possible, agy has no fork.
+- **OpenCode:** not possible, its terminal UI has no fork.
 - **Codex:** `codex exec fork <id> <prompt>` (the installed CLI has it) with `-c sandbox_mode="workspace-write"`, started in the worktree or copy.
 
 The prompt of a continued run starts with a note: it works in a copy at `<worktree>`, the earlier conversation mentions paths of the original folder, use the same files under the worktree and change nothing in the original. The note is only advice; the barrier above is what holds. See `security.md`.
 
 ## What a run leaves
 
-When its process ends, eye stores the report (the run's last assistant message, secrets masked, at most 6000 characters), the diff stat (`git diff --stat <base>` plus the files git does not know yet; for a copy the list of changed and new files) and the loose ends of its session (the same list `eye loose` shows), marks its session **Needs you** with the next step "review the night run", and shows a desktop notice ("Night shift: 2 runs finished") when notices are on (`[remind] notify`). Status is `done` (exit 0), `failed` (anything else, with the last line of the log), `stopped` (a limit) or `skipped` (cancelled).
+When its process ends, eye stores the report (the run's last assistant message, secrets masked, at most 6000 characters), the diff stat (`git diff --stat <base>` plus the files git does not know yet; for a copy the list of changed and new files) and the leftovers of its session (the same list `eye loose` shows), marks its session **Needs you** with the next step "review the night run", and shows a desktop notice ("Night shift: 2 runs finished") when notices are on (`[remind] notify`). Status is `done` (exit 0), `failed` (anything else, with the last line of the log), `stopped` (a limit) or `skipped` (cancelled).
 
 **BRING INTO MY REPO** (a repo copy only) runs `git fetch <copy> night/<...>:night/<...>` in your repo after a confirm, and refuses when your repo already has that branch.
 

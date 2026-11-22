@@ -14,7 +14,7 @@ eye usage --week --by session  # top sessions first
 eye usage --week --json        # the same data the board gets
 ```
 
-`--days N`, `--week` (7) and `--month` (30) count local days, today included. `--by` is `project` (the board's project names; temp folders and tiny projects fold into one `other (N)` row), `folder` (one row per folder), `agent`, `model` or `session`. Rows are sorted by estimated cost, then by tokens; the last row is the total. Columns are input, output and cache tokens (cache writes plus cache reads) and the estimated cost.
+`--days N`, `--week` (7) and `--month` (30) count local days, today included. `--by` is `project` (the board's project names; tiny projects, and temp folders when `[exclude] temp = false` lets them in, fold into one `other (N)` row), `folder` (one row per folder), `agent`, `model` or `session`. Rows are sorted by estimated cost, then by tokens; the last row is the total. Columns are input, output and cache tokens (cache writes plus cache reads) and the estimated cost.
 
 The plan limits come first, one line per window, with when they were seen:
 

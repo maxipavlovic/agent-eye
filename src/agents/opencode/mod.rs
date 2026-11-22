@@ -93,12 +93,6 @@ impl OpenCode {
         }
     }
 
-    /// Bring the plugin (which names the `agent-eye` at `eye_bin`) and the command that are
-    /// installed up to date; neither is added.
-    pub fn refresh_skill_with(&self, eye_bin: &Path) -> Result<Option<skill_file::State>> {
-        install::refresh(self, eye_bin)
-    }
-
     /// Install the plugin and the command in this config folder instead of the usual one.
     pub fn with_config_dir(mut self, dir: PathBuf) -> OpenCode {
         self.config_dir = dir;
@@ -448,13 +442,6 @@ impl Agent for OpenCode {
 
     fn install(&self, ctx: &InstallCtx) -> Result<Report> {
         install::install(self, ctx)
-    }
-
-    fn refresh_skill(&self) -> Result<Option<skill_file::State>> {
-        match std::env::current_exe() {
-            Ok(exe) => self.refresh_skill_with(&exe),
-            Err(_) => Ok(None),
-        }
     }
 
     fn uninstall(&self, ctx: &InstallCtx) -> Result<Report> {

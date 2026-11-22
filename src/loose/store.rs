@@ -94,7 +94,7 @@ pub fn counts(db: &Db) -> Result<HashMap<String, usize>> {
 /// Stop listing one stored item. Unknown keys are refused: only what a scan found can be ignored.
 pub fn ignore(db: &Db, key: &str, now: i64) -> Result<()> {
     if get(db, key)?.is_none() {
-        bail!("no such loose end: {key}");
+        bail!("no such leftover: {key}");
     }
     db.conn.execute(
         "INSERT OR REPLACE INTO loose_ignore(key, at) VALUES(?1, ?2)",

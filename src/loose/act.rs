@@ -10,7 +10,7 @@ use anyhow::{anyhow, bail, Result};
 use std::path::Path;
 
 fn item(db: &Db, key: &str, kinds: &[Kind]) -> Result<LooseEnd> {
-    let it = get(db, key)?.ok_or_else(|| anyhow!("no such loose end: {key} (scan again)"))?;
+    let it = get(db, key)?.ok_or_else(|| anyhow!("no such leftover: {key} (scan again)"))?;
     if !kinds.contains(&it.kind) {
         bail!(
             "{} cannot do that to a {}",

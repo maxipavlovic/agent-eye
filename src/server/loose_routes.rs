@@ -62,7 +62,7 @@ async fn act_on(
         let db = open_db(&st)?;
         loose::get(&db, &key)?
             .map(|i| i.session_id)
-            .ok_or_else(|| ApiError::not_found(format!("no such loose end: {key}")))?
+            .ok_or_else(|| ApiError::not_found(format!("no such leftover: {key}")))?
     };
     let note = blocking(move || {
         let db = open_db(&st)?;

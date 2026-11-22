@@ -14,7 +14,7 @@ export interface DocPage {
 }
 
 /** Pages listed first, in this order; any other page follows alphabetically. */
-const ORDER = ['getting-started', 'install', 'terminal', 'board', 'config', 'agents', 'api'];
+const ORDER = ['terminal', 'board', 'config', 'usage', 'night', 'backups', 'agents', 'api'];
 
 const slugify = (s: string) => s.toLowerCase().replace(/`/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'section';
 const plain = (s: string) => unlink(s.replace(/[`*_]/g, ''));

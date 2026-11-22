@@ -33,7 +33,7 @@ agents that only exit. Tests that change things (a reminder, a new idea, a stopp
 affect each other.
 
 The fixture has sessions in every lane, two agents, a Remote session, a very long project name, due
-and later reminders, ideas, usage over ten days with plan limits, left-behind items, a night run in
+and later reminders, ideas, usage over ten days with plan limits, leftovers, a night run in
 each status and a session waiting on a permission.
 
 **Time is fixed.** The binary is built with the `fixed-clock` feature, which makes `EYE_FIXED_NOW_MS`
@@ -46,9 +46,7 @@ its sections; D in the panel; right-click menus; Remind me on the card and in th
 form with TONIGHT; the usage panel; LEFTOVERS (Ignore asks first, Stop ends a process the test
 started); the Tonight list; export (from MORE) downloads one HTML page with the secret masked. The
 worst-case card (every mark, a long project name and title) is screenshot at 260, 310 and 360 px in
-light and dark: the card's frame must hold whatever a card carries. Tests written
-with `test.fixme` wait for keys and menu entries that have not shipped; remove the `fixme` when
-they do.
+light and dark: the card's frame must hold whatever a card carries.
 
 ### Screenshots
 

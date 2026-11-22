@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Makes the board's README media from the offline sample build (npm run look):
 //   board-light.png                   1440x900 at 2x
-//   board-demo.gif                    open a card, search, right-click Mark done
+//   board-demo.gif                    open a card and MORE, search, right-click Mark done, USAGE
 //
 //   node tools/media.mjs [outdir]     (default ../assets)
 //
@@ -122,10 +122,16 @@ const rightClick = async (selector, text) => { await glide(await target(selector
 // 1. the board at rest
 await hold(1500);
 
-// 2. open a card: the session stopped on a permission prompt
-await click('.c-needs_you .card', 'date library');
+// 2. open a card that carries marks on its top edge (Remote, a night run, a reminder, Needs you):
+//    its panel has the night run in one line, and MORE holds the other actions
+await click('.c-needs_you .card', 'Cache the product list');
 await watch(500);
-await hold(2200);
+await hold(2000);
+await click('.page .ptop .more > .btn');
+await watch(300);
+await hold(1800);
+await page.key('Escape');
+await watch(250);
 await page.key('Escape');
 await watch(350);
 
@@ -151,6 +157,13 @@ await click('.ctx button', 'MARK DONE');
 await watch(500);
 await hold(1600);
 await click('.toast .tact');
+await watch(400);
+
+// 5. what it costs: the USAGE panel
+await click('header.hd .btn', 'USAGE');
+await watch(500);
+await hold(2000);
+await page.key('Escape');
 await watch(400);
 // back to the first frame, so the loop is seamless
 for (let i = 5; i >= 0; i--) {

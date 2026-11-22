@@ -288,22 +288,7 @@ fn fold_small(rows: Vec<Row>) -> Vec<Row> {
 
 /// The system's temp and scratch folders: nothing worth a row of its own.
 fn is_temp(p: &str) -> bool {
-    let t = std::env::temp_dir();
-    let t = t.to_string_lossy();
-    let t = t.trim_end_matches('/');
-    let under = |root: &str| !root.is_empty() && (p == root || p.starts_with(&format!("{root}/")));
-    [
-        "/tmp",
-        "/private/tmp",
-        "/var/tmp",
-        "/private/var/tmp",
-        "/var/folders",
-        "/private/var/folders",
-    ]
-    .iter()
-    .any(|r| under(r))
-        || under(t)
-        || under(t.strip_prefix("/private").unwrap_or(t))
+    crate::util::is_temp_folder(p)
 }
 
 /// The name the board's project bar gives a folder: its last segment, `home` for the home folder.

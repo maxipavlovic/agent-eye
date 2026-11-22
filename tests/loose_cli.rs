@@ -167,10 +167,10 @@ fn an_ignored_item_is_not_listed_again_after_a_new_scan() {
     // a key no scan found is refused
     assert!(h
         .err(&["loose", "ignore", "proc:1:1"])
-        .contains("no such loose end"));
+        .contains("no such leftover"));
     assert!(h
         .err(&["loose", "remove", "worktree:/nope", "--yes"])
-        .contains("no such loose end"));
+        .contains("no such leftover"));
 }
 
 #[test]

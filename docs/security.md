@@ -18,7 +18,10 @@ machine, and how to report a problem.
   install says so. Codex runs a hook only after you trust it once with `/hooks`; eye never touches
   Codex's trust or its `notify` setting. For Codex the `PostToolUse` hook runs after every tool call
   and Codex hands it the tool's input and output; eye keeps only the session id from it, so no
-  command, file or output is stored.
+  command, file or output is stored. For agy, `eye install` writes a global plugin `agent-eye`
+  (`~/.gemini/config/plugins/agent-eye/`) with `SessionStart` and `Stop` hooks; each runs
+  `agent-eye hook <Event> --agent agy`, prints `{}` and stores the same short fields (no prompt, no
+  tool output). For OpenCode, see "The OpenCode plugin" below.
 - Resume and Start drive iTerm2 with AppleScript (macOS only; it asks permission once), open a
   `.command` file with `open` (macOS), run a terminal program (`xdg-terminal-exec`,
   `x-terminal-emulator` or `$TERMINAL`; Linux) or copy the command, with `pbcopy` on macOS and
@@ -41,6 +44,7 @@ A run starts an agent that edits files, unattended, so the guards are fixed in c
 - Runs are detached from the daemon (own session) and found again by pid and start time. A limit stops a run with SIGTERM to its process group, after checking pid and start time, and never with SIGKILL.
 - Nothing leaves a copy except through BRING INTO MY REPO: one `git fetch <copy> <branch>:<branch>` in your repo, after your confirm, creating a new branch and refusing to replace one. It does not touch your checked-out branch or your files.
 - The only thing eye deletes is on DISCARD, after your confirm, and only inside `<eye home>/night`: it removes the run's folder, runs `git worktree prune` and `git branch -D` on its own `night/` branch. It refuses while there are uncommitted changes unless the confirm says they will be lost. Nothing is ever deleted by the daemon by itself.
+- agy and OpenCode runs start only with `[night] allow_unsandboxed = true`: neither confines a run's writes the way Claude's sandbox or Codex's `workspace-write` does, so the worktree or copy is their only guard.
 - Night runs are headless sessions in eye's night folder, so they do not count as a session you work in. They keep your usual agent settings and hooks, so eye sees them like any other session.
 
 The prompt, report and diff stat are kept in `night_run` in `eye.db`, as private as the rest of it. The report is masked like any summary.
@@ -96,6 +100,7 @@ folder is tightened on the next run):
 - `archive/`: a **full compressed copy of each transcript**. It holds whatever was in the session,
   including anything sensitive you pasted. It is not masked. Delete `~/.agent-eye/archive` (or run
   `eye uninstall --purge`) to remove it.
+- `night/`: the night runs' worktrees or copies, logs and exit codes, until you DISCARD a run.
 - `backups/`: compressed snapshots of `eye.db` (see [backups.md](backups.md)), the same data as the database, kept as long as the rotation says. Delete the folder to remove them; `[backup] enabled = false` stops new ones.
 - `queue/` (the same hook lines, rotated at 1 MB; one older file is kept), `logs/`, `config.toml`, `board.token`, `ui.json` (board theme, accent colour and layout), `daemon.lock`, `work/`, an empty folder the summary runs in, and `tmp/`, where a copy of an archived session is made while its conversation is read and removed right after.
 
@@ -121,7 +126,8 @@ eye does not read the credential files that sit next to an agent's live-session 
 Only for **summaries**, and only through the agent you already use (for Claude Code: `claude -p`,
 run from an empty folder, with no tools, no MCP servers and no hooks, no transcript kept; for Codex
 CLI: `codex exec --ephemeral --ignore-user-config --ignore-rules -s read-only` from an empty folder,
-nothing kept). For each
+nothing kept; for agy: `agy -p --output-format json --mode plan --sandbox` with a JSON schema; for
+OpenCode: `opencode run --format json --archived`, and the session it makes is deleted afterwards). For each
 quiet session eye sends a short excerpt: the title, the folder and branch, the first prompt (up to
 2,000 characters), the agent's own recap of the session, the last 30 messages (each cut to 1,500
 characters), one line per tool call (no file contents, no tool output), the outputs list, the names

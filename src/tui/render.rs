@@ -384,7 +384,7 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     // hint / message
     let hint_full = "↑↓ move   Enter resume   Ctrl-F fork   Ctrl-T talk   Ctrl-R remind   Ctrl-L leftovers   Ctrl-Y copy   Ctrl-X hide   Tab preview   Ctrl-A hidden+archive   Esc quit";
     let hint_mid =
-        "↑↓  Enter resume  ^F fork  ^T talk  ^R remind  ^L left  ^Y copy  ^X hide  Tab preview  ^A all  Esc quit";
+        "↑↓  Enter resume  ^F fork  ^T talk  ^R remind  ^L leftovers  ^Y copy  ^X hide  Tab preview  Esc quit";
     let hint_short = "Enter resume  ^F fork  ^T talk  ^Y copy  ^X hide  Esc quit";
     let hint_min = "Enter resume  ^F fork  ^T talk  Esc quit";
     let w = foot.width as usize;

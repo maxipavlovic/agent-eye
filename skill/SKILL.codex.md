@@ -5,7 +5,7 @@ description: Find, resume and tidy up Codex CLI sessions with eye, and see what 
 
 # eye
 
-`eye` (the `agent-eye` binary; `eye` is its alias) indexes every Codex CLI session on this machine (title, folder, state, next step, outputs) and has an optional web board: `eye board on` turns it on (then `eye board` prints its URL), `eye board off` turns it off. It is off by default.
+`eye` (the `agent-eye` binary; `eye` is its alias) indexes every Codex CLI session on this machine (and those of any other coding agent eye watches) (title, folder, state, next step, outputs) and has an optional web board: `eye board on` turns it on (then `eye board` prints its URL), `eye board off` turns it off. It is off by default.
 
 ## `/eye` with nothing else
 
@@ -15,7 +15,7 @@ When the user runs `/eye` and asks nothing more, give a short overview of where 
 2. Write at most about 12 lines:
    - **Needs you** (newest first): the title, the `next` line, and the age. A due reminder (`remind_due`) says so.
    - **Running now**: titles only.
-   - When `eye loose --json` lists items, one line, e.g. "3 sessions left things behind: 2 servers still running, 1 repo with commits on no remote (`eye loose`)".
+   - When `eye loose --json` lists items, one line on the leftovers, e.g. "Leftovers: 2 servers still running, 1 repo with commits on no remote (`eye loose`)".
    - When `eye night ls` shows runs planned for tonight, one line with their count.
 3. End with one line of what they can ask, e.g. "Ask me *where did we…*, *park this idea…*, *what did this week cost?*".
 
@@ -52,15 +52,19 @@ Confirm in one line what you changed.
 
 ## Cost and plan limits
 
-`eye usage --week` (or `--month`, `--days N`; `--by project|agent|model|session`) prints tokens and an API-equivalent cost estimate with the plan limits on top. Say it is an estimate, not their bill.
+`eye usage --week` (or `--month`, `--days N`; `--by project|folder|agent|model|session`) prints tokens and an API-equivalent cost estimate with the plan limits on top. Say it is an estimate, not their bill.
 
-## What sessions left behind
+## Leftovers
 
-`eye loose [<session>] --json` lists servers still running, containers, worktrees, commits on no remote and uncommitted files, each with the session that left it. Only list them. Stopping or removing something (`eye loose stop|remove <key>`) is the user's call: run it only when they ask, and only for the item they named.
+`eye loose [<session>] --json` lists each session's leftovers: servers still running, containers, worktrees, commits on no remote and uncommitted files, each with the session that left it. Only list them. Stopping or removing something (`eye loose stop|remove <key>`) is the user's call: run it only when they ask, and only for the item they named.
 
 ## Night shift
 
 `eye night ls` shows what is planned for tonight and how runs went. `eye night add idea:<n>` or `eye night add <session> --prompt "<what to do tonight>"` plans one (it needs `[night] enabled = true`, which only the user turns on). Plan only when the user asks.
+
+## Moving to another machine
+
+`eye export` writes one `.eyepack` with everything eye knows; `eye import <file>` merges one in (it shows the plan and asks first). Run them only when the user asks.
 
 ## Removing a session
 

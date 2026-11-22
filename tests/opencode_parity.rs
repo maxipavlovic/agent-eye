@@ -512,14 +512,6 @@ fn install_adds_the_plugin_and_the_command_next_to_other_ones_and_uninstall_take
         moved.iter().any(|c| !c.ok && c.msg.contains("out of date")),
         "{moved:?}"
     );
-    // a new version of eye updates both
-    assert_eq!(
-        oc.refresh_skill_with(Path::new("/new/agent-eye")).unwrap(),
-        Some(agent_eye::agents::skill_file::State::Updated)
-    );
-    assert!(std::fs::read_to_string(cfg.join("plugins/agent-eye.js"))
-        .unwrap()
-        .contains("/new/agent-eye"));
     // uninstall
     let rep = oc.uninstall(&ctx(eye)).unwrap();
     assert_eq!(rep.rows[0].text, "plugin removed, /eye command removed");

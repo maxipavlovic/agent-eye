@@ -279,11 +279,6 @@ pub trait Agent: Send + Sync + std::fmt::Debug {
     fn install(&self, _ctx: &InstallCtx) -> Result<Report> {
         Ok(Report::default())
     }
-    /// Bring the `/eye` skill this agent already has up to date with this version, without adding
-    /// one that was never installed. The daemon calls it when it starts, so an upgrade reaches it.
-    fn refresh_skill(&self) -> Result<Option<skill_file::State>> {
-        Ok(None)
-    }
     /// Remove what `install` added. An agent with nothing of eye's to remove says nothing.
     fn uninstall(&self, _ctx: &InstallCtx) -> Result<Report> {
         Ok(Report::default())

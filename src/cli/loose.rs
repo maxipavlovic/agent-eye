@@ -76,7 +76,7 @@ fn act(g: &Global, key: &str, yes: bool, what: Act) -> Result<()> {
     if loose::get(&env.db, key)?.is_none() {
         loose::scan_and_store(&env.db, &env.cfg, &env.agents, now_ms())?;
     }
-    let item = loose::get(&env.db, key)?.with_context(|| format!("no such loose end: {key}"))?;
+    let item = loose::get(&env.db, key)?.with_context(|| format!("no such leftover: {key}"))?;
     let question = item
         .confirm()
         .with_context(|| format!("eye does not act on a {}", item.kind.as_str()))?;

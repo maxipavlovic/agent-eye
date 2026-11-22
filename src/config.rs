@@ -34,6 +34,7 @@ name = ""          # your name as older summaries wrote it, e.g. "Sam": lines st
 
 [exclude]
 paths = []         # cwd prefixes eye ignores completely
+temp = true        # sessions started in a temp folder (/tmp, the system temp folder, Claude's scratchpads) are not indexed; false indexes them, e.g. for testing
 
 [outputs]
 jira_projects = [] # empty = learn project prefixes; or list them, e.g. ["PROJ", "ACME"]
@@ -87,7 +88,7 @@ const KNOWN: &[(&str, &[&str])] = &[
     ("user", &["name"]),
     ("board", &["enabled", "port", "resume", "done_days"]),
     ("remind", &["notify"]),
-    ("exclude", &["paths"]),
+    ("exclude", &["paths", "temp"]),
     ("outputs", &["jira_projects", "jira_url"]),
     (
         "hide",
@@ -486,10 +487,21 @@ pub struct RemindCfg {
 }
 
 /// `[exclude]`: folders that are never indexed.
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct ExcludeCfg {
     pub paths: Vec<String>,
+    /// Sessions started in a temp folder (test runs, scratch work) are not indexed. True by default.
+    pub temp: bool,
+}
+
+impl Default for ExcludeCfg {
+    fn default() -> Self {
+        ExcludeCfg {
+            paths: vec![],
+            temp: true,
+        }
+    }
 }
 
 impl Config {
@@ -576,12 +588,13 @@ impl Config {
         c
     }
 
-    /// Is `cwd` inside an excluded folder?
+    /// Is `cwd` inside an excluded folder, or (with `[exclude] temp`, the default) a temp folder?
     pub fn is_excluded(&self, cwd: &str) -> bool {
         self.exclude
             .paths
             .iter()
             .any(|p| !p.is_empty() && cwd.starts_with(p.as_str()))
+            || (self.exclude.temp && crate::util::is_temp_folder(cwd))
     }
 }
 
@@ -893,6 +906,18 @@ mod tests {
         assert!(!c.is_excluded("/x"));
         let c = Config::parse("[exclude]\npaths=[\"/x\"]").unwrap();
         assert!(c.is_excluded("/x/y"));
+        // temp folders are left out unless `temp = false`
+        let tmp = std::env::temp_dir().join("eye-x");
+        for p in [
+            "/tmp/x",
+            "/private/tmp/claude-501/p/s/scratchpad",
+            tmp.to_str().unwrap(),
+        ] {
+            assert!(c.is_excluded(p), "{p}");
+        }
+        assert!(!c.is_excluded("/tmpfoo/x") && !c.is_excluded("/Users/me/code/x"));
+        let c = Config::parse("[exclude]\ntemp = false").unwrap();
+        assert!(!c.is_excluded("/tmp/x") && !c.is_excluded(tmp.to_str().unwrap()));
         assert!(c.summary.enabled);
         assert!(c.hide.trivial);
         assert_eq!(c.hide.max_reply_chars, 200);

@@ -33,7 +33,9 @@ impl World {
             home: tmp.path().join("eye"),
         };
         paths.ensure_home().unwrap();
-        let mut cfg = Config::parse("[agents]\nenabled = [\"claude\"]\n").unwrap();
+        // the test's sessions live in temp folders, which eye leaves out by default
+        let mut cfg =
+            Config::parse("[agents]\nenabled = [\"claude\"]\n[exclude]\ntemp = false\n").unwrap();
         cfg.override_agent_dir("claude", claude.clone());
         cfg.night_dir = Some(paths.home.join("night"));
         let db = Db::open(&paths.db_path()).unwrap();

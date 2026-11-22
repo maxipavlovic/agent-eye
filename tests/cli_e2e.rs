@@ -368,7 +368,7 @@ fn loose_stop_asks_first_and_ends_a_process_this_test_started() {
     // the item is gone, and a second stop says so instead of killing a stranger
     let again = w.err(&["loose", "stop", &key, "--yes"]);
     assert!(
-        again.contains("no such loose end") || again.contains("not running"),
+        again.contains("no such leftover") || again.contains("not running"),
         "{again}"
     );
 }
@@ -463,7 +463,7 @@ fn loose_remove_and_stop_refuse_the_wrong_kind_and_an_unknown_key() {
         .contains("does not act on"));
     assert!(w
         .err(&["loose", "remove", "worktree:/nowhere", "--yes"])
-        .contains("no such loose end"));
+        .contains("no such leftover"));
 }
 
 #[test]

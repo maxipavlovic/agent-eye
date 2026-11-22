@@ -342,10 +342,6 @@ impl Agent for Codex {
         install::preflight(self, ctx)
     }
 
-    fn refresh_skill(&self) -> Result<Option<crate::agents::skill_file::State>> {
-        crate::agents::skill_file::refresh(&self.skill_path(), install::SKILL_MD)
-    }
-
     fn install(&self, ctx: &InstallCtx) -> Result<Report> {
         install::install(self, ctx)
     }

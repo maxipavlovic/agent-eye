@@ -4,6 +4,27 @@ use jiff::{
     Timestamp, Zoned,
 };
 
+/// Is `p` in one of the system's temp and scratch folders (`/tmp`, `/var/tmp`, the per-user temp folder;
+/// Claude Code's scratchpads live there)?
+pub fn is_temp_folder(p: &str) -> bool {
+    let t = std::env::temp_dir();
+    let t = t.to_string_lossy();
+    let t = t.trim_end_matches('/');
+    let under = |root: &str| !root.is_empty() && (p == root || p.starts_with(&format!("{root}/")));
+    [
+        "/tmp",
+        "/private/tmp",
+        "/var/tmp",
+        "/private/var/tmp",
+        "/var/folders",
+        "/private/var/folders",
+    ]
+    .iter()
+    .any(|r| under(r))
+        || under(t)
+        || under(t.strip_prefix("/private").unwrap_or(t))
+}
+
 /// Shell-quote with single quotes: `it's` becomes `'it'\''s'`.
 pub fn shell_quote(s: &str) -> String {
     format!("'{}'", s.replace('\'', "'\\''"))

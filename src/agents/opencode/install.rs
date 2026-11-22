@@ -92,26 +92,6 @@ pub fn install(c: &OpenCode, ctx: &InstallCtx) -> Result<Report> {
     Ok(rep)
 }
 
-/// After an upgrade: bring the plugin and the command that are there up to date. Neither is added.
-pub fn refresh(c: &OpenCode, eye_bin: &Path) -> Result<Option<skill_file::State>> {
-    let plugin = if is_ours(&c.plugin_path()) {
-        skill_file::refresh(&c.plugin_path(), &plugin_text(eye_bin))?
-    } else {
-        None
-    };
-    let command = skill_file::refresh(&c.command_path(), COMMAND_MD)?;
-    Ok(match (plugin, command) {
-        (None, None) => None,
-        (Some(skill_file::State::Unchanged), Some(skill_file::State::Unchanged)) => {
-            Some(skill_file::State::Unchanged)
-        }
-        (Some(skill_file::State::Unchanged), None) | (None, Some(skill_file::State::Unchanged)) => {
-            Some(skill_file::State::Unchanged)
-        }
-        _ => Some(skill_file::State::Updated),
-    })
-}
-
 pub fn uninstall(c: &OpenCode, ctx: &InstallCtx) -> Result<Report> {
     let mut rep = Report::default();
     let dry = ctx.dry_run;

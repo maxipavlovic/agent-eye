@@ -532,13 +532,6 @@ fn install_adds_a_plugin_and_the_skill_and_uninstall_takes_only_them() {
             .any(|c| !c.ok && c.msg.contains("SessionStart")),
         "{checks:?}"
     );
-    // the daemon's refresh updates an installed skill and adds none
-    std::fs::write(config.join("skills/eye/SKILL.md"), "old").unwrap();
-    assert!(a.refresh_skill().unwrap().is_some());
-    assert_eq!(
-        std::fs::read_to_string(config.join("skills/eye/SKILL.md")).unwrap(),
-        skill
-    );
     // uninstall
     let rep = a.uninstall(&ctx(false)).unwrap();
     assert_eq!(rep.rows[0].text, "hooks removed, skill removed");
@@ -547,7 +540,6 @@ fn install_adds_a_plugin_and_the_skill_and_uninstall_takes_only_them() {
         config.join("plugins/mine/hooks.json").is_file()
             && config.join("skills/other/SKILL.md").is_file()
     );
-    assert!(a.refresh_skill().unwrap().is_none(), "never adds one");
     assert!(a.uninstall(&ctx(false)).unwrap().rows.is_empty());
 }
 

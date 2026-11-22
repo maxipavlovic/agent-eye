@@ -68,7 +68,7 @@ impl Home {
         std::fs::create_dir_all(h.join(".agent-eye")).unwrap();
         std::fs::write(
             h.join(".agent-eye/config.toml"),
-            "[night]\nallow_unsandboxed = true\n",
+            "[night]\nallow_unsandboxed = true\n[exclude]\ntemp = false\n",
         )
         .unwrap();
         Home { dir }
@@ -287,7 +287,7 @@ fn a_rate_limited_run_starts_again_on_the_other_agent_when_it_allows_it() {
     std::fs::create_dir_all(h.eye_home()).unwrap();
     std::fs::write(
         h.eye_home().join("config.toml"),
-        "[agents]\nenabled = [\"claude\", \"codex\"]\n[night]\nallow_unsandboxed = true\n",
+        "[agents]\nenabled = [\"claude\", \"codex\"]\n[night]\nallow_unsandboxed = true\n[exclude]\ntemp = false\n",
     )
     .unwrap();
     let repo = h.repo();

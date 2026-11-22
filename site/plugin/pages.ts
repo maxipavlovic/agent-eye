@@ -86,7 +86,7 @@ function footer(): string {
       <a href="${REPO}/issues">Issues</a>
       <a href="{{base}}docs/">Docs</a>
     </nav>
-    <p class="fine">agent-eye is an independent open-source project. It is not affiliated with, endorsed by or sponsored by Anthropic. Claude and Claude Code are trademarks of Anthropic.</p>
+    <p class="fine">agent-eye is an independent open-source project. It is not affiliated with, endorsed by or sponsored by Anthropic, OpenAI, Google or OpenCode. Claude and Claude Code are trademarks of Anthropic; Codex is a trademark of OpenAI.</p>
   </div>
 </footer>`;
 }

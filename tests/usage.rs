@@ -102,6 +102,9 @@ impl Env {
         };
         paths.ensure_home().unwrap();
         let mut cfg = Config::load_or_create(&paths.config_path()).unwrap();
+        // the test's sessions live in temp folders, which eye leaves out by default
+        index_temp(&paths.config_path());
+        cfg.exclude.temp = false;
         cfg.override_agent_dir("claude", claude);
         let db = Db::open(&paths.db_path()).unwrap();
         Env {
@@ -404,7 +407,7 @@ impl Codex {
         };
         paths.ensure_home().unwrap();
         let cfg = Config::parse(&format!(
-            "[agents]\nenabled = [\"codex\"]\n[agents.codex]\ndir = \"{}\"\n",
+            "[agents]\nenabled = [\"codex\"]\n[agents.codex]\ndir = \"{}\"\n[exclude]\ntemp = false\n",
             codex.display()
         ))
         .unwrap();
@@ -477,4 +480,10 @@ fn the_newest_codex_limits_are_kept_with_the_time_they_were_seen() {
     );
     assert!(l.seen_at > 1_790_000_000_000);
     assert_eq!(l.plan.as_deref(), Some("go"));
+}
+
+/// Let eye index sessions in temp folders, in the config file a CLI run reads (`[exclude] temp`).
+fn index_temp(config: &std::path::Path) {
+    let t = std::fs::read_to_string(config).unwrap();
+    std::fs::write(config, t.replacen("temp = true", "temp = false", 1)).unwrap();
 }

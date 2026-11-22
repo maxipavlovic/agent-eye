@@ -420,10 +420,6 @@ impl Agent for Agy {
         install::install(self, ctx)
     }
 
-    fn refresh_skill(&self) -> Result<Option<skill_file::State>> {
-        skill_file::refresh(&self.skill_path(), install::SKILL_MD)
-    }
-
     fn uninstall(&self, ctx: &InstallCtx) -> Result<Report> {
         install::uninstall(self, ctx)
     }
