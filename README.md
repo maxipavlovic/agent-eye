@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <b>Find, sort, resume and finish your coding-agent sessions, even overnight.</b><br>
+  <b>Keeps an eye on your agent sessions, even overnight.</b><br>
   A local index, a terminal picker and an optional pixel-art board. macOS and Linux.
 </p>
 

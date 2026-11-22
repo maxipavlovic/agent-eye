@@ -16,8 +16,8 @@ interface Options {
 }
 
 const LANDING = {
-  title: 'agent-eye: find, sort, resume and finish your coding-agent sessions, even overnight',
-  description: 'Find, sort, resume and finish your coding-agent sessions, even overnight: a local board and terminal picker that show what is running, what needs you and what was left behind. Works with Claude Code, Codex, Antigravity and OpenCode. Open source, local only.',
+  title: 'agent-eye: keeps an eye on your agent sessions, even overnight',
+  description: 'Keeps an eye on your agent sessions, even overnight: a local board and terminal picker that show what is running, what needs you and what was left behind. Works with Claude Code, Codex, Antigravity and OpenCode. Open source, local only.',
 };
 
 /** On its own page the demo board gets a way back to the site; inside the site's frame it does not. */
