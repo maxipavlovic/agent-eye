@@ -46,4 +46,23 @@ describe('where a session was started', () => {
     const total = root.querySelectorAll('.card').length;
     expect(chips.length).toBeLessThan(total);
   });
+
+  it('a night run\'s card has its night mark and no second Night chip', async () => {
+    const src = fixtureSource(true);
+    const board = src.board;
+    src.board = async () => {
+      const b = await board();
+      const c = b.columns.flatMap((col) => col.cards).find((x) => x.night)!;
+      c.origin = 'night';
+      return b;
+    };
+    const store = createStore(src);
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    mounted = root;
+    render(h(Root, { store }), root);
+    await vi.waitFor(() => expect(root.querySelector('.card .mk.night')).not.toBeNull());
+    const card = root.querySelector('.card .mk.night')!.closest('.card')!;
+    expect(card.querySelector('.mk.origin')).toBeNull();
+  });
 });

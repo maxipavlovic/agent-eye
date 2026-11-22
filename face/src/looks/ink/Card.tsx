@@ -113,7 +113,8 @@ export function CardView({ c, store, i, kind, tag }: { c: Card; store: Store; i:
         <span class="ml">
           {ptag}
           {agent}
-          <OriginMark origin={c.origin} raw={c.origin_raw} />
+          {/* a night run's card already says so with its night mark */}
+          <OriginMark origin={c.night && c.origin === 'night' ? null : c.origin} raw={c.origin_raw} />
           {c.remote_url && <RemoteMark />}
         </span>
         <span class="mr"><Tok t={c.tokens} /><span class="age">{age}</span></span>
