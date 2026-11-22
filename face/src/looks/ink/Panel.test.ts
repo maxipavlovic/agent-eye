@@ -7,8 +7,10 @@ import { fixtureSource } from '../../data/fixture';
 import { keepPrefsLocal } from '../../prefs';
 import { createStore } from '../../store';
 import { Root } from './Root';
-import { keyHelp, KEY_LIST } from './KeyHelp';
-import { tonightOpen } from './Night';
+import { IDEA_KEY_LIST, keyHelp, KEY_LIST } from './KeyHelp';
+import { closeForget } from './Forget';
+import { ideaForm } from './IdeaForm';
+import { nightAsk, tonightOpen } from './Night';
 import { remindForm } from './Remind';
 import { usagePanel } from './Usage';
 import { resetFolds } from './Sections';
@@ -21,7 +23,7 @@ beforeAll(() => {
   Element.prototype.scrollIntoView ??= () => {};
   Element.prototype.scrollTo ??= () => {};
 });
-beforeEach(() => { localStorage.clear(); resetFolds(); tonightOpen.value = null; keyHelp.value = false; remindForm.value = null; usagePanel.value = false; });
+beforeEach(() => { localStorage.clear(); resetFolds(); closeForget(); tonightOpen.value = null; nightAsk.value = null; ideaForm.value = null; keyHelp.value = false; remindForm.value = null; usagePanel.value = false; });
 afterEach(() => {
   if (mounted) { render(null, mounted); mounted.remove(); mounted = null; }
   document.body.innerHTML = '';
@@ -187,6 +189,65 @@ describe('the panel keys and the keys list', () => {
     expect(m.$('.forget')).toBeNull();
     press('x');
     await vi.waitFor(() => expect(m.$('.forget')).not.toBeNull());
+  });
+});
+
+describe("an idea's panel", () => {
+  const openIdea = async (title: string, over: Partial<Source> = {}) => {
+    const m = await mount(over);
+    m.$$('.card.idea').find((c) => text(c).includes(title))!.click();
+    await vi.waitFor(() => expect(m.$('.page .acts')).not.toBeNull());
+    return m;
+  };
+  const started = () => {
+    const calls: Array<[number, boolean]> = [];
+    const startIdea: Source['startIdea'] = async (id, background) => {
+      calls.push([id, background]);
+      return { dry_run: true, mode: 'bg', command: 'claude', note: '', session_id: null, job: null, creates_folder: false };
+    };
+    return { calls, startIdea };
+  };
+
+  it('has START, IN BACKGROUND, TONIGHT and EDIT in one row, and REMIND ME and ARCHIVE in MORE', async () => {
+    const m = await openIdea('Shortcut list');
+    const rows = m.$$('.page > .acts');
+    expect(rows.length).toBe(1);
+    expect(m.$$('.page > .acts .btn').map(text)).toEqual(['START', 'IN BACKGROUND', 'TONIGHT', 'EDIT']);
+    m.$$('.page .ptop button').find((b) => text(b) === 'MORE ▾')!.click();
+    await vi.waitFor(() => expect(m.$('.page .more .menu')).not.toBeNull());
+    expect(m.$$('.page .more [role=menuitem] span').map(text)).toEqual(['REMIND ME…', 'ARCHIVE']);
+  });
+
+  it('S starts it, B starts it in the background, E edits it and T opens the plan for tonight', async () => {
+    const s = started();
+    const m = await openIdea('Shortcut list', { startIdea: s.startIdea });
+    const id = m.store.detail.value!.idea_id!;
+    press('s');
+    await vi.waitFor(() => expect(s.calls).toEqual([[id, false]]));
+    await tick();
+    press('b');
+    await vi.waitFor(() => expect(s.calls).toEqual([[id, false], [id, true]]));
+    press('t');
+    await vi.waitFor(() => expect(m.$('.page form.nplan')).not.toBeNull());
+    (document.activeElement as HTMLElement | null)?.blur();
+    press('e');
+    await vi.waitFor(() => expect(ideaForm.value).toEqual({ edit: m.store.detail.value!.id }));
+  });
+
+  it('B on an idea with no prompt opens the form on the prompt instead', async () => {
+    const s = started();
+    const m = await openIdea('Migration guide', { startIdea: s.startIdea });
+    press('b');
+    await vi.waitFor(() => expect(ideaForm.value).toEqual({ edit: m.store.detail.value!.id, focus: 'prompt' }));
+    expect(s.calls).toEqual([]);
+  });
+
+  it('? lists the keys of an idea', async () => {
+    const m = await openIdea('Shortcut list');
+    press('?', { shiftKey: true });
+    await vi.waitFor(() => expect(m.$('.keyhelp')).not.toBeNull());
+    expect(m.$$('.keyhelp dt').map(text)).toEqual(IDEA_KEY_LIST.map(([k]) => k));
+    expect(text(m.$('.keyhelp .hint'))).toContain("an idea's panel");
   });
 });
 

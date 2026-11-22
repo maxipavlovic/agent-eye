@@ -1,4 +1,4 @@
-// Screenshots of the real page: the board in both layouts, the panel, the menu, the idea form and
+// Screenshots of the real page: the board in both layouts, the panel, an idea's panel, the menu, the idea form and
 // the usage panel, light and dark, at two widths. Baselines are made by `scripts/e2e.sh --update`
 // in the pinned Playwright container (see docs/testing.md). The server clock, the browser clock
 // and the time zone are fixed, so what the page says about time is the same on every run.
@@ -22,6 +22,10 @@ const VIEWS: Record<string, (p: Page) => Promise<void>> = {
     // a card that is fully in view at 1000 px, so the click does not scroll the lanes
     await card(p, /Fix stale tokens/).click({ button: 'right' });
     await expect(p.getByRole('menu')).toBeVisible();
+  },
+  'idea-panel': async (p) => {
+    await card(p, /Write a changelog generator/).click();
+    await expect(p.getByRole('heading', { level: 2, name: /Write a changelog generator/ })).toBeVisible();
   },
   'idea-form': async (p) => {
     await p.getByRole('button', { name: '+ IDEA' }).click();

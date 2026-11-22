@@ -14,7 +14,7 @@ import { keyHelp } from './KeyHelp';
 import { hideSession, Keyed, MoveMenu, QuickMove } from './Move';
 import { Next } from './Card';
 import { Leftovers } from './Loose';
-import { canContinueTonight, ContinueTonight, NightRunLine, NightRunSection, TonightButton, TonightIdea, tonightOpen } from './Night';
+import { canContinueTonight, ContinueTonight, NightRunLine, NightRunSection, TonightButton, TonightIdea, TonightIdeaButton, tonightOpen } from './Night';
 import { openRemind, RemindPanel, RemindRow } from './Remind';
 import { originChip, RemoteMark, Sigil } from './pieces';
 import { Kids, Outputs, Running, Sec, TokenSec, Topics, Where } from './Sections';
@@ -30,22 +30,30 @@ const ZIG = (() => {
   return `polygon(${pts.join(',')})`;
 })();
 
+/** What an idea's START, IN BACKGROUND and EDIT do; S, B and E do the same. False: nothing to do (the folder cannot be used). */
+export function ideaAct(store: Store, d: CardDetail, what: 'start' | 'background' | 'edit'): boolean {
+  if (what === 'edit') { ideaForm.value = { edit: d.id }; return true; }
+  if (startButton(d).blocked) return false;
+  // in the background it needs a prompt: without one, the form opens on it
+  if (what === 'background' && !d.prompt) ideaForm.value = { edit: d.id, focus: 'prompt' };
+  else void store.startIdea(d, what === 'background');
+  return true;
+}
+
 /** An idea's panel: start it, change it, and what it keeps (the notes stay here; only the prompt is sent). */
 function IdeaBody({ d, store }: { d: CardDetail; store: Store }) {
-  const edit = (focus?: 'prompt') => { ideaForm.value = { edit: d.id, focus }; };
   const start = startButton(d);
   return (
     <>
+      {/* one row; REMIND ME and ARCHIVE are in MORE */}
       <div class="acts">
-        <button class="btn big" disabled={!!start.blocked} title={start.blocked ?? undefined} onClick={() => void store.startIdea(d, false)}>{start.label}</button>
-        <button class="btn" disabled={!!start.blocked} title={d.prompt ? `${d.agent_name} works on it without you` : 'Needs a prompt first'} onClick={() => (d.prompt ? void store.startIdea(d, true) : edit('prompt'))}>IN BACKGROUND</button>
-        <button class="btn" onClick={() => edit()}>EDIT</button>
+        <button class="btn big" disabled={!!start.blocked} aria-keyshortcuts="S" title={start.blocked ?? 'Start it now (S)'} onClick={() => ideaAct(store, d, 'start')}><Keyed label={start.label} k="s" /></button>
+        <button class="btn" disabled={!!start.blocked} aria-keyshortcuts="B" title={d.prompt ? `${d.agent_name} works on it without you (B)` : 'Needs a prompt first (B)'} onClick={() => ideaAct(store, d, 'background')}><Keyed label="IN BACKGROUND" k="b" /></button>
+        <TonightIdeaButton d={d} store={store} />
+        <button class="btn" aria-keyshortcuts="E" title="Edit the idea (E)" onClick={() => ideaAct(store, d, 'edit')}><Keyed label="EDIT" k="e" /></button>
       </div>
-      {store.night.value && <TonightIdea d={d} store={store} />}
+      <TonightIdea d={d} store={store} />
       {(start.blocked || folderMissing(d)) && <p class="fnote" role="status">{start.blocked ?? d.folder_note}</p>}
-      <div class="acts">
-        <button class="btn ghost" onClick={() => { void store.move(d.id, 'archive').then(() => store.close()); }}>ARCHIVE</button>
-      </div>
       <Sec t="NOTES">{d.notes ? <p class="notes"><Hl s={d.notes} /></p> : <p class="dim">None.</p>}</Sec>
       <Sec t={`PROMPT FOR ${d.agent_name.toUpperCase()}`}>
         {d.prompt ? <blockquote class="prompt first"><Hl s={d.prompt} /></blockquote> : <p class="dim">None: START opens {d.agent_name} in the folder and waits for you.</p>}
@@ -109,8 +117,10 @@ export function exportSession(id: string) {
 /** One action in MORE, with the key that does the same. */
 interface MoreItem { label: string; key?: string; title: string; run: () => void }
 
-/** What a session can do besides moving and RESUME, each with its key: MORE opens them under the action row. */
+/** What a card can do besides its main buttons, each with its key: MORE opens them in the top bar. An idea has REMIND ME and ARCHIVE. */
 function moreItems(d: CardDetail, store: Store): MoreItem[] {
+  const archive: MoreItem = { label: 'ARCHIVE', title: 'Out of the lanes, into the archive', run: () => { void store.move(d.id, 'archive').then(() => store.close()); } };
+  if (d.kind === 'idea') return [{ label: 'REMIND ME…', key: 'M', title: 'Pick when eye moves it to Needs you', run: () => openRemind(d.id) }, archive];
   const out: MoreItem[] = [];
   if (d.resumable && d.resume_cmd) out.push({ label: 'FORK', key: 'F', title: 'Resume as a new session branched from this one', run: () => void store.resume(d.id, true) });
   if (d.resume_cmd) out.push({ label: 'COPY RESUME COMMAND', key: 'C', title: 'Copy the command that resumes it', run: () => copy(d.resume_cmd!, store) });
@@ -119,18 +129,19 @@ function moreItems(d: CardDetail, store: Store): MoreItem[] {
   out.push({ label: 'REMIND ME…', key: 'M', title: 'Pick when eye moves it to Needs you', run: () => openRemind(d.id) });
   out.push({ label: 'HIDE', key: 'H', title: 'Hide this session from the board', run: () => hideSession(store, d.id) });
   out.push({ label: 'FORGET…', key: 'X', title: 'Remove this session from eye, and optionally from its agent', run: () => openForget(d) });
-  out.push({ label: 'ARCHIVE', title: 'Out of the lanes, into the archive', run: () => { void store.move(d.id, 'archive').then(() => store.close()); } });
+  out.push(archive);
   return out;
 }
 
-/** MORE ▾: the session's other actions in a small menu in the panel's top bar; a click elsewhere, or Esc, closes it. */
+/** MORE ▾: the card's other actions in a small menu in the panel's top bar; a click elsewhere, or Esc, closes it. */
 function More({ d, store }: { d: CardDetail; store: Store }) {
   const open = useSignal(false);
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open.value) return;
     const away = (e: PointerEvent) => { if (!box.current?.contains(e.target as Node)) open.value = false; };
-    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); open.value = false; } };
+    // still listening for a moment after it closed: an Esc then is the panel's
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape' && open.peek()) { e.stopPropagation(); open.value = false; } };
     addEventListener('pointerdown', away, true);
     addEventListener('keydown', esc, true);
     box.current?.querySelector<HTMLElement>('[role=menuitem]')?.focus({ preventScroll: true });
@@ -187,9 +198,9 @@ export function Detail({ store, walk }: { store: Store; walk: Walk }) {
   return (
     <HlWords.Provider value={re}>
       <div class="page" ref={ref}>
-        {/* the top bar's right end: MORE (a session's other actions), the keys list and close */}
+        {/* the top bar's right end: MORE (the card's other actions), the keys list and close */}
         <div class="ptop">
-          {session && <More d={d} store={store} />}
+          <More d={d} store={store} />
           <button class="x qk" onClick={() => { keyHelp.value = true; }} aria-label="Keyboard shortcuts (?)" title="Keyboard shortcuts (?)">?</button>
           <button class="x" onClick={() => store.close()} aria-label="Close (Esc)">ESC ✕</button>
         </div>
