@@ -1,6 +1,7 @@
 import type { DocPage } from './docs.ts';
 import { ACCENTS, DEFAULT_ACCENT } from '../../face/src/accents.ts';
 import { REPO, SITE_URL } from './links.ts';
+import { searchBox } from './search.ts';
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
@@ -94,6 +95,7 @@ function footer(): string {
 function docNav(pages: DocPage[], current: string): string {
   const link = (href: string, text: string, on: boolean) => `<li><a href="${href}"${on ? ' aria-current="page"' : ''}>${esc(text)}</a></li>`;
   return `<nav class="docnav" aria-label="Documentation">
+  ${searchBox()}
   <details class="docmenu" open>
     <summary>Docs</summary>
     <ul>${link('{{base}}docs/', 'Overview', current === '')}${pages.map((p) => link(`{{base}}docs/${p.slug}/`, p.title, current === p.slug)).join('')}</ul>
