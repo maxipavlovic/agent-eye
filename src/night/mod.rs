@@ -256,6 +256,22 @@ fn from_row(r: &rusqlite::Row) -> rusqlite::Result<Run> {
     })
 }
 
+/// A run's folder was discarded: forget it, and give back the idea whose work it threw away, so
+/// the idea is in Ideas again to plan or start.
+pub fn discarded(db: &Db, run: &Run) -> Result<()> {
+    db.conn.execute(
+        "UPDATE night_run SET worktree=NULL, branch=NULL WHERE id=?1",
+        [run.id],
+    )?;
+    if let (Some(idea), Some(sid)) = (run.idea_id, run.run_session_id.as_deref()) {
+        db.conn.execute(
+            "UPDATE idea SET session_id=NULL WHERE id=?1 AND session_id=?2",
+            params![idea, sid],
+        )?;
+    }
+    Ok(())
+}
+
 pub fn get(db: &Db, id: i64) -> Result<Option<Run>> {
     Ok(db
         .conn

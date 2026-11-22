@@ -8,6 +8,8 @@ Park work during the day, let it run at night inside the plan you already pay fo
 - Inside the window (01:00-07:00 by default) the daemon starts planned runs, headless, when no session you work in is live.
 - Every run works in its own git worktree on a new branch, or in a separate copy of your folder (`[night] isolation`, see "Two ways to keep your folder safe"). It never runs in your folder. A sandboxed Claude run cannot reach a git host (see "The barrier" below), and a Codex run has no network.
 - When a run ends, its session is a **Needs you** card with the next step "review the night run": status, report, what it changed, and its loose ends.
+- An idea whose run is done leaves Ideas for that session, as a started idea does. After a failed or stopped run the idea stays, to plan again; DISCARD gives it back.
+- A continued session's card lives in the run's worktree or copy, so RESUME opens it there.
 
 ## Plan, from the command line
 

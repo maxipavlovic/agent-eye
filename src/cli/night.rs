@@ -294,10 +294,7 @@ fn discard(g: &Global, id: i64, yes: bool, lose: bool) -> Result<()> {
         &r,
         lose,
     )?;
-    env.db.conn.execute(
-        "UPDATE night_run SET worktree=NULL, branch=NULL WHERE id=?1",
-        [id],
-    )?;
+    night::discarded(&env.db, &r)?;
     println!("{said}");
     Ok(())
 }

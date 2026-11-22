@@ -183,10 +183,7 @@ pub(super) async fn api_night_discard(
             b.lose_changes,
         )
         .map_err(|e| ApiError::conflict("not_done", format!("{e:#}")))?;
-        db.conn.execute(
-            "UPDATE night_run SET worktree=NULL, branch=NULL WHERE id=?1",
-            [id],
-        )?;
+        night::discarded(&db, &run)?;
         Ok(said)
     })
     .await?;

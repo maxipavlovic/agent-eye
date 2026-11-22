@@ -217,6 +217,13 @@ fn finish(db: &mut Db, sys: &dyn Sys, run: &Run) -> Result<()> {
     )?;
     if let Some(sid) = col.session_id.as_deref().or(run.run_session_id.as_deref()) {
         let _ = crate::mark::mark(db, sid, "needs-you", Some(super::NEXT_STEP));
+        // a done idea leaves Ideas for its session, as a started one does (DISCARD gives it back)
+        if let (DONE, Some(idea)) = (status, run.idea_id.filter(|_| run.kind == "idea")) {
+            db.conn.execute(
+                "UPDATE idea SET session_id=?2 WHERE id=?1 AND session_id IS NULL",
+                params![idea, sid],
+            )?;
+        }
     }
     Ok(())
 }

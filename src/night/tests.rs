@@ -640,6 +640,38 @@ fn a_daemon_restart_finds_running_runs_again_and_finishes_the_ended_ones() {
 }
 
 #[test]
+fn a_done_idea_leaves_ideas_for_its_session_a_failed_one_stays_and_discard_gives_it_back() {
+    let cfg = cfg_with("");
+    let mut db = db_with(2, "2026-11-21");
+    // the runs are for ideas 1 and 2
+    let (a, b) = (
+        idea(&db, Some("/x"), Some("do it")),
+        idea(&db, Some("/x"), Some("do it")),
+    );
+    assert_eq!((a, b), (1, 2));
+    let f = Fake::new("2026-11-21", "03:00");
+    f.sessions.borrow_mut().insert(1, "s-1".into());
+    f.sessions.borrow_mut().insert(2, "s-2".into());
+    session_row(&db, "s-1", "/n/1/wt", None);
+    session_row(&db, "s-2", "/n/2/wt", None);
+    tick(&mut db, &f, &cfg);
+    f.end(&get(&db, 1).unwrap().unwrap(), 0);
+    f.end(&get(&db, 2).unwrap().unwrap(), 1);
+    tick(&mut db, &f, &cfg);
+    let linked = |id: i64| crate::ideas::get(&db, id).unwrap().unwrap().session_id;
+    assert_eq!(linked(1).as_deref(), Some("s-1"));
+    assert_eq!(linked(2), None);
+    assert!(crate::ideas::list_open(&db)
+        .unwrap()
+        .iter()
+        .all(|i| i.id != 1));
+    // DISCARD threw the night's work away: the idea is back in Ideas
+    super::discarded(&db, &get(&db, 1).unwrap().unwrap()).unwrap();
+    assert_eq!(linked(1), None);
+    assert!(get(&db, 1).unwrap().unwrap().worktree.is_none());
+}
+
+#[test]
 fn a_finished_run_puts_its_session_in_needs_you_with_the_next_step() {
     let cfg = cfg_with("");
     let mut db = db_with(1, "2026-11-21");
