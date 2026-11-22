@@ -228,11 +228,10 @@ impl Target {
                 let now = SystemTime::now();
                 prune(dir, now);
                 let file = write_command_file(dir, command, now)?;
-                let out = Command::new(open)
-                    .arg(&file)
-                    .stdin(Stdio::null())
-                    .output()
-                    .context("running open");
+                let out = super::retry_busy(|| {
+                    Command::new(open).arg(&file).stdin(Stdio::null()).output()
+                })
+                .context("running open");
                 let failed = match &out {
                     Ok(o) if o.status.success() => None,
                     Ok(o) => Some(format!(
