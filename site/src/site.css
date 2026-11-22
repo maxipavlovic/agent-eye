@@ -86,7 +86,7 @@ code { background: color-mix(in srgb, var(--ink) 11%, var(--paper)); padding: .0
 .hero-text { min-width: 0; }
 .hero-eye { --s: 3; width: calc(68px * var(--s)); height: calc(36px * var(--s)); margin: calc(14px * var(--s)) 0 4px; }
 .hero-eye .eye { transform: scale(var(--s)); transform-origin: 0 0; margin: 0; }
-.hero h1 { font: 700 clamp(32px, 5.4vw, 62px)/1.05 var(--f-body); letter-spacing: -.025em; margin: 14px 0 20px; text-wrap: balance; }
+.hero h1 { font: 700 clamp(32px, 5.4vw, 60px)/1.17 var(--f-body); letter-spacing: -.025em; margin: 14px 0 20px; text-wrap: balance; }
 .pitch { font-size: 20px; line-height: 1.5; max-width: 38em; margin: 0 0 30px; }
 .cta { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 18px 24px; margin-bottom: 30px; }
 .cmd { display: flex; max-width: 100%; width: max-content; border: 2px solid var(--ink); background: var(--code-bg); color: var(--code-fg); margin-bottom: 16px; }
@@ -94,8 +94,9 @@ code { background: color-mix(in srgb, var(--ink) 11%, var(--paper)); padding: .0
 .copy { font: 400 14px/1 var(--f-label); background: var(--paper); color: var(--ink); border: 0; border-left: 2px solid var(--ink); padding: 0 14px; }
 .copy:hover { background: var(--accent); color: var(--on-accent); }
 @media (min-width: 900px) {
-  .hero-in { grid-template-columns: minmax(0, 1fr) 340px; }
-  .hero-eye { --s: 5; order: 2; margin-top: calc(14px * var(--s)); }
+  /* the text keeps the logo's edge; the eye sits in the middle of the room to its right */
+  .hero-in { grid-template-columns: minmax(0, 720px) minmax(340px, 1fr); }
+  .hero-eye { --s: 5; order: 2; margin-top: calc(14px * var(--s)); justify-self: center; }
 }
 
 .demo { border-top: 4px solid var(--ink); }
