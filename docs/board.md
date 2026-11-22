@@ -14,7 +14,7 @@ Every card has the same frame, whatever it carries:
 - **The title** (two lines at most), then **the next step** with who acts: `YOU`, the agent, or a person's name. A running card shows what it is doing instead. A reminder adds its time.
 - **Marks on the top edge**, the most important at the right: `!` (needs you), a clock (a reminder is set), a crescent (a night run made it), a number (its leftovers) and the Remote Control signal. At most four show; more become `+N`. Hover a mark for its words.
 
-A card whose agent is stopped until you answer pulses its border. Right-click a card (or press the menu key on it) for its menu: MARK DONE, MOVE TO, REMIND ME (tomorrow, Monday, in a week, a date), HIDE, FORGET…, COPY RESUME COMMAND, FORK, CONTINUE TONIGHT… and OPEN DETAILS.
+A card whose agent is stopped until you answer pulses its border, and its `!` blinks. Right-click a card (or press the menu key on it) for its menu: MARK DONE, MOVE TO, REMIND ME (tomorrow, Monday, in a week, a date), HIDE, FORGET…, COPY RESUME COMMAND, FORK, CONTINUE TONIGHT… and OPEN DETAILS.
 
 ## The panel
 
