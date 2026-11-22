@@ -103,12 +103,17 @@ test.describe('menu', () => {
   });
 
   test('CONTINUE TONIGHT… in a session menu opens the form with its prompt focused', async ({ board }) => {
+    // a laptop-height window: the panel is longer than the screen
+    await board.setViewportSize({ width: 1280, height: 600 });
     await card(board, /Fix stale tokens/).click({ button: 'right' });
     const menu = board.getByRole('menu', { name: /Actions for Fix stale tokens/ });
     await menu.getByRole('menuitem', { name: 'CONTINUE TONIGHT…' }).click();
     const form = board.getByRole('form', { name: 'Continue tonight' });
     await expect(form).toBeVisible();
     await expect(form.getByRole('textbox').first()).toBeFocused();
+    // in view, also after the panel's other sections have loaded above it
+    await board.waitForTimeout(800);
+    await expect(form.getByRole('textbox').first()).toBeInViewport();
   });
 });
 

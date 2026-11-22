@@ -132,6 +132,8 @@ export function Detail({ store, walk }: { store: Store; walk: Walk }) {
         </header>
         {session && <QuickMove d={d} store={store} />}
         <RemindRow c={d} store={store} />
+        {/* opened from the menu, T or its button: at the top, where nothing that loads later can push it away */}
+        <ContinueTonight d={d} store={store} />
         {snip && <p class="match"><b>MATCH</b><span>{snippetParts(snip).map((p, j) => (p.hit ? <mark key={j}>{p.text}</mark> : p.text))}</span></p>}
         {session && d.state && <p class="lead"><Hl s={d.state} /></p>}
         <Next c={d} hot={need} />
@@ -154,7 +156,6 @@ export function Detail({ store, walk }: { store: Store; walk: Walk }) {
         <Where d={d} />
         <RemindPanel c={d} store={store} />
         <Receipt d={d} />
-        <ContinueTonight d={d} store={store} />
         <Actions d={d} store={store} />
       </div>
     </HlWords.Provider>

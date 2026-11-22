@@ -186,6 +186,16 @@ describe('CONTINUE TONIGHT', () => {
     await vi.waitFor(() => expect(text(m.$('.hd .tonight'))).toBe('Tonight: 1'));
   });
 
+  it('opens at the top of the panel, above every section that loads later', async () => {
+    const m = await mount();
+    await openSession(m);
+    button(m.$('.page')!, 'CONTINUE TONIGHT…')!.click();
+    await vi.waitFor(() => expect(m.$('form.nplan')).not.toBeNull());
+    const secs = m.$$('.page section.sec');
+    expect(secs[0]!.querySelector('h4')!.textContent).toBe('CONTINUE TONIGHT');
+    expect(secs[0]!.contains(m.$('form.nplan'))).toBe(true);
+  });
+
   it('a weekly limit eye cannot check is refused with the reason', async () => {
     const m = await mount();
     await openSession(m);
