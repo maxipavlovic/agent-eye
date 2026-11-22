@@ -18,15 +18,27 @@ const ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"'
 /** Character references in one pass, so `&amp;lt;` stays `&lt;`. */
 const decode = (s: string) => s.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (all, ref: string) => {
   if (ref[0] !== '#') return ENTITIES[ref.toLowerCase()] ?? all;
-  const code = ref[1] === 'x' || ref[1] === 'X' ? parseInt(ref.slice(2), 16) : parseInt(ref.slice(1), 10);
+  const code = ref[1] === 'x' || ref[1] === 'X' ? Number.parseInt(ref.slice(2), 16) : Number.parseInt(ref.slice(1), 10);
   return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : all;
 });
 
 /** Tags that end a word (a table cell, a list item, a paragraph); inline tags (code, em, a) do not. */
-const BLOCK_TAG = /<\/?(?:p|li|ul|ol|tr|td|th|thead|tbody|table|div|pre|blockquote|br|hr|h[1-6])\b[^>]*>/gi;
+const BLOCK_TAGS = new Set(['p', 'li', 'ul', 'ol', 'tr', 'td', 'th', 'thead', 'tbody', 'table', 'div', 'pre', 'blockquote', 'br', 'hr', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6']);
 
-/** The text of a piece of the page's html. */
-const plain = (html: string) => decode(html.replace(BLOCK_TAG, ' ').replace(/<[^>]*>/g, '')).replace(/\s+/g, ' ').trim();
+/** The text of a piece of the page's html: the tags go (a block tag leaves a space), in one pass. */
+const plain = (html: string) => {
+  let out = '';
+  let i = 0;
+  for (;;) {
+    const open = html.indexOf('<', i);
+    const close = open < 0 ? -1 : html.indexOf('>', open + 1);
+    if (close < 0) break;
+    const name = html.slice(open + 1, close).replace(/^\//, '').split(/[\s/]/)[0]!.toLowerCase();
+    out += html.slice(i, open) + (BLOCK_TAGS.has(name) ? ' ' : '');
+    i = close + 1;
+  }
+  return decode(out + html.slice(i)).replace(/\s+/g, ' ').trim();
+};
 
 const HEADING = /<h([23]) id="([^"]+)">([\s\S]*?)<\/h\1>/g;
 const ANCHOR_LINK = /<a class="anchor"[^>]*>[^<]*<\/a>/g;

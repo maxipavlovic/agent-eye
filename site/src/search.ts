@@ -166,7 +166,8 @@ export function setupSearch() {
   if (!form || !input || !panel || !list || !none || !status) return;
 
   /** Where the pages are: the index is docs/search.json, so a page is `<root><slug>/`. */
-  const root = (form.dataset.index ?? '').replace(/[^/]*$/, '');
+  const index = form.dataset.index ?? '';
+  const root = index.slice(0, index.lastIndexOf('/') + 1);
   let loading: Promise<Section[]> | null = null;
   let links: HTMLAnchorElement[] = [];
   let active = -1;
