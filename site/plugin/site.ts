@@ -4,6 +4,7 @@ import type { Plugin } from 'vite';
 import { loadDocs } from './docs.ts';
 import { SITE_URL } from './links.ts';
 import { docPage, docsIndex, notFound, page } from './pages.ts';
+import { searchIndex } from './search.ts';
 import { renderSprites } from './sprites.ts';
 
 interface Options {
@@ -84,6 +85,7 @@ export function eyeSite(opts: Options): Plugin {
 
     generateBundle() {
       this.emitFile({ type: 'asset', fileName: 'demo/index.html', source: demo() });
+      this.emitFile({ type: 'asset', fileName: 'docs/search.json', source: JSON.stringify(searchIndex(loadDocs(opts.docsDir))) });
       this.emitFile({ type: 'asset', fileName: 'robots.txt', source: `User-agent: *\nAllow: /\nSitemap: ${SITE_URL}sitemap.xml\n` });
       const urls = [...pages.keys()]
         .map((id) => path.relative(root, id).replace(/index\.html$/, ''))
@@ -101,6 +103,11 @@ export function eyeSite(opts: Options): Plugin {
         if (rel === 'demo/' || rel === 'demo/index.html') {
           res.setHeader('content-type', 'text/html; charset=utf-8');
           res.end(demo());
+          return;
+        }
+        if (rel === 'docs/search.json') {
+          res.setHeader('content-type', 'application/json; charset=utf-8');
+          res.end(JSON.stringify(searchIndex(loadDocs(opts.docsDir))));
           return;
         }
         const id = path.join(root, rel.endsWith('/') || rel === '' ? `${rel}index.html` : rel);

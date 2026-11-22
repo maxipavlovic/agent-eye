@@ -16,5 +16,6 @@ From `face/`, `npm run site:build` and `npm run site:dev` do the same (they inst
 - `pages/landing.html` is the landing page's body. `{{sprite:name:scale}}` draws a pixel icon, `{{eye}}` the brand eye, `{{base}}` the base path.
 - Every `../docs/*.md` becomes a page at `docs/<name>/`, with a menu and an "on this page" list. Links between docs files become page links; links to other repo files open on GitHub. Page order: `plugin/docs.ts`.
 - `npm run demo` builds the board's offline sample build (`face/dist-looks/ink/index.html`); the plugin copies it to `demo/index.html`, and the landing page shows it in a frame.
+- Search: the plugin cuts every docs page at its h2 and h3 headings into `docs/search.json` (page, title, heading, anchor id and the section's text). Each docs page has a box at the top of the menu (`plugin/search.ts`); `src/search.ts` loads the index on first use, ranks title hits over heading hits over text hits, and `/` jumps to the box.
 - Colours, fonts, the eye and the pixel sprites come from `face/` (`tokens.css`, `eye.css`, `art.ts`), so the site and the board look the same. Fonts are bundled; nothing loads from a CDN.
 - `plugin/site.ts` is the Vite plugin that does all of this, in dev and in the build.
