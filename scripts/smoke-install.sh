@@ -96,9 +96,9 @@ if [[ ! -e "$CLAUDE_DIR" ]]; then
 JSON
   SID="5a0e0000-0000-4000-8000-000000000001"
   {
-    printf '{"type":"user","timestamp":"2026-11-01T10:00:00Z","cwd":"/tmp","sessionId":"%s","message":{"content":"Smoke test the zebra importer"}}\n' "$SID"
-    printf '{"type":"assistant","timestamp":"2026-11-01T10:00:05Z","cwd":"/tmp","sessionId":"%s","message":{"id":"m1","content":[{"type":"text","text":"Importer checked."}]}}\n' "$SID"
-    printf '{"type":"user","timestamp":"2026-11-01T10:01:00Z","cwd":"/tmp","sessionId":"%s","message":{"content":"Thanks"}}\n' "$SID"
+    printf '{"type":"user","timestamp":"2026-11-01T10:00:00Z","cwd":"/work/zebra","sessionId":"%s","message":{"content":"Smoke test the zebra importer"}}\n' "$SID"
+    printf '{"type":"assistant","timestamp":"2026-11-01T10:00:05Z","cwd":"/work/zebra","sessionId":"%s","message":{"id":"m1","content":[{"type":"text","text":"Importer checked."}]}}\n' "$SID"
+    printf '{"type":"user","timestamp":"2026-11-01T10:01:00Z","cwd":"/work/zebra","sessionId":"%s","message":{"content":"Thanks"}}\n' "$SID"
   } > "$CLAUDE_DIR/projects/-smoke/$SID.jsonl"
 fi
 [[ -f "$SETTINGS" ]] || echo '{}' > "$SETTINGS"
@@ -184,7 +184,7 @@ if [[ -n "$SEEDED" ]]; then
 JSON
   CODEX_BEFORE="$(cat "$HOOKS")"
   {
-    printf '{"timestamp":"2026-11-01T10:00:00.000Z","type":"session_meta","payload":{"id":"%s","cwd":"/tmp","source":"cli"}}\n' "$RID"
+    printf '{"timestamp":"2026-11-01T10:00:00.000Z","type":"session_meta","payload":{"id":"%s","cwd":"/work/zebra","source":"cli"}}\n' "$RID"
     printf '{"timestamp":"2026-11-01T10:00:01.000Z","type":"event_msg","payload":{"type":"user_message","message":"Smoke test the codex importer"}}\n'
     printf '{"timestamp":"2026-11-01T10:00:05.000Z","type":"event_msg","payload":{"type":"agent_message","message":"Importer checked."}}\n'
     printf '{"timestamp":"2026-11-01T10:01:00.000Z","type":"event_msg","payload":{"type":"user_message","message":"Thanks"}}\n'

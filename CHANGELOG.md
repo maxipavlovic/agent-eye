@@ -45,6 +45,7 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ### Fixed
 
+- The accent colour picker now closes on an Esc or a click outside that comes right after it opens.
 - The reminder's date picker moved from the old day when two keys came before it was drawn again (Down then PageDown from late in a month landed a month short).
 
 ## 0.2.1 - 2026-11-12

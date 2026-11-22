@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { ACCENTS } from '../../accents';
 import type { Store } from '../../store';
 
@@ -10,7 +10,8 @@ export function AccentPicker({ store }: { store: Store }) {
   const accent = store.accent.value;
   const current = ACCENTS.find((a) => a.id === accent);
 
-  useEffect(() => {
+  // listening from the moment the row is drawn, so an Esc or a click right after opening is not lost
+  useLayoutEffect(() => {
     if (!open) return;
     const away = (e: PointerEvent) => { if (!root.current?.contains(e.target as Node)) setOpen(false); };
     const esc = (e: KeyboardEvent) => {
