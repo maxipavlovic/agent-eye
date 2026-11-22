@@ -2,6 +2,12 @@
 
 All notable changes are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Fixed
+
+- A doc Claude Code writes through the Claude Docs connector (its `batch` tool) is an artifact output, with the doc's name as its title. Before, only the `Artifact` tool's publishes counted, so a session that made a doc showed no artifact. Sessions indexed before pick it up with `eye scan --full`.
+
 ## 0.3.1 - 2026-11-22
 
 ### Changed

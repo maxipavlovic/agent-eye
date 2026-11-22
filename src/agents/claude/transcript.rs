@@ -36,6 +36,11 @@ static RE_CMD_ARGS: LazyLock<Regex> =
 static RE_ARTIFACT: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"https://claude\.ai/(?:code/)?artifact/[A-Za-z0-9-]{8,}").expect("static regex")
 });
+/// The doc a Claude Docs reply is about; links inside the doc come earlier in the reply.
+static RE_DOC_URL: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#""artifactUrl":"(https://claude\.ai/(?:code/)?artifact/[A-Za-z0-9-]{8,})""#)
+        .expect("static regex")
+});
 static RE_TOKEN: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"\b[0-9a-f]{8}(?:-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})?\b")
         .expect("static regex")
@@ -52,6 +57,10 @@ pub enum Pending {
     },
     Commit {
         message: Option<String>,
+    },
+    /// A Claude Docs batch: its reply names the doc it wrote.
+    Doc {
+        title: Option<String>,
     },
 }
 
@@ -388,6 +397,16 @@ fn handle_result(
                         push_output(d, seen, "artifact", u.clone(), Some(u), title, ts);
                     }
                 }
+                Pending::Doc { title } => {
+                    let text = cap_str(&text, RESULT_SCAN_CAP);
+                    let url = RE_DOC_URL
+                        .captures(text)
+                        .map(|c| c[1].to_string())
+                        .or_else(|| RE_ARTIFACT.find(text).map(|m| m.as_str().to_string()));
+                    if let Some(u) = url {
+                        push_output(d, seen, "artifact", u.clone(), Some(u), title, ts);
+                    }
+                }
                 Pending::Commit { message } => {
                     // RTK rewrites the output to "ok 1 file changed", so the sha is optional.
                     let sha = commit_sha(&text);
@@ -576,6 +595,14 @@ fn path_title(p: &str) -> Option<String> {
     Some(parent.unwrap_or(stem))
 }
 
+/// The Claude Docs connector's batch tool, whatever the server is called
+/// (`mcp__claude_ai_Claude_Docs__batch`).
+fn is_docs_batch(name: &str) -> bool {
+    name.strip_prefix("mcp__")
+        .and_then(|r| r.rsplit_once("__"))
+        .is_some_and(|(server, tool)| tool == "batch" && server.ends_with("Claude_Docs"))
+}
+
 fn handle_tool_use(
     b: &Value,
     d: &mut Delta,
@@ -616,6 +643,16 @@ fn handle_tool_use(
                     );
                 }
             }
+        }
+        n if is_docs_batch(n) => {
+            // A batch writes a Claude Docs doc, a new one with `container.create`; the reply
+            // names the doc.
+            let title = input
+                .pointer("/container/create/name")
+                .and_then(Value::as_str)
+                .filter(|t| !t.trim().is_empty())
+                .map(String::from);
+            pending.insert(id.to_string(), Pending::Doc { title });
         }
         "Write" | "Edit" | "NotebookEdit" => {
             let p = s(&input, "file_path").or_else(|| s(&input, "notebook_path"));
@@ -790,6 +827,45 @@ mod tests {
         let d =
             parse(b"{\"type\":\"user\",\"gitBranch\":\"HEAD\",\"message\":{\"content\":\"x\"}}\n");
         assert_eq!(d.branch, None);
+    }
+
+    #[test]
+    fn claude_docs_batch_is_an_artifact() {
+        let call = |name: &str, input: &str, reply: &str| {
+            format!(
+                r#"{{"type":"assistant","timestamp":"2026-01-01T00:00:00Z","message":{{"content":[{{"type":"tool_use","id":"t1","name":"{name}","input":{input}}}]}}}}
+{{"type":"user","timestamp":"2026-01-01T00:00:01Z","message":{{"content":[{{"type":"tool_result","tool_use_id":"t1","content":[{{"type":"text","text":{reply}}}]}}]}}}}
+"#
+            )
+        };
+        // The doc links another artifact before the reply names the doc itself.
+        let reply = serde_json::to_string(
+            r#"{"verdict":"allow","xml":"<doc><link href='https://claude.ai/artifact/Other1234'/></doc>","frame":{"slug":"88745825","url":"https://claude.ai/artifact/HrJLEp1r9uivtk52","artifactUrl":"https://claude.ai/artifact/HrJLEp1r9uivtk52"}}"#,
+        )
+        .unwrap();
+        let create = r##"{"container":{"kind":"project","create":{"name":"Launch plan","doc":{"markdown":"# Launch plan"}}},"batch":[]}"##;
+        let d = parse(call("mcp__claude_ai_Claude_Docs__batch", create, &reply).as_bytes());
+        assert_eq!(d.outputs.len(), 1);
+        assert_eq!(d.outputs[0].kind, "artifact");
+        assert_eq!(
+            d.outputs[0].value,
+            "https://claude.ai/artifact/HrJLEp1r9uivtk52"
+        );
+        assert_eq!(d.outputs[0].title.as_deref(), Some("Launch plan"));
+        // A batch on a doc made elsewhere is an output too, with no title.
+        let edit = r#"{"container":{"kind":"project","id":"88745825"},"batch":[]}"#;
+        let d = parse(call("mcp__claude_ai_Claude_Docs__batch", edit, &reply).as_bytes());
+        assert_eq!(d.outputs.len(), 1);
+        assert_eq!(d.outputs[0].title, None);
+        // Reading a doc, or a batch tool of another server, makes nothing.
+        for name in ["mcp__claude_ai_Claude_Docs__read", "mcp__acme__batch"] {
+            assert!(
+                parse(call(name, edit, &reply).as_bytes())
+                    .outputs
+                    .is_empty(),
+                "{name}"
+            );
+        }
     }
 
     #[test]
