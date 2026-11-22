@@ -3,7 +3,7 @@ import { card, done, expect, lane, problems, sid, test } from '../support';
 
 test.describe('board', () => {
   test('loads with every lane and no console problems', async ({ board }) => {
-    for (const [name, n] of [['ideas', 3], ['running', 2], ['needs you', 4], ['waiting', 3], ['paused', 2]] as const) {
+    for (const [name, n] of [['ideas', 3], ['running', 2], ['needs you', 5], ['waiting', 3], ['paused', 2]] as const) {
       await expect(lane(board, new RegExp(`^${name}`, 'i')).locator('[data-id]')).toHaveCount(n);
     }
     // Done starts folded to a rail that says how many it holds
@@ -15,7 +15,7 @@ test.describe('board', () => {
 
   test('both agents, a remote session and the long project name show on their cards', async ({ board }) => {
     await expect(lane(board, /^running/i).getByText(/codex/i).first()).toBeVisible();
-    // a narrow card shows Remote as its icon only; the chip keeps its title
+    // Remote Control is a mark on the card's top edge: its icon, its words in the title
     await expect(lane(board, /^waiting/i).getByTitle(/Remote Control is on/)).toBeVisible();
     await expect(lane(board, /^running/i)).toContainText('customer-billing');
   });
@@ -53,8 +53,8 @@ test.describe('panel', () => {
     await card(board, /Fix stale tokens/).click();
     await expect(board.getByRole('heading', { level: 2, name: 'Fix stale tokens in the account store' })).toBeVisible();
     await expect(board.getByRole('button', { name: 'Close (Esc)' })).toBeVisible();
-    for (const t of ['LEFT BEHIND', 'REMINDER']) await expect(board.getByRole('heading', { name: new RegExp(t) })).toBeVisible();
-    for (const b of ['EXPORT']) await expect(board.getByRole('link', { name: b })).toBeVisible();
+    for (const t of ['LEFTOVERS', 'REMINDER']) await expect(board.getByRole('heading', { name: new RegExp(t) })).toBeVisible();
+    await expect(board.getByRole('button', { name: 'MORE ▾' })).toBeVisible();
     await board.keyboard.press('Escape');
     await expect(board.getByRole('button', { name: 'Close (Esc)' })).toHaveCount(0);
   });
@@ -124,8 +124,10 @@ test.describe('reminders', () => {
     await expect.poll(async () => (await eye.api(`/api/cards/${sid(8)}`)).remind_at).toBe(Date.UTC(2026, 10, 21, 9));
     await expect(card(board, /Fix the flaky checkout/).getByRole('img', { name: /remind/i })).toBeVisible();
     await card(board, /Fix the flaky checkout/).click();
-    const panel = board.getByRole('heading', { name: 'REMINDER' }).locator('..');
+    // folded with the details: what is set in its heading, the rest when opened
+    const panel = board.locator('#reminder');
     await expect(panel).toContainText(/Sat.*9:00|9:00/);
+    await panel.getByRole('button', { name: /^REMINDER/ }).click();
     await expect(panel).not.toContainText('No reminder.');
     await panel.getByRole('button', { name: 'CLEAR' }).click();
     await expect(panel).toContainText('No reminder.');
@@ -174,9 +176,11 @@ test.describe('usage', () => {
   });
 });
 
-test.describe('left behind', () => {
+test.describe('leftovers', () => {
   test('Ignore asks first, and a yes removes the item', async ({ board, eye }) => {
     await card(board, /Fix stale tokens/).click();
+    // the list is folded under the two-line summary
+    await board.locator('#leftovers').getByRole('button', { name: 'SHOW' }).click();
     const items = board.locator('ul.dloose > li');
     await expect(items).toHaveCount(3);
     const git = items.filter({ hasText: '2 commits in auth-service' });
@@ -200,6 +204,7 @@ test.describe('left behind', () => {
       expect(eye.addProcess(child.pid!)).toMatch(/^proc:\d+:\d+$/);
       await board.reload();
       await card(board, /Fix stale tokens/).click();
+      await board.locator('#leftovers').getByRole('button', { name: 'SHOW' }).click();
       const item = board.locator('ul.dloose > li').filter({ hasText: `sleep (pid ${child.pid})` });
       await item.getByRole('button', { name: 'STOP' }).click();
       const ask = board.getByRole('alertdialog', { name: `Stop sleep (pid ${child.pid})?` });
@@ -231,7 +236,8 @@ test.describe('night', () => {
 test.describe('export', () => {
   test('Export downloads one self-contained HTML page with the secret masked', async ({ board }) => {
     await card(board, /Fix stale tokens/).click();
-    const [download] = await Promise.all([board.waitForEvent('download'), board.getByRole('link', { name: 'EXPORT' }).click()]);
+    await board.getByRole('button', { name: 'MORE ▾' }).click();
+    const [download] = await Promise.all([board.waitForEvent('download'), board.getByRole('menuitem', { name: /^EXPORT/ }).click()]);
     expect(download.suggestedFilename()).toMatch(/^eye-e2e00000.*\.html$/);
     const path = await download.path();
     const html = (await import('node:fs')).readFileSync(path, 'utf8');

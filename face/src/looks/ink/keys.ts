@@ -1,9 +1,11 @@
 import { useEffect, useRef } from 'preact/hooks';
 import type { Store } from '../../store';
 import { copy } from './copy';
+import { exportSession } from './Detail';
 import { ideaForm } from './IdeaForm';
 import { closeForget, forgetFor, openForget } from './Forget';
 import { keyHelp } from './KeyHelp';
+import { leftoversOpen } from './Loose';
 import { hideSession, QUICK, quickMove } from './Move';
 import { canContinueTonight, tonightOpen } from './Night';
 import { closeRemind, openRemind, remindForm } from './Remind';
@@ -73,7 +75,7 @@ export function useKeys(store: Store, step: Walk['step']) {
   }, []);
 }
 
-/** The panel keys that are not moves: remind, continue tonight, fork, copy, hide, loose ends, export, forget.
+/** The panel keys that are not moves: remind, continue tonight, fork, copy, hide, leftovers, export, forget.
  *  True when the key was one of them and did something (or deliberately nothing); the buttons carry the same keys. */
 function panelAct(store: Store, d: NonNullable<Store['detail']['value']>, k: string): boolean {
   const session = d.kind !== 'idea';
@@ -96,17 +98,15 @@ function panelAct(store: Store, d: NonNullable<Store['detail']['value']>, k: str
       hideSession(store, d.id);
       return true;
     case 'l': {
-      const el = document.getElementById('left-behind');
-      if (!el) return false;
-      el.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      if (!session || !d.loose_ends?.length) return false;
+      leftoversOpen.value = d.id;
+      requestAnimationFrame(() => document.getElementById('leftovers')?.scrollIntoView({ block: 'start', behavior: 'smooth' }));
       return true;
     }
-    case 'e': {
-      const a = document.querySelector<HTMLAnchorElement>('.page a[href*="/export"]');
-      if (!a) return false;
-      a.click();
+    case 'e':
+      if (!session) return false;
+      exportSession(d.id);
       return true;
-    }
     case 'x':
       if (d.kind === 'idea') return false;
       openForget(d);

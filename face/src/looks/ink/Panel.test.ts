@@ -11,6 +11,7 @@ import { keyHelp, KEY_LIST } from './KeyHelp';
 import { tonightOpen } from './Night';
 import { remindForm } from './Remind';
 import { usagePanel } from './Usage';
+import { resetFolds } from './Sections';
 
 let mounted: HTMLElement | null = null;
 
@@ -20,7 +21,7 @@ beforeAll(() => {
   Element.prototype.scrollIntoView ??= () => {};
   Element.prototype.scrollTo ??= () => {};
 });
-beforeEach(() => { localStorage.clear(); tonightOpen.value = null; keyHelp.value = false; remindForm.value = null; usagePanel.value = false; });
+beforeEach(() => { localStorage.clear(); resetFolds(); tonightOpen.value = null; keyHelp.value = false; remindForm.value = null; usagePanel.value = false; });
 afterEach(() => {
   if (mounted) { render(null, mounted); mounted.remove(); mounted = null; }
   document.body.innerHTML = '';
@@ -42,7 +43,7 @@ async function mount(over: Partial<Source> = {}) {
 const tick = () => new Promise((r) => setTimeout(r, 40));
 const text = (e: Element | null | undefined) => e?.textContent ?? '';
 const press = (k: string, init: KeyboardEventInit = {}) => document.body.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true, ...init }));
-const session = (m: Awaited<ReturnType<typeof mount>>) => m.$$('.card').find((c) => !c.classList.contains('idea') && !c.classList.contains('row') && !c.querySelector('.mk.night'))!;
+const session = (m: Awaited<ReturnType<typeof mount>>) => m.$$('.card').find((c) => !c.classList.contains('idea') && !c.classList.contains('row') && !c.querySelector('.tab.night'))!;
 const rightClick = (el: Element) => el.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 200, clientY: 200 }));
 
 describe('CONTINUE TONIGHT in the card menu', () => {
@@ -83,7 +84,7 @@ describe('the panel keys and the keys list', () => {
     expect(m.$('.page form.nplan')).toBeNull();
     press('t');
     await vi.waitFor(() => expect(m.$('.page form.nplan')).not.toBeNull());
-    expect(m.$('.page .acts.end .btn[aria-keyshortcuts=T]')!.getAttribute('aria-expanded')).toBe('true');
+    expect(text(m.$('.page section.sec h4'))).toBe('CONTINUE TONIGHT');
     expect(remindForm.value).toBeNull();
     press('m');
     await vi.waitFor(() => expect(m.$('form.modal[aria-label="Remind me"]')).not.toBeNull());
@@ -109,12 +110,44 @@ describe('the panel keys and the keys list', () => {
     await vi.waitFor(() => expect(setHidden).toHaveBeenCalledWith(id, true));
   });
 
-  it('shows each key on its button, the way RESUME shows R', async () => {
+  it('shows each key on its button, the way RESUME shows R, and beside each action in MORE', async () => {
     const m = await open();
     const keyed = (sel: string) => text(m.$(`${sel} u`));
     expect(keyed('.qmove .resume')).toBe('R');
-    expect(m.$$('.page .acts.end .btn u').map(text)).toEqual(['F', 'C', 'E', 'T', 'H']);
     expect(m.$$('.qmove button[aria-keyshortcuts] u').map(text)).toEqual(['N', 'W', 'P', 'D', 'R']);
+    [...m.$$<HTMLButtonElement>('.page .dbar button')].find((b) => text(b) === 'MORE ▾')!.click();
+    await vi.waitFor(() => expect(m.$('.page [role=menu]')).not.toBeNull());
+    expect(m.$$('.page [role=menuitem] kbd').map(text)).toEqual(['F', 'C', 'E', 'T', 'M', 'H', 'X']);
+  });
+
+  it('MORE holds the other actions; a choice runs and closes it, and Esc closes it without closing the panel', async () => {
+    const m = await open();
+    const more = () => [...m.$$<HTMLButtonElement>('.page .dbar button')].find((b) => text(b) === 'MORE ▾')!;
+    more().click();
+    await vi.waitFor(() => expect(m.$('.page [role=menu]')).not.toBeNull());
+    expect(m.$$('.page [role=menuitem] span').map(text)).toEqual(['FORK', 'COPY RESUME COMMAND', 'EXPORT', 'CONTINUE TONIGHT…', 'REMIND ME…', 'HIDE', 'FORGET…', 'ARCHIVE']);
+    press('Escape');
+    await vi.waitFor(() => expect(m.$('.page [role=menu]')).toBeNull());
+    expect(m.store.selected.value).not.toBeNull();
+    more().click();
+    await vi.waitFor(() => expect(m.$('.page [role=menu]')).not.toBeNull());
+    [...m.$$<HTMLButtonElement>('.page [role=menuitem]')].find((b) => text(b.querySelector('span')) === 'CONTINUE TONIGHT…')!.click();
+    await vi.waitFor(() => expect(m.$('.page form.nplan')).not.toBeNull());
+    expect(m.$('.page [role=menu]')).toBeNull();
+  });
+
+  it('the details start folded, and a section you open stays open on the next card', async () => {
+    const m = await open();
+    const heads = () => m.$$('.page .details .fsec h4').map((h) => text(h.querySelector('.fhead')).replace(/(SHOW|HIDE)$/, ''));
+    expect(heads().some((h) => h.startsWith('WHERE'))).toBe(true);
+    expect(m.$$('.page .details .fsec.open').length).toBe(0);
+    m.$<HTMLButtonElement>('#where .fhead')!.click();
+    await vi.waitFor(() => expect(m.$('#where.open dl.where')).not.toBeNull());
+    m.store.close();
+    await vi.waitFor(() => expect(m.$('.page')).toBeNull());
+    session(m).click();
+    await vi.waitFor(() => expect(m.$('.page #where')).not.toBeNull());
+    expect(m.$('#where')!.classList.contains('open')).toBe(true);
   });
 
   it('? opens the list of keys, and ?, Esc or CLOSE closes it without closing the panel', async () => {
@@ -122,7 +155,8 @@ describe('the panel keys and the keys list', () => {
     press('?', { shiftKey: true });
     await vi.waitFor(() => expect(m.$('.keyhelp')).not.toBeNull());
     const shown = m.$$('.keyhelp dt').map(text);
-    for (const [k] of KEY_LIST.filter(([k]) => k !== 'X')) expect(shown).toContain(k);
+    // a session's panel lists every key, X (forget) included
+    for (const [k] of KEY_LIST) expect(shown).toContain(k);
     press('Escape');
     await tick();
     expect(m.$('.keyhelp')).toBeNull();
@@ -163,8 +197,8 @@ describe('the reminder row at the top of the panel', () => {
     expect(text(row)).toContain('Tomorrow 9:00');
     expect(text(row)).toContain('the contrast review');
     expect(row.querySelector('.rclock svg')).not.toBeNull();
-    // in the status row: right under the quick moves, before the state line
-    expect(m.$('.page .qmove')!.nextElementSibling).toBe(row);
+    // in the status row: right under the action bar (the moves and MORE), before the state line
+    expect(m.$('.page .dbar')!.nextElementSibling).toBe(row);
     [...row.querySelectorAll('button')].find((b) => text(b) === 'CHANGE')!.click();
     await vi.waitFor(() => expect(remindForm.value).toBe(m.store.selected.value));
     remindForm.value = null;
@@ -198,6 +232,9 @@ describe('the COST row', () => {
   it('is a label and value row of WHERE, with the note in the small hint style', async () => {
     const m = await mount();
     session(m).click();
+    // WHERE is folded with the details
+    await vi.waitFor(() => expect(m.$('.page #where .fhead')).not.toBeNull());
+    m.$<HTMLButtonElement>('#where .fhead')!.click();
     await vi.waitFor(() => expect(m.$('.page dl.where')).not.toBeNull());
     const dts = m.$$('.page dl.where dt');
     const cost = dts.find((d) => text(d) === 'COST')!;

@@ -4,7 +4,7 @@ import type { Store } from '../../store';
 import type { Message } from '../../api/types';
 import { codeParts, msgTime } from '../../format';
 import { Hl } from './highlight';
-import { FoldSec, Sec } from './Sections';
+import { FoldSec, Sec, useFold } from './Sections';
 
 /** Message text with `inline code` spans; the search words are marked inside both. */
 function Text({ s }: { s: string }) {
@@ -22,10 +22,10 @@ export function Conversation({ store, id, agent, fallback }: { store: Store; id:
   const next = useSignal<number | null>(null);
   const state = useSignal<'loading' | 'ready' | 'failed'>('loading');
   const older = useSignal(false);
-  const open = useSignal(false);
-  useEffect(() => { open.value = false; }, [id]);
+  // folded until you open it; eye remembers that you keep it open
+  const [open, toggle] = useFold('conversation');
   useEffect(() => {
-    if (!open.value) return;
+    if (!open) return;
     let live = true;
     msgs.value = []; next.value = null; state.value = 'loading';
     void store.conversation(id, null, PAGE).then((p) => {
@@ -34,7 +34,7 @@ export function Conversation({ store, id, agent, fallback }: { store: Store; id:
       msgs.value = p.messages; next.value = p.more ? p.next_before : null; state.value = 'ready';
     });
     return () => { live = false; };
-  }, [id, open.value]);
+  }, [id, open]);
   const more = async () => {
     const before = next.value;
     if (before === null || older.value) return;
@@ -50,7 +50,7 @@ export function Conversation({ store, id, agent, fallback }: { store: Store; id:
     return fallback.length ? <Sec t="LAST PROMPTS">{fallback.map((p, j) => <blockquote class="prompt" key={j}><Hl s={p} /></blockquote>)}</Sec> : null;
   }
   return (
-    <FoldSec t="CONVERSATION" open={open.value} toggle={() => { open.value = !open.value; }}>
+    <FoldSec t="CONVERSATION" open={open} toggle={toggle} id="conversation">
       {state.value === 'ready' && msgs.value.length === 0 && <p class="dim">No messages to show.</p>}
       {state.value === 'loading' && <p class="dim">Loading the conversation<i class="dots" /></p>}
       {next.value !== null && (

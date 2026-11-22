@@ -492,7 +492,7 @@ fn loose_ignore_by_key_and_send_dry_run_name_the_session() {
     // nothing left for the session now
     assert!(w
         .ok(&["loose", "send", &id[..8], "--dry-run"])
-        .contains("nothing left behind"));
+        .contains("no leftovers"));
 }
 
 // ----------------------------------------------------------------------------------- find, ls, show, pick

@@ -3,7 +3,7 @@ import { signal, useSignal } from '@preact/signals';
 import type { Store } from '../../store';
 import type { CardDetail, NightIsolation, NightRun } from '../../api/types';
 import { ago } from '../../format';
-import { Sec } from './Sections';
+import { Sec, Fold, openFold } from './Sections';
 import { tokensText } from './usageText';
 
 /** Is the Tonight list open? The header chip sets it. */
@@ -49,11 +49,6 @@ export function TonightChip({ store }: { store: Store }) {
   );
 }
 
-/** The chip on a card made by a night run. */
-export function NightMark({ n }: { n: { status: string } | undefined }) {
-  if (!n) return null;
-  return <span class="mk night" title="This session was made by a night-shift run">night</span>;
-}
 
 /** Plan an idea (or continue a session) for tonight: the prompt (a session needs one), one optional limit, the agent and the switch. */
 export function NightPlanForm({ store, d, onDone }: { store: Store; d: CardDetail; onDone?: () => void }) {
@@ -152,17 +147,6 @@ export function canContinueTonight(d: Pick<CardDetail, 'kind' | 'resumable'>, st
   return d.kind !== 'idea' && !!d.resumable && store.night.value !== null;
 }
 
-/** CONTINUE TONIGHT… in the panel's action row; T does the same. */
-export function TonightButton({ d, store }: { d: CardDetail; store: Store }) {
-  if (!canContinueTonight(d, store)) return null;
-  const open = tonightOpen.value === d.id;
-  return (
-    <button class="btn" aria-expanded={open} aria-keyshortcuts="T" title="Fork this session tonight, in its own worktree, with a prompt you write now (T)" onClick={() => { tonightOpen.value = open ? null : d.id; }}>
-      CONTINUE <u>T</u>ONIGHT…
-    </button>
-  );
-}
-
 /** The CONTINUE TONIGHT form, in the panel, while it is open. */
 export function ContinueTonight({ d, store }: { d: CardDetail; store: Store }) {
   if (!canContinueTonight(d, store) || tonightOpen.value !== d.id) return null;
@@ -181,6 +165,30 @@ export function discardText(r: NightRun): string {
 }
 
 /** NIGHT RUN: how the run went, what it said, what it changed, and what to do with it. */
+/** "1 file changed": the first part of a diff stat's last line. */
+export function changedText(diff: string | null): string | null {
+  const last = diff?.trim().split('\n').pop()?.trim();
+  return last ? last.split(',')[0]!.trim() : null;
+}
+
+/** The night run in one line at the top of the panel: its status, what it changed and how long it took; REVIEW opens the details. */
+export function NightRunLine({ d }: { d: CardDetail }) {
+  const r = d.night_run;
+  if (!r) return null;
+  const parts = [runStatus(r), r.worktree ? changedText(r.diff_stat) : 'discarded', r.duration_ms != null ? durationText(r.duration_ms) : null].filter(Boolean);
+  const review = () => {
+    openFold('night-run');
+    requestAnimationFrame(() => document.getElementById('night-run')?.scrollIntoView({ block: 'start', behavior: 'smooth' }));
+  };
+  return (
+    <p class="nline">
+      <b>NIGHT RUN</b><span>{parts.join(' · ')}</span>
+      <button class="lnk" onClick={review}>REVIEW</button>
+    </p>
+  );
+}
+
+/** The night run's details, folded in the panel: report, what it changed, where, and RESUME, BRING, OPEN FOLDER, DISCARD. */
 export function NightRunSection({ d, store }: { d: CardDetail; store: Store }) {
   const ask = useSignal(false);
   const askBring = useSignal(false);
@@ -203,7 +211,7 @@ export function NightRunSection({ d, store }: { d: CardDetail; store: Store }) {
   };
   const repoCopy = r.isolation === 'copy' && !!r.branch && !!folder;
   return (
-    <Sec t="NIGHT RUN" n={runStatus(r)}>
+    <Fold name="night-run" t="NIGHT RUN" sum={runStatus(r)} text={r.report ?? undefined}>
       <dl class="nrun">
         <dt>Status</dt><dd>{runStatus(r)}</dd>
         {r.started_at != null && <><dt>Started</dt><dd>{clock(r.started_at)}</dd></>}
@@ -237,7 +245,7 @@ export function NightRunSection({ d, store }: { d: CardDetail; store: Store }) {
           {folder && r.status !== 'running' && <button class="btn ghost" onClick={() => { ask.value = true; }}>DISCARD</button>}
         </div>
       )}
-    </Sec>
+    </Fold>
   );
 }
 

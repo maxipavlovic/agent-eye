@@ -305,12 +305,86 @@ fn main() -> Result<()> {
     for (n, s) in OPENCODE_SESSIONS.iter().enumerate() {
         insert_session(&db, demo, &claude, 100 + n, s)?;
     }
+    insert_session(&db, demo, &claude, WORST_N, &WORST)?;
     ideas(&db, demo)?;
     reminders(&db)?;
     outputs(&db)?;
     usage(&db)?;
     loose(&db)?;
     night(&db, demo)?;
+    worst_case(&db, demo)?;
+    Ok(())
+}
+
+/// The number of the worst-case card's session.
+const WORST_N: usize = 200;
+
+/// A card that carries everything at once, so its screenshots show that the card's frame holds: Needs
+/// you, a reminder, a night run, leftovers and Remote Control (more marks than fit, so a `+N` box), an
+/// app origin, a long project name and a long title. It is live and waits for a permission (resumed
+/// after its night run), since Remote Control shows only on a live session.
+const WORST: S = S {
+    title: "Rework the customer billing reconciliation export so finance can close the month without manual fixes",
+    project: "customer-billing-reconciliation-service-monorepo",
+    branch: "night/rework-reconciliation-export",
+    agent: "codex",
+    age: 3 * 60,
+    ai: "needs_you",
+    state: "The export now matches the ledger for October; two columns still differ from the finance macros",
+    next: "You: decide whether the export keeps the old column order that the finance macros expect",
+    live: "waiting",
+    origin: "app",
+    prompt: "Rework the reconciliation export so it matches the ledger.",
+    reply: "Matches the ledger now; the column order is your call.",
+};
+
+/// The worst-case card's reminder, Remote Control link, night run and leftovers.
+fn worst_case(db: &Db, home: &Path) -> Result<()> {
+    let id = sid(WORST_N);
+    db.conn.execute(
+        "UPDATE session SET remind_at=?2, remind_note=?3, remote_url=?4 WHERE id=?1",
+        params![
+            id,
+            NOW_MS + DAY,
+            "the column order",
+            "https://claude.ai/code/session_01E2E0000000000000000200"
+        ],
+    )?;
+    let folder = home.join("code/customer-billing-reconciliation-service-monorepo");
+    db.conn.execute(
+        "INSERT INTO night_run(kind, agent, folder, prompt, night, status, run_session_id, started_at, ended_at,
+           report, diff_stat, created_at, isolation, worktree, branch)
+         VALUES('idea','codex',?1,'Rework the export','2026-11-20','done',?2,?3,?4,?5,?6,?3,'worktree',?7,?8)",
+        params![
+            folder.display().to_string(),
+            id,
+            NOW_MS - 5 * HOUR,
+            NOW_MS - 4 * HOUR,
+            "The export matches the ledger; the column order is left for you.",
+            " export.rs | 120 ++++----\n 1 file changed, 80 insertions(+), 40 deletions(-)",
+            "/tmp/eye-night/run-9",
+            "night/rework-reconciliation-export",
+        ],
+    )?;
+    for (key, kind, line, detail) in [
+        (
+            "proc:999998:1795000001",
+            Kind::Process,
+            "node preview server on port 5173 is still running",
+            "node (pid 999998, port 5173)",
+        ),
+        (
+            "uncommitted:/Users/demo/code/customer-billing-reconciliation-service-monorepo",
+            Kind::Uncommitted,
+            "2 modified files in customer-billing-reconciliation-service-monorepo are not committed",
+            "2 modified files\nrepo /Users/demo/code/customer-billing-reconciliation-service-monorepo",
+        ),
+    ] {
+        db.conn.execute(
+            "INSERT INTO loose(session_id, key, kind, line, detail, since_ms, found_at) VALUES(?1,?2,?3,?4,?5,?6,?7)",
+            params![id, key, kind.as_str(), line, detail, NOW_MS - 3 * HOUR, NOW_MS - 5 * MIN],
+        )?;
+    }
     Ok(())
 }
 

@@ -431,7 +431,7 @@ fn the_summary_line_reads_like_a_sentence() {
     ];
     assert_eq!(
         summary_line(&items).unwrap(),
-        "Left behind: 2 servers (ports 4321, 4350), 1 process still running, 3 commits not pushed, 1 file not committed"
+        "Leftovers: 2 servers (ports 4321, 4350), 1 process still running, 3 commits not pushed, 1 file not committed"
     );
 }
 

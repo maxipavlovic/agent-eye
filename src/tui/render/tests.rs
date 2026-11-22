@@ -280,15 +280,15 @@ fn the_preview_names_what_the_session_left_behind_and_ctrl_l_lists_it() {
     ];
     // nothing stored: no line, and Ctrl-L says so
     let t = render_text(&mut a, 170, 30).unwrap();
-    assert!(!t.contains("Left behind"), "{t}");
+    assert!(!t.contains("Leftovers"), "{t}");
     let ctrl_l = KeyEvent::new(KeyCode::Char('l'), KeyModifiers::CONTROL);
     a.key(ctrl_l);
-    assert_eq!(a.msg.as_deref(), Some("nothing left behind"));
+    assert_eq!(a.msg.as_deref(), Some("no leftovers"));
     loose::replace(&a.db, &items, a.now).unwrap();
     a.detail.loose = loose::list(&a.db, Some(&id), false).unwrap();
     let t = render_text(&mut a, 170, 30).unwrap();
     assert!(
-        t.contains("Left behind: 2 servers (ports 4321, 4350), 3 commits not pushed"),
+        t.contains("Leftovers: 2 servers (ports 4321, 4350), 3 commits not pushed"),
         "{t}"
     );
     // the list, with the keys in the footer

@@ -33,7 +33,7 @@ The package and binary are `agent-eye`; `eye` is its alias, and the examples use
 
 Enter on a session leaves the screen and runs the session's agent in the session's folder (for Claude Code `claude --resume <id>`), replacing eye in this terminal. With `--print` it writes the shell line (`cd '<dir>' && claude --resume <id>`) to stdout instead. The folder and every argument are quoted, and an id that is not plain letters, digits, `-`, `_` or `.` (or starts with `-` or `.`) is refused, and so is a folder with a control character in its name. Starting an idea records the start, as `eye idea start` does, and sends the idea's prompt (never its notes); an idea without a prompt opens the agent waiting for you. An idea whose folder does not exist shows `+` before its project in the list and a line in the preview; Enter asks first (Enter again creates the folder and starts, Esc cancels). Eye creates folders only inside your home folder; for any other missing folder, or a file in the way, Enter says why and starts nothing. Ctrl-F leaves the same way with the agent's fork command (or prints that line with `--print`). A session that is open in another terminal asks first: Enter again resumes anyway, Esc cancels.
 
-The preview of a session that left things behind has one more line, `Left behind: 2 servers (ports 4321, 4350), 3 commits not pushed`, from what the daemon last found (`[loose]` in config.md).
+The preview of a session that left things behind has one more line, `Leftovers: 2 servers (ports 4321, 4350), 3 commits not pushed`, from what the daemon last found (`[loose]` in config.md).
 
 ## Shell key
 

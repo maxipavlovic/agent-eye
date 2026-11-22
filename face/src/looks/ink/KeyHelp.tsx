@@ -16,7 +16,7 @@ export const KEY_LIST: ReadonlyArray<readonly [string, string]> = [
   ['F', 'Fork'],
   ['C', 'Copy the resume command'],
   ['H', 'Hide'],
-  ['L', 'Loose ends (scroll to LEFT BEHIND)'],
+  ['L', 'Leftovers (open the list)'],
   ['E', 'Export'],
   ['X', 'Forget'],
   ['← →', 'Previous or next card'],
@@ -37,7 +37,8 @@ export function KeyHelpHost() {
         <h2>KEYS</h2>
         <p class="hint">In a session's panel, when no field has the focus.</p>
         <dl class="where">
-          {KEY_LIST.filter(([k]) => k !== 'X' || !!document.querySelector('.page [data-key="x"]')).map(([k, what]) => (<Fragment key={k}><dt>{k}</dt><dd>{what}</dd></Fragment>))}
+          {/* X forgets a session: listed while a session's panel (its action bar) is open, not an idea's */}
+          {KEY_LIST.filter(([k]) => k !== 'X' || !!document.querySelector('.page .dbar')).map(([k, what]) => (<Fragment key={k}><dt>{k}</dt><dd>{what}</dd></Fragment>))}
         </dl>
         <div class="acts end">
           <button type="button" class="btn ghost" onClick={close}>CLOSE</button>

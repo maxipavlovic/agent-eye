@@ -6,7 +6,7 @@ import type { Card } from '../../api/types';
 import { remindReason, remindShort, remindText, remindTitle } from '../../format';
 import { CLOCK, ICONS, INK } from './art';
 import { addDays, dateValue, DatePicker, parseTime, TimeField } from './DatePick';
-import { Sec } from './Sections';
+import { Fold } from './Sections';
 
 /** The card whose reminder form is open (a date, a time and a note), or null. */
 export const remindForm = signal<string | null>(null);
@@ -137,7 +137,7 @@ export function RemindFormHost({ store }: { store: Store }) {
 export function RemindPanel({ c, store }: { c: Card; store: Store }) {
   const summary = remindSummary(c);
   return (
-    <Sec t="REMINDER">
+    <Fold name="reminder" t="REMINDER" sum={summary ?? 'none'}>
       <p class="notes">{summary ?? 'No reminder.'}</p>
       {!summary && <p class="rhint">eye moves this card to Needs you at the time you pick.</p>}
       <div class="acts">
@@ -146,7 +146,7 @@ export function RemindPanel({ c, store }: { c: Card; store: Store }) {
         {c.remind_at && <button class="btn sm ghost" onClick={() => void store.remind(c.id, { clear: true })}>CLEAR</button>}
       </div>
       <NoticeSwitch store={store} />
-    </Sec>
+    </Fold>
   );
 }
 

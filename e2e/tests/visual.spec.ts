@@ -16,7 +16,7 @@ const VIEWS: Record<string, (p: Page) => Promise<void>> = {
   panel: async (p) => {
     await card(p, /Fix stale tokens/).click();
     await expect(p.getByRole('heading', { level: 2, name: /Fix stale tokens/ })).toBeVisible();
-    await expect(p.getByRole('heading', { name: /LEFT BEHIND/ })).toBeVisible();
+    await expect(p.getByRole('heading', { name: /LEFTOVERS/ })).toBeVisible();
   },
   menu: async (p) => {
     // a card that is fully in view at 1000 px, so the click does not scroll the lanes
@@ -55,4 +55,25 @@ for (const scheme of SCHEMES) {
       }
     });
   }
+}
+
+// The card's frame holds whatever a card carries: the worst-case card (Needs you, a reminder, a night run,
+// leftovers and Remote Control, an app origin, a long project name and a long title) at three widths, light
+// and dark. A new state becomes a mark on the top edge or goes to the panel, never a new row or chip; if a
+// change breaks that, these screenshots show it.
+for (const scheme of SCHEMES) {
+  test.describe(`worst-case card ${scheme}`, () => {
+    test.use({ colorScheme: scheme, viewport: { width: 1440, height: 900 } });
+    for (const w of [260, 310, 360]) {
+      test(`${w} px`, async ({ board }) => {
+        const c = card(board, /Rework the customer billing reconciliation/);
+        await expect(c).toBeVisible();
+        await c.evaluate((el, px) => { (el as HTMLElement).style.width = `${px}px`; }, w);
+        await board.evaluate(() => document.fonts.ready);
+        await board.evaluate(() => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))));
+        await board.mouse.move(1435, 895);
+        await expect(c).toHaveScreenshot(`worst-card-${scheme}-${w}.png`);
+      });
+    }
+  });
 }

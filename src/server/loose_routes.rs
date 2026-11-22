@@ -129,7 +129,7 @@ pub(super) async fn api_loose_send(
         .ok_or_else(|| ApiError::not_found("no such session"))?;
     let items = loose::list(&db, Some(&id), false)?;
     if items.is_empty() {
-        return Err(ApiError::bad("nothing left behind to send back"));
+        return Err(ApiError::bad("no leftovers to send back"));
     }
     if s.kind.as_deref() == Some("history_only") {
         return Err(ApiError::bad("this session has no transcript to resume"));
@@ -194,6 +194,10 @@ mod tests {
         let (_, c) = call(&e, req("GET", "/api/cards/aaaaaaaa-1", None)).await;
         assert_eq!(c["loose"], 2);
         assert_eq!(c["loose_ends"].as_array().unwrap().len(), 2);
+        assert_eq!(
+            c["loose_summary"],
+            "1 server (port 4321), 3 commits not pushed"
+        );
         let (_, c) = call(&e, req("GET", "/api/cards/bbbbbbbb-1", None)).await;
         assert_eq!(c["loose"], 0);
         let (_, board) = call(&e, req("GET", "/api/board", None)).await;
@@ -224,7 +228,7 @@ mod tests {
             .ends_with("git push --all"));
         assert_eq!(
             v["summary"],
-            "Left behind: 1 server (port 4321), 3 commits not pushed"
+            "Leftovers: 1 server (port 4321), 3 commits not pushed"
         );
         // ignore drops the count; all ignored: no chip
         let (st, _) = call(

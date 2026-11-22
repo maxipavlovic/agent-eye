@@ -15,7 +15,7 @@ mod tests;
 pub use act::{copy_command, remove, send_prompt, stop};
 pub use find::{find, Input, Sess};
 pub use probe::{Docker, Probe, System};
-pub use store::{counts, get, ignore, list, ports_of, replace, summary_line};
+pub use store::{counts, get, ignore, list, ports_of, replace, summary_line, summary_text};
 
 use crate::agents::Agents;
 use crate::config::Config;

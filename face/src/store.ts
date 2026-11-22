@@ -71,6 +71,8 @@ export interface Store {
   looseAct(action: LooseAct, key: string): Promise<boolean>;
   /** Opens the session with a message that lists what it left behind. */
   looseSend(id: string): Promise<boolean>;
+  /** Several leftover actions in a row (REMOVE ALL, IGNORE ALL), with one toast and one refresh; true when all worked. */
+  looseActAll(acts: { action: LooseAct; key: string }[]): Promise<boolean>;
   /** The night shift: null until loaded, and when the engine has none (the chip and sections stay hidden). */
   night: ReadonlySignal<NightState | null>;
   loadNight(): void;
@@ -387,6 +389,18 @@ export function createStore(src: Source, { defaultTheme = 'auto' }: { defaultThe
     }
   }
 
+  async function looseActAll(acts: { action: LooseAct; key: string }[]) {
+    let done = 0;
+    const failed: string[] = [];
+    for (const a of acts) {
+      try { await src.looseAct(a.action, a.key); done++; } catch (e) { failed.push(e instanceof Error ? e.message : String(e)); }
+    }
+    if (failed.length) toast(`${done} done, ${failed.length} not: ${failed[0]}`, 'error');
+    else toast(acts.every((a) => a.action === 'ignore') ? `Ignored ${done}` : `Done: ${done}`);
+    await refresh();
+    return failed.length === 0;
+  }
+
   async function looseSend(id: string) {
     try {
       const plan = await src.looseSend(id, false);
@@ -450,7 +464,7 @@ export function createStore(src: Source, { defaultTheme = 'auto' }: { defaultThe
   return {
     source: src.name,
     board, selected, detail, query, results, searching, connection, themePref, accent, theme, toasts, agents, notice, night, needsYou, error,
-    open, close, search, move, setHidden, forget, resume, usage, conversation, addIdea, editIdea, startIdea, folderCheck: (path) => src.folderCheck(path), remind, looseAct, looseSend, loadNotice, setNotice, loadNight, nightSettings, nightPlan, nightCancel, nightLimit, nightDiscard, nightOpen, nightBring,
+    open, close, search, move, setHidden, forget, resume, usage, conversation, addIdea, editIdea, startIdea, folderCheck: (path) => src.folderCheck(path), remind, looseAct, looseActAll, looseSend, loadNotice, setNotice, loadNight, nightSettings, nightPlan, nightCancel, nightLimit, nightDiscard, nightOpen, nightBring,
     archive: (offset, limit = 50) => src.archive(offset, limit),
     setTheme, setAccent, toast, dismissToast, refresh,
   };

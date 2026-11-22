@@ -3,7 +3,7 @@
  * mirrored to the engine (~/.agent-eye/ui.json) so the tab and the installed app share them and
  * they survive cleared site data.
  */
-export const PREF_KEYS = ['eye.theme', 'eye.ink.layout', 'eye.ink.fold', 'eye.accent'] as const;
+export const PREF_KEYS = ['eye.theme', 'eye.ink.layout', 'eye.ink.fold', 'eye.ink.panel', 'eye.accent'] as const;
 
 let engine = true;
 

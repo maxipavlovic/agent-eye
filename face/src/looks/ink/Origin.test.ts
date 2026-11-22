@@ -33,21 +33,22 @@ describe('where a session was started', () => {
     expect(originChip(undefined)).toBeNull();
   });
 
-  it('a card shows the chip only when the session did not start in a terminal', async () => {
+  it('a card says where it was started in its top line, only when that was not a terminal', async () => {
     const store = createStore(fixtureSource(true));
     const root = document.createElement('div');
     document.body.appendChild(root);
     mounted = root;
     render(h(Root, { store }), root);
     await vi.waitFor(() => expect(root.querySelectorAll('.card').length).toBeGreaterThan(5));
-    const chips = [...root.querySelectorAll('.card .mk.origin')].map((c) => c.textContent);
-    expect(chips.length).toBeGreaterThan(0);
-    expect(chips.every((c) => ['App', 'IDE', 'Night'].includes(c ?? ''))).toBe(true);
-    const total = root.querySelectorAll('.card').length;
-    expect(chips.length).toBeLessThan(total);
+    // the top line's facts after the project: the agent (the demo board has two) and the origin
+    const facts = [...root.querySelectorAll('.card .meta .mf')].map((c) => c.textContent).filter((f) => f !== 'Claude' && f !== 'Codex');
+    expect(facts.length).toBeGreaterThan(0);
+    expect(facts.every((c) => ['App', 'IDE', 'Night'].includes(c ?? ''))).toBe(true);
+    const total = root.querySelectorAll('.card:not(.idea):not(.row)').length;
+    expect(facts.length).toBeLessThan(total);
   });
 
-  it('a night run\'s card has its night mark and no second Night chip', async () => {
+  it('a night run\'s card has its night mark and does not say Night again in its top line', async () => {
     const src = fixtureSource(true);
     const board = src.board;
     src.board = async () => {
@@ -61,8 +62,8 @@ describe('where a session was started', () => {
     document.body.appendChild(root);
     mounted = root;
     render(h(Root, { store }), root);
-    await vi.waitFor(() => expect(root.querySelector('.card .mk.night')).not.toBeNull());
-    const card = root.querySelector('.card .mk.night')!.closest('.card')!;
-    expect(card.querySelector('.mk.origin')).toBeNull();
+    await vi.waitFor(() => expect(root.querySelector('.card .tab.night')).not.toBeNull());
+    const card = root.querySelector('.card .tab.night')!.closest('.card')!;
+    expect([...card.querySelectorAll('.meta .mf')].map((c) => c.textContent)).not.toContain('Night');
   });
 });

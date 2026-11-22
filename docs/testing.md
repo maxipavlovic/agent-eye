@@ -43,8 +43,10 @@ is never enabled in a release.
 
 Flows: board loads with no console problems; search (words, a typo, a pasted link); the panel and
 its sections; D in the panel; right-click menus; Remind me on the card and in the panel; the idea
-form with TONIGHT; the usage panel; LEFT BEHIND (Ignore asks first, Stop ends a process the test
-started); the Tonight list; export downloads one HTML page with the secret masked. Tests written
+form with TONIGHT; the usage panel; LEFTOVERS (Ignore asks first, Stop ends a process the test
+started); the Tonight list; export (from MORE) downloads one HTML page with the secret masked. The
+worst-case card (every mark, a long project name and title) is screenshot at 260, 310 and 360 px in
+light and dark: the card's frame must hold whatever a card carries. Tests written
 with `test.fixme` wait for keys and menu entries that have not shipped; remove the `fixme` when
 they do.
 

@@ -345,6 +345,8 @@ export interface CardDetail extends Card {
   usage?: CardUsage | null;
   /** What the session left behind, ignored items left out. */
   loose_ends?: LooseEnd[];
+  /** What is left, by kind, in one line ("2 servers (ports 4321, 4350), 3 commits not pushed"); null when nothing is. */
+  loose_summary?: string | null;
   /** The night run that made this session; null (or missing) for any other. */
   night_run?: NightRun | null;
   /** Up to the last 10 prompts, oldest first. */

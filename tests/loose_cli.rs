@@ -121,7 +121,7 @@ fn it_lists_commits_on_no_remote_and_modified_files_and_never_pushes() {
         "{out}"
     );
     assert!(
-        out.contains("Left behind: 1 commit not pushed, 1 file not committed"),
+        out.contains("Leftovers: 1 commit not pushed, 1 file not committed"),
         "{out}"
     );
     let json: serde_json::Value = serde_json::from_str(&h.ok(&["loose", "--json"])).unwrap();
@@ -162,7 +162,7 @@ fn an_ignored_item_is_not_listed_again_after_a_new_scan() {
     for i in json.as_array().unwrap() {
         h.ok(&["loose", "ignore", i["key"].as_str().unwrap()]);
     }
-    assert!(h.ok(&["loose"]).contains("nothing left behind"));
+    assert!(h.ok(&["loose"]).contains("no leftovers"));
     assert_eq!(h.ok(&["loose", "--json"]).trim(), "[]");
     // a key no scan found is refused
     assert!(h
@@ -177,5 +177,5 @@ fn an_ignored_item_is_not_listed_again_after_a_new_scan() {
 fn with_loose_turned_off_nothing_is_scanned() {
     let (h, _repo, _remote) = world();
     std::fs::write(h.paths().config_path(), "[loose]\nenabled = false\n").unwrap();
-    assert!(h.ok(&["loose"]).contains("loose ends are off"));
+    assert!(h.ok(&["loose"]).contains("leftovers are off"));
 }

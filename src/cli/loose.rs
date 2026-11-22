@@ -30,7 +30,7 @@ pub fn run(g: &Global, sub: Option<LooseCmd>, session: Option<&str>, json: bool)
 fn list(g: &Global, session: Option<&str>, json: bool) -> Result<()> {
     let env = g.open()?;
     if !env.cfg.loose.enabled {
-        println!("loose ends are off ([loose] enabled = false in config.toml)");
+        println!("leftovers are off ([loose] enabled = false in config.toml)");
         return Ok(());
     }
     loose::scan_and_store(&env.db, &env.cfg, &env.agents, now_ms())?;
@@ -42,7 +42,7 @@ fn list(g: &Global, session: Option<&str>, json: bool) -> Result<()> {
         return Ok(());
     }
     if items.is_empty() {
-        println!("nothing left behind");
+        println!("no leftovers");
         return Ok(());
     }
     for i in &items {
@@ -99,7 +99,7 @@ fn send(g: &Global, session: &str, yes: bool, dry_run: bool) -> Result<()> {
     loose::scan_and_store(&env.db, &env.cfg, &env.agents, now_ms())?;
     let items = loose::list(&env.db, Some(&id), false)?;
     if items.is_empty() {
-        println!("nothing left behind");
+        println!("no leftovers");
         return Ok(());
     }
     let s = env.db.session_by_id(&id)?.context("session vanished")?;

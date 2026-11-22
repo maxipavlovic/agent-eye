@@ -8,6 +8,7 @@ import { createStore } from '../../store';
 import { ideaForm } from './IdeaForm';
 import { remindForm } from './Remind';
 import { Root } from './Root';
+import { resetFolds } from './Sections';
 import { dateValue } from './DatePick';
 
 const CLAUDE: Agent = { id: 'claude', name: 'Claude Code', short: 'Claude', default: true };
@@ -53,7 +54,7 @@ beforeAll(() => {
   Element.prototype.scrollIntoView ??= () => {};
   Element.prototype.scrollTo ??= () => {};
 });
-beforeEach(() => { localStorage.clear(); });
+beforeEach(() => { localStorage.clear(); resetFolds(); });
 afterEach(() => {
   if (mounted) { render(null, mounted); mounted.remove(); mounted = null; }
   ideaForm.value = null;
@@ -109,11 +110,11 @@ describe('what a session does on its own', () => {
     const { $, $$ } = await mount();
     const lines = $$('.c-running .card .activity').map((e) => e.textContent);
     expect(lines).toEqual(['background: npm run dev · 4 min', '↻ every 10 min · next 14:20']);
-    expect($$('.c-running .card .rc')).toHaveLength(1);
-    expect($('.c-running .card .rc')!.className).toBe('mk rc');
-    expect($('.c-running .card .rc')!.textContent).toBe('Remote');
-    expect($('.c-running .card .rc')!.tagName).toBe('SPAN');
-    expect($$('.c-needs_you .card .rc, .c-needs_you .card .activity')).toHaveLength(0);
+    // Remote Control is a mark on the card's top edge: an icon, its words in the label
+    expect($$('.c-running .card .tab.rc')).toHaveLength(1);
+    expect($('.c-running .card .tab.rc')!.getAttribute('aria-label')).toBe('Remote Control is on for this session');
+    expect($('.c-running .card .tab.rc')!.tagName).toBe('SPAN');
+    expect($$('.c-needs_you .card .tab.rc, .c-needs_you .card .activity')).toHaveLength(0);
   });
 
   it('lists them in the panel, with the link to the remote session', async () => {
@@ -221,33 +222,32 @@ function mixedSource(): Source {
 }
 
 describe('a board of several agents', () => {
-  it('labels each card with its agent, and only when there is more than one', async () => {
-    const { $$ } = await mount(mixedSource(), (root) => expect(root.querySelectorAll('.card .agent-tag').length).toBeGreaterThan(3));
-    const tags = $$('.card .agent-tag').map((t) => t.textContent);
-    expect(new Set(tags)).toEqual(new Set(['Claude', 'Codex']));
-    // one label in the meta line of every full card; rows and ideas have no meta line
+  /** The agent named in a card's top line: its first fact after the project. */
+  const agentOf = (c: Element) => c.querySelector('.meta .mf')?.textContent;
+
+  it('names each card\'s agent in its top line, and only when there is more than one', async () => {
+    const { $$ } = await mount(mixedSource(), (root) => expect(root.querySelectorAll('.card .meta .mf').length).toBeGreaterThan(3));
+    // every full card names its agent, in plain words in the one top line; rows and ideas have none
     const metas = $$('.card .meta');
     expect(metas.length).toBeGreaterThan(3);
-    for (const m of metas) expect(m.querySelectorAll('.agent-tag')).toHaveLength(1);
-    expect($$('.card.row .agent-tag, .card.idea .agent-tag')).toHaveLength(0);
-    expect($$('.card .meta .agent-tag').every((t) => t.parentElement!.classList.contains('ml'))).toBe(true);
-    expect($$('.agent-tag').every((t) => t.className === 'mk agent-tag')).toBe(true);
+    const agents = $$('.card:not(.row):not(.idea)').map(agentOf);
+    expect(new Set(agents)).toEqual(new Set(['Claude', 'Codex']));
+    expect($$('.card.row .meta, .card.idea .meta')).toHaveLength(0);
+    expect($$('.card .meta .mf').every((t) => t.parentElement!.classList.contains('ml'))).toBe(true);
   });
 
-  it('names the agent in the header of the panel', async () => {
-    const { $, $$ } = await mount(mixedSource(), (root) => expect(root.querySelectorAll('.card .agent-tag').length).toBeGreaterThan(3));
-    $$('.card').find((c) => c.querySelector('.agent-tag')?.textContent === 'Codex')!.click();
-    await vi.waitFor(() => expect($('.page .dh .agent-tag')?.textContent).toBe('Codex'));
-    // the same chip as on the card
-    expect($('.page .dh .agent-tag')!.className).toBe('mk agent-tag');
+  it('names the agent in the facts line of the panel', async () => {
+    const { $, $$ } = await mount(mixedSource(), (root) => expect(root.querySelectorAll('.card .meta .mf').length).toBeGreaterThan(3));
+    $$('.card').find((c) => agentOf(c) === 'Codex')!.click();
+    await vi.waitFor(() => expect($('.page .dh .facts')?.textContent).toContain('Codex'));
   });
 
   it('adds nothing with one agent: the sample board keeps its look', async () => {
     const { $$, root } = await mount();
-    expect($$('.agent-tag')).toHaveLength(0);
+    expect($$('.card .meta .mf').map((t) => t.textContent)).not.toContain('Claude');
     card(root, 'needs_you', 'date library').click();
     await vi.waitFor(() => expect(root.querySelector('.page h2')).not.toBeNull());
-    expect($$('.page .agent-tag')).toHaveLength(0);
+    expect(root.querySelector('.page .dh .facts')!.textContent).not.toContain('Claude');
   });
 });
 
@@ -259,7 +259,10 @@ describe('the panel', () => {
     expect($('.qmove button[aria-pressed="true"]')!.textContent).toBe('NEEDS YOU');
     expect($('.page .chip.now')).not.toBeNull();
     expect($$('.page .sec h4').map((h4) => h4.textContent)).toEqual(expect.arrayContaining(['TOPICS3', 'OUTPUTS2']));
-    expect($('.receipt code')!.textContent).toContain('claude --resume');
+    // the resume command is folded with the details
+    expect($('.receipt')).toBeNull();
+    $<HTMLButtonElement>('#resume-command .fhead')!.click();
+    await vi.waitFor(() => expect($('.receipt code')!.textContent).toContain('claude --resume'));
     key('Escape');
     await vi.waitFor(() => expect(store.selected.value).toBeNull());
     expect($('.page')).toBeNull();
@@ -313,8 +316,9 @@ describe('the panel', () => {
     document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'r', metaKey: true, bubbles: true }));
     await new Promise((r) => setTimeout(r, 30));
     expect(resume).toHaveBeenCalledTimes(2);
-    // the receipt and the bottom actions stay
-    expect($('.page .acts.end .btn.big')!.textContent).toBe('RESUME');
+    // RESUME lives in the action bar only; the resume command is folded with the details
+    expect($('.page .acts.end')).toBeNull();
+    expect($('.page #resume-command')).not.toBeNull();
   });
 
   it('does not resume or move the session behind the idea form', async () => {
@@ -388,7 +392,7 @@ describe('reminders', () => {
     expect(first.textContent).toContain('Cache the product list');
     expect(first.querySelector('.next')!.textContent).toBe("YOUcheck on this: Dana's CDN rule");
     expect(first.querySelector('.next .chip.you.hot')).not.toBeNull();
-    expect([...first.querySelectorAll('.tabs > .tab')].map((t) => t.className)).toEqual(['tab clock', 'tab']);
+    expect([...first.querySelectorAll('.tabs > .tab')].map((t) => t.className)).toEqual(['tab clock', 'tab need']);
     expect(first.querySelector('.tab.clock')!.getAttribute('title')).toMatch(/^Reminder due: .+ · Dana's CDN rule$/);
     // the YOU line says why; no second line for the time
     expect(first.querySelector('.when')).toBeNull();
@@ -494,6 +498,8 @@ describe('reminders', () => {
   it('gives focus back to the PICK A DATE button when the form closes, by Esc, CANCEL or the scrim', async () => {
     const { root, $, $$ } = await mount();
     card(root, 'paused', 'Changelog generator').click();
+    await vi.waitFor(() => expect($('.page #reminder .fhead')).not.toBeNull());
+    $<HTMLButtonElement>('#reminder .fhead')!.click();
     await vi.waitFor(() => expect($$('.page .acts .btn').some((b) => b.textContent === 'PICK A DATE…')).toBe(true));
     const opener = $$('.page .acts .btn').find((b) => b.textContent === 'PICK A DATE…')!;
     for (const close of [() => key('Escape'), () => $$('form.modal .btn').find((b) => b.textContent === 'CANCEL')!.click(), () => ($('form.modal')!.previousElementSibling as HTMLElement).click()]) {
@@ -533,9 +539,12 @@ describe('reminders', () => {
   it('shows the reminder in the panel with a way to change or clear it', async () => {
     const { root, $, $$ } = await mount();
     card(root, 'needs_you', 'Cache the product list').click();
-    await vi.waitFor(() => expect($('.page')).not.toBeNull());
-    await vi.waitFor(() => expect($$('.page .sec h4').some((h) => h.textContent === 'REMINDER')).toBe(true));
-    const sec = $$('.page .sec').find((x) => x.querySelector('h4')!.textContent === 'REMINDER')!;
+    await vi.waitFor(() => expect($('.page #reminder .fhead')).not.toBeNull());
+    // folded with the details, with what is set in its heading
+    expect($('#reminder .fsum')!.textContent).toMatch(/^Due .+ · Dana's CDN rule$/);
+    $<HTMLButtonElement>('#reminder .fhead')!.click();
+    await vi.waitFor(() => expect($('#reminder .notes')).not.toBeNull());
+    const sec = $('#reminder')!;
     expect(sec.querySelector('.notes')!.textContent).toMatch(/^Due .+ · Dana's CDN rule$/);
     expect($$('.page .acts .btn').map((b) => b.textContent)).toEqual(expect.arrayContaining(['TOMORROW 9:00', 'PICK A DATE…', 'CLEAR']));
   });
@@ -543,8 +552,10 @@ describe('reminders', () => {
   it('says in plain words that a card has no reminder and what setting one does', async () => {
     const { root, $, $$ } = await mount();
     card(root, 'needs_you', 'Upgrade the date library').click();
-    await vi.waitFor(() => expect($$('.page .sec h4').some((h) => h.textContent === 'REMINDER')).toBe(true));
-    const sec = $$('.page .sec').find((x) => x.querySelector('h4')!.textContent === 'REMINDER')!;
+    await vi.waitFor(() => expect($('.page #reminder .fhead')).not.toBeNull());
+    $<HTMLButtonElement>('#reminder .fhead')!.click();
+    await vi.waitFor(() => expect($('#reminder .notes')).not.toBeNull());
+    const sec = $('#reminder')!;
     expect([...sec.querySelectorAll(':scope > p')].map((p) => p.textContent)).toEqual(['No reminder.', 'eye moves this card to Needs you at the time you pick.']);
     expect([...sec.querySelectorAll('.btn')].map((b) => b.textContent)).not.toContain('CLEAR');
   });
@@ -554,19 +565,23 @@ describe('long lists in the panel', () => {
   it('shows the first items with a +N MORE button that opens the rest in place and folds them again', async () => {
     const { root, $, $$ } = await mount();
     card(root, 'needs_you', 'Review the retry policy').click();
-    const group = (name: string) => $$('.og').find((g) => g.querySelector('h5')!.textContent!.startsWith(name))!;
-    await vi.waitFor(() => expect(group('Commits')).toBeDefined());
-    const commits = group('Commits');
-    expect(commits.querySelectorAll('li:not(.more)')).toHaveLength(8);
-    const more = commits.querySelector<HTMLButtonElement>('li.more button')!;
-    expect(more.textContent).toBe('+4 MORE');
-    expect(more.getAttribute('aria-expanded')).toBe('false');
+    // the outputs are one row of chips: the first 8 links, then +N MORE; the commits are one chip
+    const links = () => $$('.ochips > .oc.out').filter((c) => c.tagName !== 'BUTTON');
+    // the full detail (the board's copy of the card carries only a few outputs)
+    await vi.waitFor(() => expect(links()).toHaveLength(8));
+    const moreLinks = $$<HTMLButtonElement>('.ochips > .lnk')[0]!;
+    expect(moreLinks.textContent).toMatch(/^\+\d+ MORE$/);
+    const all = 8 + Number(moreLinks.textContent!.match(/\d+/)![0]);
+    moreLinks.click();
+    await vi.waitFor(() => expect(links()).toHaveLength(all));
+    const chip = $$<HTMLButtonElement>('.ochips > button.oc').find((b) => b.textContent!.endsWith('12 commits'))!;
+    expect(chip.getAttribute('aria-expanded')).toBe('false');
+    chip.click();
+    const list = () => $$('.page .sec ul li:not(.more)').filter((li) => li.closest('.sec')!.querySelector('h4')!.textContent!.startsWith('OUTPUTS'));
+    await vi.waitFor(() => expect(list()).toHaveLength(8));
+    const more = $$<HTMLButtonElement>('.page li.more button').find((b) => b.textContent === '+4 MORE')!;
     more.click();
-    await vi.waitFor(() => expect(group('Commits').querySelectorAll('li:not(.more)')).toHaveLength(12));
-    expect(group('Commits').querySelector('li.more button')!.textContent).toBe('SHOW LESS');
-    expect(group('Jira').querySelector('li.more button')!.textContent).toBe('+3 MORE');
-    group('Commits').querySelector<HTMLButtonElement>('li.more button')!.click();
-    await vi.waitFor(() => expect(group('Commits').querySelectorAll('li:not(.more)')).toHaveLength(8));
+    await vi.waitFor(() => expect(list()).toHaveLength(12));
 
     $$('.kidsum button')[0]!.click();
     await vi.waitFor(() => expect($$('.kids li:not(.more)')).toHaveLength(8));

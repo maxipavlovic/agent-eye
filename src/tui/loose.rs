@@ -43,7 +43,7 @@ impl App {
         let id = r.id.clone();
         let items = loose::list(&self.db, Some(&id), false).unwrap_or_default();
         if items.is_empty() {
-            self.msg = Some("nothing left behind".into());
+            self.msg = Some("no leftovers".into());
             return;
         }
         self.msg = None;
@@ -169,7 +169,7 @@ impl App {
 
 /// The list as lines of the preview pane.
 pub(super) fn lines(l: &List) -> Vec<String> {
-    let mut v = vec!["Left behind".to_string(), String::new()];
+    let mut v = vec!["Leftovers".to_string(), String::new()];
     for (i, it) in l.items.iter().enumerate() {
         let mark = if i == l.sel { "›" } else { " " };
         v.push(format!("{mark} {}", it.line));

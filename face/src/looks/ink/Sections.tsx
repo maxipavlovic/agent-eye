@@ -1,10 +1,12 @@
 import type { ComponentChildren } from 'preact';
-import { useSignal } from '@preact/signals';
+import { useContext } from 'preact/hooks';
+import { signal, useSignal } from '@preact/signals';
+import { pushPref } from '../../prefs';
 import { Pix } from '../../pixel/Pix';
 import type { CardDetail, Output, OutputKind, Stream, Tokens, Topic } from '../../api/types';
-import { folderGroup, OUTPUT_NAMES, outputLabel, tok } from '../../format';
+import { folderGroup, outputLabel, tok } from '../../format';
 import { INK, MARKS, OUT_TAG } from './art';
-import { Hl } from './highlight';
+import { Hl, HlWords } from './highlight';
 import { Mark } from './pieces';
 import { costText, tokensText } from './usageText';
 import { WorkedRows } from './WorkedRows';
@@ -35,9 +37,9 @@ export function Running({ d }: { d: CardDetail }) {
 }
 
 /** A section that starts folded: the heading (with an optional one-line summary) opens it. */
-export function FoldSec({ t, sum, open, toggle, children }: { t: string; sum?: string; open: boolean; toggle: () => void; children: ComponentChildren }) {
+export function FoldSec({ t, sum, open, toggle, id, children }: { t: string; sum?: string; open: boolean; toggle: () => void; id?: string; children: ComponentChildren }) {
   return (
-    <section class={`sec fsec${open ? ' open' : ''}`}>
+    <section class={`sec fsec${open ? ' open' : ''}`} id={id}>
       <h4>
         <button class="fhead" onClick={toggle} aria-expanded={open}>
           {t}{sum && <span class="fsum">{sum}</span>}<span class="frule" /><span class="fact">{open ? 'HIDE' : 'SHOW'}</span>
@@ -45,6 +47,53 @@ export function FoldSec({ t, sum, open, toggle, children }: { t: string; sum?: s
       </h4>
       {open && children}
     </section>
+  );
+}
+
+/** The folded sections of the panel kept open, by name, in this browser and the engine (`eye.ink.panel`). */
+const kept = signal<Set<string>>(readKept());
+
+function readKept(): Set<string> {
+  try { return new Set((localStorage.getItem('eye.ink.panel') ?? '').split(',').filter(Boolean)); } catch { return new Set(); }
+}
+
+function keep(name: string, open: boolean) {
+  const next = new Set(kept.value);
+  if (open) next.add(name); else next.delete(name);
+  kept.value = next;
+  pushPref('eye.ink.panel', [...next].join(','));
+}
+
+/** Read the kept sections again from storage (a test starts from a clean page). */
+export function resetFolds() {
+  kept.value = readKept();
+}
+
+/** Open a folded section (REVIEW on the night run's line does). */
+export function openFold(name: string) {
+  if (!kept.value.has(name)) keep(name, true);
+}
+
+/** Whether the folded section `name` is open, and the toggle that remembers it. */
+export function useFold(name: string): [boolean, () => void] {
+  const open = kept.value.has(name);
+  return [open, () => keep(name, !open)];
+}
+
+/**
+ * A section of the panel's details: one line with SHOW until opened, and eye remembers which ones you keep
+ * open. Opened from a search, a section whose `text` holds a search word opens by itself (HIDE folds it).
+ */
+export function Fold({ name, t, sum, text, children }: { name: string; t: string; sum?: string; text?: string; children: ComponentChildren }) {
+  const re = useContext(HlWords);
+  const shut = useSignal(false);
+  const [open, toggle] = useFold(name);
+  const hit = !!re && !!text && new RegExp(re.source, 'i').test(text) && !shut.value;
+  const shown = open || hit;
+  return (
+    <FoldSec t={t} sum={sum} open={shown} toggle={() => { if (shown && !open) shut.value = true; else toggle(); }} id={name}>
+      {children}
+    </FoldSec>
   );
 }
 
@@ -132,34 +181,46 @@ function groupOutputs(os: Output[]) {
   return (['pr', 'artifact', 'jira', 'commit', 'folder'] as OutputKind[]).filter((k) => by.has(k)).map((k) => ({ k, items: by.get(k)! }));
 }
 
-/** What the session produced, grouped by kind: pull requests, artifacts, Jira keys, commits, folders. */
+/** The pull requests, artifacts and Jira keys shown as chips before `+N MORE`. */
+const OUT_CHIPS = 8;
+
+/**
+ * What the session produced, as one row of small chips: each pull request, artifact and Jira key (a link where
+ * it has one), then one chip for the commits and one for the folders, which open their list below.
+ */
 export function Outputs({ outputs }: { outputs: Output[] }) {
+  const all = useSignal(false);
+  const list = useSignal<OutputKind | null>(null);
   const groups = groupOutputs(outputs);
   if (!groups.length) return null;
+  const links = groups.filter((g) => g.k !== 'commit' && g.k !== 'folder').flatMap((g) => g.items);
+  const of = (k: OutputKind) => groups.find((g) => g.k === k)?.items ?? [];
+  const shown = all.value ? links : links.slice(0, OUT_CHIPS);
+  const toggle = (k: OutputKind) => { list.value = list.value === k ? null : k; };
+  const commits = of('commit');
+  const folders = of('folder');
   return (
     <Sec t="OUTPUTS" n={outputs.length}>
-      {groups.map(({ k, items }) => (
-        <div class="og" key={k}>
-          <h5>{OUTPUT_NAMES[k]} <b>{items.length}</b></h5>
-          {k === 'folder' ? <Folders items={items} /> : (
-            <MoreList items={items} n={8} row={(o, j) => (
-              <li key={j}>
-                <span class="ot">{OUT_TAG[k]}</span>
-                {o.url ? <a href={o.url} target="_blank" rel="noopener noreferrer">{outputLabel(o)}</a> : <span title={o.value}>{outputLabel(o)}</span>}
-              </li>
-            )} />
-          )}
-        </div>
-      ))}
+      <div class="ochips">
+        {shown.map((o, j) => (
+          o.url
+            ? <a key={j} class="oc out" href={o.url} target="_blank" rel="noopener noreferrer" title={o.value}><span class="ot">{OUT_TAG[o.kind]}</span>{outputLabel(o)}</a>
+            : <span key={j} class="oc out" title={o.value}><span class="ot">{OUT_TAG[o.kind]}</span>{outputLabel(o)}</span>
+        ))}
+        {links.length > OUT_CHIPS && <button class="lnk" onClick={() => { all.value = !all.value; }}>{all.value ? 'SHOW LESS' : `+${links.length - OUT_CHIPS} MORE`}</button>}
+        {commits.length > 0 && <button class="oc out" aria-expanded={list.value === 'commit'} onClick={() => toggle('commit')}><span class="ot">{OUT_TAG.commit}</span>{commits.length} {commits.length === 1 ? 'commit' : 'commits'}</button>}
+        {folders.length > 0 && <button class="oc out" aria-expanded={list.value === 'folder'} onClick={() => toggle('folder')}><span class="ot">{OUT_TAG.folder}</span>{folders.length} {folders.length === 1 ? 'folder' : 'folders'}</button>}
+      </div>
+      {list.value === 'commit' && <MoreList items={commits} n={8} row={(o, j) => <li key={j}><span title={o.value}>{outputLabel(o)}</span></li>} />}
+      {list.value === 'folder' && <Folders items={folders} />}
     </Sec>
   );
 }
 
 export function TokenSec({ t }: { t: Tokens }) {
   const n = (v: number) => v.toLocaleString('en-GB');
-  const open = useSignal(false);
   return (
-    <FoldSec t="TOKENS" sum={tok(t.total)} open={open.value} toggle={() => { open.value = !open.value; }}>
+    <Fold name="tokens" t="TOKENS" sum={tok(t.total)}>
       <dl class="where toks">
         <dt>TOTAL</dt><dd><b>{n(t.total)}</b> <span class="dim">{tok(t.total)}</span></dd>
         <dt>INPUT</dt><dd>{n(t.input)}</dd>
@@ -168,14 +229,14 @@ export function TokenSec({ t }: { t: Tokens }) {
         <dt>CACHE READ</dt><dd>{n(t.cache_read)}</dd>
         {t.subagents_total > 0 && (<><dt>SUB-AGENTS</dt><dd>{n(t.subagents_total)} <span class="dim">({Math.round((t.subagents_total / Math.max(1, t.total)) * 100)}% of the total)</span></dd></>)}
       </dl>
-    </FoldSec>
+    </Fold>
   );
 }
 
 export function Where({ d }: { d: CardDetail }) {
   const u = d.usage && d.usage.total > 0 ? d.usage : null;
   return (
-    <Sec t="WHERE">
+    <Fold name="where" t="WHERE" sum={d.branch ?? undefined} text={[d.folder, d.branch].filter(Boolean).join(' ')}>
       <dl class="where">
         {d.folder && (<><dt>FOLDER</dt><dd>{d.folder}</dd></>)}
         {d.branch && (<><dt>BRANCH</dt><dd>{d.branch}</dd></>)}
@@ -184,6 +245,6 @@ export function Where({ d }: { d: CardDetail }) {
         {u && (<><dt>COST</dt><dd>{costText(u)} · {tokensText(u)}</dd></>)}
       </dl>
       {u && <p class="rhint">{u.estimate}</p>}
-    </Sec>
+    </Fold>
   );
 }

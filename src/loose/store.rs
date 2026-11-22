@@ -133,8 +133,13 @@ fn count(n: usize, one: &str, many: &str) -> String {
     format!("{n} {}", if n == 1 { one } else { many })
 }
 
-/// `Left behind: 2 servers (ports 4321, 4350), 3 commits not pushed`; None when nothing is.
+/// `Leftovers: 2 servers (ports 4321, 4350), 3 commits not pushed`; None when nothing is.
 pub fn summary_line(items: &[LooseEnd]) -> Option<String> {
+    summary_text(items).map(|t| format!("Leftovers: {t}"))
+}
+
+/// `2 servers (ports 4321, 4350), 3 commits not pushed`: what is left, by kind; None when nothing is.
+pub fn summary_text(items: &[LooseEnd]) -> Option<String> {
     if items.is_empty() {
         return None;
     }
@@ -176,5 +181,5 @@ pub fn summary_line(items: &[LooseEnd]) -> Option<String> {
     if n > 0 {
         parts.push(format!("{} not committed", count(n, "file", "files")));
     }
-    Some(format!("Left behind: {}", parts.join(", ")))
+    Some(parts.join(", "))
 }

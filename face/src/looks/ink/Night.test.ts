@@ -6,7 +6,8 @@ import { fixtureSource } from '../../data/fixture';
 import { keepPrefsLocal } from '../../prefs';
 import { createStore } from '../../store';
 import { Root } from './Root';
-import { discardText, durationText, nightAsk, nightPanel, runStatus } from './Night';
+import { changedText, discardText, durationText, nightAsk, nightPanel, runStatus, tonightOpen } from './Night';
+import { resetFolds } from './Sections';
 
 let mounted: HTMLElement | null = null;
 
@@ -15,7 +16,7 @@ beforeAll(() => {
   Element.prototype.scrollIntoView ??= () => {};
   Element.prototype.scrollTo ??= () => {};
 });
-beforeEach(() => { localStorage.clear(); nightAsk.value = null; nightPanel.value = false; });
+beforeEach(() => { localStorage.clear(); resetFolds(); nightAsk.value = null; nightPanel.value = false; tonightOpen.value = null; });
 afterEach(() => {
   if (mounted) { render(null, mounted); mounted.remove(); mounted = null; }
   document.body.innerHTML = '';
@@ -163,18 +164,24 @@ describe('the TONIGHT switch in the idea form', () => {
   });
 });
 
+/** An item of the panel's MORE menu, by its label (the key letter beside it is left out). */
+const moreItem = async (m: M, label: string) => {
+  button(m.$('.page')!, 'MORE ▾')!.click();
+  await vi.waitFor(() => expect(m.$('.page [role=menu]')).not.toBeNull());
+  return [...m.$$<HTMLButtonElement>('.page [role=menuitem]')].find((b) => text(b.querySelector('span')) === label);
+};
+
 describe('CONTINUE TONIGHT', () => {
   async function openSession(m: M) {
-    const card = m.$$('.card').find((c) => !c.classList.contains('idea') && !c.querySelector('.mk.night'))!;
+    const card = m.$$('.card').find((c) => !c.classList.contains('idea') && !c.querySelector('.tab.night'))!;
     card.click();
-    await vi.waitFor(() => expect(m.$('.page')).not.toBeNull());
-    await vi.waitFor(() => expect(button(m.root, 'CONTINUE TONIGHT…')).toBeDefined());
+    await vi.waitFor(() => expect(m.$('.page .dbar')).not.toBeNull());
+    (await moreItem(m, 'CONTINUE TONIGHT…'))!.click();
   }
 
   it('needs a prompt, then plans the session', async () => {
     const m = await mount();
     await openSession(m);
-    button(m.$('.page')!, 'CONTINUE TONIGHT…')!.click();
     await vi.waitFor(() => expect(m.$('form.nplan textarea')).not.toBeNull());
     m.$<HTMLFormElement>('form.nplan')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     await vi.waitFor(() => expect(m.$$('.toast, [role=status]').map(text).join(' ')).toContain('needs a prompt'));
@@ -189,7 +196,6 @@ describe('CONTINUE TONIGHT', () => {
   it('opens at the top of the panel, above every section that loads later', async () => {
     const m = await mount();
     await openSession(m);
-    button(m.$('.page')!, 'CONTINUE TONIGHT…')!.click();
     await vi.waitFor(() => expect(m.$('form.nplan')).not.toBeNull());
     const secs = m.$$('.page section.sec');
     expect(secs[0]!.querySelector('h4')!.textContent).toBe('CONTINUE TONIGHT');
@@ -199,7 +205,6 @@ describe('CONTINUE TONIGHT', () => {
   it('a weekly limit eye cannot check is refused with the reason', async () => {
     const m = await mount();
     await openSession(m);
-    button(m.$('.page')!, 'CONTINUE TONIGHT…')!.click();
     await vi.waitFor(() => expect(m.$('form.nplan textarea')).not.toBeNull());
     type(m.$<HTMLTextAreaElement>('form.nplan textarea'), 'go');
     type(m.$<HTMLInputElement>('form.nplan input:not([type=checkbox])'), '80%');
@@ -211,15 +216,31 @@ describe('CONTINUE TONIGHT', () => {
 
 describe('the morning card and the NIGHT RUN section', () => {
   async function openNight(m: M) {
-    const card = m.$$('.card').find((c) => c.querySelector('.mk.night'))!;
+    const card = m.$$('.card').find((c) => c.querySelector('.tab.night'))!;
     expect(card).toBeDefined();
     card.click();
+    await vi.waitFor(() => expect(m.$('.page .nline')).not.toBeNull());
+    button(m.$('.nline')!, 'REVIEW')!.click();
     await vi.waitFor(() => expect(m.$('.nrun')).not.toBeNull());
   }
 
-  it('a card made by a night run has a calm NIGHT chip, and no other card does', async () => {
+  it('a card made by a night run has a night mark on its top edge, and no other card does', async () => {
     const m = await mount();
-    expect(m.$$('.card .mk.night').map(text)).toEqual(['night']);
+    const marks = m.$$('.card .tab.night');
+    expect(marks.length).toBe(1);
+    expect(marks[0]!.getAttribute('aria-label')).toMatch(/night-shift run/);
+  });
+
+  it('says the run in one line at the top; its details stay folded until REVIEW', async () => {
+    const m = await mount();
+    m.$$('.card').find((c) => c.querySelector('.tab.night'))!.click();
+    await vi.waitFor(() => expect(m.$('.page .nline')).not.toBeNull());
+    expect(text(m.$('.nline'))).toBe('NIGHT RUNDone · 2 files changed · 41 minREVIEW');
+    expect(m.$('.nrun')).toBeNull();
+    button(m.$('.nline')!, 'REVIEW')!.click();
+    await vi.waitFor(() => expect(m.$('.nrun')).not.toBeNull());
+    expect(changedText(' a | 1 +\n 2 files changed, 3 insertions(+)')).toBe('2 files changed');
+    expect(changedText(null)).toBeNull();
   });
 
   it('shows status, times, tokens, limit, report, diff stat, branch and the three buttons', async () => {
@@ -288,7 +309,9 @@ describe('the two ways to keep your folder safe', () => {
   });
 
   async function openRun(m: M) {
-    m.$$('.card').find((c) => c.querySelector('.mk.night'))!.click();
+    m.$$('.card').find((c) => c.querySelector('.tab.night'))!.click();
+    await vi.waitFor(() => expect(m.$('.page .nline')).not.toBeNull());
+    button(m.$('.nline')!, 'REVIEW')!.click();
     await vi.waitFor(() => expect(m.$('.nrun')).not.toBeNull());
   }
 

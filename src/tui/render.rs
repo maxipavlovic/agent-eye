@@ -382,7 +382,7 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     }
 
     // hint / message
-    let hint_full = "↑↓ move   Enter resume   Ctrl-F fork   Ctrl-T talk   Ctrl-R remind   Ctrl-L left behind   Ctrl-Y copy   Ctrl-X hide   Tab preview   Ctrl-A hidden+archive   Esc quit";
+    let hint_full = "↑↓ move   Enter resume   Ctrl-F fork   Ctrl-T talk   Ctrl-R remind   Ctrl-L leftovers   Ctrl-Y copy   Ctrl-X hide   Tab preview   Ctrl-A hidden+archive   Esc quit";
     let hint_mid =
         "↑↓  Enter resume  ^F fork  ^T talk  ^R remind  ^L left  ^Y copy  ^X hide  Tab preview  ^A all  Esc quit";
     let hint_short = "Enter resume  ^F fork  ^T talk  ^Y copy  ^X hide  Esc quit";

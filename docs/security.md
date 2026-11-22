@@ -56,7 +56,7 @@ and the tail of the last reply. It reads no file, opens no connection, never cha
 at a time in the background, each stopped after 5 s) and says nothing when something fails. The path of `agent-eye` in it is the
 one installed. `eye uninstall` removes it, `eye doctor` checks it, and a file of that name that is not eye's is left alone.
 
-### Loose ends
+### Leftovers
 
 `[loose]` (on by default, `enabled = false` turns it off) makes the daemon look, every 5 minutes and after a session stops, for what sessions left behind. Looking never changes a repo or a process (it keeps what it finds in eye's own database): the process table of your own user (`ps` and `lsof` on macOS, `/proc` on Linux: pid, start time, command line, working folder and listening ports), `docker ps` when docker is installed, and in the repos of recent sessions `git worktree list`, `git remote`, `git log --branches --not --remotes` and `git status --porcelain`, each with `--no-optional-locks`, `core.fsmonitor=false` and a time limit. It writes nothing in any repo and starts nothing. The results (command lines and folder names included) are kept in `loose` in `eye.db`, which is as private as the rest of it, and shown on the board and in the picker like any other card text.
 
