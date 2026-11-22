@@ -153,6 +153,27 @@ test.describe('ideas', () => {
     await expect(board.getByRole('button', { name: /Tonight: 3/ })).toBeVisible();
   });
 
+  test("an idea's panel has one action row and takes its keys", async ({ board }) => {
+    await card(board, /Write a changelog generator/).click();
+    const page = board.locator('.page');
+    await expect(page.getByRole('heading', { level: 2, name: /Write a changelog generator/ })).toBeVisible();
+    // START, IN BACKGROUND, TONIGHT and EDIT on one line, ARCHIVE in MORE
+    const mids = await page.locator(':scope > .acts .btn').evaluateAll((bs) => bs.map((b) => { const r = b.getBoundingClientRect(); return Math.round(r.top + r.height / 2); }));
+    expect(mids.length).toBe(4);
+    expect(new Set(mids).size).toBe(1);
+    await page.getByRole('button', { name: 'MORE ▾' }).click();
+    await expect(page.getByRole('menuitem', { name: /ARCHIVE/ })).toBeVisible();
+    await board.keyboard.press('Escape');
+    await expect(page.getByRole('menuitem', { name: /ARCHIVE/ })).toHaveCount(0);
+    await board.keyboard.press('?');
+    const keys = board.getByRole('dialog', { name: 'Keyboard shortcuts' });
+    await expect(keys).toContainText('Start in the background');
+    await board.keyboard.press('Escape');
+    await expect(keys).toHaveCount(0);
+    await board.keyboard.press('e');
+    await expect(board.getByRole('form', { name: 'Edit idea' })).toBeVisible();
+  });
+
   test('a title is required', async ({ board }) => {
     await board.getByRole('button', { name: '+ IDEA' }).click();
     const form = board.getByRole('form', { name: 'New idea' });

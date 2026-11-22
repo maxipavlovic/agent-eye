@@ -110,7 +110,7 @@ export function Root({ store }: { store: Store }) {
       <ForgetHost store={store} />
       <UsageHost store={store} />
       <NightHost store={store} />
-      <KeyHelpHost />
+      <KeyHelpHost store={store} />
       <CardMenu store={store} />
       <Toasts store={store} />
     </div>

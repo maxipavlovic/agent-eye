@@ -1,18 +1,18 @@
 import { useEffect, useRef } from 'preact/hooks';
 import type { Store } from '../../store';
 import { copy } from './copy';
-import { exportSession } from './Detail';
+import { exportSession, ideaAct } from './Detail';
 import { ideaForm } from './IdeaForm';
 import { closeForget, forgetFor, openForget } from './Forget';
 import { keyHelp } from './KeyHelp';
 import { leftoversOpen } from './Loose';
 import { hideSession, QUICK, quickMove } from './Move';
-import { canContinueTonight, tonightOpen } from './Night';
+import { canContinueTonight, canPlanIdea, nightAsk, tonightOpen } from './Night';
 import { closeRemind, openRemind, remindForm } from './Remind';
 import type { Walk } from './walk';
 
 /** Board keys: / or ⌘K / Ctrl-K searches, ← → walk the cards, Esc backs out one level, ? lists the keys. The open session's panel
- *  takes R D W P N M T F C H L E X (see KEY_LIST), and only while no field has the focus. */
+ *  takes R D W P N M T F C H L E X (see KEY_LIST), an idea's S B T E M (IDEA_KEY_LIST), and only while no field has the focus. */
 /** Back to the search box, with what is in it selected, so typing starts a new search. */
 export function focusSearch() {
   const q = document.getElementById('q') as HTMLInputElement | null;
@@ -75,10 +75,11 @@ export function useKeys(store: Store, step: Walk['step']) {
   }, []);
 }
 
-/** The panel keys that are not moves: remind, continue tonight, fork, copy, hide, leftovers, export, forget.
- *  True when the key was one of them and did something (or deliberately nothing); the buttons carry the same keys. */
+/** The panel keys that are not moves: remind, continue tonight, fork, copy, hide, leftovers, export, forget; an idea's
+ *  start, in the background, tonight, edit and remind. True when the key was one of them and did something (or
+ *  deliberately nothing); the buttons carry the same keys. */
 function panelAct(store: Store, d: NonNullable<Store['detail']['value']>, k: string): boolean {
-  const session = d.kind !== 'idea';
+  if (d.kind === 'idea') return ideaKey(store, d, k);
   switch (k) {
     case 'm': openRemind(d.id); return true;
     case 't':
@@ -86,7 +87,7 @@ function panelAct(store: Store, d: NonNullable<Store['detail']['value']>, k: str
       tonightOpen.value = d.id;
       return true;
     case 'f':
-      if (!session || !d.resumable || !d.resume_cmd) return false;
+      if (!d.resumable || !d.resume_cmd) return false;
       void store.resume(d.id, true);
       return true;
     case 'c':
@@ -94,23 +95,35 @@ function panelAct(store: Store, d: NonNullable<Store['detail']['value']>, k: str
       copy(d.resume_cmd, store);
       return true;
     case 'h':
-      if (!session) return false;
       hideSession(store, d.id);
       return true;
     case 'l': {
-      if (!session || !d.loose_ends?.length) return false;
+      if (!d.loose_ends?.length) return false;
       leftoversOpen.value = d.id;
       requestAnimationFrame(() => document.getElementById('leftovers')?.scrollIntoView({ block: 'start', behavior: 'smooth' }));
       return true;
     }
     case 'e':
-      if (!session) return false;
       exportSession(d.id);
       return true;
     case 'x':
-      if (d.kind === 'idea') return false;
       openForget(d);
       return true;
+    default: return false;
+  }
+}
+
+/** An idea's panel keys: S start, B in the background, T tonight, E edit, M remind me. */
+function ideaKey(store: Store, d: NonNullable<Store['detail']['value']>, k: string): boolean {
+  switch (k) {
+    case 's': return ideaAct(store, d, 'start');
+    case 'b': return ideaAct(store, d, 'background');
+    case 'e': return ideaAct(store, d, 'edit');
+    case 't':
+      if (!canPlanIdea(d, store)) return false;
+      nightAsk.value = d.id;
+      return true;
+    case 'm': openRemind(d.id); return true;
     default: return false;
   }
 }

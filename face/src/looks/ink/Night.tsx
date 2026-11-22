@@ -124,19 +124,30 @@ export function NightPlanForm({ store, d, onDone }: { store: Store; d: CardDetai
   );
 }
 
-/** The TONIGHT button of an idea's panel and its form. */
-export function TonightIdea({ d, store }: { d: CardDetail; store: Store }) {
+/** The night run planned for this idea, if one is still to come. */
+const plannedRun = (d: CardDetail, store: Store) => store.night.value?.open.find((r) => r.idea_id === d.idea_id && r.status !== 'done');
+
+/** Can this idea be planned for tonight: the night shift is on and no run of it is planned yet. */
+export const canPlanIdea = (d: CardDetail, store: Store) => !!store.night.value && !plannedRun(d, store);
+
+/** TONIGHT in an idea's action row (T does the same): it opens the plan form under the row. */
+export function TonightIdeaButton({ d, store }: { d: CardDetail; store: Store }) {
+  if (!canPlanIdea(d, store)) return null;
   const open = nightAsk.value === d.id;
-  const planned = store.night.value?.open.find((r) => r.idea_id === d.idea_id && r.status !== 'done');
-  if (planned) return <p class="fnote" role="status">Planned for tonight{planned.limit ? `, limit ${planned.limit.text}` : ''}. <button class="btn sm ghost" onClick={() => { nightPanel.value = true; }}>OPEN THE LIST</button></p>;
   return (
-    <>
-      <div class="acts">
-        <button class="btn" aria-expanded={open} title="Run it while you sleep, in its own worktree" onClick={() => { nightAsk.value = open ? null : d.id; }}>TONIGHT</button>
-      </div>
-      {open && <NightPlanForm store={store} d={d} onDone={() => { nightAsk.value = null; }} />}
-    </>
+    <button class="btn" aria-expanded={open} aria-keyshortcuts="T" title="Run it while you sleep, in its own worktree (T)" onClick={() => { nightAsk.value = open ? null : d.id; }}>
+      <u>T</u>ONIGHT
+    </button>
   );
+}
+
+/** Under an idea's action row: the plan form while it is open, or the run already planned. */
+export function TonightIdea({ d, store }: { d: CardDetail; store: Store }) {
+  if (!store.night.value) return null;
+  const planned = plannedRun(d, store);
+  if (planned) return <p class="fnote" role="status">Planned for tonight{planned.limit ? `, limit ${planned.limit.text}` : ''}. <button class="btn sm ghost" onClick={() => { nightPanel.value = true; }}>OPEN THE LIST</button></p>;
+  if (nightAsk.value !== d.id) return null;
+  return <NightPlanForm store={store} d={d} onDone={() => { nightAsk.value = null; }} />;
 }
 
 /** The session whose CONTINUE TONIGHT form is open in the panel (the button, N and the card menu set it). */

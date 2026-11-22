@@ -4,7 +4,13 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## Unreleased
 
+### Added
+
+- An idea's panel has keys: S starts it, B starts it in the background, T plans it for tonight, E edits it and M sets a reminder. `?` lists them while an idea is open.
+
 ### Fixed
+
+- An idea's panel had its buttons on three rows (START, IN BACKGROUND and EDIT; then TONIGHT; then ARCHIVE). They are one row now (START, IN BACKGROUND, TONIGHT, EDIT), with REMIND ME and ARCHIVE in MORE ▾, as a session's panel has them.
 
 - A doc Claude Code writes through the Claude Docs connector (its `batch` tool) is an artifact output, with the doc's name as its title. Before, only the `Artifact` tool's publishes counted, so a session that made a doc showed no artifact. Sessions indexed before pick it up with `eye scan --full`.
 

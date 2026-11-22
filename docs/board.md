@@ -48,6 +48,20 @@ In a session's panel, when no field has the focus:
 | Esc | Close |
 | ? | The list of keys |
 
+An idea's panel has START, IN BACKGROUND, TONIGHT and EDIT in one row, and REMIND ME and ARCHIVE in MORE ▾. Its keys:
+
+| Key | Does |
+|---|---|
+| S | Start |
+| B | Start in the background |
+| T | Plan for tonight |
+| E | Edit |
+| M | Remind me |
+| ← → | Previous or next card |
+| / or ⌘K | Search |
+| Esc | Close |
+| ? | The list of keys |
+
 ## The header
 
 Search (every session, archive included; the best match first), the Needs you count, the live connection, Lanes / Grid, the theme (light, dark, auto) and the accent colour, **Tonight: N** while night runs are planned (see `night.md`), USAGE (cost and plan limits, see `usage.md`) and **+ IDEA**. The theme, accent, layout, folded lanes and the panel sections you keep open are shared by every browser on this machine (`ui.json`).
