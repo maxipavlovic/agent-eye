@@ -2,6 +2,12 @@
 
 All notable changes are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Changed
+
+- Dependencies: rusqlite 0.43 (SQLite from libsqlite3-sys 0.40), sha2 0.11, vite 8.3.8 (face).
+
 ## 0.3.0 - 2026-11-22
 
 ### Added
