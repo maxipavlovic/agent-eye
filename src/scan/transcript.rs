@@ -38,6 +38,26 @@ pub(super) fn prompt_title(p: &str) -> String {
     head_chars(&p.split_whitespace().collect::<Vec<_>>().join(" "), 80)
 }
 
+/// The worktree or copy of the night run that made `sid`, when the transcript names a folder outside it.
+/// A continued session's fork starts with the copied conversation of the original folder, but it lives
+/// (and resumes) where the run worked.
+fn night_folder(tx: &Connection, sid: &str, cwd: Option<&str>) -> Option<String> {
+    let wt: String = tx
+        .query_row(
+            "SELECT worktree FROM night_run WHERE run_session_id=?1 AND worktree IS NOT NULL
+             ORDER BY id DESC LIMIT 1",
+            [sid],
+            |r| r.get(0),
+        )
+        .optional()
+        .ok()??;
+    let inside = cwd.is_some_and(|c| {
+        let w = wt.trim_end_matches('/');
+        c == w || c.starts_with(&format!("{w}/"))
+    });
+    (!inside).then_some(wt)
+}
+
 /// Store what one parse of a transcript found: the session row, its tokens, outputs and search text.
 pub(super) fn apply(
     tx: &Connection,
@@ -81,6 +101,7 @@ pub(super) fn apply(
     } else {
         ex.cwd.clone().or(d.cwd.clone())
     };
+    let cwd = night_folder(tx, sid, cwd.as_deref()).or(cwd);
     if cwd.as_deref().is_some_and(|c| cfg.is_excluded(c)) {
         return Ok(());
     }
