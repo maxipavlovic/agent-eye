@@ -95,7 +95,7 @@ pub fn snapshot(conn: &Connection, dir: &Path, reason: &Reason) -> Result<Snapsh
     let schema = restore::schema_of(conn).ok();
     let name = names::file_name(
         jiff::Timestamp::now()
-            .to_zoned(jiff::tz::TimeZone::UTC)
+            .to_zoned_datetime(jiff::tz::TimeZone::UTC)
             .datetime(),
         reason,
         schema,

@@ -5,7 +5,7 @@ use anyhow::{anyhow, bail, ensure, Result};
 use jiff::{
     civil::{Date, DateTime, Weekday},
     tz::TimeZone,
-    Span, Timestamp, Zoned,
+    Span, Timestamp, ZonedDateTime,
 };
 
 /// The hour of the day the words mean when they name a day and no time.
@@ -31,12 +31,12 @@ const WEEKDAYS: [(&str, Weekday); 7] = [
 pub fn parse_local(text: &str, now_ms: i64) -> Result<i64> {
     let now = Timestamp::from_millisecond(now_ms)
         .map_err(|_| anyhow!("the clock is out of range"))?
-        .to_zoned(TimeZone::system());
+        .to_zoned_datetime(TimeZone::system());
     parse(text, &now)
 }
 
 /// The time `text` names, in Unix ms, in the zone of `now` and after it.
-pub fn parse(text: &str, now: &Zoned) -> Result<i64> {
+pub fn parse(text: &str, now: &ZonedDateTime) -> Result<i64> {
     let t = text.trim().to_lowercase();
     ensure!(!t.is_empty(), "{HELP}");
     let tz = now.time_zone();
@@ -71,7 +71,7 @@ pub fn parse(text: &str, now: &Zoned) -> Result<i64> {
     finish(text, now, when)
 }
 
-fn finish(text: &str, now: &Zoned, when: Zoned) -> Result<i64> {
+fn finish(text: &str, now: &ZonedDateTime, when: ZonedDateTime) -> Result<i64> {
     ensure!(when > *now, "{} has already passed", text.trim());
     Ok(when.timestamp().as_millisecond())
 }
@@ -105,7 +105,7 @@ fn morning(d: Date) -> DateTime {
 
 /// A wall-clock time in a zone. When the clocks go back and it happens twice, the first one; when
 /// they go forward and it never happens, the same time an hour later.
-fn at(tz: &TimeZone, wall: DateTime) -> Result<Zoned> {
+fn at(tz: &TimeZone, wall: DateTime) -> Result<ZonedDateTime> {
     let first = |w: DateTime| crate::util::wall_earliest(tz, w);
     first(wall)
         .or_else(|| first(wall.checked_add(Span::new().hours(1)).ok()?))
@@ -126,16 +126,16 @@ mod tests {
     fn show(ms: i64) -> String {
         Timestamp::from_millisecond(ms)
             .unwrap()
-            .to_zoned(madrid())
+            .to_zoned_datetime(madrid())
             .strftime("%a %Y-%m-%d %H:%M")
             .to_string()
     }
 
-    fn now(y: i16, m: i8, d: i8, h: i8, mi: i8) -> Zoned {
+    fn now(y: i16, m: i8, d: i8, h: i8, mi: i8) -> ZonedDateTime {
         crate::util::wall_earliest(&madrid(), jiff::civil::date(y, m, d).at(h, mi, 0, 0)).unwrap()
     }
 
-    fn at_(text: &str, from: &Zoned) -> String {
+    fn at_(text: &str, from: &ZonedDateTime) -> String {
         show(parse(text, from).unwrap())
     }
 
@@ -193,7 +193,7 @@ mod tests {
             assert_eq!(at_("tomorrow", &from), want);
         }
         // the distance in real time is 23, 25, 24 and 24 hours, and never 24 by force
-        let hours = |a: &Zoned, text: &str| {
+        let hours = |a: &ZonedDateTime, text: &str| {
             (parse(text, a).unwrap() - a.timestamp().as_millisecond()) as f64 / 3_600_000.0
         };
         assert_eq!(hours(&now(2026, 3, 28, 9, 0), "tomorrow"), 24.0 - 1.0);
@@ -214,7 +214,7 @@ mod tests {
         assert_eq!(
             Timestamp::from_millisecond(first)
                 .unwrap()
-                .to_zoned(TimeZone::UTC)
+                .to_zoned_datetime(TimeZone::UTC)
                 .strftime("%H:%M")
                 .to_string(),
             "00:30"

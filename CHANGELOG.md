@@ -2,6 +2,12 @@
 
 All notable changes are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Changed
+
+- Dependencies: jiff 1.0 (its `Zoned` type is now `ZonedDateTime`; nothing changes for you) and clap 4.6.8. CI: taiki-e/install-action 2.90.5 and sonarqube-scan-action 8.5.0.
+
 ## 0.3.2 - 2026-11-23
 
 ### Added

@@ -96,7 +96,7 @@ pub fn log(paths: &Paths, msg: &str) {
         let _ = writeln!(
             f,
             "{} {}",
-            jiff::Zoned::now().strftime("%Y-%m-%d %H:%M:%S"),
+            jiff::ZonedDateTime::now().strftime("%Y-%m-%d %H:%M:%S"),
             msg
         );
     }

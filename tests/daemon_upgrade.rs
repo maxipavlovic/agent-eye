@@ -38,19 +38,30 @@ fn start(home: &Path, args: &[&str]) -> Daemon {
     let bin = home.join("bin/agent-eye");
     std::fs::create_dir_all(bin.parent().unwrap()).unwrap();
     std::fs::copy(env!("CARGO_BIN_EXE_agent-eye"), &bin).unwrap();
-    let child = Command::new(&bin)
-        .arg("daemon")
-        .args(args)
-        .env("HOME", home)
-        .env_remove("EYE_HOME")
-        .env_remove("EYE_CLAUDE_DIR")
-        .env_remove("EYE_CLAUDE_BIN")
-        .env("PATH", "/usr/bin:/bin")
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .unwrap();
+    // Linux refuses to start a program another thread still has open for writing ("text file
+    // busy"): the test beside this one may have forked while the copy above was open. It passes.
+    let mut tries = 0;
+    let child = loop {
+        let spawned = Command::new(&bin)
+            .arg("daemon")
+            .args(args)
+            .env("HOME", home)
+            .env_remove("EYE_HOME")
+            .env_remove("EYE_CLAUDE_DIR")
+            .env_remove("EYE_CLAUDE_BIN")
+            .env("PATH", "/usr/bin:/bin")
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn();
+        match spawned {
+            Err(e) if e.kind() == std::io::ErrorKind::ExecutableFileBusy && tries < 20 => {
+                tries += 1;
+                std::thread::sleep(Duration::from_millis(25));
+            }
+            r => break r.unwrap(),
+        }
+    };
     Daemon(child)
 }
 

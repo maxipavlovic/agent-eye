@@ -1,7 +1,7 @@
 use jiff::{
     civil::DateTime,
     tz::{AmbiguousOffset, TimeZone},
-    Timestamp, Zoned,
+    Timestamp, ZonedDateTime,
 };
 
 /// Is `p` in one of the system's temp and scratch folders (`/tmp`, `/var/tmp`, the per-user temp folder;
@@ -150,18 +150,18 @@ pub fn now_ms() -> i64 {
 }
 
 /// A Unix ms time on the wall clock of this machine; None when it is out of range.
-pub fn local_time(ms: i64) -> Option<Zoned> {
+pub fn local_time(ms: i64) -> Option<ZonedDateTime> {
     Some(
         Timestamp::from_millisecond(ms)
             .ok()?
-            .to_zoned(TimeZone::system()),
+            .to_zoned_datetime(TimeZone::system()),
     )
 }
 
 /// A wall-clock time in a zone: the first one when the clocks go back and it happens twice, None
 /// when they go forward and it never happens.
-pub fn wall_earliest(tz: &TimeZone, wall: DateTime) -> Option<Zoned> {
-    let amb = tz.to_ambiguous_zoned(wall);
+pub fn wall_earliest(tz: &TimeZone, wall: DateTime) -> Option<ZonedDateTime> {
+    let amb = tz.to_ambiguous_zoned_datetime(wall);
     if matches!(amb.offset(), AmbiguousOffset::Gap { .. }) {
         return None;
     }
