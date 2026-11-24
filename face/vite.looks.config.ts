@@ -3,9 +3,9 @@ import { defineConfig } from 'vite';
 import preact from '@preact/preset-vite';
 import { viteSingleFile } from 'vite-plugin-singlefile';
 
-// Look prototype: npm run look → dist-looks/ink/index.html,
-// one self-contained file (fixture data, fonts and sprites inlined) that opens from file://.
-const look = 'ink';
+// The offline sample board: npm run look → dist-looks/ink/index.html (LOOK=iris for iris),
+// one self-contained file (fixture data, fonts and drawings inlined) that opens from file://.
+const look = process.env.LOOK ?? 'ink';
 
 export default defineConfig({
   root: resolve(import.meta.dirname, 'looks', look),

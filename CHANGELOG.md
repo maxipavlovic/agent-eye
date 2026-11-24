@@ -4,8 +4,13 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## Unreleased
 
+### Added
+
+- A second look for the board, **iris**: the board as a technical drawing in one-pixel lines, with header cells, condensed counts, a fact and a timeline under each lane name, and a title block. Pick INK or IRIS in the colour button of the header (the choice is shared by every browser, like the theme). Same cards, panel, keys and accent colours as ink.
+
 ### Changed
 
+- The board's settings keep one layout, set of folded lanes and open panel sections per look (`eye.<look>.layout`, `.fold`, `.panel`); ink keeps the ones it had. `ui.json` holds at most 64 settings.
 - Dependencies: jiff 1.0 (its `Zoned` type is now `ZonedDateTime`; nothing changes for you) and clap 4.6.8. CI: taiki-e/install-action 2.90.5 and sonarqube-scan-action 8.5.0.
 
 ## 0.3.2 - 2026-11-23

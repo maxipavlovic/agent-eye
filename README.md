@@ -7,7 +7,7 @@
 
 <p align="center">
   <b>Keeps an eye on your agent sessions, even overnight.</b><br>
-  A local index, a terminal picker and an optional pixel-art board. macOS and Linux.
+  A local index, a terminal picker and an optional board in two looks. macOS and Linux.
 </p>
 
 <p align="center">

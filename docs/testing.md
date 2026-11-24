@@ -7,7 +7,7 @@ Four layers, from fastest to most realistic.
 | Rust unit and integration tests | `src/**/tests.rs`, `tests/*.rs` | `cargo test` | the engine, adapters, API routes |
 | CLI end to end | `tests/cli_e2e.rs` | `cargo test --test cli_e2e` | the real binary on temporary homes: `usage`, `loose` (stop and remove on things the test made), `night`, `find`, `ls`, `show`, `pick`, `idea`, export and import through `-` |
 | Face unit tests | `face/src/**/*.test.ts` (happy-dom) | `cd face && npm test` | components and the store, not the real page |
-| Browser end to end | `e2e/` (Playwright) | `scripts/e2e.sh` | the real `agent-eye serve` and the real board in Chromium and WebKit: flows and screenshots |
+| Browser end to end | `e2e/` (Playwright) | `scripts/e2e.sh` | the real `agent-eye serve` and the real board in Chromium and WebKit, in both looks (ink and iris): flows and screenshots |
 
 The face tests run in happy-dom, which has no layout. A wrapped card line, a broken form row or a
 misaligned bar passes all of them. The browser suite exists for that.
@@ -44,14 +44,23 @@ is never enabled in a release.
 Flows: board loads with no console problems; search (words, a typo, a pasted link); the panel and
 its sections; D in the panel; right-click menus; Remind me on the card and in the panel; the idea
 form with TONIGHT; the usage panel; LEFTOVERS (Ignore asks first, Stop ends a process the test
-started); the Tonight list; export (from MORE) downloads one HTML page with the secret masked. The
+started); the Tonight list; export (from MORE) downloads one HTML page with the secret masked; the
+look picker (the engine remembers the look, each look keeps its own layout, an unknown `?look=` is
+ignored); in iris, each lane's fact and timeline. Every flow runs in both looks: the projects
+`chromium` and `webkit` open the board in ink, `chromium-iris` and `webkit-iris` in iris, and each test
+checks the page really is in its look. The
 worst-case card (every mark, a long project name and title) is screenshot at 260, 310 and 360 px in
 light and dark: the card's frame must hold whatever a card carries.
 
 ### Screenshots
 
 `tests/visual.spec.ts` takes the board (Lanes and Grid), the panel, the menu, the idea form and the
-usage panel, light and dark, at 1440 and 1000 px: 24 per browser, in `e2e/__screenshots__/<browser>/`.
+usage panel, light and dark, at 1440 and 1000 px, and the worst-case card: 34 per project, in
+`e2e/__screenshots__/<project>/` (`chromium`, `webkit`, `chromium-iris`, `webkit-iris`).
+
+WebKit draws at 2x and the screenshots are kept at CSS size, so a line one device pixel wide (iris
+on a Retina screen) can drop out of a WebKit baseline even though the browser draws it. Check such
+lines at device scale (`scale: 'device'`) when one seems to be missing.
 
 - **When a screenshot fails** the page changed. Look at the diff (`e2e/test-results/*/…-diff.png`;
   CI uploads them as the `e2e-diffs` artifact). A bug: fix it. A change you meant: update.

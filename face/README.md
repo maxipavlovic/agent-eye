@@ -29,16 +29,35 @@ Open the URL `eye serve` prints (`/?t=<token>` sets the cookie). Reload after ea
 - `src/data/live.ts`: `Source` over the API and `/api/events`. `src/data/fixture.ts`: `Source` over `fixtures/sample/` (synthetic, committed), or over `fixtures/real/` (a git-ignored snapshot of your own board) when that exists.
 - `src/store.ts`: signals and actions. Looks never fetch. `src/format.ts`: pure helpers (ages, "next" owners, paths, tokens).
 - `src/pixel/`: `sprite.ts` turns text rows into SVG; `Pix.tsx` is the component.
-- `src/looks/index.ts`: the registry. `src/looks/ink/`: the look, one module per part:
-  - `Root.tsx` composes the page; `Header.tsx` has the brand, search, switches and the project bar.
-  - `Lanes.tsx`, `Grid.tsx`, `Head.tsx`, `Paused.tsx`: the two layouts. `Welcome.tsx`: what a board with nothing on it shows. `Card.tsx`: a card and its "next" line. `Results.tsx`: search results.
-  - `Detail.tsx` with `Sections.tsx`, `Conversation.tsx`, `Move.tsx`: the side panel. `CardMenu.tsx`: the right-click menu.
-  - `IdeaForm.tsx`, `keys.ts` (board keys), `walk.ts` (arrows step through cards), `layout.ts` (layout and folded lanes).
-  - `art.ts`: the pixel art. `tokens.css`, `eye.css`, `ink.css`: styles.
+- `src/board/`: the board every look shares, one module per part:
+  - `look.tsx`: what a look gives (`Look`: its header, project bar, lane head, welcome, loading, footer and `Art`, the drawings the shared parts ask for); `LookProvider` and `useLook()`.
+  - `Board.tsx` composes the page from the look's parts. `Lanes.tsx`, `Grid.tsx`, `Paused.tsx`: the two layouts. `Card.tsx`: a card, its marks and its "next" line (the fixed frame). `Results.tsx`: search results.
+  - `Detail.tsx` with `Sections.tsx`, `Conversation.tsx`, `Move.tsx`: the side panel. `CardMenu.tsx`: the right-click menu. `AccentPicker.tsx`: the look and the accent colour.
+  - `IdeaForm.tsx`, `Remind.tsx`, `DatePick.tsx`, `Night.tsx`, `Usage.tsx`, `Loose.tsx`, `Forget.tsx`, `KeyHelp.tsx`, `Toasts.tsx`: forms and panels.
+  - `keys.ts` (board keys), `walk.ts` (arrows step through cards), `layout.ts` (layout and folded lanes, per look), `columns.ts`, `model.ts` (projects), `folder.ts`, `worked.ts`.
+- `src/looks/index.ts`: the registry and the picker's list. Each look is a folder with a `Root.tsx` (its `Look` in a `LookProvider` around `Board`), its parts and its styles:
+  - `src/looks/ink/`: `look.tsx` (the parts and the pixel `Art`), `Header.tsx`, `Head.tsx`, `Eye.tsx`, `Welcome.tsx`, `art.ts` (the sprites), `tokens.css`, `eye.css`, `ink.css`.
+  - `src/looks/iris/`: `look.tsx` (the parts, the welcome and the title block), `art.tsx` (hairline drawings), `Header.tsx` (cells and the project strips), `Head.tsx` (count, fact, timeline), `facts.ts`, `Eye.tsx`, `tokens.css`, `iris.css`.
 
-## The look
+## The looks
 
-One look is published: `ink`, a one-bit printed board (warm paper, black ink, dithered greys, vermilion for what needs you), with a Lanes and a Grid layout. See `src/looks/ink/NOTES.md`. An unknown `?look=` or saved `eye.look` falls back to ink.
+Two looks, picked in the header's colour button (INK or IRIS, shared by every browser as `eye.look`) or with `?look=`; an unknown name falls back to ink.
+
+- `ink`: a one-bit printed board (warm paper, black ink, dithered greys, vermilion for what needs you). See `src/looks/ink/NOTES.md`.
+- `iris`: the board as a technical drawing in one-pixel lines (header cells, condensed counts, a fact and a timeline under each lane, a title block). See `src/looks/iris/NOTES.md`.
+
+Both have the Lanes and the Grid layout, the same cards, panel, forms, keys and the eight accent colours.
+
+**Adding a look.**
+
+1. Make `src/looks/<name>/` with a `Look` (`board/look.tsx` lists what it gives) and a `Root.tsx` that wraps `Board` in it.
+2. Write a style sheet for the shared parts' classes (iris.css covers all of them) and a `tokens.css` with the eight accents (copy `iris/tokens.test.ts` for it).
+3. Add the look to `REGISTRY` in `src/looks/index.ts`: the loader and the picker's label.
+4. For the offline sample: `looks/<name>/index.html`, `src/looks/<name>/main.tsx` and a `look:<name>` script.
+5. Add two Playwright projects in `e2e/playwright.config.ts`, make their baselines with `scripts/e2e.sh --update --project=…` and look at every one.
+6. List any new font's license in `../licenses/`.
+
+A look's chunk loads only when it is picked.
 
 ## Agents and the user
 
@@ -48,6 +67,7 @@ The board does not assume a name or an agent. Next-step owners are `You` (the us
 
 ```
 npm run look           # -> dist-looks/ink/index.html
+npm run look:iris      # -> dist-looks/iris/index.html
 ```
 
 One self-contained file (sample data, fonts and sprites inlined) that opens from `file://`. The sample is a developer's week across five made-up projects; its times are moved on load, so it always looks fresh. The project site serves this file as its live demo.

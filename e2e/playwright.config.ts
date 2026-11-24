@@ -1,9 +1,12 @@
 import { defineConfig, devices } from '@playwright/test';
 
-// Two engines, one viewport; the visual tests set their own widths. Snapshots live in
+// The board's looks; every flow and every screenshot runs in each of them.
+const IRIS = { look: 'iris' } as const;
+
+// Two engines times two looks (ink, iris), one viewport; the visual tests set their own widths. Snapshots live in
 // __screenshots__/<project>/ and are made only in the pinned Playwright container
 // (scripts/e2e.sh), so fonts and rendering are the same on every machine.
-export default defineConfig({
+export default defineConfig<{ look: string }>({
   testDir: './tests',
   snapshotPathTemplate: '{testDir}/../__screenshots__/{projectName}/{arg}{ext}',
   fullyParallel: true,
@@ -26,5 +29,7 @@ export default defineConfig({
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } } },
     { name: 'webkit', use: { ...devices['Desktop Safari'], viewport: { width: 1440, height: 900 } } },
+    { name: 'chromium-iris', use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 }, ...IRIS } },
+    { name: 'webkit-iris', use: { ...devices['Desktop Safari'], viewport: { width: 1440, height: 900 }, ...IRIS } },
   ],
 });

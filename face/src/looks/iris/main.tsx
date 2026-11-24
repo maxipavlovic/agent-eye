@@ -1,0 +1,10 @@
+import { render } from 'preact';
+import { createStore } from '../../store';
+import { fixtureSource } from '../../data/fixture';
+import { keepPrefsLocal } from '../../prefs';
+import { Root } from './Root';
+import './iris.css';
+
+keepPrefsLocal();
+const store = createStore(fixtureSource(true), { defaultTheme: 'light' });
+render(<Root store={store} />, document.getElementById('app')!);

@@ -137,7 +137,7 @@ jobs:
       - name: Install smoke test
         run: scripts/smoke-install.sh target/release/agent-eye
 
-  # The board in a real browser (Chromium and WebKit) against the real binary, inside the pinned
+  # The board in a real browser (Chromium and WebKit, both looks) against the real binary, inside the pinned
   # Playwright container, with screenshot baselines. Arm64 on purpose: the baselines are made on a
   # Mac's Docker, which is arm64 Linux, and the same image on the same CPU draws the same pixels.
   e2e:
