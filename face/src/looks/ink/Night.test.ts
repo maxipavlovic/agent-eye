@@ -6,8 +6,8 @@ import { fixtureSource } from '../../data/fixture';
 import { keepPrefsLocal } from '../../prefs';
 import { createStore } from '../../store';
 import { Root } from './Root';
-import { changedText, discardText, durationText, nightAsk, nightPanel, runStatus, tonightOpen } from './Night';
-import { resetFolds } from './Sections';
+import { changedText, discardText, durationText, nightAsk, nightPanel, runStatus, tonightOpen } from '../../board/Night';
+import { resetFolds } from '../../board/Sections';
 
 let mounted: HTMLElement | null = null;
 

@@ -7,7 +7,7 @@ import { fixtureSource } from '../../data/fixture';
 import { keepPrefsLocal } from '../../prefs';
 import { createStore } from '../../store';
 import { Root } from './Root';
-import { usagePanel } from './Usage';
+import { usagePanel } from '../../board/Usage';
 
 let mounted: HTMLElement | null = null;
 

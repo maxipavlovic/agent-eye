@@ -1,7 +1,7 @@
 import { Pix } from '../../pixel/Pix';
 import type { Column } from '../../api/types';
 import { FOLD, ICONS, INK } from './art';
-import { LANE_LABEL } from './columns';
+import { LANE_LABEL } from '../../board/columns';
 
 /** A lane's header: icon, count and name. Folds the lane when `fold` is given; `inline` puts the name beside the icon. */
 export function Head({ col, inline, fold }: { col: Column; inline?: boolean; fold?: () => void }) {

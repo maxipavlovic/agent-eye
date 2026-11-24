@@ -7,13 +7,13 @@ import { fixtureSource } from '../../data/fixture';
 import { keepPrefsLocal } from '../../prefs';
 import { createStore } from '../../store';
 import { Root } from './Root';
-import { IDEA_KEY_LIST, keyHelp, KEY_LIST } from './KeyHelp';
-import { closeForget } from './Forget';
-import { ideaForm } from './IdeaForm';
-import { nightAsk, tonightOpen } from './Night';
-import { remindForm } from './Remind';
-import { usagePanel } from './Usage';
-import { resetFolds } from './Sections';
+import { IDEA_KEY_LIST, keyHelp, KEY_LIST } from '../../board/KeyHelp';
+import { closeForget } from '../../board/Forget';
+import { ideaForm } from '../../board/IdeaForm';
+import { nightAsk, tonightOpen } from '../../board/Night';
+import { remindForm } from '../../board/Remind';
+import { usagePanel } from '../../board/Usage';
+import { resetFolds } from '../../board/Sections';
 
 let mounted: HTMLElement | null = null;
 

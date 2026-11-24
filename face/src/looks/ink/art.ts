@@ -126,6 +126,9 @@ export const LAYOUT_ICON = {
 } as const;
 export const CHECK: Rows = ['.....#', '....#.', '#..#..', '.##...'];
 export const CROSS: Rows = ['#...#', '.#.#.', '..#..', '.#.#.', '#...#'];
+/** The time stepper's arrows. */
+export const UP: Rows = ['..#..', '.###.', '#####'];
+export const DOWN: Rows = ['#####', '.###.', '..#..'];
 /** Two arrowheads pointing in: fold this lane. */
 export const FOLD: Rows = ['#.....#', '##...##', '###.###', '##...##', '#.....#'];
 
@@ -137,7 +140,6 @@ export const OUT_ICON: Record<OutputKind, Rows> = {
   folder: ['###...', '#oo###', '#oooo#', '#oooo#', '#oooo#', '######'],
 };
 
-export const OUT_TAG: Record<OutputKind, string> = { pr: 'PR', artifact: 'ART', jira: 'JIRA', commit: 'CMT', folder: 'DIR' };
 
 // ---- eye: the sprite rows are shared with the site and the README art (eyeArt.ts) ----
 export { EYE_FRAMES, EYE_STILL, IRIS } from './eyeArt.ts';

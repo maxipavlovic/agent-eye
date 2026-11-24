@@ -1,13 +1,13 @@
 import { Pix } from '../../pixel/Pix';
 import type { Store } from '../../store';
-import type { Project } from './model';
-import { AccentPicker } from './AccentPicker';
+import type { Project } from '../../board/model';
+import { AccentPicker } from '../../board/AccentPicker';
 import { AUTO, INK_CC, LAYOUT_ICON, MOON, SUN } from './art';
 import { Eye } from './Eye';
-import { ideaForm } from './IdeaForm';
-import type { Layout } from './layout';
-import { TonightChip } from './Night';
-import { usagePanel } from './Usage';
+import { ideaForm } from '../../board/IdeaForm';
+import type { Layout } from '../../board/layout';
+import { TonightChip } from '../../board/Night';
+import { usagePanel } from '../../board/Usage';
 
 const CONN: Record<string, string> = { live: 'LIVE', connecting: 'LINKING', offline: 'OFFLINE', fixture: 'SAMPLE' };
 

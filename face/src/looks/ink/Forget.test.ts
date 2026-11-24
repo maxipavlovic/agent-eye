@@ -4,7 +4,7 @@ import { h, render } from 'preact';
 import { fixtureSource } from '../../data/fixture';
 import { keepPrefsLocal } from '../../prefs';
 import { createStore } from '../../store';
-import { forgetFor, forgetText } from './Forget';
+import { forgetFor, forgetText } from '../../board/Forget';
 import { Root } from './Root';
 
 let mounted: HTMLElement | null = null;

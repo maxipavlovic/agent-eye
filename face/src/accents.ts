@@ -1,5 +1,5 @@
-/** The accent colours of the board: the ink look's signal colour, chosen in the header. The colours
- *  themselves are in `looks/ink/tokens.css`, one `data-accent` block per id. */
+/** The accent colours of the board: the signal colour of every look, chosen in the header. Each look has
+ *  its own shades, in its `tokens.css`, one `data-accent` block per id. */
 export const ACCENTS = [
   { id: 'vermilion', name: 'Vermilion (original)' },
   { id: 'cobalt', name: 'Cobalt' },
