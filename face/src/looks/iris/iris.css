@@ -1,13 +1,12 @@
 @import '@fontsource-variable/inter/opsz.css';
 @import '@fontsource-variable/archivo/wdth.css';
-@import '@fontsource-variable/martian-mono/wdth.css';
 
 @import './tokens.css';
 
 /* The iris look: the board as a technical drawing. One sheet in a hairline frame, a row of header cells,
-   full-height lane lines, a title block. Three kinds of type: Archivo Extra Condensed for counts, Archivo
-   Expanded capitals for labels, Inter for everything read; Martian Mono only for codes. One colour, the
-   accent, only for what needs you. Every line is --hair, the thinnest the browser draws (tokens.css). */
+   full-height lane lines, a title block. Two type families: Archivo, Extra Condensed for counts and Expanded
+   capitals for labels, and Inter for everything read, codes included. One colour, the accent, only for what
+   needs you. Every line is --hair, the thinnest the browser draws (tokens.css). */
 
 * { box-sizing: border-box; }
 html, body { height: 100%; }
@@ -29,7 +28,9 @@ a:hover { background: var(--ink); color: var(--paper); text-decoration: none; }
 .empty, .loading, .welcome h2, .tact, .dphead span, .dpgrid th, .nrow, .theme.seg button, .nline b, .receipt .rt {
   font-family: var(--f-disp); font-stretch: 125%; font-weight: 600; text-transform: uppercase; letter-spacing: .08em;
 }
-.code, kbd, .tab .tn, .receipt code, .more .menu kbd { font-family: var(--f-mono); font-stretch: 87.5%; letter-spacing: 0; }
+.code, kbd { font-family: var(--f-disp); font-stretch: 125%; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; }
+/* codes are read: Inter, figures of one width and a slashed zero */
+.tab .tn, .receipt code { font-family: var(--f-body); font-variant-numeric: tabular-nums slashed-zero; letter-spacing: 0; }
 
 /* ───────── the sheet ───────── */
 .app {
@@ -41,7 +42,15 @@ a:hover { background: var(--ink); color: var(--paper); text-decoration: none; }
 .err { flex: none; padding: 10px 16px; background: var(--accent); color: var(--on-accent); font: 600 15px/1.3 var(--f-body); border-bottom: var(--hair) solid var(--rule); }
 
 /* ───────── header: one row of cells ───────── */
-.hd { display: flex; align-items: stretch; flex: none; min-height: 60px; border-bottom: var(--hair) solid var(--rule); }
+/* z-index: its own layer for the scale under it, above the board (its popover hangs over the lanes), below panels and menus */
+.hd { position: relative; z-index: 3; display: flex; align-items: stretch; flex: none; min-height: 60px; border-bottom: var(--hair) solid var(--rule); }
+/* the header row stands on a scale, as a drawing's sheet: a tick every 8 px, a longer one every 40 */
+.hd::before {
+  content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 7px; z-index: -1; pointer-events: none;
+  background:
+    repeating-linear-gradient(90deg, var(--rule) 0 var(--hair), transparent 0 40px) left bottom / 100% 7px no-repeat,
+    repeating-linear-gradient(90deg, var(--rule-2) 0 var(--hair), transparent 0 8px) left bottom / 100% 4px no-repeat;
+}
 .hd > * { display: flex; align-items: center; gap: 10px; padding: 0 14px; border-left: var(--hair) solid var(--rule); flex: none; min-width: 0; }
 .hd > :first-child { border-left: 0; }
 .brand { gap: 12px; padding: 0 16px 0 14px; }
@@ -60,7 +69,7 @@ a:hover { background: var(--ink); color: var(--paper); text-decoration: none; }
 .needbtn.on b { color: var(--on-accent); }
 .needbtn.on:hover { background: color-mix(in srgb, var(--accent) 86%, var(--ink)); }
 .needbtn:hover { background: var(--lit); }
-.conn { font: 500 12.5px/1 var(--f-mono); font-stretch: 87.5%; color: var(--mute); gap: 8px; white-space: nowrap; }
+.conn { font: 600 12px/1 var(--f-disp); font-stretch: 125%; letter-spacing: .08em; text-transform: uppercase; color: var(--mute); gap: 8px; white-space: nowrap; }
 .conn i { width: 6px; height: 6px; border-radius: 50%; background: var(--ink); }
 .conn.live i { animation: breathe 2.4s ease-in-out infinite; }
 @keyframes breathe { 50% { opacity: .2; transform: scale(.7); } }
@@ -79,6 +88,8 @@ a:hover { background: var(--ink); color: var(--paper); text-decoration: none; }
 .hd > .btn:hover { background: var(--lit); color: var(--ink); }
 .hd > .btn.plus { background: var(--ink); color: var(--paper); padding: 0 20px; }
 .hd > .btn.plus:hover { background: var(--mute); color: var(--paper); }
+:root[data-theme='dark'] .hd > .btn.plus { background: none; color: var(--ink); }
+:root[data-theme='dark'] .hd > .btn.plus:hover { background: var(--lit); }
 .hd > .btn.tonight[aria-pressed='true'] { background: var(--lit); }
 
 /* look and accent: one button wearing the accent; its popover holds the looks and the eight swatches */
@@ -86,7 +97,7 @@ a:hover { background: var(--ink); color: var(--paper); text-decoration: none; }
 .accbtn { width: 34px; height: 34px; display: grid; place-items: center; border: var(--hair) solid var(--rule); }
 .accbtn i { width: 14px; height: 14px; border-radius: 50%; background: var(--accent); }
 .accbtn[aria-expanded='true'], .accbtn:hover { background: var(--lit); }
-.accpop { position: absolute; top: calc(100% + 13px); right: -1px; z-index: 20; display: flex; flex-direction: column; gap: 12px; padding: 14px; background: var(--paper); border: var(--hair) solid var(--rule); }
+.accpop { position: absolute; top: calc(100% + 13px); right: -1px; z-index: 20; display: flex; flex-direction: column; gap: 12px; padding: 14px; background: var(--paper); border: var(--hair) solid var(--rule); box-shadow: var(--sheet); }
 .accpop .looks, .accpop .accs { display: flex; gap: 8px; }
 .lookbtn { font-size: 13px; padding: 8px 12px; border: var(--hair) solid var(--rule); }
 .lookbtn:hover { background: var(--lit); }
@@ -127,6 +138,8 @@ a:hover { background: var(--ink); color: var(--paper); text-decoration: none; }
 /* drawing paper: a faint dot grid shows where the board is empty; cards and heads sit on plain paper */
 .board { --dot: color-mix(in srgb, var(--ink) 17%, transparent); background-image: radial-gradient(circle, var(--dot) .7px, transparent .9px); background-size: 16px 16px; background-position: 8px 8px; }
 .c-needs_you, .needsbox { --wash: color-mix(in srgb, var(--accent) 6%, var(--paper)); --wash-hi: color-mix(in srgb, var(--accent) 11%, var(--paper)); }
+/* on the night paper a tint turns muddy: Needs you is told by its accent lines and count alone */
+:root[data-theme='dark'] :is(.c-needs_you, .needsbox) { --wash: var(--paper); --wash-hi: var(--lit); }
 .board.lanes { display: flex; }
 .lanes > * + * { border-left: var(--hair) solid var(--rule-2); }
 .lanes .col { flex: 1 1 0; padding: 0 16px; }
@@ -167,7 +180,7 @@ a:hover { background: var(--ink); color: var(--paper); text-decoration: none; }
 .tline.hot .tk { stroke: var(--accent); }
 .c-needs_you .chead { --line: var(--accent); background-color: var(--wash); }
 .c-needs_you .chead::before, .c-needs_you .chead::after { background: var(--accent); }
-.c-needs_you .chead .count { font-size: 112px; color: var(--accent); }
+.c-needs_you .chead .count { color: var(--accent); }
 .c-needs_you .chead h2 { color: var(--accent-ink); }
 .lic { color: var(--ink); }
 .lic .clap { fill: var(--accent); }
@@ -252,8 +265,8 @@ a:hover { background: var(--ink); color: var(--paper); text-decoration: none; }
 .card.idea .acts { display: flex; flex-wrap: wrap; gap: 8px 10px; margin-top: 12px; }
 .card.idea .acts .btn { white-space: normal; max-width: 100%; text-align: left; line-height: 1.25; }
 /* a live session: a short stroke travels along the card's top rule */
-.card .ants { position: absolute; top: calc(-1 * var(--hair)); left: 0; width: 72px; height: max(var(--hair), 1px); pointer-events: none; opacity: 0; background: linear-gradient(90deg, transparent, var(--ink) 35%, var(--ink) 65%, transparent); }
-@keyframes scan { to { left: calc(100% - 64px); } }
+.card .ants { position: absolute; top: calc(-1 * var(--hair)); left: 0; width: 30%; height: 2px; margin-top: -.5px; pointer-events: none; opacity: 0; background: linear-gradient(90deg, transparent, var(--ink) 20%, var(--ink) 80%, transparent); }
+@keyframes scan { to { left: 70%; } }
 /* rows: Paused and Done */
 .card.row { display: flex; align-items: baseline; gap: 12px; padding: 10px 16px; }
 .card.row .tw { flex: 1; min-width: 0; }
@@ -290,7 +303,6 @@ a.mk:hover { background: var(--ink); color: var(--paper); }
 .chead.inline h2 { display: flex; flex-direction: column; gap: 5px; }
 .chead.inline h2 small { font: 400 14.5px/1.2 var(--f-body); text-transform: none; letter-spacing: 0; color: var(--mute); }
 .chead.inline .count { font-size: 46px; margin-left: auto; }
-.c-needs_you.box .chead.inline .count { font-size: 60px; }
 .ngrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; padding: 14px 0 6px; }
 .ngrid .card { border: var(--hair) solid color-mix(in srgb, var(--accent) 35%, var(--rule-2)); }
 .ngrid .card:first-child { border-top-color: color-mix(in srgb, var(--accent) 35%, var(--rule-2)); }
@@ -310,8 +322,8 @@ a.mk:hover { background: var(--ink); color: var(--paper); }
 .results { flex: 1; min-height: 0; overflow-y: auto; padding: 22px 24px 60px; }
 .rh { margin: 0 0 20px; display: flex; gap: 14px; align-items: baseline; flex-wrap: wrap; font: 800 40px/.9 var(--f-disp); font-stretch: 62%; text-transform: uppercase; }
 .rh span { font: 400 17px var(--f-body); color: var(--mute); text-transform: none; }
-.rgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(440px, 1fr)); column-gap: 32px; }
-.rgrid .card.hit { display: flex; flex-direction: column; }
+.rgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(440px, 1fr)); gap: 12px; }
+.rgrid .card.hit { display: flex; flex-direction: column; border: var(--hair) solid var(--rule-2); }
 .rgrid .card.hit .top h3 { min-height: calc(2em * 1.32); }
 .rgrid .card.hit .foot { margin-top: auto; }
 .card.hit { padding-top: 14px; }
@@ -332,7 +344,7 @@ mark { background: var(--ink); color: var(--paper); padding: 0 3px; }
 .welcome h2 { margin: 8px 0 0; font: 800 44px/.9 var(--f-disp); font-stretch: 62%; letter-spacing: 0; }
 .welcome p { margin: 0; max-width: 34em; font: 400 17px/1.45 var(--f-body); }
 .welcome .hint { color: var(--mute); font-size: 15px; }
-.welcome code, .msg .mt code, .recap code { font: 400 14px/1.4 var(--f-mono); font-stretch: 87.5%; }
+.welcome code, .msg .mt code, .recap code { font: inherit; font-variant-numeric: tabular-nums slashed-zero; padding: 0 .25em; background: var(--lit); box-shadow: inset 0 0 0 var(--hair) var(--rule-2); }
 .welcome code { border: var(--hair) solid var(--rule); padding: 1px 5px; }
 .tblock { display: flex; flex-wrap: wrap; flex: none; border-top: var(--hair) solid var(--rule); }
 .tblock > div { padding: 8px 16px; font: 400 14.5px/1.3 var(--f-body); color: var(--mute); border-left: var(--hair) solid var(--rule); white-space: nowrap; }
@@ -346,7 +358,8 @@ mark { background: var(--ink); color: var(--paper); padding: 0 3px; }
 .eye .ir { fill: none; stroke: var(--accent); stroke-width: var(--sw); vector-effect: non-scaling-stroke; }
 .eye .pup { fill: var(--pupil); }
 .eye .gl { fill: #fff; }
-.eye .look { transition: transform .4s cubic-bezier(.2, .7, .2, 1); }
+.eye .lash { fill: none; stroke: var(--accent); stroke-width: var(--sw); stroke-linecap: round; vector-effect: non-scaling-stroke; visibility: hidden; }
+.eye.alert .lash { visibility: visible; }
 
 /* ───────── the panel ───────── */
 .scrim { position: fixed; inset: 0; z-index: 30; }
@@ -414,8 +427,8 @@ mark { background: var(--ink); color: var(--paper); padding: 0 3px; }
 .dim { color: var(--mute); font: 400 16px var(--f-body); margin: 8px 0 0; }
 .prompt { margin: 0 0 12px; max-width: 66ch; padding: 3px 0 3px 14px; border-left: var(--hair) solid var(--rule); font: 400 16px/1.5 var(--f-body); white-space: pre-wrap; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
 .prompt.first { -webkit-line-clamp: 8; }
-.where { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 0; font: 400 16px/1.4 var(--f-body); }
-.where dt { font: 500 13px/1.6 var(--f-mono); font-stretch: 87.5%; color: var(--mute); }
+.where { display: grid; grid-template-columns: auto 1fr; align-items: baseline; gap: 6px 16px; margin: 0; font: 400 16px/1.4 var(--f-body); }
+.where dt { font: 600 12px/1.4 var(--f-disp); font-stretch: 125%; letter-spacing: .08em; text-transform: uppercase; color: var(--mute); }
 .where dd { margin: 0; overflow-wrap: anywhere; }
 .wstrip { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; }
 .wstrip small { font: 400 14.5px/1 var(--f-body); color: var(--mute); margin-right: 8px; }
@@ -433,9 +446,9 @@ mark { background: var(--ink); color: var(--paper); padding: 0 3px; }
 .match { display: flex; gap: 12px; align-items: baseline; margin: 18px 0 0; padding: 10px 12px; border: var(--hair) dashed var(--rule); font: 400 16px/1.5 var(--f-body); }
 .match b { flex: none; font: 600 12.5px/1 var(--f-disp); font-stretch: 125%; letter-spacing: .08em; }
 .move, .more { position: relative; }
-.menu { position: absolute; bottom: calc(100% + 6px); left: 0; list-style: none; margin: 0; padding: 4px 0; background: var(--paper); border: var(--hair) solid var(--rule); z-index: 10; min-width: 200px; }
+.menu { position: absolute; bottom: calc(100% + 6px); left: 0; list-style: none; margin: 0; padding: 4px 0; background: var(--paper); border: var(--hair) solid var(--rule); z-index: 10; min-width: 200px; box-shadow: var(--sheet); }
 .menu button { display: block; width: 100%; text-align: left; font-size: 12.5px; line-height: 1; padding: 11px 14px; }
-.menu button:hover, .menu button:focus-visible { background: var(--ink); color: var(--paper); outline: 0; }
+.menu button:hover, .menu button:focus-visible { background: var(--lit); color: var(--ink); outline: 0; box-shadow: inset 2px 0 0 var(--ink); }
 .page .ptop .menu { top: calc(100% + 6px); bottom: auto; left: auto; right: 0; min-width: 330px; }
 .more .menu button { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
 .more .menu button span { white-space: nowrap; }
@@ -451,7 +464,7 @@ mark { background: var(--ink); color: var(--paper); padding: 0 3px; }
 .qmove button.auto { margin-left: 10px; }
 .qmove button.resume { margin-left: auto; background: var(--ink); color: var(--paper); }
 .qmove button.resume:hover { background: var(--mute); color: var(--paper); }
-.pnav { display: flex; align-items: center; gap: 10px; margin: -12px 0 16px; font: 500 13px/1 var(--f-mono); font-stretch: 87.5%; font-variant-numeric: tabular-nums; }
+.pnav { display: flex; align-items: center; gap: 10px; margin: -12px 0 16px; font: 600 14px/1 var(--f-body); font-variant-numeric: tabular-nums; }
 .pnav button { width: 34px; height: 30px; display: grid; place-items: center; border: var(--hair) solid var(--rule); font: 400 18px/1 var(--f-body); }
 .pnav button:hover { background: var(--ink); color: var(--paper); }
 .rrow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 16px 0 0; font: 600 17px/1.3 var(--f-body); }
@@ -477,7 +490,7 @@ mark { background: var(--ink); color: var(--paper); padding: 0 3px; }
 .nline b { font-size: 12.5px; line-height: 1; border: var(--hair) solid var(--rule); padding: 4px 6px; }
 .druns { list-style: none; margin: 0; padding: 0; }
 .druns li { margin-bottom: 8px; font: 400 17px/1.4 var(--f-body); }
-.druns .k { font: 500 13px/1 var(--f-mono); font-stretch: 87.5%; margin-right: 8px; }
+.druns .k { font: 600 13px/1 var(--f-body); font-variant-numeric: tabular-nums; margin-right: 8px; }
 .druns small { display: block; font-size: 15px; color: var(--mute); }
 .conv { list-style: none; margin: 0; padding: 0; display: grid; gap: 18px; max-width: 66ch; }
 .msg .who { margin: 0 0 4px; display: flex; align-items: baseline; gap: 10px; font: 600 14.5px/1.2 var(--f-body); }
@@ -612,13 +625,13 @@ fieldset.nightpick .fchips { margin: 4px 0 0; }
 .tact { font-size: 12.5px; line-height: 1; border: var(--hair) solid currentColor; padding: 8px 10px; flex: none; }
 .tact:hover { background: var(--paper); color: var(--ink); }
 .ctxscrim { position: fixed; inset: 0; z-index: 85; }
-.ctx { position: fixed; z-index: 90; min-width: 264px; max-width: min(340px, calc(100vw - 16px)); max-height: calc(100vh - 16px); overflow-y: auto; background: var(--paper); color: var(--ink); border: var(--hair) solid var(--rule); padding-bottom: 4px; }
+.ctx { position: fixed; z-index: 90; min-width: 264px; max-width: min(340px, calc(100vw - 16px)); max-height: calc(100vh - 16px); overflow-y: auto; background: var(--paper); color: var(--ink); border: var(--hair) solid var(--rule); padding-bottom: 4px; box-shadow: var(--sheet); }
 .ctx .ct { margin: 0; padding: 11px 14px 10px; border-bottom: var(--hair) solid var(--rule); font: 600 15px/1.35 var(--f-body); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
 .ctx .gl { margin: 0; padding: 10px 14px 4px; font: 600 12px/1.2 var(--f-disp); font-stretch: 125%; letter-spacing: .1em; text-transform: uppercase; color: var(--mute); }
 .ctx hr { border: 0; border-top: var(--hair) solid var(--rule-2); margin: 4px 0; }
 .ctx button { white-space: nowrap; display: block; width: 100%; text-align: left; font: 400 15.5px/1 var(--f-body); padding: 10px 14px; }
 .ctx button.sub { padding-left: 26px; }
-.ctx button:hover, .ctx button:focus { background: var(--ink); color: var(--paper); outline: none; }
+.ctx button:hover, .ctx button:focus-visible { background: var(--lit); color: var(--ink); outline: none; box-shadow: inset 2px 0 0 var(--ink); }
 @media (pointer: coarse) {
   .card { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
   .ctx button { min-height: 44px; }
@@ -652,10 +665,11 @@ fieldset.nightpick .fchips { margin: 4px 0 0; }
   .chead .count { animation: countup .55s cubic-bezier(.2, .7, .2, 1) backwards; }
   .card { animation: rise .45s cubic-bezier(.2, .7, .2, 1) backwards; animation-delay: var(--d, 0ms); }
   /* a working session: a short stroke runs along its top rule */
-  .card .ants { opacity: 1; animation: scan 3.2s cubic-bezier(.45, 0, .55, 1) infinite alternate; }
-  /* the eye blinks now and then */
-  .eye .lid.up { animation: lidup 6.8s ease-in-out infinite; }
-  .eye .lid.down { animation: liddown 6.8s ease-in-out infinite; }
+  .card .ants { opacity: 1; animation: scan 2.4s cubic-bezier(.45, 0, .55, 1) infinite alternate; }
+  /* a menu settles in place */
+  .ctx, .menu, .accpop { animation: settle .14s cubic-bezier(.2, .7, .2, 1); }
+  /* the lashes lift and fall while something needs you */
+  .eye.alert .lash { animation: lash 1.6s ease-in-out infinite; }
   /* something waits on you: the bell rings every few seconds */
   .has .o-needs_you .swing { animation: ring 9s ease-in-out infinite; }
   /* you wait on others: the hourglass turns over */
@@ -668,9 +682,8 @@ fieldset.nightpick .fchips { margin: 4px 0 0; }
 @keyframes rise { from { opacity: 0; transform: translateY(6px); } }
 @keyframes drawline { from { background-size: 0% var(--hair); } }
 @keyframes countup { from { opacity: 0; transform: translateY(.16em); } }
-/* the upper lid does most of the work and slips under the lower one, so the closed eye is one curved line */
-@keyframes lidup { 0%, 92%, 97.5%, 100% { transform: translateY(0); } 94.6% { transform: translateY(17px); } }
-@keyframes liddown { 0%, 92%, 97.5%, 100% { transform: translateY(0); } 94.6% { transform: translateY(-8.5px); } }
+@keyframes settle { from { opacity: 0; transform: translateY(-3px); } }
+@keyframes lash { 50% { transform: translateY(-1px); } }
 @keyframes ring { 0%, 84%, 95%, 100% { transform: rotate(0); } 86% { transform: rotate(14deg); } 88% { transform: rotate(-11deg); } 90% { transform: rotate(7deg); } 92% { transform: rotate(-4deg); } }
 @keyframes turnover { 0%, 42% { transform: rotate(0); } 50%, 92% { transform: rotate(180deg); } 100% { transform: rotate(360deg); } }
 @keyframes twinkle { 50% { opacity: .2; } }
@@ -745,7 +758,6 @@ fieldset.nightpick .fchips { margin: 4px 0 0; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; }
-  .eye .look { transition: none; }
   .chip.now { text-decoration: underline var(--hair) var(--accent); text-underline-offset: 3px; }
 }
 

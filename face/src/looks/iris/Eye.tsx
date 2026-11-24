@@ -1,7 +1,15 @@
 import { useEffect, useId, useRef } from 'preact/hooks';
+import { followEye } from './eyeFollow';
 
 /** The almond the eye is drawn in: two hairline arcs. */
 const ALMOND = 'M1.5 17C14 2.5 46 2.5 58.5 17C46 31.5 14 31.5 1.5 17Z';
+
+/** The almond's two arcs, drawn from the inner corner, and how far outside them the lids rest. */
+const UPPER = 'C14 2.5 46 2.5 58.5 17', LOWER = 'C14 31.5 46 31.5 58.5 17', REST = 1.5;
+/** A lid: the paper beyond one arc, out to well past the almond. */
+const LID_UP = 'M1.5 17C14 2.5 46 2.5 58.5 17H62V-24H-2V17Z', LID_DOWN = 'M1.5 17C14 31.5 46 31.5 58.5 17H62V58H-2V17Z';
+/** Three lashes over the upper arc, only while something needs you (as ink's eye). */
+const LASHES = 'M30 4.4V1.2M21.6 6.4L19.9 3.3M38.4 6.4L40.1 3.3';
 
 /** Fibres of the iris: sparse radial hairlines, long and short in turn. */
 const FIBRES = (() => {
@@ -14,51 +22,26 @@ const FIBRES = (() => {
   return d;
 })();
 
-/** The almond's two arcs, drawn from the inner corner, and how far outside them the lids rest. */
-const UPPER = 'C14 2.5 46 2.5 58.5 17', LOWER = 'C14 31.5 46 31.5 58.5 17', REST = 1.5;
-/** A lid: the paper beyond one arc, out to well past the almond. */
-const LID_UP = 'M1.5 17C14 2.5 46 2.5 58.5 17H62V-24H-2V17Z', LID_DOWN = 'M1.5 17C14 31.5 46 31.5 58.5 17H62V58H-2V17Z';
-
-/** How far the iris may move inside the almond, in drawing units. */
-const REACH_X = 9, REACH_Y = 3.2;
-
 /**
- * The brand eye in hairlines: the iris follows the pointer; when something needs you (`alert`) and the
- * pointer has not moved yet, it looks at the Needs you lane. Now and then it blinks: two lids, paper with a
- * hairline edge shaped like the almond, close into one curved line (iris.css).
+ * The brand eye in hairlines (eyeFollow.ts moves it): the iris follows the pointer and its pupil narrows when
+ * the pointer comes close; resting, it looks at Needs you while something waits there (`alert`, which also
+ * raises three lashes), else it drifts; now and then it blinks, two paper lids closing into one curved line.
  */
 export function Eye({ alert }: { alert: boolean }) {
   const svg = useRef<SVGSVGElement>(null);
-  const look = useRef<SVGGElement>(null);
-  const moved = useRef(false);
+  const alertRef = useRef(alert);
+  alertRef.current = alert;
   // one clip per eye: the welcome page shows two
   const clip = `almond-${useId()}`;
 
-  const aim = (x: number, y: number) => {
-    const box = svg.current?.getBoundingClientRect();
-    if (!box || !look.current) return;
-    const dx = x - (box.left + box.width / 2), dy = y - (box.top + box.height / 2);
-    const d = Math.hypot(dx, dy) || 1, k = Math.min(1, d / 420);
-    look.current.style.transform = `translate(${((dx / d) * REACH_X * k).toFixed(2)}px, ${((dy / d) * REACH_Y * k).toFixed(2)}px)`;
-  };
-
-  useEffect(() => {
-    const on = (e: PointerEvent) => { moved.current = true; aim(e.clientX, e.clientY); };
-    addEventListener('pointermove', on);
-    return () => removeEventListener('pointermove', on);
-  }, []);
-
-  useEffect(() => {
-    if (!alert || moved.current) return;
-    const lane = document.querySelector('[data-col="needs_you"]')?.getBoundingClientRect();
-    if (lane) aim(lane.left + lane.width / 2, lane.top + 120);
-  }, [alert]);
+  useEffect(() => followEye(svg.current!, () => (alertRef.current ? document.querySelector('[data-col="needs_you"]') : null)), []);
 
   return (
     <svg ref={svg} class={`eye${alert ? ' alert' : ''}`} viewBox="0 0 60 34" width="56" height="32" aria-hidden="true">
       <defs><clipPath id={clip}><path d={ALMOND} /></clipPath></defs>
+      <path class="lash" d={LASHES} />
       <g clip-path={`url(#${clip})`}>
-        <g ref={look} class="look">
+        <g class="look">
           <g transform="translate(30 17)">
             <path class="fib" d={FIBRES} />
             <circle class="ir" r="11.5" />
