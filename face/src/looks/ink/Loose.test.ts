@@ -6,8 +6,8 @@ import { fixtureSource } from '../../data/fixture';
 import { keepPrefsLocal } from '../../prefs';
 import { createStore } from '../../store';
 import { Root } from './Root';
-import { ignoreAllText, ignoreText, leftoversOpen, removeAllText, sendText } from './Loose';
-import { resetFolds } from './Sections';
+import { ignoreAllText, ignoreText, leftoversOpen, removeAllText, sendText } from '../../board/Loose';
+import { resetFolds } from '../../board/Sections';
 
 let mounted: HTMLElement | null = null;
 

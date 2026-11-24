@@ -1,0 +1,170 @@
+import { useEffect, useId, useRef } from 'preact/hooks';
+import { signal, useSignal } from '@preact/signals';
+import type { Store } from '../store';
+import type { Card } from '../api/types';
+import { remindReason, remindShort, remindText, remindTitle } from '../format';
+import { useArt } from './look';
+import { addDays, dateValue, DatePicker, parseTime, TimeField } from './DatePick';
+import { Fold } from './Sections';
+
+/** The card whose reminder form is open (a date, a time and a note), or null. */
+export const remindForm = signal<string | null>(null);
+
+let opener: HTMLElement | null = null;
+
+/** Open the reminder form for a card, remembering what had focus so closing can give it back. */
+export function openRemind(id: string) {
+  opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  remindForm.value = id;
+}
+
+/** Close the reminder form and return focus to what opened it, when that is still in the page. */
+export function closeRemind() {
+  remindForm.value = null;
+  const back = opener;
+  opener = null;
+  if (back?.isConnected) back.focus();
+}
+
+/** The quick choices, in the words `eye remind` reads. */
+export const REMIND_PRESETS: ReadonlyArray<{ label: string; when: string }> = [
+  { label: 'TOMORROW 9:00', when: 'tomorrow' },
+  { label: 'MONDAY 9:00', when: 'mon' },
+  { label: 'IN A WEEK', when: '1w' },
+];
+
+/** What the form sends: the date and the time as the engine reads them; the time is 9:00 when empty. */
+export function whenText(date: string, time: string): string {
+  return `${date} ${time || '09:00'}`;
+}
+
+/** What the panel says about a card's reminder: "Tomorrow 9:00 · Ana's reply", "Due today 9:00 · …" once due. */
+export function remindSummary(c: Card, now = Date.now()): string | null {
+  const text = remindText(c, now);
+  if (!text) return null;
+  return c.remind_due ? `Due ${text}` : text[0]!.toUpperCase() + text.slice(1);
+}
+
+/** Why the form cannot be sent yet, or null: a time that does not read, or one that has passed. */
+export function whenProblem(date: string, time: string, now = Date.now()): string | null {
+  const t = time.trim() ? parseTime(time) : '09:00';
+  if (!t) return 'Write the time as HH:MM, 24 h, e.g. 14:30.';
+  const [y, m, d] = date.split('-').map(Number);
+  const [h, min] = t.split(':').map(Number);
+  return new Date(y!, m! - 1, d!, h, min).getTime() <= now ? 'That time has passed. Pick a later one.' : null;
+}
+
+/** DESKTOP NOTICE ON | OFF, for every reminder; hidden when this machine cannot show one or the engine has no such setting. */
+function NoticeSwitch({ store }: { store: Store }) {
+  useEffect(() => { store.loadNotice(); }, []);
+  const lbl = useId();
+  const n = store.notice.value;
+  if (!n?.available) return null;
+  return (
+    <div class="notice">
+      <div class="nrow">
+        <span id={lbl}>DESKTOP NOTICE</span>
+        <div class="theme seg" role="group" aria-labelledby={lbl}>
+          {([true, false] as const).map((on) => (
+            <button key={String(on)} type="button" class={n.notify === on ? 'on' : ''} aria-pressed={n.notify === on} onClick={() => { if (n.notify !== on) void store.setNotice(on); }}>{on ? 'ON' : 'OFF'}</button>
+          ))}
+        </div>
+      </div>
+      <p class="nhint">Applies to every reminder on this computer.</p>
+    </div>
+  );
+}
+
+/** Pick a date, a time and a note for a reminder. */
+function RemindForm({ store, id, onClose }: { store: Store; id: string; onClose: () => void }) {
+  const art = useArt();
+  const today = dateValue(new Date());
+  const date = useSignal(addDays(today, 1));
+  const time = useSignal('09:00');
+  const problem = useSignal<string | null>(null);
+  const busy = useSignal(false);
+  const form = useRef<HTMLFormElement>(null);
+  useEffect(() => { form.current?.querySelector<HTMLButtonElement>('.dpgrid button[tabindex="0"]')?.focus(); }, []);
+  const submit = async (e: Event) => {
+    e.preventDefault();
+    if (busy.value) return;
+    problem.value = whenProblem(date.value, time.value);
+    if (problem.value) { form.current?.querySelector<HTMLInputElement>('#remind-time')?.focus(); return; }
+    const note = (form.current?.elements.namedItem('note') as HTMLInputElement).value.trim();
+    busy.value = true;
+    const ok = await store.remind(id, { when: whenText(date.value, parseTime(time.value) ?? ''), note: note || undefined });
+    busy.value = false;
+    if (ok) onClose();
+  };
+  return (
+    <>
+      <div class="scrim" role="presentation" onClick={onClose} />
+      <form ref={form} class="modal" onSubmit={submit} aria-label="Remind me">
+        <div class="dis" />
+        <h2>{art.lane('needs_you', 'lg')} REMIND ME</h2>
+        <div class="when">
+          <div class="wdate">
+            <span class="flbl" id="remind-date">DATE</span>
+            <DatePicker value={date.value} min={today} labelId="remind-date" onChange={(d) => { date.value = d; problem.value = null; }} />
+          </div>
+          <div class="wtime">
+            <label class="flbl" htmlFor="remind-time">TIME</label>
+            <TimeField id="remind-time" value={time.value} invalid={!!problem.value} onChange={(t) => { time.value = t; problem.value = null; }} />
+            {problem.value && <p class="fnote" id="remind-time-err" role="alert">{problem.value}</p>}
+          </div>
+        </div>
+        <label>NOTE<span class="hint">Optional. Shown on the card when it is due.</span>
+          <input name="note" placeholder="Ana's reply" autocomplete="off" />
+        </label>
+        <NoticeSwitch store={store} />
+        <div class="acts end">
+          <button type="button" class="btn ghost" onClick={onClose}>CANCEL</button>
+          <button type="submit" class="btn big" disabled={busy.value}>SET REMINDER</button>
+        </div>
+      </form>
+    </>
+  );
+}
+
+/** The reminder form when asked for. */
+export function RemindFormHost({ store }: { store: Store }) {
+  const id = remindForm.value;
+  if (!id) return null;
+  return <RemindForm key={id} store={store} id={id} onClose={closeRemind} />;
+}
+
+/** The reminder of a card in its panel: what is set, the quick choices and a way to clear it. */
+export function RemindPanel({ c, store }: { c: Card; store: Store }) {
+  const summary = remindSummary(c);
+  return (
+    <Fold name="reminder" t="REMINDER" sum={summary ?? 'none'}>
+      <p class="notes">{summary ?? 'No reminder.'}</p>
+      {!summary && <p class="rhint">eye moves this card to Needs you at the time you pick.</p>}
+      <div class="acts">
+        {REMIND_PRESETS.map((p) => <button key={p.when} class="btn sm" onClick={() => void store.remind(c.id, { when: p.when })}>{p.label}</button>)}
+        <button class="btn sm" aria-keyshortcuts="M" title="Pick a date (M)" onClick={() => openRemind(c.id)}>PICK A DATE…</button>
+        {c.remind_at && <button class="btn sm ghost" onClick={() => void store.remind(c.id, { clear: true })}>CLEAR</button>}
+      </div>
+      <NoticeSwitch store={store} />
+    </Fold>
+  );
+}
+
+/** A set reminder at the top of the panel, in the status row: the accent clock, when, the note (or, once due,
+ *  why the session is yours), and CHANGE / CLEAR. Nothing when no reminder is set. */
+export function RemindRow({ c, store }: { c: Card; store: Store }) {
+  const art = useArt();
+  const when = remindShort(c);
+  if (!c.remind_at || !when) return null;
+  const title = remindTitle(c) ?? undefined;
+  const note = c.remind_due ? remindReason(c) : c.remind_note;
+  return (
+    <p class={`rrow${c.remind_due ? ' due' : ''}`} title={title}>
+      <span class="rclock" role="img" aria-label={title}>{art.icon('clock-accent')}</span>
+      <b>{c.remind_due ? `Due ${when.toLowerCase()}` : when}</b>
+      {note && <span class="wn"> · {note}</span>}
+      <button class="lnk" aria-keyshortcuts="M" title="Change the reminder (M)" onClick={() => openRemind(c.id)}>CHANGE</button>
+      <button class="lnk" onClick={() => void store.remind(c.id, { clear: true })}>CLEAR</button>
+    </p>
+  );
+}

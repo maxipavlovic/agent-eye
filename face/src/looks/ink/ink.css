@@ -67,6 +67,11 @@ a:hover { background: var(--ink); color: var(--paper); text-decoration: none; }
 .accbtn i { width: 18px; height: 18px; background: var(--accent); border: 2px solid var(--ink); }
 .accbtn[aria-expanded='true'] { background: var(--ink); }
 .accpop { position: absolute; top: calc(100% + 8px); right: 0; display: flex; gap: 8px; padding: 10px; background: var(--paper); border: 2px solid var(--ink); box-shadow: 4px 4px 0 var(--ink); z-index: 10; }
+/* the popover: the looks (when the page has more than one), then the accents */
+.accpop { flex-direction: column; }
+.accpop .looks, .accpop .accs { display: flex; gap: 8px; }
+.lookbtn { font: 400 16px/1 var(--f-label); background: var(--paper); color: var(--ink); border: 2px solid var(--ink); padding: 7px 10px 6px; }
+.lookbtn:hover, .lookbtn[aria-pressed='true'] { background: var(--ink); color: var(--paper); }
 .acc { width: 24px; height: 24px; padding: 0; border: 2px solid var(--ink); background: var(--accent); cursor: pointer; flex: none; }
 .acc[aria-pressed='true'] { box-shadow: 0 0 0 2px var(--paper), 0 0 0 4px var(--ink); }
 .acc:hover { transform: translate(-1px, -1px); }
@@ -569,7 +574,8 @@ a.mk:hover { background: var(--ink); color: var(--paper); }
   /* on a phone the popover spans the header, so eight swatches never run off the screen */
   .hd { position: relative; }
   .accpick { position: static; }
-  .accpop { left: 12px; right: 12px; top: 100%; justify-content: space-between; }
+  .accpop { left: 12px; right: 12px; top: 100%; }
+  .accpop .accs { justify-content: space-between; }
   .hd { gap: 10px; }
   .conn.live, .conn.fixture { display: none; }
   .gridview { grid-template-columns: minmax(0, 1fr); }

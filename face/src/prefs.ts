@@ -1,9 +1,20 @@
 /**
- * Board settings (theme, accent, layout, folded lanes) live in the browser's storage for speed, and are
+ * Board settings (theme, accent, look, layout, folded lanes) live in the browser's storage for speed, and are
  * mirrored to the engine (~/.agent-eye/ui.json) so the tab and the installed app share them and
  * they survive cleared site data.
  */
-export const PREF_KEYS = ['eye.theme', 'eye.ink.layout', 'eye.ink.fold', 'eye.ink.panel', 'eye.accent'] as const;
+
+/** Settings every look shares. */
+const SHARED = ['eye.theme', 'eye.accent', 'eye.look'] as const;
+
+/** A setting a look keeps for itself: `eye.<look>.layout`, `.fold` or `.panel` (the engine accepts the same). */
+const PER_LOOK = /^eye\.[a-z][a-z0-9]{0,15}\.(layout|fold|panel)$/;
+
+export type PrefKey = (typeof SHARED)[number] | `eye.${string}.${'layout' | 'fold' | 'panel'}`;
+
+export function isPrefKey(k: string): k is PrefKey {
+  return (SHARED as readonly string[]).includes(k) || PER_LOOK.test(k);
+}
 
 let engine = true;
 
@@ -22,21 +33,39 @@ export async function pullPrefs(timeoutMs = 800): Promise<void> {
     if (!res.ok) return;
     const saved: unknown = await res.json();
     if (!saved || typeof saved !== 'object') return;
-    for (const k of PREF_KEYS) {
-      const v = (saved as Record<string, unknown>)[k];
-      if (typeof v === 'string') localStorage.setItem(k, v);
+    for (const [k, v] of Object.entries(saved as Record<string, unknown>)) {
+      if (isPrefKey(k) && typeof v === 'string') localStorage.setItem(k, v);
     }
   } catch { /* offline build, old engine or blocked storage */ }
 }
 
-/** Remember one setting here and in the engine. */
-export function pushPref(key: (typeof PREF_KEYS)[number], value: string): void {
+/**
+ * Remember one setting here and in the engine. Resolves true when the engine has it or there is no engine to
+ * ask (the offline board, an engine that is down: the browser's copy then stands); false when the engine
+ * answered with a refusal, so the caller can say so.
+ */
+export async function savePref(key: PrefKey, value: string, timeoutMs = 3000): Promise<boolean> {
   try { localStorage.setItem(key, value); } catch { /* storage blocked */ }
-  if (!engine) return;
-  void fetch('/api/prefs', {
-    method: 'POST',
-    credentials: 'same-origin',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ [key]: value }),
-  }).catch(() => { /* offline build */ });
+  if (!engine) return true;
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), timeoutMs);
+  try {
+    const res = await fetch('/api/prefs', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ [key]: value }),
+      signal: ctl.signal,
+    });
+    return res.ok;
+  } catch {
+    return true;
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+/** Remember one setting here and in the engine, without waiting. */
+export function pushPref(key: PrefKey, value: string): void {
+  void savePref(key, value);
 }

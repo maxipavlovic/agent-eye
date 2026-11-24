@@ -5,11 +5,11 @@ import type { Agent, Source } from '../../api/types';
 import { fixtureSource } from '../../data/fixture';
 import { keepPrefsLocal } from '../../prefs';
 import { createStore } from '../../store';
-import { ideaForm } from './IdeaForm';
-import { remindForm } from './Remind';
+import { ideaForm } from '../../board/IdeaForm';
+import { remindForm } from '../../board/Remind';
 import { Root } from './Root';
-import { resetFolds } from './Sections';
-import { dateValue } from './DatePick';
+import { resetFolds } from '../../board/Sections';
+import { dateValue } from '../../board/DatePick';
 
 const CLAUDE: Agent = { id: 'claude', name: 'Claude Code', short: 'Claude', default: true };
 const CODEX: Agent = { id: 'codex', name: 'Codex CLI', short: 'Codex', default: false };
