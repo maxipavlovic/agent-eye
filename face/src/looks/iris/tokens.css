@@ -1,0 +1,57 @@
+/* Colours, fonts and lines of the iris look.
+   One line = the thinnest the browser draws: --hair for borders, --sw for SVG strokes; 1px on a normal screen,
+   .5px on Retina, .34px at 3x. SVG strokes and Safari's borders come out one device pixel; Chrome rounds a
+   border up to one CSS pixel. Hierarchy comes from contrast (--rule vs --rule-2), never from thicker lines.
+   --accent fills (a mark box, a count); --accent-ink is the same colour dark enough for text on the paper. */
+:root {
+  color-scheme: light;
+  --paper: #e8e8e4;
+  --lit: #f1f1ed;
+  --ink: #0e0e0d;
+  --mute: #4f4e49;
+  --rule: #0e0e0d;
+  --rule-2: #c3c2bb;
+  --accent: #e04e12;
+  --accent-ink: #b23d08;
+  --on-accent: #0e0e0d;
+  --pupil: #0d0c0b;
+  --f-disp: 'Archivo Variable', 'Archivo', 'Helvetica Neue', Arial, sans-serif;
+  --f-body: 'Inter Variable', 'Inter', system-ui, -apple-system, sans-serif;
+  --f-mono: 'Martian Mono Variable', 'Martian Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --hair: 1px;
+  --sw: 1;
+  --inset: 10px;
+}
+@media (min-resolution: 2dppx) { :root { --hair: .5px; --sw: .5; } }
+@media (min-resolution: 3dppx) { :root { --hair: .34px; --sw: .34; } }
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --paper: #0b0b0a;
+  --lit: #171715;
+  --ink: #ecebe6;
+  --mute: #aaa8a0;
+  --rule: #ecebe6;
+  --rule-2: #302f2c;
+  --accent: #ff6a2b;
+  --accent-ink: #ff8a55;
+  --on-accent: #0b0b0a;
+}
+
+/* Accent presets: the same eight as ink, tuned for the grey paper and the night. Vermilion is the default.
+   A `.acc` swatch carries its own data-accent, so it shows its own colour. */
+.acc[data-accent='vermilion'] { --accent: #e04e12; --accent-ink: #b23d08; --on-accent: #0e0e0d; }
+:root[data-theme='dark'] .acc[data-accent='vermilion'] { --accent: #ff6a2b; --accent-ink: #ff8a55; --on-accent: #0b0b0a; }
+:root[data-accent='cobalt'], .acc[data-accent='cobalt'] { --accent: #2f62d8; --accent-ink: #2449a8; --on-accent: #fafaf7; }
+:root[data-theme='dark'][data-accent='cobalt'], :root[data-theme='dark'] .acc[data-accent='cobalt'] { --accent: #7aa2ff; --accent-ink: #9cbaff; --on-accent: #0b0b0a; }
+:root[data-accent='teal'], .acc[data-accent='teal'] { --accent: #0e8a82; --accent-ink: #0b6b65; --on-accent: #0e0e0d; }
+:root[data-theme='dark'][data-accent='teal'], :root[data-theme='dark'] .acc[data-accent='teal'] { --accent: #3fc7bb; --accent-ink: #6fd8ce; --on-accent: #0b0b0a; }
+:root[data-accent='moss'], .acc[data-accent='moss'] { --accent: #4c8a2a; --accent-ink: #3b6b20; --on-accent: #0e0e0d; }
+:root[data-theme='dark'][data-accent='moss'], :root[data-theme='dark'] .acc[data-accent='moss'] { --accent: #9ccc62; --accent-ink: #b4da85; --on-accent: #0b0b0a; }
+:root[data-accent='amber'], .acc[data-accent='amber'] { --accent: #b97300; --accent-ink: #8a5600; --on-accent: #0e0e0d; }
+:root[data-theme='dark'][data-accent='amber'], :root[data-theme='dark'] .acc[data-accent='amber'] { --accent: #f2b33d; --accent-ink: #f6c76c; --on-accent: #0b0b0a; }
+:root[data-accent='magenta'], .acc[data-accent='magenta'] { --accent: #cc2a86; --accent-ink: #a11f69; --on-accent: #fafaf7; }
+:root[data-theme='dark'][data-accent='magenta'], :root[data-theme='dark'] .acc[data-accent='magenta'] { --accent: #f070b7; --accent-ink: #f597c9; --on-accent: #0b0b0a; }
+:root[data-accent='violet'], .acc[data-accent='violet'] { --accent: #6d48d8; --accent-ink: #5536b0; --on-accent: #fafaf7; }
+:root[data-theme='dark'][data-accent='violet'], :root[data-theme='dark'] .acc[data-accent='violet'] { --accent: #ab92ff; --accent-ink: #c2b0ff; --on-accent: #0b0b0a; }
+:root[data-accent='graphite'], .acc[data-accent='graphite'] { --accent: #4a4a47; --accent-ink: #3a3a38; --on-accent: #fafaf7; }
+:root[data-theme='dark'][data-accent='graphite'], :root[data-theme='dark'] .acc[data-accent='graphite'] { --accent: #c9c7bf; --accent-ink: #dcdad3; --on-accent: #0b0b0a; }

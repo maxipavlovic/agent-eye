@@ -4,4 +4,5 @@ ratatui = "ratatui" # the terminal UI crate
 ot = "ot" # CSS class of the output tag in the board
 
 [files]
-extend-exclude = ["Cargo.lock", "face/package-lock.json", "face/fixtures/", "tests/fixtures/**/*.jsonl"]
+# licenses/: third-party license texts, kept word for word
+extend-exclude = ["Cargo.lock", "face/package-lock.json", "face/fixtures/", "tests/fixtures/**/*.jsonl", "licenses/OFL-*.txt"]

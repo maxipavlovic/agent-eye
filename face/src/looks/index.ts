@@ -13,6 +13,14 @@ const REGISTRY = {
       return (await import('./ink/Root')).Root;
     },
   },
+  iris: {
+    label: 'IRIS',
+    title: 'Iris: a technical drawing in one-pixel lines',
+    load: async (): Promise<LookRoot> => {
+      await import('./iris/iris.css');
+      return (await import('./iris/Root')).Root;
+    },
+  },
 } as const;
 
 export type LookName = keyof typeof REGISTRY;

@@ -55,7 +55,10 @@ function startServer(dir: string, env: NodeJS.ProcessEnv): Promise<{ child: Chil
   });
 }
 
-export const test = base.extend<{ eye: Eye; board: Page }>({
+export const test = base.extend<{ look: string; eye: Eye; board: Page }>({
+  /** The look the board is drawn in (a project option: `chromium-iris` sets `iris`). */
+  look: ['ink', { option: true }],
+
   eye: async ({}, use) => {
     const dir = mkdtempSync(join(tmpdir(), 'eye-e2e-'));
     const bin = join(dir, 'bin');
@@ -96,8 +99,8 @@ export const test = base.extend<{ eye: Eye; board: Page }>({
     rmSync(dir, { recursive: true, force: true });
   },
 
-  /** A page on the fixture board with the browser clock pinned to NOW and every console problem recorded in `page.problems`. */
-  board: async ({ page, eye }, use) => {
+  /** A page on the fixture board, in the project's look, with the browser clock pinned to NOW and every console problem recorded in `page.problems`. */
+  board: async ({ page, eye, look }, use) => {
     const problems: string[] = [];
     page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') problems.push(`console ${m.type()}: ${m.text()}`); });
     page.on('pageerror', (e) => problems.push(`page error: ${e.message}`));
@@ -105,7 +108,9 @@ export const test = base.extend<{ eye: Eye; board: Page }>({
     page.on('response', (r) => { if (r.status() >= 400) problems.push(`http ${r.status()}: ${r.url()}`); });
     (page as Page & { problems: string[] }).problems = problems;
     await page.clock.setFixedTime(NOW);
-    await page.goto(eye.url);
+    await page.goto(look === 'ink' ? eye.url : `${eye.url}&look=${look}`);
+    // every test checks it really runs in its look, not in the default
+    await expect(page.locator('html')).toHaveAttribute('data-look', look);
     await expect(page.getByRole('region', { name: /^needs you/i })).toBeVisible();
     await use(page);
   },

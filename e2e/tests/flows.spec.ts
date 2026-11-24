@@ -267,3 +267,65 @@ test.describe('export', () => {
     expect(html).not.toContain('ghp_AAAAAAAA');
   });
 });
+
+test.describe('looks', () => {
+  test('the picker switches the look, and the engine remembers it for the next page', async ({ board, eye, look }) => {
+    const other = look === 'ink' ? 'iris' : 'ink';
+    await board.getByRole('button', { name: /^Accent colour/ }).click();
+    const looks = board.getByRole('group', { name: 'Look' });
+    await expect(looks.getByRole('button', { name: look.toUpperCase() })).toHaveAttribute('aria-pressed', 'true');
+    await looks.getByRole('button', { name: other.toUpperCase() }).click();
+    await expect(board.locator('html')).toHaveAttribute('data-look', other);
+    await expect(board.getByRole('region', { name: /^needs you/i })).toBeVisible();
+    expect((await eye.api('/api/prefs'))['eye.look']).toBe(other);
+    // a new page without ?look= opens in the saved look
+    await board.goto(eye.base + '/');
+    await expect(board.locator('html')).toHaveAttribute('data-look', other);
+    await expect(board.getByRole('region', { name: /^needs you/i })).toBeVisible();
+    // leaving a page cancels its event stream (WebKit reports that); anything else is a problem
+    expect(problems(board).filter((p) => !/\/api\/events .*(cancelled|ERR_ABORTED)/i.test(p))).toEqual([]);
+  });
+
+  test('iris: each lane head says one fact and draws one tick per session', async ({ board, look }) => {
+    test.skip(look !== 'iris', 'the lane facts and timelines are iris parts');
+    const head = (name: RegExp) => lane(board, name).locator('.chead');
+    await expect(head(/^needs you/i).locator('.lfact')).toHaveText('oldest ask 1d');
+    await expect(head(/^waiting/i).locator('.lfact')).toHaveText('on Dana');
+    await expect(head(/^running/i).locator('.lfact')).toHaveText('2 working now');
+    await expect(head(/^paused/i).locator('.lfact')).toHaveText('2 this week');
+    for (const [name, n] of [['ideas', 3], ['running', 2], ['needs you', 5], ['waiting', 3], ['paused', 2]] as const) {
+      await expect(head(new RegExp(`^${name}`, 'i')).locator('.tline .tk')).toHaveCount(n);
+    }
+    // the title block under the board counts what is open and what is done
+    await expect(board.locator('.tblock')).toContainText('15 open · 4 done · 0 archived');
+    // no stamps per session in iris: a card is told apart by its words
+    await expect(board.locator('.sigil')).toHaveCount(0);
+  });
+
+  test('each look keeps its own layout: Grid in one, Lanes in the other, both back after switching', async ({ board, eye, look }) => {
+    const other = look === 'ink' ? 'iris' : 'ink';
+    const pick = async (name: string) => {
+      await board.getByRole('button', { name: /^Accent colour/ }).click();
+      await board.getByRole('group', { name: 'Look' }).getByRole('button', { name: name.toUpperCase() }).click();
+      await expect(board.locator('html')).toHaveAttribute('data-look', name);
+    };
+    await board.getByRole('group', { name: 'Layout' }).getByRole('button', { name: 'Grid' }).click();
+    await expect(board.locator('.board.gridview')).toBeVisible();
+    await pick(other);
+    await expect(board.locator('.board.lanes')).toBeVisible();
+    await pick(look);
+    await expect(board.locator('.board.gridview')).toBeVisible();
+    const prefs = await eye.api('/api/prefs');
+    expect(prefs[`eye.${look}.layout`]).toBe('grid');
+    expect(prefs[`eye.${other}.layout`]).toBeUndefined();
+  });
+
+  test('an unknown look in the address keeps the one this browser has', async ({ board, eye, look }) => {
+    await board.goto(`${eye.url}&look=nope`);
+    await expect(board.locator('html')).toHaveAttribute('data-look', look);
+    await board.goto(`${eye.url}&look=constructor`);
+    await expect(board.locator('html')).toHaveAttribute('data-look', look);
+    await expect(board.getByRole('region', { name: /^needs you/i })).toBeVisible();
+  });
+});
+
