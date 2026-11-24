@@ -8,14 +8,19 @@ import type { Art, IconName } from '../../board/look';
  * the dot of a `!`.
  */
 
-/** The lane objects, each drawn with one line on a 32-unit grid: a bulb, a tape reel (it turns while something runs, iris.css), a bell, an hourglass, a moon, a flag. */
+/**
+ * The lane objects, each drawn with one line on a 32-unit grid. Their parts move in iris.css, gently and only
+ * when it means something: the reel turns while a session works, the bell swings while something waits on
+ * you, the hourglass turns over while you wait on others, the moon's star twinkles, the bulb lights and the
+ * flag waves under the pointer. With reduced motion they keep still.
+ */
 const LANE: Record<ColumnId, string> = {
-  ideas: '<path class="s" d="M12.5 21.5c0-2.8-4.6-4.6-4.6-9.6a8.1 8.1 0 0 1 16.2 0c0 5-4.6 6.8-4.6 9.6Z"/><path class="s" d="M12.5 24.5h7M13.75 27.25h4.5M14 21.5v-5.25l2-2.5 2 2.5v5.25"/>',
+  ideas: '<g class="rays"><path class="s" d="M16 1.75v2M4.75 6.5l1.5 1.4M27.25 6.5l-1.5 1.4M2.5 14.5h2M27.5 14.5h2"/></g><path class="s" d="M12.5 21.5c0-2.8-4.6-4.6-4.6-9.6a8.1 8.1 0 0 1 16.2 0c0 5-4.6 6.8-4.6 9.6Z"/><path class="s" d="M12.5 24.5h7M13.75 27.25h4.5"/><path class="s fil" d="M14 21.5v-5.25l2-2.5 2 2.5v5.25"/>',
   running: '<g class="reel"><circle class="s" cx="16" cy="16" r="11.5"/><circle class="s" cx="16" cy="16" r="2.25"/><circle class="s" cx="16" cy="9.25" r="2.75"/><circle class="s" cx="21.85" cy="19.375" r="2.75"/><circle class="s" cx="10.15" cy="19.375" r="2.75"/></g>',
-  needs_you: '<path class="s" d="M8.75 22.5h14.5l-2-2.75v-6a5.25 5.25 0 0 0-10.5 0v6Z"/><path class="s" d="M16 6.25v2.25M5.75 11.5a10.5 10.5 0 0 1 2.75-4.75M26.25 11.5a10.5 10.5 0 0 0-2.75-4.75"/><circle class="clap" cx="16" cy="25.5" r="1.9"/>',
-  waiting: '<path class="s" d="M9.25 5.25h13.5M9.25 26.75h13.5M11 5.25c0 6.25 4.75 7.5 4.75 10.75S11 20.5 11 26.75M21 5.25c0 6.25-4.75 7.5-4.75 10.75S21 20.5 21 26.75M13 25l3-3.75L19 25Z"/>',
-  paused: '<path class="s" d="M21.6 6.1A10.5 10.5 0 1 0 26.4 21a8.6 8.6 0 0 1-4.8-14.9Z"/><path class="s" d="M24.75 5.5v3.5M23 7.25h3.5"/>',
-  done: '<path class="s" d="M9.25 27.5V4.75M9.25 6h15l-3.25 4.75 3.25 4.75h-15"/>',
+  needs_you: '<g class="ring"><path class="s" d="M5.75 11.5a10.5 10.5 0 0 1 2.75-4.75M26.25 11.5a10.5 10.5 0 0 0-2.75-4.75"/></g><g class="swing"><path class="s" d="M8.75 22.5h14.5l-2-2.75v-6a5.25 5.25 0 0 0-10.5 0v6Z"/><path class="s" d="M16 6.25v2.25"/><circle class="clap" cx="16" cy="25.5" r="1.9"/></g>',
+  waiting: '<g class="flip"><path class="s" d="M9.25 5.25h13.5M9.25 26.75h13.5M11 5.25c0 6.25 4.75 7.5 4.75 10.75S11 20.5 11 26.75M21 5.25c0 6.25-4.75 7.5-4.75 10.75S21 20.5 21 26.75M13 25l3-3.75L19 25Z"/></g>',
+  paused: '<path class="s" d="M21.6 6.1A10.5 10.5 0 1 0 26.4 21a8.6 8.6 0 0 1-4.8-14.9Z"/><g class="star"><path class="s" d="M24.75 5.5v3.5M23 7.25h3.5"/></g>',
+  done: '<path class="s" d="M9.25 27.5V4.75"/><g class="cloth"><path class="s" d="M9.25 6h15l-3.25 4.75 3.25 4.75h-15"/></g>',
 };
 
 /** A lane's object at `px` CSS pixels. */

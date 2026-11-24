@@ -4,7 +4,7 @@ import type { Store } from '../../store';
 import { agentNames } from '../../board/pieces';
 import { irisArt, LaneObject } from './art';
 import { Eye } from './Eye';
-import { Head } from './Head';
+import { Head, Tile } from './Head';
 import { CODE, Header, ProjectBar } from './Header';
 
 /** A board with no sessions and no ideas yet: the eye, drawn large, and where sessions come from. */
@@ -40,4 +40,4 @@ function TitleBlock({ store }: { store: Store }) {
 }
 
 /** Iris: the board as a technical drawing in one-pixel lines, with one signal colour for what needs you. */
-export const IRIS_LOOK: Look = { name: 'iris', art: irisArt, Header, ProjectBar, Head, Welcome, Loading, Footer: TitleBlock };
+export const IRIS_LOOK: Look = { name: 'iris', art: irisArt, Header, ProjectBar, Head, Welcome, Loading, Footer: TitleBlock, Tile };

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Card } from '../../api/types';
-import { laneFact, tickAt } from './facts';
+import { hoursAt, laneFact, tickAt } from './facts';
 
 const NOW = 1_795_176_000_000;
 const H = 3_600_000;
@@ -49,6 +49,12 @@ describe('a tick on the timeline', () => {
     expect(tickAt(NOW - 14 * 24 * H, NOW)).toBeCloseTo(0, 6);
     expect(tickAt(NOW - 40 * 24 * H, NOW)).toBe(0);
     expect(tickAt(null, NOW)).toBeNull();
+  });
+
+  it('puts the scale marks where ticks of that age would sit', () => {
+    expect(hoursAt(0)).toBe(1);
+    expect(hoursAt(336)).toBeCloseTo(0, 6);
+    for (const h of [1, 24, 168]) expect(hoursAt(h)).toBe(tickAt(NOW - h * H, NOW));
   });
 
   it('moves left as a session gets older, the last day taking more room than last week', () => {

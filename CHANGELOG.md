@@ -6,7 +6,7 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ### Added
 
-- A second look for the board, **iris**: the board as a technical drawing in one-pixel lines, with header cells, condensed counts, a fact and a timeline under each lane name, and a title block. Pick INK or IRIS in the colour button of the header (the choice is shared by every browser, like the theme). Same cards, panel, keys and accent colours as ink.
+- A second look for the board, **iris**: the board as a technical drawing in one-pixel lines, with header cells, condensed counts, a fact and a timeline under each lane name, and a title block. Its drawings move a little (the eye blinks, the bell rings while something waits on you) and keep still when your system asks for reduced motion. Pick INK or IRIS in the colour button of the header (the choice is shared by every browser, like the theme). Same cards, panel, keys and accent colours as ink.
 
 ### Changed
 

@@ -22,7 +22,7 @@ function Rail({ col, open }: { col: Column; open?: () => void }) {
     </>
   );
   return open
-    ? <button class={`rail folded c-${col.id}`} data-col={col.id} onClick={open} aria-label={`${col.title}, ${n} cards. Unfold`}>{body}</button>
+    ? <button class={`rail folded c-${col.id}${n ? ' has' : ''}`} data-col={col.id} onClick={open} aria-label={`${col.title}, ${n} cards. Unfold`}>{body}</button>
     : <section class={`rail c-${col.id}`} data-col={col.id} aria-label={`${col.title}, no cards`}>{body}</section>;
 }
 

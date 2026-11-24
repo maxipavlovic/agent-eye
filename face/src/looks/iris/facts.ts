@@ -50,6 +50,10 @@ export const SPAN_MS = 14 * DAY;
  */
 export function tickAt(t: number | null | undefined, now = Date.now()): number | null {
   if (!t) return null;
-  const hours = Math.max(0, (now - t) / 3_600_000);
+  return hoursAt(Math.max(0, (now - t) / 3_600_000));
+}
+
+/** Where `hours` ago sits on a lane's timeline, 0 to 1 (see `tickAt`). */
+export function hoursAt(hours: number): number {
   return Math.max(0, 1 - Math.log1p(hours) / Math.log1p(SPAN_MS / 3_600_000));
 }

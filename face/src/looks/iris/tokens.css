@@ -15,6 +15,8 @@
   --accent-ink: #b23d08;
   --on-accent: #0e0e0d;
   --pupil: #0d0c0b;
+  /* six muted hues, one per project on the project bar; never on a card, where colour means needs you */
+  --p0: #5b6ea8; --p1: #6b8c66; --p2: #a3864d; --p3: #8a6fa3; --p4: #a96a55; --p5: #5a8592;
   --f-disp: 'Archivo Variable', 'Archivo', 'Helvetica Neue', Arial, sans-serif;
   --f-body: 'Inter Variable', 'Inter', system-ui, -apple-system, sans-serif;
   --f-mono: 'Martian Mono Variable', 'Martian Mono', ui-monospace, 'SF Mono', Menlo, monospace;
@@ -35,6 +37,7 @@
   --accent: #ff6a2b;
   --accent-ink: #ff8a55;
   --on-accent: #0b0b0a;
+  --p0: #8fa0d6; --p1: #9cbc95; --p2: #d2b47c; --p3: #b9a0d0; --p4: #d79a83; --p5: #8fb6c2;
 }
 
 /* Accent presets: the same eight as ink, tuned for the grey paper and the night. Vermilion is the default.

@@ -14,12 +14,18 @@ const FIBRES = (() => {
   return d;
 })();
 
+/** The almond's two arcs, drawn from the inner corner, and how far outside them the lids rest. */
+const UPPER = 'C14 2.5 46 2.5 58.5 17', LOWER = 'C14 31.5 46 31.5 58.5 17', REST = 1.5;
+/** A lid: the paper beyond one arc, out to well past the almond. */
+const LID_UP = 'M1.5 17C14 2.5 46 2.5 58.5 17H62V-24H-2V17Z', LID_DOWN = 'M1.5 17C14 31.5 46 31.5 58.5 17H62V58H-2V17Z';
+
 /** How far the iris may move inside the almond, in drawing units. */
 const REACH_X = 9, REACH_Y = 3.2;
 
 /**
  * The brand eye in hairlines: the iris follows the pointer; when something needs you (`alert`) and the
- * pointer has not moved yet, it looks at the Needs you lane.
+ * pointer has not moved yet, it looks at the Needs you lane. Now and then it blinks: two lids, paper with a
+ * hairline edge shaped like the almond, close into one curved line (iris.css).
  */
 export function Eye({ alert }: { alert: boolean }) {
   const svg = useRef<SVGSVGElement>(null);
@@ -60,6 +66,8 @@ export function Eye({ alert }: { alert: boolean }) {
             <circle class="gl" cx="-1.7" cy="-1.9" r="1.05" />
           </g>
         </g>
+        <g class="lid up"><path class="lidfill" d={LID_UP} transform={`translate(0 ${-REST})`} /><path class="s" d={`M1.5 17${UPPER}`} transform={`translate(0 ${-REST})`} /></g>
+        <g class="lid down"><path class="lidfill" d={LID_DOWN} transform={`translate(0 ${REST})`} /><path class="s" d={`M1.5 17${LOWER}`} transform={`translate(0 ${REST})`} /></g>
       </g>
       <path class="s" d={ALMOND} />
     </svg>
