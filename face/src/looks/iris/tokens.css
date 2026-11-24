@@ -19,10 +19,11 @@
   --p0: #5b6ea8; --p1: #6b8c66; --p2: #a3864d; --p3: #8a6fa3; --p4: #a96a55; --p5: #5a8592;
   --f-disp: 'Archivo Variable', 'Archivo', 'Helvetica Neue', Arial, sans-serif;
   --f-body: 'Inter Variable', 'Inter', system-ui, -apple-system, sans-serif;
-  --f-mono: 'Martian Mono Variable', 'Martian Mono', ui-monospace, 'SF Mono', Menlo, monospace;
   --hair: 1px;
   --sw: 1;
   --inset: 10px;
+  /* a floating sheet (menus, popovers): a second hairline sheet behind it, offset down and right */
+  --sheet: 6px 6px 0 var(--paper), 6px 6px 0 var(--hair) var(--rule);
 }
 @media (min-resolution: 2dppx) { :root { --hair: .5px; --sw: .5; } }
 @media (min-resolution: 3dppx) { :root { --hair: .34px; --sw: .34; } }
@@ -32,8 +33,9 @@
   --lit: #171715;
   --ink: #ecebe6;
   --mute: #aaa8a0;
-  --rule: #ecebe6;
-  --rule-2: #302f2c;
+  /* lines in one warm grey, as on a printed data sheet: frames brighter, the lines inside quieter */
+  --rule: #5a5953;
+  --rule-2: #373632;
   --accent: #ff6a2b;
   --accent-ink: #ff8a55;
   --on-accent: #0b0b0a;

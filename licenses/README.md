@@ -8,7 +8,6 @@ agent-eye itself is MIT (see `../LICENSE`). The web board embeds five fonts unde
 | `OFL-Silkscreen.txt` | Silkscreen (regular, bold) | ink: labels and column titles | The Silkscreen Project Authors, https://github.com/googlefonts/silkscreen |
 | `OFL-Doto.txt` | Doto (800) | ink: counts | The Doto Project Authors, https://github.com/oliverlalan/Doto |
 | `OFL-Archivo.txt` | Archivo (variable, width axis) | iris: counts and labels | The Archivo Project Authors, https://github.com/Omnibus-Type/Archivo |
-| `OFL-MartianMono.txt` | Martian Mono (variable, width axis) | iris: codes | The Martian Mono Project Authors, https://github.com/evilmartians/mono |
 
 The fonts come from the `@fontsource` npm packages and are bundled unmodified by `face/` at build time. They are not committed to this repository.
 
