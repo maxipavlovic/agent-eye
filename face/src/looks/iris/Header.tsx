@@ -63,6 +63,13 @@ export function Header({ store, layout, setLayout }: HeaderProps) {
   );
 }
 
+/** A project's hue on the bar (one of six muted ones), the same for a project every day: from its name. */
+function hue(key: string): number {
+  let h = 2166136261;
+  for (const ch of key) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); }
+  return (h >>> 0) % 6;
+}
+
 /**
  * The projects (the five biggest and "other"), each hanging from the header's rule by a tick, with a strip
  * under it: its length is how many sessions, the part in the signal colour is how many need you.
@@ -83,7 +90,7 @@ export function ProjectBar({ total, ps, filter, setFilter }: ProjectBarProps) {
         {strip(total, needs, 96 / Math.max(total, 1))}
       </button>
       {ps.map((p) => (
-        <button key={p.key || 'other'} class={filter === p.key ? 'on' : ''} aria-pressed={filter === p.key} onClick={() => setFilter(filter === p.key ? null : p.key)}>
+        <button key={p.key || 'other'} class={`ph${p.key ? hue(p.key) : 'x'}${filter === p.key ? ' on' : ''}`} aria-pressed={filter === p.key} onClick={() => setFilter(filter === p.key ? null : p.key)}>
           <span class="pname">{p.label}<b>{p.count}</b>{p.needs > 0 && <em title="needs you">{p.needs}</em>}</span>
           {strip(p.count, p.needs, 96 / most)}
         </button>

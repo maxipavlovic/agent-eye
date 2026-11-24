@@ -17,7 +17,7 @@ function Box({ col, ctx, children, cls, fold }: {
 }) {
   const s = LANE_LABEL[col.id];
   const n = col.cards.length;
-  const { Head, art } = useLook();
+  const { Head, Tile, art } = useLook();
   const tile = (
     <>
       {art.lane(col.id, 'sm')}
@@ -28,14 +28,14 @@ function Box({ col, ctx, children, cls, fold }: {
   if (fold?.folded) {
     return (
       <section class={`box col c-${col.id} ${cls ?? ''}`} data-col={col.id} aria-label={col.title}>
-        <button class="minitile folded" onClick={() => fold.set(false)} aria-label={`${col.title}, ${n} cards. Unfold`}>{tile}<span class="plus">+</span></button>
+        {Tile ? <Tile col={col} open={() => fold.set(false)} /> : <button class="minitile folded" onClick={() => fold.set(false)} aria-label={`${col.title}, ${n} cards. Unfold`}>{tile}<span class="plus">+</span></button>}
       </section>
     );
   }
   if (!n && col.id !== 'done') {
     return (
       <section class={`box col c-${col.id} ${cls ?? ''}`} data-col={col.id} aria-label={`${col.title}, no cards`}>
-        <div class="minitile">{tile}</div>
+        {Tile ? <Tile col={col} /> : <div class="minitile">{tile}</div>}
       </section>
     );
   }

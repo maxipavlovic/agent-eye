@@ -35,6 +35,8 @@ export interface HeaderProps { store: Store; layout: Layout; setLayout: (l: Layo
 export interface ProjectBarProps { store: Store; total: number; ps: Project[]; filter: string | null; setFilter: (key: string | null) => void }
 /** A lane's header. `inline` puts the name beside the icon (the grid); `fold` folds the lane. */
 export interface HeadProps { col: Column; inline?: boolean; fold?: () => void }
+/** A grid lane drawn as one line: folded by hand (`open` unfolds it) or empty. */
+export interface TileProps { col: Column; open?: () => void }
 
 /** Everything that makes a look a look; the rest of the board is shared. */
 export interface Look {
@@ -50,6 +52,8 @@ export interface Look {
   Loading: ComponentType;
   /** Under the board, when the look has something there. */
   Footer?: ComponentType<{ store: Store }>;
+  /** A grid lane folded or empty; without it the grid draws its own plain tile. */
+  Tile?: ComponentType<TileProps>;
 }
 
 const LookCtx = createContext<Look | null>(null);
