@@ -145,7 +145,7 @@ pub fn file_word(s: &str) -> String {
 }
 
 /// `agent-eye-<host>-<YYYYMMDD-HHMM>.eyepack`
-pub fn pack_name(host: &str, at: &jiff::Zoned) -> String {
+pub fn pack_name(host: &str, at: &jiff::ZonedDateTime) -> String {
     format!(
         "agent-eye-{}-{}.{EXT}",
         file_word(host),

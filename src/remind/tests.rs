@@ -326,7 +326,7 @@ fn labels_say_today_tomorrow_the_weekday_or_the_date() {
     let at = |days: i64, h: u32| {
         let d = jiff::civil::date(2026, 6, 10)
             .at(h.try_into().unwrap(), 0, 0, 0)
-            .to_zoned(jiff::tz::TimeZone::system())
+            .to_zoned_datetime(jiff::tz::TimeZone::system())
             .unwrap()
             .checked_add(jiff::Span::new().days(days))
             .unwrap();

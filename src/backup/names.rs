@@ -111,13 +111,13 @@ impl Entry {
     /// When it was made, in Unix ms.
     pub fn stamp_ms(&self) -> i64 {
         self.stamp
-            .to_zoned(TimeZone::UTC)
+            .to_zoned_datetime(TimeZone::UTC)
             .map_or(0, |z| z.timestamp().as_millisecond())
     }
 
     /// When it was made, on the wall clock of this machine, as `YYYY-MM-DD HH:MM`.
     pub fn local_stamp(&self) -> String {
-        self.stamp.to_zoned(TimeZone::UTC).map_or_else(
+        self.stamp.to_zoned_datetime(TimeZone::UTC).map_or_else(
             |_| "?".into(),
             |z| {
                 z.with_time_zone(TimeZone::system())

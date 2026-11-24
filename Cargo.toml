@@ -42,7 +42,7 @@ fixed-clock = []
 [dependencies]
 anyhow = "1"
 axum = { version = "0.8", default-features = false, features = ["http1", "tokio", "json", "query"] }
-jiff = { version = "0.2", default-features = false, features = ["std", "tz-system", "tzdb-bundle-platform"] }
+jiff = { version = "1.0", default-features = false, features = ["std", "tz-system", "tzdb-bundle-platform"] }
 clap = { version = "4", features = ["derive", "env"] }
 libc = "0.2"
 regex = "1"
@@ -62,7 +62,7 @@ sha2 = "0.11"
 
 [dev-dependencies]
 # tests name Europe/Madrid, and a bare Linux image has no tz database
-jiff = { version = "0.2", default-features = false, features = ["std", "tz-system", "tzdb-bundle-always"] }
+jiff = { version = "1.0", default-features = false, features = ["std", "tz-system", "tzdb-bundle-always"] }
 http-body-util = "0.1"
 tempfile = "3"
 tower = { version = "0.5", features = ["util"] }

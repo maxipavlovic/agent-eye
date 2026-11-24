@@ -367,7 +367,7 @@ mod tests {
         let at = parse_lstart(&["Sun", "Nov", "1", "09:05:06", "2026"]).unwrap();
         let local = jiff::Timestamp::from_second(at)
             .unwrap()
-            .to_zoned(jiff::tz::TimeZone::system());
+            .to_zoned_datetime(jiff::tz::TimeZone::system());
         assert_eq!(
             local.strftime("%Y-%m-%d %H:%M:%S").to_string(),
             "2026-11-01 09:05:06"
@@ -383,7 +383,7 @@ mod tests {
         assert_eq!((pid, ppid, uid), (38090, 1, 501));
         let local = jiff::Timestamp::from_second(start)
             .unwrap()
-            .to_zoned(jiff::tz::TimeZone::system());
+            .to_zoned_datetime(jiff::tz::TimeZone::system());
         assert_eq!(
             local.strftime("%Y-%m-%d %H:%M:%S").to_string(),
             "2026-11-21 10:11:12"
