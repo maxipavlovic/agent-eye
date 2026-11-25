@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'preact/hooks';
+import { useLayoutEffect, useRef } from 'preact/hooks';
 import { useSignal } from '@preact/signals';
 import type { Store } from '../store';
 import type { CardDetail, MoveTarget } from '../api/types';
@@ -64,8 +64,8 @@ export function QuickMove({ d, store }: { d: CardDetail; store: Store }) {
 export function MoveMenu({ d, store }: { d: CardDetail; store: Store }) {
   const open = useSignal(false);
   const box = useRef<HTMLDivElement>(null);
-  // A click anywhere else, or Esc, closes the open menu.
-  useEffect(() => {
+  // A click anywhere else, or Esc, closes the open menu; listening from before the paint, like MORE.
+  useLayoutEffect(() => {
     if (!open.value) return;
     const away = (e: PointerEvent) => { if (!box.current?.contains(e.target as Node)) open.value = false; };
     const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); open.value = false; } };

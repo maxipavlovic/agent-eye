@@ -165,7 +165,8 @@ export function CardMenu({ store }: { store: Store }) {
     el.querySelector<HTMLElement>('button')?.focus({ preventScroll: true });
   }, [m?.seq]);
 
-  useEffect(() => {
+  // its keys listen from before the paint, so an Esc the moment it shows is the menu's
+  useLayoutEffect(() => {
     if (!m) return;
     const items = () => [...(ref.current?.querySelectorAll<HTMLElement>('button') ?? [])];
     const onKey = (e: KeyboardEvent) => {
@@ -182,14 +183,20 @@ export function CardMenu({ store }: { store: Store }) {
       // a menu taller than the window scrolls to the item (the page does not move: the menu is fixed)
       list[next]?.focus();
     };
+    addEventListener('keydown', onKey, true);
+    return () => removeEventListener('keydown', onKey, true);
+  }, [m?.seq]);
+
+  // A scroll, a resize or leaving the window closes it; from after the first frame, as the right-click that
+  // opened it may have scrolled its card into view, and that scroll arrives then
+  useEffect(() => {
+    if (!m) return;
     const onScroll = (e: Event) => { if (!ref.current?.contains(e.target as Node)) close(); };
     const shut = () => close();
-    addEventListener('keydown', onKey, true);
     addEventListener('scroll', onScroll, true);
     addEventListener('resize', shut);
     addEventListener('blur', shut);
     return () => {
-      removeEventListener('keydown', onKey, true);
       removeEventListener('scroll', onScroll, true);
       removeEventListener('resize', shut);
       removeEventListener('blur', shut);
