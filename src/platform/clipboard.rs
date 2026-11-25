@@ -61,13 +61,14 @@ fn copy_with(path: &OsStr, tools: &'static [Tool], text: &str) -> Option<&'stati
 /// The tools keep serving the clipboard from a background process, so their output is not held
 /// open here: that would wait for as long as the text stays on the clipboard.
 fn pipe_to(exe: &std::path::Path, args: &[&str], text: &str) -> bool {
-    let Ok(mut child) = Command::new(exe)
-        .args(args)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-    else {
+    let Ok(mut child) = super::retry_busy(|| {
+        Command::new(exe)
+            .args(args)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+    }) else {
         return false;
     };
     let written = child

@@ -29,13 +29,15 @@ fn available_with(path: &OsStr, mac: bool) -> bool {
 fn send_with(path: &OsStr, mac: bool, title: &str, body: &str, limit: Duration) -> bool {
     let (program, args) = command(mac, title, body);
     find_in(program, path).is_some_and(|exe| {
-        Command::new(exe)
-            .args(args)
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-            .is_ok_and(|child| succeeds_within(child, limit))
+        super::retry_busy(|| {
+            Command::new(&exe)
+                .args(&args)
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn()
+        })
+        .is_ok_and(|child| succeeds_within(child, limit))
     })
 }
 
