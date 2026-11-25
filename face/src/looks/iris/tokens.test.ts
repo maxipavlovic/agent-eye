@@ -1,28 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { ACCENTS } from '../../accents';
+import { contrast, cssTokens, mix } from '../../colourCheck';
 import css from './tokens.css?raw';
 
 interface Set3 { accent: string; accentInk: string; onAccent: string }
 
 /** The colour tokens of the first rule whose selector list starts with `selector`. */
 function tokens(selector: string): Partial<Set3> & { paper?: string } {
-  const at = css.indexOf(selector);
-  if (at < 0) throw new Error(`no rule for ${selector}`);
-  const body = css.slice(css.indexOf('{', at) + 1, css.indexOf('}', at));
-  const get = (name: string) => new RegExp(`--${name}:\\s*(#[0-9a-fA-F]{6})`).exec(body)?.[1];
-  return { accent: get('accent'), accentInk: get('accent-ink'), onAccent: get('on-accent'), paper: get('paper') };
+  const t = cssTokens(css, selector);
+  return { accent: t['accent'], accentInk: t['accent-ink'], onAccent: t['on-accent'], paper: t['paper'] };
 }
-
-/** WCAG 2 relative luminance and contrast ratio. */
-function luminance(hex: string): number {
-  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
-    .map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
-  return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
-}
-const contrast = (a: string, b: string) => {
-  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
-  return (hi! + 0.05) / (lo! + 0.05);
-};
 
 const PAPER = { light: tokens(':root {').paper!, dark: tokens(":root[data-theme='dark'] {").paper! };
 
@@ -48,6 +35,13 @@ describe('iris colours', () => {
         expect(contrast(onAccent, accent)).toBeGreaterThanOrEqual(4.5);
         expect(contrast(accent, PAPER[theme])).toBeGreaterThanOrEqual(3);
         expect(contrast(accentInk, PAPER[theme])).toBeGreaterThanOrEqual(4.5);
+      });
+
+      // Needs you sits on a wash of the accent in light (6 %, 11 % under the pointer; iris.css); at night on the paper
+      if (theme === 'light') it(`${id} (light): Needs you's words read on its wash (4.5) and its count stands out (3)`, () => {
+        const { accent, accentInk } = preset(id, theme);
+        for (const share of [0.06, 0.11]) expect(contrast(accentInk, mix(accent, share, PAPER.light)), `${share}`).toBeGreaterThanOrEqual(4.5);
+        expect(contrast(accent, mix(accent, 0.06, PAPER.light))).toBeGreaterThanOrEqual(3);
       });
     }
   }

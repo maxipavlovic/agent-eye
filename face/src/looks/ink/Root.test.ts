@@ -63,6 +63,23 @@ afterEach(() => {
 });
 
 describe('the board', () => {
+  it('reads the settings saved before each look had its own: Done open and the open panel sections', async () => {
+    localStorage.setItem('eye.ink.done', 'open');
+    localStorage.setItem('eye.ink.panel', 'conversation');
+    const { $, store } = await mount();
+    expect($('.rail.folded.c-done')).toBeNull();
+    expect($('.c-done')).not.toBeNull();
+    const running = (await fixtureSource().board()).columns.find((c) => c.id === 'running')!.cards;
+    store.open(running[0]!.id);
+    await vi.waitFor(() => expect($('#conversation')?.classList.contains('open')).toBe(true));
+  });
+
+  it('reads a saved grid layout', async () => {
+    localStorage.setItem('eye.ink.layout', 'grid');
+    const { $ } = await mount();
+    expect($('.board.gridview')).not.toBeNull();
+  });
+
   it('draws every lane, counts what needs you, and blinks the stopped session', async () => {
     const { $, $$ } = await mount();
     expect($('.c-needs_you .count')!.textContent).toBe('6');

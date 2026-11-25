@@ -1,54 +1,24 @@
 import { Pix } from '../../pixel/Pix';
-import type { Store } from '../../store';
+import type { HeaderProps } from '../../board/look';
 import type { Project } from '../../board/model';
-import { AccentPicker } from '../../board/AccentPicker';
+import { ConnState, HeaderEnd, LayoutSwitch, NeedsButton, SearchField, ThemeSwitch } from '../../board/HeaderParts';
 import { AUTO, INK_CC, LAYOUT_ICON, MOON, SUN } from './art';
 import { Eye } from './Eye';
-import { ideaForm } from '../../board/IdeaForm';
-import type { Layout } from '../../board/layout';
-import { TonightChip } from '../../board/Night';
-import { usagePanel } from '../../board/Usage';
 
-const CONN: Record<string, string> = { live: 'LIVE', connecting: 'LINKING', offline: 'OFFLINE', fixture: 'SAMPLE' };
+const THEME_ICON = { light: SUN, dark: MOON, auto: AUTO };
 
 /** Brand, search, the Needs you button, connection state, layout and theme switches, and + IDEA. */
-export function Header({ store, layout, setLayout }: { store: Store; layout: Layout; setLayout: (l: Layout) => void }) {
-  const need = store.needsYou.value;
-  const conn = store.connection.value;
-  const pref = store.themePref.value;
+export function Header({ store, layout, setLayout }: HeaderProps) {
   return (
     <header class="hd">
-      <div class="brand"><Eye alert={need > 0} /><span class="word">EYE</span></div>
-      <label class="search" title="Search (/ or ⌘K)">
-        <kbd>/</kbd>
-        <input id="q" type="search" placeholder="Search every session" autocomplete="off" aria-keyshortcuts="/ Meta+K Control+K" value={store.query.value} onInput={(e) => store.search(e.currentTarget.value)} />
-      </label>
+      <div class="brand"><Eye alert={store.needsYou.value > 0} /><span class="word">EYE</span></div>
+      <SearchField store={store} />
       <div class="grow" />
-      <button
-        class={`needbtn${need ? ' on' : ''}`}
-        onClick={() => document.querySelector('[data-col="needs_you"]')?.scrollIntoView({ inline: 'center', block: 'nearest' })}
-      >
-        <span>{need ? 'NEEDS YOU' : 'ALL CLEAR'}</span><b>{need}</b>
-      </button>
-      <span class={`conn ${conn}`} title={`data: ${conn}`}><i />{CONN[conn] ?? conn}</span>
-      <div class="theme layout" role="group" aria-label="Layout">
-        {(['lanes', 'grid'] as const).map((k) => (
-          <button key={k} class={layout === k ? 'on' : ''} aria-pressed={layout === k} title={k === 'lanes' ? 'Lanes' : 'Grid'} onClick={() => setLayout(k)}>
-            <Pix rows={LAYOUT_ICON[k]} pal={INK_CC} scale={2} />
-          </button>
-        ))}
-      </div>
-      <div class="theme" role="group" aria-label="Theme">
-        {([['light', SUN], ['dark', MOON], ['auto', AUTO]] as const).map(([k, rows]) => (
-          <button key={k} class={pref === k ? 'on' : ''} aria-pressed={pref === k} title={k} onClick={() => store.setTheme(k)}>
-            <Pix rows={rows} pal={INK_CC} scale={2} />
-          </button>
-        ))}
-      </div>
-      <AccentPicker store={store} />
-      <TonightChip store={store} />
-      <button class="btn" title="What the sessions used and cost, and where the plan limits stand" aria-haspopup="dialog" onClick={() => { usagePanel.value = !usagePanel.value; }}>USAGE</button>
-      <button class="btn plus" onClick={() => { ideaForm.value = {}; }}>+ IDEA</button>
+      <NeedsButton store={store} />
+      <ConnState store={store} />
+      <LayoutSwitch layout={layout} setLayout={setLayout} icon={(k) => <Pix rows={LAYOUT_ICON[k]} pal={INK_CC} scale={2} />} />
+      <ThemeSwitch store={store} icon={(k) => <Pix rows={THEME_ICON[k]} pal={INK_CC} scale={2} />} />
+      <HeaderEnd store={store} />
     </header>
   );
 }
