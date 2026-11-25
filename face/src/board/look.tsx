@@ -17,7 +17,7 @@ export interface Art {
   /** The status mark of a topic or a sub-agent. */
   mark(status: TopicStatus, scale?: number, label?: string): JSX.Element;
   /** The stamp that tells sessions apart; null for a look that draws none. */
-  sigil(id: string, big?: boolean): JSX.Element | null;
+  sigil(id: string): JSX.Element | null;
   /** What an empty lane shows above its words. */
   empty(): JSX.Element | null;
 }

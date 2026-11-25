@@ -22,8 +22,8 @@ export function foldedFrom(saved: string, oldDone: string): ColumnId[] {
 /** The board layout and its folded lanes of a look (`eye.<look>.layout`, `.fold`), remembered in the browser and in the engine. */
 export function useLayout(look: string) {
   const layout = useSignal<Layout>(load(`eye.${look}.layout`, 'lanes') === 'grid' ? 'grid' : 'lanes');
-  // Folded lanes; Done starts folded. An older saved "Done open" choice carries over once.
-  const folded = useSignal<ReadonlySet<ColumnId>>(new Set(foldedFrom(load(`eye.${look}.fold`, ''), load(`eye.${look}.done`, 'folded'))));
+  // Folded lanes; Done starts folded. Ink's older saved "Done open" choice (eye.ink.done) carries over once.
+  const folded = useSignal<ReadonlySet<ColumnId>>(new Set(foldedFrom(load(`eye.${look}.fold`, ''), look === 'ink' ? load('eye.ink.done', 'folded') : 'folded')));
   const setLayout = (l: Layout) => { layout.value = l; pushPref(`eye.${look}.layout`, l); };
   const setFold: SetFold = (id, v) => {
     const next = new Set(folded.value);

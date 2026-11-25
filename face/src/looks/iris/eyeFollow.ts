@@ -17,7 +17,8 @@ export function aimAt(dx: number, dy: number): { x: number; y: number } {
 /**
  * Brings an iris `svg.eye` to life: the iris eases toward the pointer, and its pupil narrows when the pointer
  * comes close; when the pointer rests, it looks at `idleTarget()` (Needs you while something waits) or drifts;
- * now and then it blinks, sometimes twice. With reduced motion it only follows the pointer. Returns the stop.
+ * now and then it blinks, sometimes twice. With reduced motion it jumps to where it looks, never drifts and never
+ * blinks. Returns the stop.
  */
 export function followEye(svg: SVGSVGElement, idleTarget: () => Element | null = () => null): () => void {
   const look = svg.querySelector<SVGGElement>('.look')!;

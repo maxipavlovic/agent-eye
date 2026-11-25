@@ -82,7 +82,6 @@ a:hover { background: var(--ink); color: var(--paper); text-decoration: none; }
 .theme button { width: 34px; height: 34px; display: grid; place-items: center; color: var(--mute); border: var(--hair) solid transparent; }
 .theme button.on { color: var(--ink); border-color: var(--rule); }
 .theme button:not(.on):hover { color: var(--ink); background: var(--lit); }
-.ico { color: inherit; }
 .ico.accent { color: var(--accent-ink); }
 .hd > .btn { border: 0; border-left: var(--hair) solid var(--rule); padding: 0 16px; box-shadow: none; font-size: 13px; }
 .hd > .btn:hover { background: var(--lit); color: var(--ink); }
@@ -112,7 +111,6 @@ a:hover { background: var(--ink); color: var(--paper); text-decoration: none; }
 .btn.ghost { border-color: var(--rule-2); }
 .btn.big { background: var(--ink); color: var(--paper); padding: 14px 20px; font-size: 13.5px; }
 .btn.big:hover { background: var(--mute); color: var(--paper); }
-.btn.plus { background: var(--ink); color: var(--paper); }
 .btn[disabled], .btn[disabled]:hover { opacity: .45; cursor: not-allowed; background: none; color: var(--ink); }
 .btn.big[disabled], .btn.big[disabled]:hover { background: var(--ink); color: var(--paper); }
 .btn u, .qmove u { text-decoration: underline var(--hair); text-underline-offset: 3px; }
@@ -156,12 +154,11 @@ a:hover { background: var(--ink); color: var(--paper); text-decoration: none; }
 .empty { padding: 22px 0; font-size: 13px; color: var(--mute); }
 
 /* a lane's head: count and object, name, one fact, the timeline; the rule under it ends in two ticks */
-.chead { --line: var(--rule); position: relative; flex: none; padding: 16px 0 14px; background: linear-gradient(var(--line), var(--line)) left bottom / 100% var(--hair) no-repeat, var(--paper); }
+.chead { --line: var(--rule); position: relative; flex: none; padding: 16px 0 0; background: linear-gradient(var(--line), var(--line)) left bottom / 100% var(--hair) no-repeat, var(--paper); }
 .chead::before, .chead::after { content: ''; position: absolute; bottom: -5px; width: var(--hair); height: 10px; background: var(--rule); }
 .chead::before { left: 0; }
 .chead::after { right: 0; }
 /* the full head's timeline stands on the lane rule, so the rule is its axis */
-.chead:not(.inline) { padding-bottom: 0; }
 .chead .tline .base, .chead .tline .end { display: none; }
 .chead .r1 { display: flex; justify-content: space-between; align-items: flex-end; height: 84px; }
 .chead .count { font: 800 82px/.74 var(--f-disp); font-stretch: 62%; letter-spacing: -.005em; font-variant-numeric: tabular-nums; }
@@ -209,7 +206,6 @@ a:hover { background: var(--ink); color: var(--paper); text-decoration: none; }
 .cbody > .card:first-child, .cbody > div:first-child > .card:first-of-type { border-top-color: transparent; }
 .card:hover { background: var(--lit); }
 .card.sel { background: var(--lit); }
-.card .dis { display: none; }
 /* the open card gets four corner marks, as a part called out on a drawing */
 .card::after {
   --c: var(--rule); --l: 9px;
@@ -223,6 +219,8 @@ a:hover { background: var(--ink); color: var(--paper); text-decoration: none; }
 }
 .card:hover::after, .card.sel::after, .card:focus-visible::after { opacity: 1; inset: 0; }
 .card:focus-visible { outline: none; background: var(--lit); }
+/* the keyboard's card: corner marks in ink, plain to see at night too */
+.card:focus-visible::after { --c: var(--ink); }
 /* line 1: the project, the agent and where it started, then the age; it keeps clear of the marks */
 .card .meta { display: flex; flex-wrap: nowrap; align-items: center; gap: 10px; height: 34px; margin: 0; padding-right: var(--tabw, 0px); }
 .card .meta .ml { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 400 14.5px/20px var(--f-body); color: var(--mute); }
@@ -305,7 +303,8 @@ a.mk:hover { background: var(--ink); color: var(--paper); }
 .chead.inline .count { font-size: 46px; margin-left: auto; }
 .ngrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; padding: 14px 0 6px; }
 .ngrid .card { border: var(--hair) solid color-mix(in srgb, var(--accent) 35%, var(--rule-2)); }
-.ngrid .card:first-child { border-top-color: color-mix(in srgb, var(--accent) 35%, var(--rule-2)); }
+/* an asking card keeps its accent top rule in the grid too */
+.ngrid .card.ask { border-top-color: var(--accent); }
 .ngrid .card, .side .card, .tiles .card, .rgrid .card { margin: 0; }
 .ngrid .card:not(.row) h3 { min-height: calc(2em * 1.32); }
 .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; padding: 4px 0 8px; }
@@ -345,7 +344,7 @@ mark { background: var(--ink); color: var(--paper); padding: 0 3px; }
 .welcome p { margin: 0; max-width: 34em; font: 400 17px/1.45 var(--f-body); }
 .welcome .hint { color: var(--mute); font-size: 15px; }
 .welcome code, .msg .mt code, .recap code { font: inherit; font-variant-numeric: tabular-nums slashed-zero; padding: 0 .25em; background: var(--lit); box-shadow: inset 0 0 0 var(--hair) var(--rule-2); }
-.welcome code { border: var(--hair) solid var(--rule); padding: 1px 5px; }
+.welcome code { box-shadow: none; border: var(--hair) solid var(--rule); padding: 1px 5px; }
 .tblock { display: flex; flex-wrap: wrap; flex: none; border-top: var(--hair) solid var(--rule); }
 .tblock > div { padding: 8px 16px; font: 400 14.5px/1.3 var(--f-body); color: var(--mute); border-left: var(--hair) solid var(--rule); white-space: nowrap; }
 .tblock > div:first-child { border-left: 0; flex: 1 1 auto; color: var(--ink); }
@@ -354,8 +353,7 @@ mark { background: var(--ink); color: var(--paper); padding: 0 3px; }
 /* ───────── the brand eye ───────── */
 .eye { overflow: visible; }
 .eye .s { stroke: var(--ink); }
-.eye .fib { fill: none; stroke: var(--accent); stroke-width: var(--sw); vector-effect: non-scaling-stroke; }
-.eye .ir { fill: none; stroke: var(--accent); stroke-width: var(--sw); vector-effect: non-scaling-stroke; }
+.eye :is(.fib, .ir) { fill: none; stroke: var(--accent); stroke-width: var(--sw); vector-effect: non-scaling-stroke; }
 .eye .pup { fill: var(--pupil); }
 .eye .gl { fill: #fff; }
 .eye .lash { fill: none; stroke: var(--accent); stroke-width: var(--sw); stroke-linecap: round; vector-effect: non-scaling-stroke; visibility: hidden; }
@@ -438,7 +436,7 @@ mark { background: var(--ink); color: var(--paper); padding: 0 3px; }
 .wcell.l3 { background: color-mix(in srgb, var(--ink) 65%, transparent); }
 .wcell.l4 { background: var(--ink); }
 /* the resume receipt: a hairline cell with the command, and a barcode of hairlines */
-.receipt { margin-top: 32px; padding: 16px 18px 16px; border: var(--hair) solid var(--rule); clip-path: none !important; }
+.receipt { margin-top: 32px; padding: 16px 18px 16px; border: var(--hair) solid var(--rule); }
 .receipt .rt { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px 14px; font-size: 12.5px; padding-bottom: 10px; border-bottom: var(--hair) dashed var(--rule-2); margin-bottom: 12px; }
 .receipt .rt small { margin-left: 10px; font: 400 14.5px/1 var(--f-body); letter-spacing: 0; text-transform: none; color: var(--mute); }
 .receipt code { display: block; font-size: 14px; line-height: 1.5; word-break: break-all; user-select: text; cursor: text; }
@@ -505,7 +503,7 @@ mark { background: var(--ink); color: var(--paper); padding: 0 3px; }
 .toks dd b { font-weight: 600; }
 .toks .dim { margin: 0; font-size: 15px; }
 
-/* ───────── modals: the idea form, the reminder, forget, keys, usage, the night ───────── */
+/* ───────── modals: the idea form, the reminder, forget, keys; .nplan (the night) shares their fields ───────── */
 /* The title and the buttons stay put and only the fields between them scroll, so SAVE is always in reach;
    the buttons sit in a strip like a drawing's title block. */
 .modal {
@@ -515,7 +513,7 @@ mark { background: var(--ink); color: var(--paper); padding: 0 3px; }
   box-shadow: 0 0 0 100vmax color-mix(in srgb, var(--paper) 55%, transparent);
 }
 .modal .dis { display: none; }
-.modal .mbody { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0 28px 6px; scrollbar-width: thin; scrollbar-color: var(--rule-2) transparent; }
+.modal .mbody { flex: 1 1 auto; min-height: 0; overflow-y: auto; scroll-padding-block: 12px; padding: 0 28px 6px; scrollbar-width: thin; scrollbar-color: var(--rule-2) transparent; }
 .modal h2 { flex: none; margin: 0; padding: 24px 28px 20px; display: flex; gap: 14px; align-items: center; font: 800 36px/.9 var(--f-disp); font-stretch: 62%; text-transform: uppercase; }
 .modal label, .nplan label { display: block; margin-bottom: 16px; font-size: 12.5px; line-height: 1; }
 .modal input, .modal textarea, .nplan textarea, .nplan input:not([type=checkbox]) {
@@ -599,7 +597,6 @@ mark { background: var(--ink); color: var(--paper); padding: 0 3px; }
 .nset { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: flex-end; margin: 0 0 12px; }
 .nset label { display: flex; flex-direction: column; gap: 4px; font: 600 16px/1.3 var(--f-body); }
 .nset input, .nset select, .nlim input { font: 400 17px/1.4 var(--f-body); background: var(--paper); border: var(--hair) solid var(--rule); padding: 6px 8px; }
-label.chk { flex-direction: row !important; align-items: center; gap: 8px !important; font-weight: 400 !important; }
 .nrun { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 0 0 12px; font: 400 17px/1.4 var(--f-body); }
 .nrun dt { font-weight: 600; }
 .nrun dd { margin: 0; overflow-wrap: anywhere; }
@@ -614,10 +611,6 @@ label.chk { flex-direction: row !important; align-items: center; gap: 8px !impor
 .trow .ns { font: 400 16px/1.4 var(--f-body); }
 .trow.failed .ns, .trow.stopped .ns { font-weight: 600; }
 .nlim { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.nightpick label { display: flex; flex-direction: column; gap: 4px; }
-fieldset.nightpick { border: 0; margin: 0 0 10px; padding: 0; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-fieldset.nightpick legend { font: 600 16px/1.3 var(--f-body); padding: 0; margin-bottom: 6px; }
-fieldset.nightpick .fchips { margin: 4px 0 0; }
 
 /* ───────── toasts and the card menu ───────── */
 .toasts { position: fixed; right: calc(var(--inset) + 16px); bottom: calc(var(--inset) + 16px); z-index: 80; display: grid; gap: 10px; justify-items: end; }
@@ -627,7 +620,7 @@ fieldset.nightpick .fchips { margin: 4px 0 0; }
 .tact { font-size: 12.5px; line-height: 1; border: var(--hair) solid currentColor; padding: 8px 10px; flex: none; }
 .tact:hover { background: var(--paper); color: var(--ink); }
 .ctxscrim { position: fixed; inset: 0; z-index: 85; }
-.ctx { position: fixed; z-index: 90; min-width: 264px; max-width: min(340px, calc(100vw - 16px)); max-height: calc(100vh - 16px); overflow-y: auto; background: var(--paper); color: var(--ink); border: var(--hair) solid var(--rule); padding-bottom: 4px; box-shadow: var(--sheet); }
+.ctx { position: fixed; z-index: 90; min-width: 264px; max-width: min(340px, calc(100vw - 16px)); max-height: calc(100vh - 16px); max-height: calc(100dvh - 16px); overflow-y: auto; background: var(--paper); color: var(--ink); border: var(--hair) solid var(--rule); padding-bottom: 4px; box-shadow: var(--sheet); }
 .ctx .ct { margin: 0; padding: 11px 14px 10px; border-bottom: var(--hair) solid var(--rule); font: 600 15px/1.35 var(--f-body); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
 .ctx .gl { margin: 0; padding: 10px 14px 4px; font: 600 12px/1.2 var(--f-disp); font-stretch: 125%; letter-spacing: .1em; text-transform: uppercase; color: var(--mute); }
 .ctx hr { border: 0; border-top: var(--hair) solid var(--rule-2); margin: 4px 0; }
@@ -731,7 +724,6 @@ fieldset.nightpick .fchips { margin: 4px 0 0; }
 }
 @media (max-width: 900px) {
   :root { --inset: 0px; }
-  .hd { position: relative; }
   .app { border: 0; }
   .accpick { position: static; }
   .accpop { left: 8px; right: 8px; top: 100%; }
@@ -759,7 +751,7 @@ fieldset.nightpick .fchips { margin: 4px 0 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation: none !important; }
+  *, *::before, *::after { animation: none !important; transition: none !important; }
   .chip.now { text-decoration: underline var(--hair) var(--accent); text-underline-offset: 3px; }
 }
 

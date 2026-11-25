@@ -5,7 +5,7 @@ import { LANE_LABEL } from './columns';
 
 /** The small stamp that tells sessions apart; nothing in a look that draws none. */
 export function Sigil({ id, big }: { id: string; big?: boolean }) {
-  const s = useArt().sigil(id, big);
+  const s = useArt().sigil(id);
   return s && <span class={`sigil${big ? ' big' : ''}`}>{s}</span>;
 }
 

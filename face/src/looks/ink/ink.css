@@ -319,7 +319,7 @@ mark { background: var(--ink); color: var(--paper); padding: 0 3px; }
 .wcell.l3 { background: var(--d75); }
 .wcell.l4 { background: var(--ink); }
 
-.receipt { margin-top: 34px; background: var(--ink); color: var(--paper); padding: 30px 22px 28px; }
+.receipt { margin-top: 34px; background: var(--ink); color: var(--paper); padding: 30px 22px 28px; clip-path: var(--zig); }
 .receipt .rt { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px 14px; font: 700 16px/1 var(--f-label); letter-spacing: 2px; padding-bottom: 12px; border-bottom: 2px dashed var(--paper); margin-bottom: 14px; }
 .receipt .rt small { margin-left: 10px; font: 400 14px/1 var(--f-body); letter-spacing: 0; }
 .receipt code { display: block; font: 400 16px/1.4 var(--f-body); word-break: break-all; user-select: text; cursor: text; }
@@ -335,11 +335,11 @@ mark { background: var(--ink); color: var(--paper); padding: 0 3px; }
 .menu button { display: block; width: 100%; text-align: left; background: none; border: 0; font: 400 16px/1 var(--f-label); padding: 11px 14px 10px; }
 .menu button:hover, .menu button:focus-visible { background: var(--ink); color: var(--paper); }
 
-/* ───────── idea modal ───────── */
+/* ───────── modals: the idea form, the reminder, forget, keys ───────── */
 /* The title and the buttons stay put and only the fields between them scroll, so SAVE is always in reach. */
 .modal { position: fixed; z-index: 50; left: 50%; top: max(16px, 6vh); width: min(600px, 92vw); max-height: calc(100vh - 2 * max(16px, 6vh)); max-height: calc(100dvh - 2 * max(16px, 6vh)); display: flex; flex-direction: column; transform: translateX(-50%); background: var(--paper); border: 4px solid var(--ink); box-shadow: 8px 8px 0 var(--ink); }
 .modal h2 { flex: none; margin: 0; padding: 26px 28px 18px; font: 700 24px/1 var(--f-label); display: flex; gap: 14px; align-items: center; }
-.modal .mbody { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0 28px 4px; scrollbar-width: thin; scrollbar-color: var(--ink) var(--paper); }
+.modal .mbody { flex: 1 1 auto; min-height: 0; overflow-y: auto; scroll-padding-block: 12px; padding: 0 28px 4px; scrollbar-width: thin; scrollbar-color: var(--ink) var(--paper); }
 .modal label { display: block; margin-bottom: 16px; font: 400 16px/1 var(--f-label); }
 .modal input, .modal textarea { display: block; width: 100%; margin-top: 8px; background: var(--paper); border: 2px solid var(--ink); padding: 10px 12px; font: 500 17px/1.4 var(--f-body); resize: vertical; }
 .modal input:focus, .modal textarea:focus { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -413,7 +413,7 @@ mark { background: var(--ink); color: var(--paper); padding: 0 3px; }
 
 /* ───────── card menu (right-click, long-press, Shift+F10) ───────── */
 .ctxscrim { position: fixed; inset: 0; z-index: 85; }
-.ctx { position: fixed; z-index: 90; min-width: 264px; max-width: min(340px, calc(100vw - 16px)); max-height: calc(100vh - 16px); overflow-y: auto; background: var(--paper); color: var(--ink); border: 2px solid var(--ink); box-shadow: 4px 4px 0 var(--ink); }
+.ctx { position: fixed; z-index: 90; min-width: 264px; max-width: min(340px, calc(100vw - 16px)); max-height: calc(100vh - 16px); max-height: calc(100dvh - 16px); overflow-y: auto; background: var(--paper); color: var(--ink); border: 2px solid var(--ink); box-shadow: 4px 4px 0 var(--ink); }
 .ctx .ct { margin: 0; padding: 10px 14px 9px; border-bottom: 2px solid var(--ink); font: 600 15px/1.35 var(--f-body); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
 .ctx .gl { margin: 0; padding: 8px 14px 2px; font: 600 13px/1.2 var(--f-body); letter-spacing: .08em; color: var(--mute); }
 .ctx hr { border: 0; border-top: 2px solid var(--ink); margin: 4px 0; }
@@ -683,7 +683,6 @@ a.mk:hover { background: var(--ink); color: var(--paper); }
 .nplan .acts { margin-top: 8px; }
 .nset label { display: flex; flex-direction: column; gap: 4px; font: 600 16px/1.3 var(--f-body); }
 .nset input, .nset select, .nlim input { font: 400 17px/1.4 var(--f-body); color: var(--ink); background: var(--paper); border: 2px solid var(--ink); padding: 6px 8px; }
-label.chk { flex-direction: row !important; align-items: center; gap: 8px !important; font-weight: 400 !important; }
 .nset { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: flex-end; margin: 0 0 12px; }
 .nrun { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 0 0 12px; font: 400 17px/1.4 var(--f-body); }
 .nrun dt { font-weight: 600; }
@@ -699,10 +698,6 @@ label.chk { flex-direction: row !important; align-items: center; gap: 8px !impor
 .trow .ns { font: 400 16px/1.4 var(--f-body); }
 .trow.failed .ns, .trow.stopped .ns { font-weight: 600; }
 .nlim { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.nightpick label { display: flex; flex-direction: column; gap: 4px; }
-fieldset.nightpick { border: 0; margin: 0 0 10px; padding: 0; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-fieldset.nightpick legend { font: 600 16px/1.3 var(--f-body); padding: 0; margin-bottom: 6px; }
-fieldset.nightpick .fchips { margin: 4px 0 0; }
 
 /* ───────── FORGET…: what goes, and a box for the agent's own copy ───────── */
 .forget { width: min(520px, 92vw); }

@@ -278,7 +278,8 @@ test.describe('looks', () => {
     await expect(board.locator('html')).toHaveAttribute('data-look', other);
     await expect(board.getByRole('region', { name: /^needs you/i })).toBeVisible();
     expect((await eye.api('/api/prefs'))['eye.look']).toBe(other);
-    // a new page without ?look= opens in the saved look
+    // a new page without ?look= opens in the saved look: the engine's, with this browser's copy gone
+    await board.evaluate(() => localStorage.clear());
     await board.goto(eye.base + '/');
     await expect(board.locator('html')).toHaveAttribute('data-look', other);
     await expect(board.getByRole('region', { name: /^needs you/i })).toBeVisible();
@@ -313,6 +314,8 @@ test.describe('looks', () => {
     await expect(board.locator('.board.gridview')).toBeVisible();
     await pick(other);
     await expect(board.locator('.board.lanes')).toBeVisible();
+    // the layout comes back from the engine, not only from this browser
+    await board.evaluate(() => localStorage.clear());
     await pick(look);
     await expect(board.locator('.board.gridview')).toBeVisible();
     const prefs = await eye.api('/api/prefs');
@@ -320,7 +323,11 @@ test.describe('looks', () => {
     expect(prefs[`eye.${other}.layout`]).toBeUndefined();
   });
 
-  test('an unknown look in the address keeps the one this browser has', async ({ board, eye, look }) => {
+  test('a look in the address holds for that page only; an unknown one falls back to the saved look', async ({ board, eye, look }) => {
+    // the board was opened with ?look=<look> (iris) or without it (ink): nothing was saved either way
+    expect(await board.evaluate(() => localStorage.getItem('eye.look'))).toBeNull();
+    expect((await eye.api('/api/prefs'))['eye.look']).toBeUndefined();
+    await eye.api('/api/prefs', { 'eye.look': look });
     await board.goto(`${eye.url}&look=nope`);
     await expect(board.locator('html')).toHaveAttribute('data-look', look);
     await board.goto(`${eye.url}&look=constructor`);

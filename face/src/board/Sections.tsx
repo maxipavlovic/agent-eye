@@ -5,9 +5,8 @@ import { pushPref, type PrefKey } from '../prefs';
 import type { CardDetail, Output, OutputKind, Stream, Tokens, Topic } from '../api/types';
 import { folderGroup, OUTPUT_NAMES, outputLabel, tok } from '../format';
 import { useArt } from './look';
-import { OUT_TAG } from './pieces';
+import { Mark, OUT_TAG } from './pieces';
 import { Hl, HlWords } from './highlight';
-import { Mark } from './pieces';
 import { costText, tokensText } from './usageText';
 import { WorkedRows } from './WorkedRows';
 

@@ -1,6 +1,6 @@
 # Third-party licenses
 
-agent-eye itself is MIT (see `../LICENSE`). The web board embeds five fonts under the SIL Open Font License 1.1. Their license texts are kept here because the license asks that every copy of the font carries it.
+agent-eye itself is MIT (see `../LICENSE`). The web board embeds four fonts under the SIL Open Font License 1.1. Their license texts are kept here because the license asks that every copy of the font carries it.
 
 | File | Font | Used for | Copyright |
 |---|---|---|---|

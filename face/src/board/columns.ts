@@ -2,7 +2,7 @@ import type { Store } from '../store';
 import type { ColumnId } from '../api/types';
 import type { Project } from './model';
 
-/** Lane label (shown in the pixel font), the small note beside it, and the text of an empty lane. */
+/** Lane label, the small note beside it, and the text of an empty lane. */
 export const LANE_LABEL: Record<ColumnId, { name: string; sub?: string; empty: string }> = {
   ideas: { name: 'IDEAS', empty: 'NO IDEAS YET' },
   running: { name: 'RUNNING', empty: 'NOTHING RUNNING' },

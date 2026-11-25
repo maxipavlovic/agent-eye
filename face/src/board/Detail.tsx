@@ -21,7 +21,7 @@ import { Kids, Outputs, Running, Sec, TokenSec, Topics, Where } from './Sections
 import { projectKey, projectLabel } from './model';
 import type { Walk } from './walk';
 
-/** The torn-edge outline of the resume receipt. */
+/** The torn-edge outline of the resume receipt, as `--zig` for a look that draws it (ink). */
 const ZIG = (() => {
   const n = 36;
   const pts: string[] = [];
@@ -78,7 +78,7 @@ function Receipt({ d }: { d: CardDetail }) {
   if (!d.resumable || !d.resume_cmd) return null;
   const { label, via } = resumeLabel(d.resume_mode, d.resume_terminal);
   return (
-    <div class="receipt" style={`clip-path:${ZIG}`}>
+    <div class="receipt" style={`--zig:${ZIG}`}>
       <div class="rt"><span>RESUME</span><span>{label}{via && <small>{via}</small>}</span></div>
       <code>{d.resume_cmd}</code>
       <div class="barcode" aria-hidden="true" />
