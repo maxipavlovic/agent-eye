@@ -4,7 +4,9 @@ import { h, render } from 'preact';
 import type { CardDetail, Worked } from '../api/types';
 import { fixtureSource } from '../data/fixture';
 import { keepPrefsLocal } from '../prefs';
+import { LookProvider } from './look';
 import { openFold, resetFolds, Where } from './Sections';
+import { TEST_LOOK } from './testLook';
 import { activeText, dayName, dayNumber, stripCells, workedText } from './worked';
 
 const MIN = 60_000;
@@ -73,10 +75,10 @@ describe('the WHERE section', () => {
   // WHERE is folded in the panel: these look inside it, opened
   const show = (d: Partial<CardDetail>): HTMLElement => {
     keepPrefsLocal();
-    openFold('where');
+    openFold(TEST_LOOK.name, 'where');
     box = document.createElement('div');
     document.body.append(box);
-    render(h(Where, { d: { started_at: 1, ...d } as CardDetail }), box);
+    render(h(LookProvider, { look: TEST_LOOK }, h(Where, { d: { started_at: 1, ...d } as CardDetail })), box);
     return box;
   };
 

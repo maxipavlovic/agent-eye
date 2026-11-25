@@ -13,10 +13,12 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 - The board's settings keep one layout, set of folded lanes and open panel sections per look (`eye.<look>.layout`, `.fold`, `.panel`); ink keeps the ones it had. `ui.json` holds at most 64 settings.
 - Dependencies: jiff 1.0 (its `Zoned` type is now `ZonedDateTime`; nothing changes for you) and clap 4.6.8. CI: taiki-e/install-action 2.90.5 and sonarqube-scan-action 8.5.0.
 - A card without a reminder says "No" under REMINDER in its panel, not "none".
+- `?look=<name>` in the address shows that look for that page only and saves nothing. Before, the browser kept it until the engine's saved look replaced it.
 
 ### Fixed
 
 - A card's right-click menu opened at the top of the window for most cards: too long to fit under the pointer, it flipped above it and was pushed to the top edge. It now opens at the pointer and moves up only as far as it must.
+- From the keyboard: in a long card menu, the arrow keys now scroll to the item they reach; Tab out of the menu goes on from the card, not from the end of the page; the key list (`?`) scrolls with the keys in Safari.
 - The idea form, the reminder form, the Forget confirm and the key list scrolled as a whole, so on a short window SAVE IDEA was below the edge. Their title and buttons now stay in place and only the fields between them scroll.
 
 ## 0.3.2 - 2026-11-23

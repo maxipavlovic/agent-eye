@@ -2,6 +2,7 @@
 @import '@fontsource-variable/archivo/wdth.css';
 
 @import './tokens.css';
+@import '../../board/modal.css';
 
 /* The iris look: the board as a technical drawing. One sheet in a hairline frame, a row of header cells,
    full-height lane lines, a title block. Two type families: Archivo, Extra Condensed for counts and Expanded
@@ -504,17 +505,11 @@ mark { background: var(--ink); color: var(--paper); padding: 0 3px; }
 .toks .dim { margin: 0; font-size: 15px; }
 
 /* ───────── modals: the idea form, the reminder, forget, keys; .nplan (the night) shares their fields ───────── */
-/* The title and the buttons stay put and only the fields between them scroll, so SAVE is always in reach;
-   the buttons sit in a strip like a drawing's title block. */
-.modal {
-  position: fixed; z-index: 50; left: 50%; top: max(16px, 6vh); transform: translateX(-50%);
-  width: min(600px, 92vw); max-height: calc(100vh - 2 * max(16px, 6vh)); max-height: calc(100dvh - 2 * max(16px, 6vh));
-  display: flex; flex-direction: column; background: var(--paper); border: var(--hair) solid var(--rule);
-  box-shadow: 0 0 0 100vmax color-mix(in srgb, var(--paper) 55%, transparent);
-}
+/* the frame is board/modal.css; the buttons sit in a strip like a drawing's title block */
+.modal { background: var(--paper); border: var(--hair) solid var(--rule); box-shadow: 0 0 0 100vmax color-mix(in srgb, var(--paper) 55%, transparent); }
 .modal .dis { display: none; }
-.modal .mbody { flex: 1 1 auto; min-height: 0; overflow-y: auto; scroll-padding-block: 12px; padding: 0 28px 6px; scrollbar-width: thin; scrollbar-color: var(--rule-2) transparent; }
-.modal h2 { flex: none; margin: 0; padding: 24px 28px 20px; display: flex; gap: 14px; align-items: center; font: 800 36px/.9 var(--f-disp); font-stretch: 62%; text-transform: uppercase; }
+.modal .mbody { padding: 0 28px 6px; scrollbar-color: var(--rule-2) transparent; }
+.modal h2 { padding: 24px 28px 20px; display: flex; gap: 14px; align-items: center; font: 800 36px/.9 var(--f-disp); font-stretch: 62%; text-transform: uppercase; }
 .modal label, .nplan label { display: block; margin-bottom: 16px; font-size: 12.5px; line-height: 1; }
 .modal input, .modal textarea, .nplan textarea, .nplan input:not([type=checkbox]) {
   display: block; width: 100%; margin-top: 8px; background: var(--paper); color: var(--ink); border: var(--hair) solid var(--rule);
@@ -526,7 +521,7 @@ mark { background: var(--ink); color: var(--paper); padding: 0 3px; }
 .modal .pick .fchips, .nplan .pick .fchips { margin: 10px 0 0; }
 .modal .hint, .nplan .hint, .nset .hint { display: block; margin-top: 6px; font: 400 16px/1.45 var(--f-body); text-transform: none; letter-spacing: 0; color: var(--ink); }
 .nplan > .hint { margin: 0 0 16px; }
-.modal .acts { flex: none; display: flex; gap: 14px; justify-content: flex-end; margin: 0; padding: 14px 28px 18px; border-top: var(--hair) solid var(--rule); }
+.modal .acts { gap: 14px; padding: 14px 28px 18px; border-top: var(--hair) solid var(--rule); }
 .mbody > .fchips { margin: -6px 0 16px; }
 .fnote, .fhint { margin: 8px 0 0; font: 400 15.5px/1.4 var(--f-body); border-left: var(--hair) solid var(--rule); padding-left: 10px; text-transform: none; letter-spacing: 0; }
 .fhint { margin: -4px 0 12px; font-size: 15px; }

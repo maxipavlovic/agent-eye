@@ -50,9 +50,9 @@ Both have the Lanes and the Grid layout, the same cards, panel, forms, keys and 
 
 **Adding a look.**
 
-1. Make `src/looks/<name>/` with a `Look` (`board/look.tsx` lists what it gives) and a `Root.tsx` that wraps `Board` in it.
-2. Write a style sheet for the shared parts' classes (iris.css covers all of them) and a `tokens.css` with the eight accents (copy `iris/tokens.test.ts` for it).
-3. Add the look to `REGISTRY` in `src/looks/index.ts`: the loader and the picker's label.
+1. Make `src/looks/<name>/` with a `Look` (`board/look.tsx` lists what it gives) and a `Root.tsx` that wraps `Board` in it. Build its header from `board/HeaderParts.tsx` and drive its eye with `board/gaze.ts`; the look only draws.
+2. Write a style sheet for the shared parts' classes (iris.css covers all of them) that imports `board/modal.css` first, and a `tokens.css` with the eight accents, with a test like `iris/tokens.test.ts` (the checks are in `src/colourCheck.ts`).
+3. Add the look to `LOOK_LIST` in `src/looks/names.ts` (the picker's label) and its loader to `looks` in `src/looks/index.ts`.
 4. For the offline sample: `looks/<name>/index.html`, `src/looks/<name>/main.tsx` and a `look:<name>` script.
 5. Add two Playwright projects in `e2e/playwright.config.ts`, make their baselines with `scripts/e2e.sh --update --project=…` and look at every one.
 6. List any new font's license in `../licenses/`.

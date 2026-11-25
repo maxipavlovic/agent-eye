@@ -12,7 +12,7 @@
   --rule: #0e0e0d;
   --rule-2: #c3c2bb;
   --accent: #e04e12;
-  --accent-ink: #b23d08;
+  --accent-ink: #a93a08;
   --on-accent: #0e0e0d;
   --pupil: #0d0c0b;
   /* six muted hues, one per project on the project bar; never on a card, where colour means needs you */
@@ -44,7 +44,7 @@
 
 /* Accent presets: the same eight as ink, tuned for the grey paper and the night. Vermilion is the default.
    A `.acc` swatch carries its own data-accent, so it shows its own colour. */
-.acc[data-accent='vermilion'] { --accent: #e04e12; --accent-ink: #b23d08; --on-accent: #0e0e0d; }
+.acc[data-accent='vermilion'] { --accent: #e04e12; --accent-ink: #a93a08; --on-accent: #0e0e0d; }
 :root[data-theme='dark'] .acc[data-accent='vermilion'] { --accent: #ff6a2b; --accent-ink: #ff8a55; --on-accent: #0b0b0a; }
 :root[data-accent='cobalt'], .acc[data-accent='cobalt'] { --accent: #2f62d8; --accent-ink: #2449a8; --on-accent: #fafaf7; }
 :root[data-theme='dark'][data-accent='cobalt'], :root[data-theme='dark'] .acc[data-accent='cobalt'] { --accent: #7aa2ff; --accent-ink: #9cbaff; --on-accent: #0b0b0a; }
@@ -52,7 +52,7 @@
 :root[data-theme='dark'][data-accent='teal'], :root[data-theme='dark'] .acc[data-accent='teal'] { --accent: #3fc7bb; --accent-ink: #6fd8ce; --on-accent: #0b0b0a; }
 :root[data-accent='moss'], .acc[data-accent='moss'] { --accent: #4c8a2a; --accent-ink: #3b6b20; --on-accent: #0e0e0d; }
 :root[data-theme='dark'][data-accent='moss'], :root[data-theme='dark'] .acc[data-accent='moss'] { --accent: #9ccc62; --accent-ink: #b4da85; --on-accent: #0b0b0a; }
-:root[data-accent='amber'], .acc[data-accent='amber'] { --accent: #b97300; --accent-ink: #8a5600; --on-accent: #0e0e0d; }
+:root[data-accent='amber'], .acc[data-accent='amber'] { --accent: #b37000; --accent-ink: #875400; --on-accent: #0e0e0d; }
 :root[data-theme='dark'][data-accent='amber'], :root[data-theme='dark'] .acc[data-accent='amber'] { --accent: #f2b33d; --accent-ink: #f6c76c; --on-accent: #0b0b0a; }
 :root[data-accent='magenta'], .acc[data-accent='magenta'] { --accent: #cc2a86; --accent-ink: #a11f69; --on-accent: #fafaf7; }
 :root[data-theme='dark'][data-accent='magenta'], :root[data-theme='dark'] .acc[data-accent='magenta'] { --accent: #f070b7; --accent-ink: #f597c9; --on-accent: #0b0b0a; }

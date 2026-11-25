@@ -3,6 +3,7 @@ import { signal, useSignal } from '@preact/signals';
 import type { Store } from '../store';
 import type { CardDetail, NightIsolation, NightRun } from '../api/types';
 import { ago } from '../format';
+import { useLook } from './look';
 import { Sec, Fold, openFold } from './Sections';
 import { tokensText } from './usageText';
 
@@ -198,8 +199,9 @@ export function NightRunLine({ d }: { d: CardDetail }) {
   const r = d.night_run;
   if (!r) return null;
   const parts = [runStatus(r), r.worktree ? changedText(r.diff_stat) : 'discarded', r.duration_ms != null ? durationText(r.duration_ms) : null].filter(Boolean);
+  const look = useLook().name;
   const review = () => {
-    openFold('night-run');
+    openFold(look, 'night-run');
     requestAnimationFrame(() => document.getElementById('night-run')?.scrollIntoView({ block: 'start', behavior: 'smooth' }));
   };
   return (

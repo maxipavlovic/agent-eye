@@ -1,0 +1,11 @@
+/* The frame of every dialog, the same in every look (each look's sheet imports it first): the title and the
+   buttons stay put and only the fields between them (.mbody) scroll, so SAVE is always in reach. A look adds
+   its border, padding, type and colours. */
+.modal {
+  position: fixed; z-index: 50; left: 50%; top: max(16px, 6vh); transform: translateX(-50%);
+  width: min(600px, 92vw); max-height: calc(100vh - 2 * max(16px, 6vh)); max-height: calc(100dvh - 2 * max(16px, 6vh));
+  display: flex; flex-direction: column;
+}
+.modal h2 { flex: none; margin: 0; }
+.modal .mbody { flex: 1 1 auto; min-height: 0; overflow-y: auto; scroll-padding-block: 12px; scrollbar-width: thin; }
+.modal .acts { flex: none; display: flex; justify-content: flex-end; margin: 0; }

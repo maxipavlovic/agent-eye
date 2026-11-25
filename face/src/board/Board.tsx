@@ -20,12 +20,10 @@ import { NightHost } from './Night';
 import { UsageHost } from './Usage';
 import { useWalk } from './walk';
 import { useLook } from './look';
-import { foldsFor } from './Sections';
 
 /** The board in the look it is wrapped in (`LookProvider`): header, lanes or grid, the panel, the forms, the menus. */
 export function Board({ store }: { store: Store }) {
   const { name, Header, ProjectBar, Welcome, Loading, Footer } = useLook();
-  foldsFor(name);
   const b = store.board.value;
   const sel = store.selected.value;
   const need = store.needsYou.value;

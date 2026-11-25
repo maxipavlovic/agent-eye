@@ -1,10 +1,10 @@
 import type { ComponentChildren } from 'preact';
 import { useContext } from 'preact/hooks';
-import { signal, useSignal } from '@preact/signals';
+import { signal, useSignal, type Signal } from '@preact/signals';
 import { pushPref, type PrefKey } from '../prefs';
 import type { CardDetail, Output, OutputKind, Stream, Tokens, Topic } from '../api/types';
 import { folderGroup, OUTPUT_NAMES, outputLabel, tok } from '../format';
-import { useArt } from './look';
+import { useArt, useLook } from './look';
 import { Mark, OUT_TAG } from './pieces';
 import { Hl, HlWords } from './highlight';
 import { costText, tokensText } from './usageText';
@@ -49,44 +49,44 @@ export function FoldSec({ t, sum, open, toggle, id, children }: { t: string; sum
   );
 }
 
-/** The folded sections of the panel kept open, by name, in this browser and the engine (`eye.<look>.panel`);
- *  the board says which look it is drawn in (`foldsFor`). */
-let panelLook = 'ink';
-const panelKey = (): PrefKey => `eye.${panelLook}.panel`;
-const kept = signal<Set<string>>(readKept());
+/** The folded sections of the panel kept open, by name, per look, in this browser and the engine (`eye.<look>.panel`). */
+const kept = new Map<string, Signal<Set<string>>>();
+const panelKey = (look: string): PrefKey => `eye.${look}.panel`;
 
-/** The board's look keeps its own open sections: read them when the look is not the one read last. */
-export function foldsFor(look: string) {
-  if (look === panelLook) return;
-  panelLook = look;
-  kept.value = readKept();
+function keptFor(look: string): Signal<Set<string>> {
+  let open = kept.get(look);
+  if (!open) {
+    let saved = '';
+    try { saved = localStorage.getItem(panelKey(look)) ?? ''; } catch { /* storage blocked */ }
+    open = signal(new Set(saved.split(',').filter(Boolean)));
+    kept.set(look, open);
+  }
+  return open;
 }
 
-function readKept(): Set<string> {
-  try { return new Set((localStorage.getItem(panelKey()) ?? '').split(',').filter(Boolean)); } catch { return new Set(); }
-}
-
-function keep(name: string, open: boolean) {
-  const next = new Set(kept.value);
+function keep(look: string, name: string, open: boolean) {
+  const sections = keptFor(look);
+  const next = new Set(sections.value);
   if (open) next.add(name); else next.delete(name);
-  kept.value = next;
-  pushPref(panelKey(), [...next].join(','));
+  sections.value = next;
+  pushPref(panelKey(look), [...next].join(','));
 }
 
 /** Read the kept sections again from storage (a test starts from a clean page). */
 export function resetFolds() {
-  kept.value = readKept();
+  kept.clear();
 }
 
-/** Open a folded section (REVIEW on the night run's line does). */
-export function openFold(name: string) {
-  if (!kept.value.has(name)) keep(name, true);
+/** Open a folded section of the panel in `look` (REVIEW on the night run's line does). */
+export function openFold(look: string, name: string) {
+  if (!keptFor(look).value.has(name)) keep(look, name, true);
 }
 
-/** Whether the folded section `name` is open, and the toggle that remembers it. */
+/** Whether the folded section `name` is open in the board's look, and the toggle that remembers it. */
 export function useFold(name: string): [boolean, () => void] {
-  const open = kept.value.has(name);
-  return [open, () => keep(name, !open)];
+  const look = useLook().name;
+  const open = keptFor(look).value.has(name);
+  return [open, () => keep(look, name, !open)];
 }
 
 /**

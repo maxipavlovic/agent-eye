@@ -83,9 +83,21 @@ describe('the iris board', () => {
     expect(localStorage.getItem('eye.ink.layout')).toBeNull();
   });
 
+  it("takes none of ink's settings: lanes, Done folded and the panel sections shut", async () => {
+    localStorage.setItem('eye.ink.layout', 'grid');
+    localStorage.setItem('eye.ink.done', 'open');
+    localStorage.setItem('eye.ink.panel', 'conversation');
+    const { $, store } = await mount();
+    expect($('.board.lanes')).not.toBeNull();
+    expect($('.rail.folded.c-done')).not.toBeNull();
+    store.open(store.board.value!.columns.find((c) => c.id === 'running')!.cards[0]!.id);
+    await vi.waitFor(() => expect($('#conversation')).not.toBeNull());
+    expect($('#conversation')!.classList.contains('open')).toBe(false);
+  });
+
   it('keeps the open panel sections under its own name', async () => {
     await mount();
-    openFold('conversation');
+    openFold('iris', 'conversation');
     expect(localStorage.getItem('eye.iris.panel')).toContain('conversation');
     expect(localStorage.getItem('eye.ink.panel')).toBeNull();
   });
