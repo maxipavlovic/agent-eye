@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { DEFAULT_LOOK, isLook, LOOK_LIST, looks, pickLook } from './index';
+import { DEFAULT_LOOK, LOOK_LIST, lookNamed, looks, pickLook } from './index';
 
 describe('pickLook', () => {
   beforeEach(() => localStorage.clear());
@@ -30,13 +30,14 @@ describe('pickLook', () => {
       expect(pickLook(`?look=${name}`)).toBe('ink');
       localStorage.setItem('eye.look', name);
       expect(pickLook('')).toBe('ink');
-      expect(isLook(name)).toBe(false);
+      expect(lookNamed(name)).toBeNull();
     }
   });
 
   it('lists in the picker exactly the looks it can load', () => {
     expect(LOOK_LIST.map((l) => l.id)).toEqual(Object.keys(looks));
     expect(LOOK_LIST.map((l) => l.label)).toEqual(['INK', 'IRIS']);
+    expect(lookNamed('iris')).toBe('iris');
   });
 });
 

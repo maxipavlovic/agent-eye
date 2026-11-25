@@ -25,9 +25,12 @@ const REGISTRY = {
 
 export type LookName = keyof typeof REGISTRY;
 
-/** Only the registry's own names: `constructor` or `toString` are not looks. */
-export function isLook(name: unknown): name is LookName {
-  return typeof name === 'string' && Object.hasOwn(REGISTRY, name);
+/**
+ * The registry's own name matching `name`, or null: `constructor` or `toString` are not looks. It hands back the
+ * registry's string, never the one passed in, so what came from an address never reaches storage.
+ */
+export function lookNamed(name: unknown): LookName | null {
+  return (Object.keys(REGISTRY) as LookName[]).find((id) => id === name) ?? null;
 }
 
 /** Lazy loaders, by look name. */
@@ -49,14 +52,14 @@ const KEY = 'eye.look';
  * (the header's picker does).
  */
 export function pickLook(search: string = location.search): LookName {
-  const asked = new URLSearchParams(search).get('look');
-  if (isLook(asked)) {
+  const asked = lookNamed(new URLSearchParams(search).get('look'));
+  if (asked) {
     try { localStorage.setItem(KEY, asked); } catch { /* storage blocked */ }
     return asked;
   }
   try {
-    const saved = localStorage.getItem(KEY);
-    if (isLook(saved)) return saved;
+    const saved = lookNamed(localStorage.getItem(KEY));
+    if (saved) return saved;
   } catch { /* storage blocked */ }
   return DEFAULT_LOOK;
 }
