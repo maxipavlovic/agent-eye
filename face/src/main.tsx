@@ -9,6 +9,6 @@ void pullPrefs().then(async () => {
   const store = createStore(liveSource());
   const name = pickLook();
   document.documentElement.dataset.look = name;
-  const Root = await looks[name]!();
+  const Root = await looks[name]();
   render(<Root store={store} />, document.getElementById('app')!);
 });

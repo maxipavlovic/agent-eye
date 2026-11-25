@@ -51,7 +51,7 @@ export function KeyHelpHost({ store }: { store: Store }) {
       <div class="modal keyhelp" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts">
         <div class="dis" />
         <h2>KEYS</h2>
-        <div class="mbody">
+        <div class="mbody" tabIndex={0} role="region" aria-label="Keys">
           <p class="hint">{idea ? "In an idea's panel" : "In a session's panel"}, when no field has the focus.</p>
           <dl class="where">
             {/* X forgets a session: listed while a session's panel is open */}

@@ -170,7 +170,8 @@ export function CardMenu({ store }: { store: Store }) {
     const items = () => [...(ref.current?.querySelectorAll<HTMLElement>('button') ?? [])];
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(true); return; }
-      if (e.key === 'Tab') { close(); return; }
+      // back to the card, so Tab goes on from there instead of from the end of the page
+      if (e.key === 'Tab') { close(true); return; }
       const step = e.key === 'ArrowDown' ? 1 : e.key === 'ArrowUp' ? -1 : 0;
       if (!step && e.key !== 'Home' && e.key !== 'End') return;
       e.preventDefault();
@@ -178,7 +179,8 @@ export function CardMenu({ store }: { store: Store }) {
       const list = items();
       const i = list.indexOf(document.activeElement as HTMLElement);
       const next = e.key === 'Home' ? 0 : e.key === 'End' ? list.length - 1 : i < 0 ? (step > 0 ? 0 : list.length - 1) : (i + step + list.length) % list.length;
-      list[next]?.focus({ preventScroll: true });
+      // a menu taller than the window scrolls to the item (the page does not move: the menu is fixed)
+      list[next]?.focus();
     };
     const onScroll = (e: Event) => { if (!ref.current?.contains(e.target as Node)) close(); };
     const shut = () => close();

@@ -16,10 +16,14 @@ describe('pickLook', () => {
     expect(pickLook('')).toBe('ink');
   });
 
-  it('takes a known look from the address and remembers it in this browser only', () => {
+  it('takes a known look from the address for that page only: it saves nothing, here or in the engine', () => {
     const post = vi.spyOn(globalThis, 'fetch');
     expect(pickLook('?look=iris')).toBe('iris');
-    expect(localStorage.getItem('eye.look')).toBe('iris');
+    expect(localStorage.getItem('eye.look')).toBeNull();
+    expect(pickLook('')).toBe('ink');
+    // over a saved look too
+    localStorage.setItem('eye.look', 'iris');
+    expect(pickLook('?look=ink')).toBe('ink');
     expect(pickLook('')).toBe('iris');
     expect(post).not.toHaveBeenCalled();
     post.mockRestore();
