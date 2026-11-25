@@ -173,6 +173,11 @@ describe('the panel keys and the keys list', () => {
     expect(m.$('.keyhelp')).toBeNull();
     press('?', { shiftKey: true });
     await vi.waitFor(() => expect(m.$('.keyhelp')).not.toBeNull());
+    // the list scrolls with the keys, as nothing in it takes the focus
+    const to = vi.spyOn(m.$<HTMLElement>('.keyhelp .mbody')!, 'scrollTo').mockImplementation(() => {});
+    press('End');
+    press('ArrowDown');
+    expect(to).toHaveBeenCalledTimes(2);
     m.$$('.keyhelp button').find((b) => text(b) === 'CLOSE')!.click();
     await tick();
     expect(m.$('.keyhelp')).toBeNull();
