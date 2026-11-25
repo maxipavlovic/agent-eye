@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'preact/hooks';
+import { useEffect, useLayoutEffect, useRef } from 'preact/hooks';
 import { signal, useSignal } from '@preact/signals';
 import type { Store } from '../store';
 import type { CardDetail, NightIsolation, NightRun } from '../api/types';
@@ -310,7 +310,8 @@ export function NightHost({ store }: { store: Store }) {
   const open = nightPanel.value;
   const win = useSignal('');
   useEffect(() => { if (open) { store.loadNight(); win.value = store.night.value?.window ?? ''; } }, [open]);
-  useEffect(() => {
+  // Esc listens from before the paint, so the first one closes this and not the panel under it
+  useLayoutEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;

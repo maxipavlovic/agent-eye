@@ -1,4 +1,4 @@
-import { useEffect } from 'preact/hooks';
+import { useEffect, useLayoutEffect } from 'preact/hooks';
 import { signal, useSignal } from '@preact/signals';
 import type { Store } from '../store';
 import type { UsageLimits, UsageReport, UsageRow, UsageSum } from '../api/types';
@@ -80,7 +80,8 @@ export function UsageHost({ store }: { store: Store }) {
     });
     return () => { live = false; };
   }, [open, days.value]);
-  useEffect(() => {
+  // Esc listens from before the paint, so the first one closes this and not the panel under it
+  useLayoutEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;

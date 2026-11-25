@@ -13,7 +13,6 @@ import type { Walk } from './walk';
 
 /** Board keys: / or ⌘K / Ctrl-K searches, ← → walk the cards, Esc backs out one level, ? lists the keys. The open session's panel
  *  takes R D W P N M T F C H L E X (see KEY_LIST), an idea's S B T E M (IDEA_KEY_LIST), and only while no field has the focus. */
-/** Back to the search box, with what is in it selected, so typing starts a new search. */
 /** Where `key` scrolls `list` to: a line, most of a page or an end; null for any other key. */
 function scrollTarget(list: HTMLElement, key: string): number | null {
   const at = list.scrollTop, page = list.clientHeight * 0.9;
@@ -21,6 +20,7 @@ function scrollTarget(list: HTMLElement, key: string): number | null {
   return Object.hasOwn(to, key) ? to[key]! : null;
 }
 
+/** Back to the search box, with what is in it selected, so typing starts a new search. */
 export function focusSearch() {
   const q = document.getElementById('q') as HTMLInputElement | null;
   q?.focus();

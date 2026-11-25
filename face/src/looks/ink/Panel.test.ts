@@ -10,7 +10,7 @@ import { Root } from './Root';
 import { IDEA_KEY_LIST, keyHelp, KEY_LIST } from '../../board/KeyHelp';
 import { closeForget } from '../../board/Forget';
 import { ideaForm } from '../../board/IdeaForm';
-import { nightAsk, tonightOpen } from '../../board/Night';
+import { nightAsk, nightPanel, tonightOpen } from '../../board/Night';
 import { remindForm } from '../../board/Remind';
 import { usagePanel } from '../../board/Usage';
 import { resetFolds } from '../../board/Sections';
@@ -23,7 +23,7 @@ beforeAll(() => {
   Element.prototype.scrollIntoView ??= () => {};
   Element.prototype.scrollTo ??= () => {};
 });
-beforeEach(() => { localStorage.clear(); resetFolds(); closeForget(); tonightOpen.value = null; nightAsk.value = null; ideaForm.value = null; keyHelp.value = false; remindForm.value = null; usagePanel.value = false; });
+beforeEach(() => { localStorage.clear(); resetFolds(); closeForget(); tonightOpen.value = null; nightAsk.value = null; nightPanel.value = false; ideaForm.value = null; keyHelp.value = false; remindForm.value = null; usagePanel.value = false; });
 afterEach(() => {
   if (mounted) { render(null, mounted); mounted.remove(); mounted = null; }
   document.body.innerHTML = '';
@@ -136,6 +136,38 @@ describe('the panel keys and the keys list', () => {
     [...m.$$<HTMLButtonElement>('.page [role=menuitem]')].find((b) => text(b.querySelector('span')) === 'CONTINUE TONIGHT…')!.click();
     await vi.waitFor(() => expect(m.$('.page form.nplan')).not.toBeNull());
     expect(m.$('.page [role=menu]')).toBeNull();
+  });
+
+  // Drawn but not yet painted, when effects have not run: an Esc then must already be theirs, or the board's Esc closes the panel
+  const popups: [string, (m: Awaited<ReturnType<typeof open>>) => void, string][] = [
+    ['MORE', (m) => m.$$<HTMLButtonElement>('.page .ptop button').find((b) => text(b) === 'MORE ▾')!.click(), '.page .more [role=menu]'],
+    ['MOVE TO…', (m) => m.$$<HTMLButtonElement>('.page button').find((b) => text(b) === 'MOVE TO…')!.click(), '.page .move:not(.more) [role=menu]'],
+    ['the card menu', (m) => rightClick(session(m)), '.ctx'],
+    ['USAGE', () => { usagePanel.value = true; }, 'aside[aria-label=Usage]'],
+    ['the Tonight list', () => { nightPanel.value = true; }, 'aside[aria-label=Tonight]'],
+  ];
+  for (const [name, show, sel] of popups) {
+    it(`an Esc the moment ${name} opens closes it and leaves the panel open`, async () => {
+      const m = await open();
+      show(m);
+      await Promise.resolve();
+      expect(document.querySelector(sel)).not.toBeNull();
+      press('Escape');
+      await vi.waitFor(() => expect(document.querySelector(sel)).toBeNull());
+      expect(m.store.selected.value).not.toBeNull();
+    });
+  }
+
+  it('the card menu stays open through the scroll of the right-click that opened it, and a later scroll closes it', async () => {
+    const m = await open();
+    rightClick(session(m));
+    await Promise.resolve();
+    // the browser brought the clicked card into view; its scroll event comes with the next frame
+    m.$('.lane, .col, main')!.dispatchEvent(new Event('scroll'));
+    await tick();
+    expect(m.$('.ctx')).not.toBeNull();
+    m.$('.lane, .col, main')!.dispatchEvent(new Event('scroll'));
+    await vi.waitFor(() => expect(m.$('.ctx')).toBeNull());
   });
 
   it('folds only the long or seldom needed parts, ends with the receipt and the actions, and keeps a section you open open', async () => {

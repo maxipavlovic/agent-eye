@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'preact/hooks';
+import { useEffect, useLayoutEffect, useRef } from 'preact/hooks';
 import { useSignal } from '@preact/signals';
 import type { Store } from '../store';
 import type { CardDetail, ColumnId } from '../api/types';
@@ -137,7 +137,8 @@ function moreItems(d: CardDetail, store: Store): MoreItem[] {
 function More({ d, store }: { d: CardDetail; store: Store }) {
   const open = useSignal(false);
   const box = useRef<HTMLDivElement>(null);
-  useEffect(() => {
+  // before the paint (a layout effect): an Esc the moment the menu shows is already the menu's, not the board's
+  useLayoutEffect(() => {
     if (!open.value) return;
     const away = (e: PointerEvent) => { if (!box.current?.contains(e.target as Node)) open.value = false; };
     // still listening for a moment after it closed: an Esc then is the panel's

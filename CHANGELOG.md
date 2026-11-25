@@ -2,6 +2,12 @@
 
 All notable changes are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Fixed
+
+- An Esc pressed the moment a menu or list opened (MORE, MOVE TO…, a card's right-click menu, USAGE, the Tonight list) could reach the board instead and close the card's panel under it. Each now listens for Esc from the moment it shows.
+
 ## 0.4.0 - 2026-11-25
 
 ### Added
