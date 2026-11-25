@@ -14,6 +14,13 @@ import type { Walk } from './walk';
 /** Board keys: / or ⌘K / Ctrl-K searches, ← → walk the cards, Esc backs out one level, ? lists the keys. The open session's panel
  *  takes R D W P N M T F C H L E X (see KEY_LIST), an idea's S B T E M (IDEA_KEY_LIST), and only while no field has the focus. */
 /** Back to the search box, with what is in it selected, so typing starts a new search. */
+/** Where `key` scrolls `list` to: a line, most of a page or an end; null for any other key. */
+function scrollTarget(list: HTMLElement, key: string): number | null {
+  const at = list.scrollTop, page = list.clientHeight * 0.9;
+  const to: Record<string, number> = { ArrowDown: at + 40, ArrowUp: at - 40, PageDown: at + page, PageUp: at - page, Home: 0, End: list.scrollHeight };
+  return Object.hasOwn(to, key) ? to[key]! : null;
+}
+
 export function focusSearch() {
   const q = document.getElementById('q') as HTMLInputElement | null;
   q?.focus();
@@ -30,9 +37,13 @@ export function useKeys(store: Store, step: Walk['step']) {
       const plain = !e.metaKey && !e.ctrlKey && !e.altKey;
       const d = store.detail.value;
       const quick = QUICK.find((m) => m.key === e.key.toLowerCase());
-      // the keys list takes Esc and ? while it is open
+      // the keys list takes Esc and ? while it is open, and the arrow, page, Home and End keys scroll it
+      // (nothing in it takes the focus, so Safari would not scroll it)
       if (keyHelp.value) {
         if (e.key === 'Escape' || e.key === '?') { e.preventDefault(); e.stopImmediatePropagation(); keyHelp.value = false; }
+        const list = document.querySelector<HTMLElement>('.keyhelp .mbody');
+        const top = list && scrollTarget(list, e.key);
+        if (top != null) { e.preventDefault(); list!.scrollTo({ top }); }
         return;
       }
       // the reminder form takes the keys while it is open; Esc closes it
