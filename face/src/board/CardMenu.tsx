@@ -67,6 +67,18 @@ export function cardProps(c: Card, store: Store) {
   } as Record<string, unknown>;
 }
 
+/**
+ * Where a menu `w` x `h` opened at the pointer (`x`, `y`) goes in a `vw` x `vh` viewport: right of and below the
+ * pointer when it fits there. Too close to the right edge, it opens to the left. Too tall for the room below, it
+ * moves up only as far as it must, so it stays next to the card (a long menu flipped above the pointer would
+ * land at the top of the window); taller than the window, it starts at the top and scrolls.
+ */
+export function placeMenu(x: number, y: number, w: number, h: number, vw: number, vh: number, pad = 8): { left: number; top: number } {
+  const left = x + w + pad <= vw ? x : x - w >= pad ? x - w : vw - w - pad;
+  const top = Math.min(y, vh - h - pad);
+  return { left: Math.max(pad, left), top: Math.max(pad, top) };
+}
+
 export type Row = { hr: true } | { head: string } | { label: string; run: () => void; sub?: boolean };
 
 const MOVE_TO: Array<{ to: ColumnId; label: string }> = [
@@ -141,16 +153,12 @@ export function CardMenu({ store }: { store: Store }) {
   const m = menu.value;
   const ref = useRef<HTMLDivElement>(null);
 
-  // Place it at the pointer, flipped and clamped so it stays inside the viewport; focus the first item.
+  // Place it at the pointer, inside the viewport (placeMenu); focus the first item.
   useLayoutEffect(() => {
     const el = ref.current;
     if (!m || !el) return;
     const r = el.getBoundingClientRect();
-    const pad = 8;
-    let left = m.x + r.width + pad > innerWidth ? m.x - r.width : m.x;
-    let top = m.y + r.height + pad > innerHeight ? m.y - r.height : m.y;
-    left = Math.max(pad, Math.min(left, innerWidth - r.width - pad));
-    top = Math.max(pad, Math.min(top, innerHeight - r.height - pad));
+    const { left, top } = placeMenu(m.x, m.y, r.width, r.height, innerWidth, innerHeight);
     el.style.left = `${left}px`;
     el.style.top = `${top}px`;
     el.style.visibility = 'visible';

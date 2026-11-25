@@ -47,13 +47,15 @@ function ForgetConfirm({ store, id, title, agent }: { store: Store; id: string; 
       <form class="modal forget" aria-label="Forget this session" aria-describedby="forget-text" onSubmit={go}>
         <div class="dis" />
         <h2>FORGET THIS SESSION</h2>
-        <p class="fname">{title}</p>
-        <p id="forget-text" class="ftext">{forgetText(agent, transcript.value)}</p>
-        <label class="fcheck">
-          <input type="checkbox" checked={transcript.value} onChange={(e) => { transcript.value = e.currentTarget.checked; }} />
-          <span>Also remove its transcript from {agent}</span>
-        </label>
-        {!transcript.value && <p class="fnote">{agent} keeps its own copy, so eye finds the session again at its next scan.</p>}
+        <div class="mbody">
+          <p class="fname">{title}</p>
+          <p id="forget-text" class="ftext">{forgetText(agent, transcript.value)}</p>
+          <label class="fcheck">
+            <input type="checkbox" checked={transcript.value} onChange={(e) => { transcript.value = e.currentTarget.checked; }} />
+            <span>Also remove its transcript from {agent}</span>
+          </label>
+          {!transcript.value && <p class="fnote">{agent} keeps its own copy, so eye finds the session again at its next scan.</p>}
+        </div>
         <div class="acts end">
           <button type="button" class="btn ghost" ref={cancel} onClick={closeForget}>CANCEL</button>
           <button type="submit" class="btn big danger" disabled={busy.value}>FORGET</button>

@@ -102,21 +102,23 @@ function RemindForm({ store, id, onClose }: { store: Store; id: string; onClose:
       <form ref={form} class="modal" onSubmit={submit} aria-label="Remind me">
         <div class="dis" />
         <h2>{art.lane('needs_you', 'lg')} REMIND ME</h2>
-        <div class="when">
-          <div class="wdate">
-            <span class="flbl" id="remind-date">DATE</span>
-            <DatePicker value={date.value} min={today} labelId="remind-date" onChange={(d) => { date.value = d; problem.value = null; }} />
+        <div class="mbody">
+          <div class="when">
+            <div class="wdate">
+              <span class="flbl" id="remind-date">DATE</span>
+              <DatePicker value={date.value} min={today} labelId="remind-date" onChange={(d) => { date.value = d; problem.value = null; }} />
+            </div>
+            <div class="wtime">
+              <label class="flbl" htmlFor="remind-time">TIME</label>
+              <TimeField id="remind-time" value={time.value} invalid={!!problem.value} onChange={(t) => { time.value = t; problem.value = null; }} />
+              {problem.value && <p class="fnote" id="remind-time-err" role="alert">{problem.value}</p>}
+            </div>
           </div>
-          <div class="wtime">
-            <label class="flbl" htmlFor="remind-time">TIME</label>
-            <TimeField id="remind-time" value={time.value} invalid={!!problem.value} onChange={(t) => { time.value = t; problem.value = null; }} />
-            {problem.value && <p class="fnote" id="remind-time-err" role="alert">{problem.value}</p>}
-          </div>
+          <label>NOTE<span class="hint">Optional. Shown on the card when it is due.</span>
+            <input name="note" placeholder="Ana's reply" autocomplete="off" />
+          </label>
+          <NoticeSwitch store={store} />
         </div>
-        <label>NOTE<span class="hint">Optional. Shown on the card when it is due.</span>
-          <input name="note" placeholder="Ana's reply" autocomplete="off" />
-        </label>
-        <NoticeSwitch store={store} />
         <div class="acts end">
           <button type="button" class="btn ghost" onClick={onClose}>CANCEL</button>
           <button type="submit" class="btn big" disabled={busy.value}>SET REMINDER</button>
@@ -137,7 +139,7 @@ export function RemindFormHost({ store }: { store: Store }) {
 export function RemindPanel({ c, store }: { c: Card; store: Store }) {
   const summary = remindSummary(c);
   return (
-    <Fold name="reminder" t="REMINDER" sum={summary ?? 'none'}>
+    <Fold name="reminder" t="REMINDER" sum={summary ?? 'No'}>
       <p class="notes">{summary ?? 'No reminder.'}</p>
       {!summary && <p class="rhint">eye moves this card to Needs you at the time you pick.</p>}
       <div class="acts">
