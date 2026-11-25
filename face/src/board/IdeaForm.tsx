@@ -104,56 +104,58 @@ function IdeaForm({ store, idea, focus, onClose }: { store: Store; idea?: CardDe
       <form class="modal" onSubmit={submit} aria-label={idea ? 'Edit idea' : 'New idea'}>
         <div class="dis" />
         <h2>{art.lane('ideas', 'lg')} {idea ? 'EDIT IDEA' : 'NEW IDEA'}</h2>
-        <label>TITLE<input ref={title} name="title" defaultValue={idea?.title ?? ''} placeholder="What is the idea?" autocomplete="off" /></label>
-        <label>NOTES<span class="hint">For you. Never sent to {who}.</span>
-          <textarea name="notes" rows={4} defaultValue={idea?.notes ?? ''} placeholder="Lists, links, anything to keep" />
-        </label>
-        {agents.length > 1 && (
-          <fieldset class="pick">
-            <legend>AGENT</legend>
-            <div class="fchips">
-              {agents.map((a) => (
-                <button type="button" key={a.id} title={a.name} aria-pressed={a.id === agent?.id} onClick={() => { chosen.value = a.id; }}>{a.short}</button>
+        <div class="mbody">
+          <label>TITLE<input ref={title} name="title" defaultValue={idea?.title ?? ''} placeholder="What is the idea?" autocomplete="off" /></label>
+          <label>NOTES<span class="hint">For you. Never sent to {who}.</span>
+            <textarea name="notes" rows={4} defaultValue={idea?.notes ?? ''} placeholder="Lists, links, anything to keep" />
+          </label>
+          {agents.length > 1 && (
+            <fieldset class="pick">
+              <legend>AGENT</legend>
+              <div class="fchips">
+                {agents.map((a) => (
+                  <button type="button" key={a.id} title={a.name} aria-pressed={a.id === agent?.id} onClick={() => { chosen.value = a.id; }}>{a.short}</button>
+                ))}
+              </div>
+            </fieldset>
+          )}
+          <label>PROMPT FOR {who.toUpperCase()}<span class="hint">Sent when you start it. Empty: {who} opens and waits for you.</span>
+            <textarea ref={prompt} name="prompt" rows={3} defaultValue={idea?.prompt ?? ''} placeholder={`What should ${who} do first?`} />
+          </label>
+          <label>FOLDER<input name="folder" value={folder.value} onInput={(e) => { folder.value = e.currentTarget.value; }} placeholder="~/code/…" autocomplete="off" spellcheck={false} /></label>
+          {hint && <p class="fhint" role="status">{hint}</p>}
+          {shown.length > 0 && (
+            <div class="fchips" role="group" aria-label="Recent folders">
+              {shown.map((f) => (
+                <button type="button" key={f} title={f} aria-pressed={homePath(f) === picked} onClick={() => { folder.value = homePath(f); }}>{homePath(f)}</button>
               ))}
             </div>
-          </fieldset>
-        )}
-        <label>PROMPT FOR {who.toUpperCase()}<span class="hint">Sent when you start it. Empty: {who} opens and waits for you.</span>
-          <textarea ref={prompt} name="prompt" rows={3} defaultValue={idea?.prompt ?? ''} placeholder={`What should ${who} do first?`} />
-        </label>
-        <label>FOLDER<input name="folder" value={folder.value} onInput={(e) => { folder.value = e.currentTarget.value; }} placeholder="~/code/…" autocomplete="off" spellcheck={false} /></label>
-        {hint && <p class="fhint" role="status">{hint}</p>}
-        {shown.length > 0 && (
-          <div class="fchips" role="group" aria-label="Recent folders">
-            {shown.map((f) => (
-              <button type="button" key={f} title={f} aria-pressed={homePath(f) === picked} onClick={() => { folder.value = homePath(f); }}>{homePath(f)}</button>
-            ))}
-          </div>
-        )}
-        {canNight && (
-          <fieldset class="pick">
-            <legend>TONIGHT</legend>
-            <div class="fchips">
-              <button type="button" aria-pressed={!tonight.value} onClick={() => { tonight.value = false; }}>Not tonight</button>
-              <button type="button" aria-pressed={tonight.value} onClick={() => { tonight.value = true; }}>Run it tonight</button>
-            </div>
-            <span class="hint">{tonight.value ? 'In its own worktree. Needs a prompt and a folder.' : 'Save the idea and start it yourself.'}</span>
-          </fieldset>
-        )}
-        {canNight && tonight.value && (
-          <>
-            <label>LIMIT<span class="hint">{LIMIT_HELP}</span><input name="limit" value={limit.value} onInput={(e) => { limit.value = e.currentTarget.value; }} placeholder="none" autocomplete="off" spellcheck={false} /></label>
-            {agents.length > 1 && (
-              <fieldset class="pick">
-                <legend>WHEN THE PLAN RUNS OUT</legend>
-                <div class="fchips">
-                  <button type="button" aria-pressed={!sw.value} onClick={() => { sw.value = false; }}>Stop</button>
-                  <button type="button" aria-pressed={sw.value} onClick={() => { sw.value = true; }}>Start again on the other agent</button>
-                </div>
-              </fieldset>
-            )}
-          </>
-        )}
+          )}
+          {canNight && (
+            <fieldset class="pick">
+              <legend>TONIGHT</legend>
+              <div class="fchips">
+                <button type="button" aria-pressed={!tonight.value} onClick={() => { tonight.value = false; }}>Not tonight</button>
+                <button type="button" aria-pressed={tonight.value} onClick={() => { tonight.value = true; }}>Run it tonight</button>
+              </div>
+              <span class="hint">{tonight.value ? 'In its own worktree. Needs a prompt and a folder.' : 'Save the idea and start it yourself.'}</span>
+            </fieldset>
+          )}
+          {canNight && tonight.value && (
+            <>
+              <label>LIMIT<span class="hint">{LIMIT_HELP}</span><input name="limit" value={limit.value} onInput={(e) => { limit.value = e.currentTarget.value; }} placeholder="none" autocomplete="off" spellcheck={false} /></label>
+              {agents.length > 1 && (
+                <fieldset class="pick">
+                  <legend>WHEN THE PLAN RUNS OUT</legend>
+                  <div class="fchips">
+                    <button type="button" aria-pressed={!sw.value} onClick={() => { sw.value = false; }}>Stop</button>
+                    <button type="button" aria-pressed={sw.value} onClick={() => { sw.value = true; }}>Start again on the other agent</button>
+                  </div>
+                </fieldset>
+              )}
+            </>
+          )}
+        </div>
         <div class="acts end">
           <button type="button" class="btn ghost" onClick={onClose}>CANCEL</button>
           <button type="submit" class="btn big" disabled={busy.value}>SAVE IDEA</button>

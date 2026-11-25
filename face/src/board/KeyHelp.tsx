@@ -51,11 +51,13 @@ export function KeyHelpHost({ store }: { store: Store }) {
       <div class="modal keyhelp" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts">
         <div class="dis" />
         <h2>KEYS</h2>
-        <p class="hint">{idea ? "In an idea's panel" : "In a session's panel"}, when no field has the focus.</p>
-        <dl class="where">
-          {/* X forgets a session: listed while a session's panel is open */}
-          {(idea ? IDEA_KEY_LIST : KEY_LIST.filter(([k]) => k !== 'X' || !!open)).map(([k, what]) => (<Fragment key={k}><dt>{k}</dt><dd>{what}</dd></Fragment>))}
-        </dl>
+        <div class="mbody">
+          <p class="hint">{idea ? "In an idea's panel" : "In a session's panel"}, when no field has the focus.</p>
+          <dl class="where">
+            {/* X forgets a session: listed while a session's panel is open */}
+            {(idea ? IDEA_KEY_LIST : KEY_LIST.filter(([k]) => k !== 'X' || !!open)).map(([k, what]) => (<Fragment key={k}><dt>{k}</dt><dd>{what}</dd></Fragment>))}
+          </dl>
+        </div>
         <div class="acts end">
           <button type="button" class="btn ghost" onClick={close}>CLOSE</button>
         </div>

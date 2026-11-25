@@ -336,8 +336,10 @@ mark { background: var(--ink); color: var(--paper); padding: 0 3px; }
 .menu button:hover, .menu button:focus-visible { background: var(--ink); color: var(--paper); }
 
 /* ───────── idea modal ───────── */
-.modal { position: fixed; z-index: 50; left: 50%; top: max(16px, 6vh); width: min(600px, 92vw); max-height: calc(100vh - 2 * max(16px, 6vh)); overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--ink) var(--paper); transform: translateX(-50%); background: var(--paper); border: 4px solid var(--ink); box-shadow: 8px 8px 0 var(--ink); padding: 26px 28px 28px; }
-.modal h2 { margin: 0 0 18px; font: 700 24px/1 var(--f-label); display: flex; gap: 14px; align-items: center; }
+/* The title and the buttons stay put and only the fields between them scroll, so SAVE is always in reach. */
+.modal { position: fixed; z-index: 50; left: 50%; top: max(16px, 6vh); width: min(600px, 92vw); max-height: calc(100vh - 2 * max(16px, 6vh)); max-height: calc(100dvh - 2 * max(16px, 6vh)); display: flex; flex-direction: column; transform: translateX(-50%); background: var(--paper); border: 4px solid var(--ink); box-shadow: 8px 8px 0 var(--ink); }
+.modal h2 { flex: none; margin: 0; padding: 26px 28px 18px; font: 700 24px/1 var(--f-label); display: flex; gap: 14px; align-items: center; }
+.modal .mbody { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0 28px 4px; scrollbar-width: thin; scrollbar-color: var(--ink) var(--paper); }
 .modal label { display: block; margin-bottom: 16px; font: 400 16px/1 var(--f-label); }
 .modal input, .modal textarea { display: block; width: 100%; margin-top: 8px; background: var(--paper); border: 2px solid var(--ink); padding: 10px 12px; font: 500 17px/1.4 var(--f-body); resize: vertical; }
 .modal input:focus, .modal textarea:focus { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -353,7 +355,7 @@ mark { background: var(--ink); color: var(--paper); padding: 0 3px; }
 .fmark { margin: 6px 0 0; font: 500 14px/1.3 var(--f-body); color: var(--ink); }
 .fnote, .fhint { margin: 8px 0 0; font: 400 15px/1.4 var(--f-body); color: var(--ink); border-left: 3px solid var(--accent); padding-left: 8px; }
 .fhint { margin: -4px 0 12px; font-size: 14px; }
-.modal .acts { display: flex; gap: 16px; justify-content: flex-end; margin-top: 8px; }
+.modal .acts { flex: none; display: flex; gap: 16px; justify-content: flex-end; margin: 0; padding: 16px 28px 24px; border-top: 2px solid var(--ink); }
 .modal .btn.big { font-size: 16px; padding: 14px 18px 12px; }
 
 /* ───────── reminder form: a month of days, a time, the desktop notice ───────── */
@@ -722,7 +724,7 @@ fieldset.nightpick .fchips { margin: 4px 0 0; }
 .keyhelp .where { grid-template-columns: 4.5em 1fr; margin: 12px 0 8px; }
 @media (max-width: 1200px) { .page .x.qk { right: 100px; } }
 
-.modal > .fchips { margin: -6px 0 16px; }
+.mbody > .fchips { margin: -6px 0 16px; }
 
 /* ───────── the panel in three layers ─────────
    1. now: the action bar (the moves, RESUME, MORE), the state, the next step, the night run's line, LEFTOVERS
