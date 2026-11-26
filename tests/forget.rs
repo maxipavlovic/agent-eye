@@ -207,6 +207,12 @@ fn forgetting_removes_the_rows_and_the_archive_and_leaves_the_agent_copy_and_oth
     let archive_a = w.archive_of(CLAUDE_A).unwrap();
     let archive_b = w.archive_of(CLAUDE_B).unwrap();
     assert!(w.rows("session_fts", CLAUDE_A) > 0);
+    assert!(w.rows("turn", CLAUDE_A) > 0, "the scan stored its turns");
+    sql(
+        &w.db.conn,
+        "INSERT INTO correction(session_id, prompt_ts, verdict) VALUES(?1, 1, 'fix')",
+        [CLAUDE_A],
+    );
     assert!(
         w.rows("worked_hour", CLAUDE_A) > 0
             || w.rows("usage_day", CLAUDE_A) > 0
@@ -239,6 +245,9 @@ fn forgetting_removes_the_rows_and_the_archive_and_leaves_the_agent_copy_and_oth
         "worked_state",
         "usage_day",
         "usage_state",
+        "turn",
+        "turn_state",
+        "correction",
         "loose",
         "jira_cand",
     ] {

@@ -535,10 +535,38 @@ fn migration_17_adds_origin_from_16_and_keeps_every_row() {
         db.meta_get("schema_version").unwrap(),
         Some(SCHEMA_VERSION.to_string())
     );
-    assert_eq!(SCHEMA_VERSION, 17);
     // the columns are there and empty (the scan fills them), and nothing else moved
     let s = db.session_by_id("s1").unwrap().unwrap();
     assert_eq!((s.origin, s.origin_raw), (None, None));
     assert_eq!(s.tokens.unwrap().input, 5);
     assert_eq!(count_rows(&db, "session"), 1);
+}
+
+#[test]
+fn migration_18_adds_the_turn_tables_from_17_and_keeps_every_row() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join("old.db");
+    {
+        let db = Db::open(&path).unwrap();
+        db.conn
+            .execute_batch(
+                "DROP TABLE turn; DROP TABLE turn_state; DROP TABLE correction; DROP TABLE idle_span;",
+            )
+            .unwrap();
+        db.meta_set("schema_version", "17").unwrap();
+        db.conn
+            .execute("INSERT INTO session(id, tok_in) VALUES('s1', 5)", [])
+            .unwrap();
+    }
+    let db = Db::init(Connection::open(&path).unwrap()).unwrap();
+    assert_eq!(
+        db.meta_get("schema_version").unwrap(),
+        Some(SCHEMA_VERSION.to_string())
+    );
+    for t in ["turn", "turn_state", "correction", "idle_span"] {
+        assert_eq!(count_rows(&db, t), 0, "{t}");
+    }
+    assert_eq!(count_rows(&db, "session"), 1);
+    // the sessions already there wait for the backfill; the cursors are left alone
+    assert!(db.cursor_get("/none").unwrap().is_none());
 }

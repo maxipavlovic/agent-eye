@@ -221,3 +221,160 @@ pub(super) fn read_events(path: &Path) -> Result<Vec<TurnEvent>> {
     })?;
     Ok(turns.finish(true).0)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const FIXTURE: &str = include_str!("../../../tests/fixtures/claude-turns.jsonl");
+
+    fn feed(turns: &mut Turns, text: &str) {
+        for line in text.lines() {
+            let v: Value = serde_json::from_str(line).unwrap();
+            let ty = v["type"].as_str().unwrap().to_string();
+            turns.line(&v, &ty);
+        }
+    }
+
+    fn kinds(events: &[TurnEvent]) -> Vec<(TurnKind, i64)> {
+        events.iter().map(|e| (e.kind, e.n)).collect()
+    }
+
+    #[test]
+    fn a_whole_transcript_reports_every_kind_once() {
+        let mut t = Turns::resume(None);
+        feed(&mut t, FIXTURE);
+        let (events, carry) = t.finish(true);
+        use TurnKind::*;
+        assert_eq!(
+            kinds(&events),
+            vec![
+                (Prompt, 20),
+                (Think, 13),
+                (Tool, 0),
+                (ToolError, 0),
+                (Tool, 0),
+                (Refusal, 0),
+                (Interrupt, 0),
+                (End, 5),
+                (Prompt, 23),
+                (Compact, 0),
+                (End, 8),
+            ]
+        );
+        // the sub-agent's tool call, the command wrapper and the harness note are not turns
+        assert_eq!(carry.unwrap()["closed"], true);
+    }
+
+    #[test]
+    fn an_end_carries_the_time_of_the_last_reply_of_its_turn() {
+        let mut t = Turns::resume(None);
+        feed(&mut t, FIXTURE);
+        let (events, _) = t.finish(true);
+        let ends: Vec<i64> = events
+            .iter()
+            .filter(|e| e.kind == TurnKind::End)
+            .map(|e| e.ts)
+            .collect();
+        let at = |m: u32, s: u32| iso_to_ms(&format!("2026-11-02T10:{m:02}:{s:02}.000Z")).unwrap();
+        assert_eq!(ends, vec![at(2, 10), at(7, 0)]);
+    }
+
+    #[test]
+    fn a_read_that_stops_inside_a_turn_does_not_close_it_twice() {
+        let lines: Vec<&str> = FIXTURE.lines().collect();
+        // the first read stops after the second prompt's first reply, the second goes on from there
+        let (head, tail) = lines.split_at(13);
+        let mut first = Turns::resume(None);
+        feed(&mut first, &head.join("\n"));
+        let (a, carry) = first.finish(false);
+        assert_eq!(a.iter().filter(|e| e.kind == TurnKind::End).count(), 1);
+        let mut second = Turns::resume(carry.as_ref());
+        feed(&mut second, &tail.join("\n"));
+        let (b, _) = second.finish(true);
+        let ends = |e: &[TurnEvent]| e.iter().filter(|e| e.kind == TurnKind::End).count();
+        assert_eq!(ends(&b), 1);
+        let (_, n) = kinds(&b)
+            .into_iter()
+            .find(|(k, _)| *k == TurnKind::End)
+            .unwrap();
+        assert_eq!(n, 8);
+    }
+
+    #[test]
+    fn a_turn_a_whole_read_closed_is_not_closed_again_by_the_next_read() {
+        let mut first = Turns::resume(None);
+        feed(
+            &mut first,
+            FIXTURE
+                .lines()
+                .take(14)
+                .collect::<Vec<_>>()
+                .join("\n")
+                .as_str(),
+        );
+        let (a, carry) = first.finish(true);
+        assert_eq!(a.last().map(|e| e.kind), Some(TurnKind::End));
+        let mut second = Turns::resume(carry.as_ref());
+        feed(
+            &mut second,
+            FIXTURE
+                .lines()
+                .skip(14)
+                .collect::<Vec<_>>()
+                .join("\n")
+                .as_str(),
+        );
+        let (b, _) = second.finish(false);
+        assert!(b.iter().all(|e| e.kind != TurnKind::End));
+    }
+
+    #[test]
+    fn what_makes_a_failed_result_a_refusal() {
+        let mut t = Turns::resume(None);
+        for (text, want) in [
+            ("Permission to use Bash has been denied.", TurnKind::Refusal),
+            ("The tool use was REJECTED by a rule", TurnKind::Refusal),
+            ("Exit code 1", TurnKind::ToolError),
+        ] {
+            let v = serde_json::json!({"type":"user","timestamp":"2026-11-02T10:00:00.000Z",
+                "message":{"content":[{"type":"tool_result","is_error":true,"content":text}]}});
+            t.line(&v, "user");
+            assert_eq!(t.events.last().map(|e| e.kind), Some(want), "{text}");
+        }
+        // an error that only mentions it past the first 400 characters is a plain error
+        let long = format!("{} permission", "x".repeat(400));
+        let v = serde_json::json!({"type":"user","timestamp":"2026-11-02T10:00:00.000Z",
+            "message":{"content":[{"type":"tool_result","is_error":true,"content":long}]}});
+        t.line(&v, "user");
+        assert_eq!(t.events.last().map(|e| e.kind), Some(TurnKind::ToolError));
+    }
+
+    #[test]
+    fn a_result_that_did_not_fail_and_an_unsigned_thinking_block_are_nothing() {
+        let mut t = Turns::resume(None);
+        let ok = serde_json::json!({"type":"user","timestamp":"2026-11-02T10:00:00.000Z",
+            "message":{"content":[{"type":"tool_result","content":"fine"}]}});
+        t.line(&ok, "user");
+        let think = serde_json::json!({"type":"assistant","timestamp":"2026-11-02T10:00:01.000Z",
+            "message":{"content":[{"type":"thinking","thinking":"hm","signature":""}]}});
+        t.line(&think, "assistant");
+        assert!(t.events.is_empty());
+    }
+
+    #[test]
+    fn an_empty_transcript_has_no_turns_and_nothing_to_carry() {
+        let (events, carry) = Turns::resume(None).finish(true);
+        assert!(events.is_empty() && carry.is_none());
+    }
+
+    #[test]
+    fn the_whole_file_reader_matches_the_streaming_one() {
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("s.jsonl");
+        std::fs::write(&p, FIXTURE).unwrap();
+        let mut t = Turns::resume(None);
+        feed(&mut t, FIXTURE);
+        assert_eq!(read_events(&p).unwrap(), t.finish(true).0);
+    }
+}

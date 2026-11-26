@@ -303,15 +303,20 @@ fn a_session_with_nothing_going_on_has_empty_fields() {
         ),
         (&Value::Null, &json!([]), &json!([]), &Value::Null)
     );
-    let n: i64 =
+    // nothing to carry for the signals; what is stored is only the turn a whole read closed
+    let stored: Vec<String> =
         w.db.conn
-            .query_row(
-                "SELECT COUNT(*) FROM meta WHERE key LIKE 'pending:%'",
-                [],
-                |r| r.get(0),
-            )
+            .prepare("SELECT value FROM meta WHERE key LIKE 'pending:%'")
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .collect::<rusqlite::Result<_>>()
             .unwrap();
-    assert_eq!(n, 0, "nothing to carry, nothing stored");
+    for v in stored {
+        let v: Value = serde_json::from_str(&v).unwrap();
+        assert_eq!(v["pending"], json!([]));
+        assert_eq!(v["signals"], Value::Null);
+    }
 }
 
 // ---------- Codex ----------

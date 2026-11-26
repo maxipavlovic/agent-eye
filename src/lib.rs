@@ -12,6 +12,8 @@ pub mod cli;
 pub mod columns;
 /// The settings in `config.toml`.
 pub mod config;
+/// `[clock]` in `config.toml`: the steering clock's settings.
+pub mod config_clock;
 /// Rewriting `config.toml` under one lock, refusing a result that does not parse.
 pub mod config_edit;
 /// A session's conversation as messages, from its transcript or archive copy.

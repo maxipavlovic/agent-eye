@@ -17,6 +17,7 @@ are the ones for a session that is one text file which only grows (see "Storage 
 |---|---|---|
 | Identity | `id`, `name`, `short_name`, `detect` | `id` is stored in the database and used in config and the API (`"claude"`). `short_name` is used in sentences and as the owner in `next` lines (`Claude: fix the test`). `detect` also decides whether `eye install` turns the agent on. |
 | Sessions on disk | `transcripts`, `parse_transcript`, `owns_transcript` | `transcripts` lists what holds each session (a file, a folder, a database) with a change stamp. `parse_transcript(transcript, opts)` reads a session, all of it or what is new since the last read, and returns a `Delta` (see below). |
+| Turn events | `turn_events`, `Delta::turns` | Optional (the default reports none). When the user and the agent took their turns, for the steering clock: `prompt` (a real prompt; `n` its characters), `end` (the agent finished a turn; `n` the words it wrote), `interrupt`, `tool` (one call), `tool_error`, `refusal` (a call the user or a rule refused), `think` (one thinking block; `n` the agent's own measure of it, compared only with the same agent's) and `compact`. Only the session itself counts, not its sub-agents. `turn_events(path)` reads a whole transcript for the backfill and must report what `parse_transcript` reports for the whole file. |
 | Usage by day | `usage_msgs`, `Delta::usage_msgs`, `UsageRead::msgs`, `Delta::limits` | Optional (the default reports none). The token use of every assistant message with its time and model, which the core adds into days per model (`usage.md`); `Delta::limits` carries the plan limits a transcript reports, newest line wins. `usage_msgs(path)` reads a whole transcript (a session's or a sub-agent's) for the backfill and must add up to the same tokens as `parse_transcript`. |
 | Sub-agents, tokens, history | `subagents`, `read_usage`, `history_source`, `read_history`, `parse_history_line`, `own_dirs` | Optional. Sub-agents become child streams on the card; `read_usage` counts their tokens; the history keeps prompts of sessions whose transcripts were deleted. `read_usage` and `read_history` continue from a marker like `parse_transcript` does. |
 | Live state | `live_sessions`, `live_status_shows_prompts`, `jobs` | Optional. Which sessions are open now (busy, idle, waiting, with why it waits, its remote control link and the loops its live state shows) and which run in the background. `live_status_shows_prompts` defaults to yes; an agent whose live status stays `busy` while it waits on a permission prompt returns no, and then a prompt a hook recorded makes the session `waiting` instead of `busy` until a hook says it was answered. |
@@ -99,6 +100,15 @@ database often does not change size when a row is added, and a database in WAL m
 its file time until a checkpoint, so make the stamp from the folder, the `-wal` file or a cheap query,
 not from the main file alone. Archive a consistent snapshot, not a copy of the live file: `VACUUM
 INTO` or the backup API, then compress it. `tests/support/folder_agent.rs` does this.
+
+## Turn events: the Claude Code mapping
+
+- `prompt`: a `user` line whose `message.content` is a string, unless it is `isMeta`, a compaction summary, starts with `<` (command and system wrappers) or is an interruption notice.
+- `interrupt`: `[Request interrupted...` as that string or as a text block of list content.
+- `tool`: every `tool_use` block of an `assistant` line. `tool_error`: a `tool_result` with `is_error`; it is a `refusal` when its first 400 characters say denied, rejected, "doesn't want", not allowed or permission.
+- `think`: a `thinking` block with a non-empty `signature`; `n` is the signature's length, which grows with the thinking. The text of a thinking block is not stored.
+- `end`: at the time of the turn's last `assistant` line, when the next prompt arrives or a read of the whole file ends. A read that stops inside a turn leaves the open turn in the carry, so it is closed once.
+- `compact`: a `system` line with `subtype` `compact_boundary`. Lines of sub-agents (`isSidechain`) are left out.
 
 ## Codex CLI: what a real second agent needed
 

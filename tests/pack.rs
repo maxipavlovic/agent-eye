@@ -368,6 +368,12 @@ fn merging_adds_new_sessions_takes_newer_rows_and_adds_only_new_ideas() {
             )
             .unwrap();
     }
+    da.conn
+        .execute(
+            "INSERT INTO correction(session_id, prompt_ts, verdict) VALUES(?1, 1, 'fix')",
+            [S2],
+        )
+        .unwrap();
     agent_eye::archive::archive_all(&da, &a.paths, &agent_eye::agents::enabled(&a.cfg)).unwrap();
     let pack_file = t.path().join("a.eyepack");
     export_to(&a, &da, &pack_file);
@@ -406,6 +412,22 @@ fn merging_adds_new_sessions_takes_newer_rows_and_adds_only_new_ideas() {
     assert_eq!(found("newer"), 1);
     assert_eq!(found("older"), 0, "the replaced row's text is gone");
     assert_eq!(found("gamma"), 1);
+    // the turns travel with their session: a new session brings them, a newer one replaces them
+    let turns = |id: &str| {
+        count(
+            &db,
+            &format!("SELECT COUNT(*) FROM turn WHERE session_id='{id}'"),
+        )
+    };
+    assert_eq!(turns(S2), 2, "a prompt and the end of its turn");
+    assert_eq!(turns(S1), 2, "not added to the local turns of the old row");
+    assert_eq!(
+        count(
+            &db,
+            &format!("SELECT COUNT(*) FROM correction WHERE session_id='{S2}'")
+        ),
+        1
+    );
     // a pre-import snapshot was made, and the archive files came across
     assert!(backup::list(&backup::dir(&c.paths))
         .iter()

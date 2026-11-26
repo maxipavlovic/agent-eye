@@ -51,6 +51,7 @@ leaves the machine except the excerpts sent to your agent for summaries (see `se
 | `worked/` | The days a session was worked on: adapters report the time of every message (`Delta::events`), `store.rs` adds them into UTC hours (`worked_hour`) with the 15-minute away rule, `summary.rs` turns hours into local days for the card and the terminal, and `backfill.rs` counts sessions read before eye kept hours, from their timestamps only. |
 | `night/` | The night shift (`night.md`): `clock.rs` (the window, which night a moment belongs to, local dates: all the time logic), `mod.rs` (the `night_run` table, limits, planning), `iso.rs` (the worktree or copy a run works in, its diff, discarding), `launch.rs` (each agent's command line, starting a run detached) and `sched.rs` (the once-a-minute pass the daemon makes: start, watch, stop, finish; everything that touches the machine goes through the `Sys` trait). |
 | `loose/` | Leftovers: `find.rs` and `gitscan.rs` find what sessions left (processes, containers, worktrees, commits on no remote, modified files) through `probe.rs`; `store.rs` keeps them in the `loose` table and builds the summary line; `act.rs` stops, removes, ignores or sends a session back, after the checks in "Leftovers" in `security.md`. |
+| `turns/` | When you and the agent took turns: adapters report turn events (`Delta::turns`: prompt, end, interrupt, tool, tool_error, refusal, think, compact), `store.rs` keeps them in `turn` (replaced on a read of the whole session, appended otherwise), and `backfill.rs` reads sessions indexed before schema 18 from their transcript or archive copy, a few per daemon pass, `turn_state` saying which are done. The tables `correction` and `idle_span` belong to the steering clock. |
 | `usage/` | Tokens by day and model (`usage_day`), the backfill of older sessions, plan limits, prices with their sources, and the report behind `eye usage` and the USAGE panel. |
 | `pack/` | `eye export` and `eye import`: the `.eyepack` file (database, archive, transcripts), path remapping between machines, merging, and one session as a readable page. |
 | `ideas.rs`, `mark.rs` | Parked ideas and starting them; putting a session in a column by hand. |
@@ -70,7 +71,7 @@ Everything is under `~/.agent-eye` (mode 0700): `eye.db` (SQLite, WAL), `archive
 summaries run in), `tmp/` (a copy of an archived session, only while its conversation is read; the `.command` files Resume opens in Terminal on macOS, removed after a day). The
 database holds one row per session (with the agent that owns it), streams (sub-agents, background
 sessions, topics, outputs), outputs, ideas, hook events, read cursors (change stamp and the
-adapter's opaque marker), the hours each session was worked in (`worked_hour`, with `worked_state` saying which sessions are counted) and a full-text index.
+adapter's opaque marker), the hours each session was worked in (`worked_hour`, with `worked_state` saying which sessions are counted), their turn events (`turn`, with `turn_state`) and a full-text index.
 
 ## Platforms
 

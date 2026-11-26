@@ -75,6 +75,20 @@ Runs that start by themselves inside a time window. Off until you switch it on. 
 | `enabled` | `true` | Look for what sessions left behind: servers and shells still running, containers, git worktrees in a scratchpad or with no folder, commits on no remote, modified files nobody committed. On by default because it never changes repos or processes; it keeps what it found in eye's database (the `loose` table). The daemon looks every 5 minutes and shortly after a session stops or ends (at most once in 20 seconds); `eye loose` looks at once. `false` stops the daemon's scans, hides the card's leftovers box, the panel's LEFTOVERS block and the picker line, and makes `eye loose` say it is off. Stored results stay until the next scan that is allowed. |
 | `days` | `30` | Only the folders and repos of sessions active in the last this many days are looked at. A scan reads `ps` and `lsof` (macOS) or `/proc` (Linux), `docker ps` when docker is installed (2 s limit) and a few read-only git commands per repo, each with a time limit. |
 
+## `[clock]`
+
+The steering clock: record when you and the agent take turns, to see whether you steer worse at
+some hours. It keeps timings and sizes (how long a prompt was, how many words a reply had), never
+the text, in eye's database (the `turn` table, see `architecture.md`).
+
+| Key | Default | Meaning |
+|---|---|---|
+| `enabled` | `true` | Record turn timing and show the clock. `false` stops recording; what is stored stays. |
+| `llm` | not set | Let a model judge which prompts were corrections. Not set: follows `[summary] enabled`, because both send prompt text to the same agent. `true` or `false` decides on its own. |
+| `hints` | `false` | Show a hint while you are in an hour that has gone badly for you. |
+| `break_minutes` | `45` | A gap this long between prompts is a break. From 10 to 240; a value outside is brought into that range. |
+| `idle` | `false` | Take breaks from the machine's idle time (a few seconds' reading of the system's idle counter, nothing else) instead of from gaps between prompts. |
+
 ## `[hide]`
 
 Throw-away sessions ("/clear", "exit", "cd ..") are left out of the board, search and lists. See

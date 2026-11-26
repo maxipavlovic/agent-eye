@@ -1,3 +1,4 @@
+pub use crate::config_clock::ClockCfg;
 use anyhow::{Context, Result};
 use serde::Deserialize;
 use std::collections::BTreeMap;
@@ -69,6 +70,13 @@ allow_unsandboxed = false # start Claude runs even where its sandbox is missing 
 [loose]
 enabled = true         # list what a session left behind (servers still running, commits on no remote, ...); it never changes repos or processes, it keeps what it found in eye's database
 days = 30              # look at the folders of sessions active in the last this many days
+
+[clock]
+enabled = true         # the steering clock: record when you and the agent take turns, and see whether you steer worse at some hours (it keeps timings and sizes only, in eye's database)
+# llm = true           # let a model judge which prompts were corrections; not set: follows [summary] enabled
+hints = false          # show a hint while you are in an hour that has gone badly for you
+break_minutes = 45     # a gap this long between prompts is a break (10 to 240)
+idle = false           # take breaks from the machine's idle time instead of from prompt gaps
 "#;
 
 /// The keys each section of `config.toml` has in this version. `agents` (its own tables per agent)
@@ -105,6 +113,10 @@ const KNOWN: &[(&str, &[&str])] = &[
         ],
     ),
     ("loose", &["enabled", "days"]),
+    (
+        "clock",
+        &["enabled", "llm", "hints", "break_minutes", "idle"],
+    ),
     (
         "night",
         &[
@@ -175,6 +187,7 @@ pub struct Config {
     pub usage: UsageCfg,
     pub loose: LooseCfg,
     pub night: NightCfg,
+    pub clock: ClockCfg,
     /// The folder eye may create idea folders inside; not set: the account's home folder.
     #[serde(skip)]
     pub folder_root: Option<PathBuf>,
@@ -520,7 +533,8 @@ impl Config {
         if let Some(toml::Value::Table(a)) = table.get_mut("agents") {
             a.retain(|k, v| k == "enabled" || v.is_table());
         }
-        let cfg = Config::deserialize(table).context("parsing config.toml")?;
+        let mut cfg = Config::deserialize(table).context("parsing config.toml")?;
+        cfg.clock = cfg.clock.normalized();
         unknown.sort();
         Ok((cfg, unknown))
     }
