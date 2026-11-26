@@ -34,9 +34,10 @@ pub struct Outcome {
 }
 
 struct Candidate {
-    sid: String,
-    ts: i64,
     ex: Exchange,
+    /// The prompts with this exact exchange (a forked session repeats its parent's): one call
+    /// answers for all of them.
+    prompts: Vec<(String, i64)>,
 }
 
 /// Run one pass. `say` gets a short line after each call to the model.
@@ -68,7 +69,7 @@ pub fn run(
     std::fs::create_dir_all(&work).with_context(|| format!("creating {}", work.display()))?;
     let model = model(cfg, ask.as_ref());
     let total = candidates.len();
-    for batch in detect::batches(candidates.into_iter().map(|c| ((c.sid, c.ts), c.ex)).collect()) {
+    for batch in detect::batches(candidates.into_iter().map(|c| (c.prompts, c.ex)).collect()) {
         let refs: Vec<&Exchange> = batch.iter().map(|(_, e)| e).collect();
         let judged = match detect::judge(ask.as_ref(), &model, &work, &refs) {
             Ok(j) => j,
@@ -78,8 +79,9 @@ pub fn run(
             }
         };
         let tx = db.conn.unchecked_transaction()?;
-        for (((sid, ts), ex), j) in batch.iter().zip(judged) {
-            if let Some(j) = j {
+        for ((prompts, ex), j) in batch.iter().zip(judged) {
+            let Some(j) = j else { continue };
+            for (sid, ts) in prompts {
                 out.corrections += usize::from(j.correction);
                 store(&tx, sid, *ts, Some((&j, &model)), &ex.hash(), now)?;
             }
@@ -103,7 +105,8 @@ fn model(cfg: &Config, agent: &dyn crate::agents::Agent) -> String {
 /// Walk the unjudged prompts newest first and settle what needs no model: a prompt the word
 /// filter drops, one whose text cannot be found, one in an excluded folder (never sent) and one
 /// that matches an exchange judged before (a forked session repeats its parent's history) get a
-/// verdict at once. The rest are returned, at most `NIGHTLY_MAX`.
+/// verdict at once. The rest are returned, at most `NIGHTLY_MAX`, an exchange that several
+/// prompts share only once.
 fn collect(
     db: &Db,
     paths: &Paths,
@@ -160,9 +163,15 @@ fn collect(
                 store(&tx, &sid, ts, None, "", now)?;
                 continue;
             };
-            match known(&tx, &ex.hash())? {
-                Some(j) => store(&tx, &sid, ts, Some((&j.0, &j.1)), &ex.hash(), now)?,
-                None => found.push(Candidate { sid: sid.clone(), ts, ex }),
+            if let Some(j) = known(&tx, &ex.hash())? {
+                store(&tx, &sid, ts, Some((&j.0, &j.1)), &ex.hash(), now)?;
+            } else if let Some(same) = found.iter_mut().find(|c| c.ex == ex) {
+                same.prompts.push((sid.clone(), ts));
+            } else {
+                found.push(Candidate {
+                    ex,
+                    prompts: vec![(sid.clone(), ts)],
+                });
             }
         }
         tx.commit()?;
