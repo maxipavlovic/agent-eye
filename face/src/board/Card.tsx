@@ -6,6 +6,7 @@ import { cardProps } from './CardMenu';
 import { useArt } from './look';
 import { KIND, type BoardCtx, type Kind } from './columns';
 import { folderMissing, startButton } from './folder';
+import { hintFor } from './hint';
 import { Hl } from './highlight';
 import { nightAsk } from './Night';
 import { originChip, Sigil } from './pieces';
@@ -38,19 +39,21 @@ export function Next({ c, hot }: { c: Card; hot?: boolean }) {
 }
 
 /** One mark on a card's top edge: a small box with an icon or a number, and its words in the title. */
-export interface CardMark { kind: 'need' | 'clock' | 'night' | 'loose' | 'rc'; title: string }
+export interface CardMark { kind: 'need' | 'hours' | 'clock' | 'night' | 'loose' | 'rc'; title: string }
 
 /** At most this many boxes on a card's top edge; more show as the first ones and a `+N` box. */
 export const MAX_MARKS = 4;
 
 /**
- * The states of a card, most important first: Needs you, a reminder, a night run, leftovers, Remote Control.
+ * The states of a card, most important first: Needs you, the clock's hint (`hint`, only for the card you work in),
+ * a reminder, a night run, leftovers, Remote Control.
  * They are the card's only place for states, so its frame never changes: a new state becomes a mark here
  * (or goes to the panel), never a row or a chip on the card.
  */
-export function cardMarks(c: Card, need: boolean): CardMark[] {
+export function cardMarks(c: Card, need: boolean, hint: string | null = null): CardMark[] {
   const out: CardMark[] = [];
   if (need) out.push({ kind: 'need', title: 'Needs you' });
+  if (hint) out.push({ kind: 'hours', title: hint });
   const when = remindTitle(c);
   if (when) out.push({ kind: 'clock', title: when });
   if (c.kind === 'idea') return out;
@@ -79,7 +82,8 @@ function MarkBox({ m, n }: { m: CardMark; n?: number }) {
     : m.kind === 'clock' ? art.icon('clock')
       : m.kind === 'night' ? art.icon('crescent')
         : m.kind === 'rc' ? art.icon('signal')
-          : <span class="tn">{text}</span>;
+          : m.kind === 'hours' ? art.icon('sunset')
+            : <span class="tn">{text}</span>;
   return <span class={`tab ${m.kind}${text && text.length > 1 ? ' wide' : ''}`} role="img" aria-label={m.title} title={m.title}>{body}</span>;
 }
 
@@ -126,7 +130,7 @@ function When({ c, row }: { c: Card; row?: boolean }) {
 /** tag: the project key to show as a tag, or null when a project filter is active. */
 export function CardView({ c, store, i, kind, tag }: { c: Card; store: Store; i: number; kind: Kind; tag: string | null }) {
   const busy = isBusy(c);
-  const marks = kind === 'row' ? [] : cardMarks(c, kind === 'need');
+  const marks = kind === 'row' ? [] : cardMarks(c, kind === 'need', hintFor(c, store.selected.value, store.clockHint.value));
   const cls = `card ${kind}${busy ? ' busy' : ''}${c.remind_at ? ' clock' : ''}${asksYou(c) ? ' ask' : ''}${store.selected.value === c.id ? ' sel' : ''}`;
   const style = `--d:${Math.min(i, 12) * 28}ms;--tabw:${marksWidth(c, marks)}px`;
   const base = { class: cls, style, 'data-id': c.id, ...cardProps(c, store) };

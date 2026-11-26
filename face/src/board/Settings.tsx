@@ -100,6 +100,7 @@ export function SettingsHost({ store, layout, setLayout, folded, setFold }: { st
     state.value = s;
     saved.value = 'Saved';
     if (input['remind.notify'] !== undefined) store.loadNotice();
+    if (Object.keys(input).some((k) => k.startsWith('clock.'))) store.loadClockHint();
     return true;
   };
   return (

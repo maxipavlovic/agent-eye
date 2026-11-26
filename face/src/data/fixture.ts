@@ -223,6 +223,11 @@ const SETTINGS: SettingsState = {
     'night.parallel': { type: 'int', min: 1, max: 8, value: 2 },
     'night.isolation': { type: 'choice', choices: ['worktree', 'copy'], value: 'worktree' },
     'remind.notify': { type: 'bool', value: false },
+    'clock.enabled': { type: 'bool', value: true },
+    'clock.llm': { type: 'bool', value: true },
+    'clock.hints': { type: 'bool', value: false },
+    'clock.break_minutes': { type: 'int', min: 10, max: 240, value: 45 },
+    'clock.idle': { type: 'bool', value: false },
     'agents.enabled': { type: 'agents', choices: [{ id: AGENT.id, name: AGENT.name }, { id: CODEX.id, name: CODEX.name }], value: [AGENT.id], restart: true },
   },
 };
@@ -347,7 +352,7 @@ export function fixtureSource(demo = false): Source {
     },
     ideas: () => delay(structuredClone(ideas)),
     agents: () => delay({ agents: structuredClone(agents) }),
-    usage: (days) => delay(demo ? demoUsage(days) : emptyUsage(days)),
+    usage: (days, series) => delay(demo ? demoUsage(days, series) : emptyUsage(days, series)),
     clock: (weeks) => delay(demo ? demoClock(weeks) : emptyClock(weeks)),
     move: (id, to) => {
       const c = find(id);

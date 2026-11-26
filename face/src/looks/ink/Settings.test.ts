@@ -61,10 +61,10 @@ async function mount(src: Source = fixtureSource()) {
 const key = (k: string) => document.body.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true }));
 
 describe('the settings gear', () => {
-  it('sits after USAGE and before + IDEA, and the header holds no look, colour, layout or theme control', async () => {
+  it('sits after USAGE and HOURS and before + IDEA, and the header holds no look, colour, layout or theme control', async () => {
     const { $$, $ } = await mount();
     const names = $$('.hd > button, .hd > .accpick, .hd > .theme').map((b) => b.getAttribute('aria-label') || b.textContent);
-    expect(names.slice(-3)).toEqual(['USAGE', 'Settings', '+ IDEA']);
+    expect(names.slice(-4)).toEqual(['USAGE', 'HOURS', 'Settings', '+ IDEA']);
     expect($('.hd [aria-label=Layout]')).toBeNull();
     expect($('.hd [aria-label=Theme]')).toBeNull();
     expect($('.hd .acc')).toBeNull();
@@ -171,7 +171,7 @@ describe('the agent settings', () => {
     const { $, $$, open } = await mount(engine().source);
     await open();
     await vi.waitFor(() => expect($('.settings [aria-label=Agents]')).not.toBeNull());
-    expect($$('.settings .sec h4').map((h4) => h4.textContent)).toEqual(['LOOK', 'BOARD', 'SUMMARIES', 'NIGHT SHIFT', 'REMINDERS', 'AGENTS']);
+    expect($$('.settings .sec h4').map((h4) => h4.textContent)).toEqual(['LOOK', 'BOARD', 'SUMMARIES', 'NIGHT SHIFT', 'REMINDERS', 'HOURS', 'AGENTS']);
     expect($('.settings')!.textContent).toContain('Takes effect when the background service restarts');
     expect($('.settings .more')!.textContent).toContain('config.toml');
     expect($('.settings .more')!.textContent).toContain('docs/config.md');
@@ -190,6 +190,51 @@ describe('the agent settings', () => {
     await vi.waitFor(() => expect(saveSettings).toHaveBeenCalledWith({ 'night.isolation': 'copy' }));
     press('Night shift', 'ON');
     await vi.waitFor(() => expect(saveSettings).toHaveBeenCalledWith({ 'night.enabled': true }));
+  });
+
+  it('saves the steering clock keys: the switches at once, the break from its field and only inside its range', async () => {
+    const { saveSettings, source } = engine();
+    const { $, $$, open, press } = await mount(source);
+    await open();
+    await vi.waitFor(() => expect($('.settings [aria-label="Steering clock"]')).not.toBeNull());
+    press('Hint', 'ON');
+    await vi.waitFor(() => expect(saveSettings).toHaveBeenCalledWith({ 'clock.hints': true }));
+    press('Judge corrections', 'OFF');
+    await vi.waitFor(() => expect(saveSettings).toHaveBeenCalledWith({ 'clock.llm': false }));
+    press('Idle time', 'ON');
+    await vi.waitFor(() => expect(saveSettings).toHaveBeenCalledWith({ 'clock.idle': true }));
+    expect($('.settings')!.textContent).toContain('Only a number of seconds is read; never what you type.');
+    const input = $$<HTMLInputElement>('.settings form.nset input').find((i) => i.type === 'number')!;
+    expect([input.min, input.max, input.value]).toEqual(['10', '240', '45']);
+    input.value = '30';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.form!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => expect(saveSettings).toHaveBeenCalledWith({ 'clock.break_minutes': 30 }));
+    saveSettings.mockClear();
+    input.value = '5.5';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.form!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => expect(input.value).toBe('30'));
+    expect(saveSettings).not.toHaveBeenCalled();
+  });
+
+  it('switches the clock-only settings off with the clock', async () => {
+    const { saveSettings, source } = engine();
+    const { $, open, press } = await mount(source);
+    await open();
+    await vi.waitFor(() => expect($('.settings [aria-label="Steering clock"]')).not.toBeNull());
+    press('Steering clock', 'OFF');
+    await vi.waitFor(() => expect(saveSettings).toHaveBeenCalledWith({ 'clock.enabled': false }));
+    await vi.waitFor(() => expect($('.settings [aria-label=Hint] button')!.hasAttribute('disabled')).toBe(true));
+  });
+
+  it('says when idle time is not available on this system, and leaves the switch off', async () => {
+    const noIdle = structuredClone(sampleState)!;
+    noIdle.settings['clock.idle'] = { type: 'bool', value: false, available: false };
+    const { $, open } = await mount({ ...fixtureSource(), name: 'live', settings: async () => structuredClone(noIdle) } as Source);
+    await open();
+    await vi.waitFor(() => expect($('.settings')!.textContent).toContain('Not available on this system.'));
+    expect($('.settings [aria-label="Idle time"] button')!.hasAttribute('disabled')).toBe(true);
   });
 
   it('saves the window and the model from their fields, and only when they changed', async () => {

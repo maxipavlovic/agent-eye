@@ -17,6 +17,7 @@ import { useLayout } from './layout';
 import { Results } from './Results';
 import { Toasts } from './Toasts';
 import { NightHost } from './Night';
+import { HoursHost } from './Hours';
 import { SettingsHost } from './Settings';
 import { UsageHost } from './Usage';
 import { useWalk } from './walk';
@@ -110,6 +111,7 @@ export function Board({ store }: { store: Store }) {
       <RemindFormHost store={store} />
       <ForgetHost store={store} />
       <UsageHost store={store} />
+      <HoursHost store={store} />
       <SettingsHost store={store} layout={layout} setLayout={setLayout} folded={folded} setFold={setFold} />
       <NightHost store={store} />
       <KeyHelpHost store={store} />

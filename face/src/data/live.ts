@@ -45,7 +45,7 @@ export function liveSource(): Source {
     search: (q) => call<{ results: SearchHit[] }>(`/api/search?q=${enc(q)}`),
     ideas: () => call<{ ideas: Idea[] }>('/api/ideas'),
     agents: () => call<{ agents: Agent[] }>('/api/agents'),
-    usage: (days) => call<UsageReport>(`/api/usage?days=${days}`),
+    usage: (days, series) => call<UsageReport>(`/api/usage?days=${days}${series ? `&series=${series}` : ''}`),
     clock: (weeks) => call<ClockReport>(`/api/clock?weeks=${weeks}`),
     move: (id: string, column: MoveTarget) => call<Card>(`/api/cards/${enc(id)}/column`, { method: 'POST', body: { column } }),
     forget: async (id, transcript) => { await call<unknown>(`/api/sessions/${enc(id)}/forget`, { method: 'POST', body: { confirm: true, transcript } }); },

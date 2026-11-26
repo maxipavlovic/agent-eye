@@ -114,6 +114,8 @@ export const BANG: Rows = ['..##..', '..##..', '..##..', '..##..', '......', '..
 export const CLOCK: Rows = ['.#####.', '#..#..#', '#..#..#', '#..##.#', '#.....#', '#.....#', '.#####.'];
 /** A night run made the session: a crescent, the size of the clock. */
 export const CRESCENT: Rows = ['..###..', '.##....', '##.....', '##.....', '##.....', '.##....', '..###..'];
+/** The clock's hint: the sun at the horizon. */
+export const SUNSET: Rows = ['...#...', '#.###.#', '..###..', '.#####.', '#######', '.......', '.#####.'];
 /** Remote Control is on: a dot with a signal going out each side. */
 export const SIGNAL: Rows = ['#.....#', '#.#.#.#', '#.#.#.#', '#..#..#', '#.....#'];
 export const CHECK: Rows = ['.....#', '....#.', '#..#..', '.##...'];

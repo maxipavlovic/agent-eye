@@ -4,8 +4,11 @@ import { pushPref } from './prefs';
 import { signal, computed, effect, batch, type Signal, type ReadonlySignal } from '@preact/signals';
 import type {
   Agent, ArchivePage, Board, Card, CardDetail, ColumnId, Connection, ConversationPage, IdeaInput, MoveTarget,
-  FolderCheck, LooseAct, NightPlanInput, NightState, RemindInput, RemindSettings, ResumePlan, SearchHit, SettingsInput, SettingsState, Source, StartPlan, UsageReport,
+  ClockReport, FolderCheck, LooseAct, NightPlanInput, NightState, RemindInput, RemindSettings, ResumePlan, SearchHit, SettingsInput, SettingsState, Source, StartPlan, UsageReport,
 } from './api/types';
+
+/** How often the board asks the clock for its hint while hints are on. */
+const CLOCK_HINT_EVERY_MS = 5 * 60_000;
 
 export type ThemePref = 'auto' | 'light' | 'dark';
 export type Theme = 'light' | 'dark';
@@ -42,6 +45,8 @@ export interface Store {
   notice: ReadonlySignal<RemindSettings | null>;
   /** Number of cards in Needs you. */
   needsYou: ReadonlySignal<number>;
+  /** The quiet "your corrections usually rise now" line; null unless `[clock] hints` is on and it is that time. */
+  clockHint: ReadonlySignal<string | null>;
   error: ReadonlySignal<string | null>;
 
   open(id: string): void;
@@ -55,7 +60,9 @@ export interface Store {
   /** Runs the resume plan for real on the live source (opens iTerm); returns the plan. */
   resume(id: string, fork?: boolean): Promise<ResumePlan | null>;
   /** Usage over the last `days` days; null (quietly) when the engine cannot say. */
-  usage(days: number): Promise<UsageReport | null>;
+  usage(days: number, series?: 'project' | 'model'): Promise<UsageReport | null>;
+  /** The steering clock over `weeks` weeks; null (quietly) when the engine has no clock. */
+  clock(weeks: number): Promise<ClockReport | null>;
   /** The config keys the board may change; null (quietly) when the engine has no settings. */
   settings(): Promise<SettingsState | null>;
   /** Saves the given keys; the new state, or null with a toast that says why nothing was saved. */
@@ -93,6 +100,8 @@ export interface Store {
   nightBring(id: number): Promise<boolean>;
   /** Reads the desktop notice setting into `notice`; an engine without it leaves `notice` null, quietly. */
   loadNotice(): void;
+  /** Asks the clock whether to show its hint now; it asks again every few minutes while hints are on. */
+  loadClockHint(): void;
   /** Turns the desktop notice for every reminder on or off; a toast says why when it cannot. */
   setNotice(on: boolean): Promise<void>;
   archive(offset: number, limit?: number): Promise<ArchivePage>;
@@ -153,6 +162,7 @@ export function createStore(src: Source, { defaultTheme = 'auto' }: { defaultThe
   const agents = signal<Agent[]>([]);
   const notice = signal<RemindSettings | null>(null);
   const night = signal<NightState | null>(null);
+  const clockHint = signal<string | null>(null);
 
   const mq = typeof matchMedia === 'function' ? matchMedia('(prefers-color-scheme: dark)') : null;
   const systemDark = signal(mq?.matches ?? false);
@@ -299,9 +309,17 @@ export function createStore(src: Source, { defaultTheme = 'auto' }: { defaultThe
     }
   }
 
-  async function usage(days: number) {
+  async function usage(days: number, series?: 'project' | 'model') {
     try {
-      return await src.usage(days);
+      return await src.usage(days, series);
+    } catch {
+      return null;
+    }
+  }
+
+  async function clock(weeks: number) {
+    try {
+      return await src.clock(weeks);
     } catch {
       return null;
     }
@@ -460,6 +478,16 @@ export function createStore(src: Source, { defaultTheme = 'auto' }: { defaultThe
   const nightBring = (id: number) => nightCall(() => src.nightBring(id), 'Branch brought into your repo');
   const nightOpen = (id: number) => nightCall(() => src.nightOpen(id), 'Opening the folder');
 
+  let hintTimer: ReturnType<typeof setTimeout> | undefined;
+  function loadClockHint() {
+    clearTimeout(hintTimer);
+    src.clock(1).then((c) => {
+      clockHint.value = c.enabled && c.hints ? c.now.hint : null;
+      // nobody needs the question again until hints are switched on, and the settings panel asks then
+      if (c.enabled && c.hints) hintTimer = setTimeout(loadClockHint, CLOCK_HINT_EVERY_MS);
+    }, () => { clockHint.value = null; });
+  }
+
   function loadNotice() {
     src.remindSettings().then((s) => { notice.value = s; }, () => { notice.value = null; });
   }
@@ -479,12 +507,13 @@ export function createStore(src: Source, { defaultTheme = 'auto' }: { defaultThe
 
   src.subscribe(() => { void refresh(); }, (s) => { connection.value = s; });
   void refresh();
+  loadClockHint();
   src.agents().then((r) => { agents.value = r.agents; }, () => { /* an older engine has no agent list: one agent */ });
 
   return {
     source: src.name,
-    board, selected, detail, query, results, searching, connection, themePref, accent, theme, toasts, agents, notice, night, needsYou, error,
-    open, close, search, move, setHidden, forget, resume, usage, settings, saveSettings, conversation, addIdea, editIdea, startIdea, folderCheck: (path) => src.folderCheck(path), remind, looseAct, looseActAll, looseSend, loadNotice, setNotice, loadNight, nightSettings, nightPlan, nightCancel, nightLimit, nightDiscard, nightOpen, nightBring,
+    board, selected, detail, query, results, searching, connection, themePref, accent, theme, toasts, agents, notice, night, needsYou, clockHint, error,
+    open, close, search, move, setHidden, forget, resume, usage, clock, settings, saveSettings, conversation, addIdea, editIdea, startIdea, folderCheck: (path) => src.folderCheck(path), remind, looseAct, looseActAll, looseSend, loadNotice, loadClockHint, setNotice, loadNight, nightSettings, nightPlan, nightCancel, nightLimit, nightDiscard, nightOpen, nightBring,
     archive: (offset, limit = 50) => src.archive(offset, limit),
     setTheme, setAccent, toast, dismissToast, refresh,
   };

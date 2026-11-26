@@ -12,6 +12,11 @@ describe('the marks on a card\'s top edge', () => {
     expect(cardMarks(card({}), false)).toEqual([]);
   });
 
+  it('carry the clock\'s hint as one more calm mark, after Needs you, when the card is given one', () => {
+    expect(cardMarks(full, true, 'Your corrections usually rise now').map((m) => m.kind)).toEqual(['need', 'hours', 'clock', 'night', 'loose', 'rc']);
+    expect(cardMarks(card({}), false, 'Your corrections usually rise now')).toEqual([{ kind: 'hours', title: 'Your corrections usually rise now' }]);
+  });
+
   it('an idea shows only Needs you and its reminder', () => {
     expect(cardMarks({ ...full, kind: 'idea' } as Card, true).map((m) => m.kind)).toEqual(['need', 'clock']);
   });

@@ -38,6 +38,7 @@ const ICON: Record<IconName, () => JSX.Element> = {
   clock: () => svg(14, 14, <><circle class="s" cx="7" cy="7" r="5.5" /><path class="s" d="M7 3.8V7l2.2 1.4" /></>),
   'clock-accent': () => svg(14, 14, <><circle class="s" cx="7" cy="7" r="5.5" /><path class="s" d="M7 3.8V7l2.2 1.4" /></>, 'ico accent'),
   crescent: () => svg(14, 14, <path class="s" d="M11.6 9.2A5 5 0 0 1 4.8 2.4a5 5 0 1 0 6.8 6.8Z" />),
+  sunset: () => svg(14, 14, <path class="s" d="M2 10.5h10M3.6 8.4a3.4 3.4 0 0 1 6.8 0M7 2.2v1.6M2.6 4.4l1.1 1.1M11.4 4.4l-1.1 1.1M4.5 12.6h5" />),
   signal: () => svg(14, 14, <><circle cx="7" cy="10" r=".9" fill="currentColor" /><path class="s" d="M4.6 7.6a3.4 3.4 0 0 1 4.8 0M2.6 5.6a6.2 6.2 0 0 1 8.8 0" /></>),
   up: () => svg(12, 7, <path class="s" d="M1.5 5.5 6 1l4.5 4.5" />),
   down: () => svg(12, 7, <path class="s" d="M1.5 1.5 6 6l4.5-4.5" />),

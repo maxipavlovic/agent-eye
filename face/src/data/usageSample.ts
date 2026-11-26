@@ -1,4 +1,4 @@
-import type { UsageReport, UsageRow, UsageSum, UsageWeek } from '../api/types';
+import type { UsageDay, UsageReport, UsageRow, UsageSeries, UsageSum, UsageWeek } from '../api/types';
 
 const ESTIMATE = 'API-equivalent estimate, not your bill';
 
@@ -10,14 +10,14 @@ function sum(input: number, output: number, cache: number, cost: number | null):
 const row = (name: string, s: UsageSum, extra: Partial<UsageRow> = {}): UsageRow => ({ name, ...s, ...extra });
 
 /** No usage yet: a new install, or the plain sample. */
-export function emptyUsage(days: number): UsageReport {
+export function emptyUsage(days: number, series?: 'project' | 'model'): UsageReport {
   const zero = sum(0, 0, 0, 0);
   const weeks: UsageWeek[] = [0, 1, 2, 3].map((i) => ({ from: `2026-11-${String(2 + i * 7).padStart(2, '0')}`, to: `2026-11-${String(8 + i * 7).padStart(2, '0')}`, ...zero }));
-  return { estimate: ESTIMATE, days, from: '2026-11-15', to: '2026-11-21', by: 'project', rows: [], totals: zero, by_project: [], by_agent: [], by_model: [], top_sessions: [], weeks, limits: [], backfill_left: 0 };
+  return { estimate: ESTIMATE, days, from: '2026-11-15', to: '2026-11-21', by: 'project', ...(series ? { series: demoSeries(days, series, [], '2026-11-21') } : {}), rows: [], totals: zero, by_project: [], by_agent: [], by_model: [], top_sessions: [], weeks, limits: [], backfill_left: 0 };
 }
 
 /** The demo board's usage: a few projects, two agents, four weeks, and a Codex limit near the top. */
-export function demoUsage(days: number): UsageReport {
+export function demoUsage(days: number, series?: 'project' | 'model'): UsageReport {
   const projects = [
     row('billing', sum(9_000, 2_400_000, 610_000_000, 142.6)),
     row('adobe-insights-multi-account', sum(5_000, 1_300_000, 300_000_000, 78.4)),
@@ -39,8 +39,12 @@ export function demoUsage(days: number): UsageReport {
     { from: '2026-11-23', to: '2026-11-29', ...total },
   ];
   const now = Date.now();
+  const scale = days === 7 ? 1 : 4;
+  const byProject: Array<[string, number]> = projects.map((p) => [p.name.startsWith('other') ? 'other' : p.name, Math.round(p.cost_usd! * scale * 100) / 100]);
+  const byModel: Array<[string, number]> = [['claude-opus-5-5', 189.4], ['claude-sonnet-5-5', 71.2], ['claude-haiku-5', 18.6], ['gpt-5-codex', 22.3], ['other', 4.3]].map(([k, c]) => [k as string, Math.round((c as number) * scale * 100) / 100]);
   return {
     estimate: ESTIMATE, days, from: '2026-11-23', to: '2026-11-29', by: 'project',
+    ...(series ? { series: demoSeries(days, series, series === 'project' ? byProject : byModel, '2026-11-29') } : {}),
     rows: projects, totals: total,
     by_project: projects, by_agent: agents, by_model: [], top_sessions: sessions, weeks,
     limits: [
@@ -49,4 +53,39 @@ export function demoUsage(days: number): UsageReport {
     ],
     backfill_left: 0,
   };
+}
+
+/** Local days ending on `to`, oldest first. */
+function daysEnding(to: string, n: number): string[] {
+  const end = Date.parse(`${to}T12:00:00Z`);
+  return Array.from({ length: n }, (_, i) => new Date(end - (n - 1 - i) * 86_400_000).toISOString().slice(0, 10));
+}
+
+/** Each day's share of a key's cost: busy on weekdays, quiet on the weekend, a little different for every key. */
+function shares(days: string[], k: number): number[] {
+  const w = days.map((d, i) => {
+    const wd = new Date(`${d}T12:00:00Z`).getUTCDay();
+    return (wd === 0 || wd === 6 ? 0.25 : 1) * (0.55 + 0.45 * Math.abs(Math.sin((i + 1) * (k + 2) * 0.9)));
+  });
+  const t = w.reduce((a, b) => a + b, 0);
+  return w.map((x) => x / t);
+}
+
+/** The demo's cost by day: the window's total per key spread over its days, so the columns add up to the rows above. */
+export function demoSeries(days: number, by: 'project' | 'model', total: Array<[string, number]>, to: string): UsageSeries {
+  const list = daysEnding(to, days);
+  const pts: UsageDay[] = list.map((day) => ({ day, cost: {}, tokens: {} }));
+  total.forEach(([key, cost], k) => {
+    const sh = shares(list, k);
+    let left = Math.round(cost * 100);
+    pts.forEach((p, i) => {
+      const cents = i === pts.length - 1 ? left : Math.round(cost * 100 * sh[i]!);
+      left -= cents;
+      if (cents > 0) {
+        p.cost[key] = cents / 100;
+        p.tokens[key] = cents * 20_000;
+      }
+    });
+  });
+  return { by, keys: total.map(([k]) => k), days: pts };
 }

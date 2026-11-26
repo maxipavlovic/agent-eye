@@ -114,6 +114,13 @@ describe('liveSource requests', () => {
     expect(f).toHaveBeenCalledWith('/api/clock?weeks=8', { credentials: 'same-origin' });
   });
 
+  it('asks for the daily series', async () => {
+    const f = vi.fn().mockResolvedValue(json(200, { days: 14, rows: [] }));
+    vi.stubGlobal('fetch', f);
+    await liveSource().usage(14, 'model');
+    expect(f).toHaveBeenCalledWith('/api/usage?days=14&series=model', { credentials: 'same-origin' });
+  });
+
   it('sends the idea agent when one is chosen', async () => {
     const f = vi.fn().mockResolvedValue(json(200, { id: 'idea:1' }));
     vi.stubGlobal('fetch', f);

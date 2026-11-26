@@ -3,6 +3,7 @@
 @import '@fontsource-variable/inter/opsz.css';
 @import '@fontsource/doto/latin-800.css';
 @import '../../board/modal.css';
+@import '../../board/charts.css';
 
 @import './tokens.css';
 @import './eye.css';
@@ -147,7 +148,7 @@ a.btn { display: inline-block; text-decoration: none; }
 /* A reminder is set: a tab in the accent with the clock, left of the `!` of a card in Needs you; the time is in words on the card (`.when`). */
 .tab.clock { background: var(--accent); color: var(--on-accent); }
 /* The calm marks: a night run, leftovers (their count), Remote Control, and `+N` for marks that do not fit. Paper and ink; the accent stays for what needs you. */
-.tab.night, .tab.loose, .tab.rc, .tab.more { background: var(--paper); color: var(--ink); }
+.tab.night, .tab.hours, .tab.loose, .tab.rc, .tab.more { background: var(--paper); color: var(--ink); }
 .tab .tn { font: 400 16px/1 var(--f-label); font-variant-numeric: tabular-nums; }
 /* two characters ("9+", "+2"): a wider box; the card's --tabw counts it */
 .tab.wide { width: 36px; }
@@ -757,3 +758,5 @@ a.mk:hover { background: var(--ink); color: var(--paper); }
 .settings .nrow > span { min-width: 10em; }
 .settings .nset { margin-top: 14px; }
 .settings .more { margin-top: 44px; }
+
+:root { --c-label: var(--f-body); --c-num: var(--f-body); }

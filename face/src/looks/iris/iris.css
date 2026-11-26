@@ -3,6 +3,7 @@
 
 @import './tokens.css';
 @import '../../board/modal.css';
+@import '../../board/charts.css';
 
 /* The iris look: the board as a technical drawing. One sheet in a hairline frame, a row of header cells,
    full-height lane lines, a title block. Two type families: Archivo, Extra Condensed for counts and Expanded
@@ -753,3 +754,8 @@ mark { background: var(--ink); color: var(--paper); padding: 0 3px; }
 .settings .nrow > span { min-width: 10em; }
 .settings .nset { margin-top: 14px; }
 .settings .more { margin-top: 44px; }
+
+:root { --c-label: var(--f-disp); --c-num: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; }
+.cstrip, .cband-label, .ctoggle { text-transform: uppercase; letter-spacing: .06em; }
+.ctip { box-shadow: var(--sheet); }
+.ctoggle { border-color: var(--rule); }

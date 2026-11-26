@@ -2,7 +2,10 @@ import { useEffect, useLayoutEffect } from 'preact/hooks';
 import { signal, useSignal } from '@preact/signals';
 import type { Store } from '../store';
 import type { UsageLimits, UsageReport, UsageRow, UsageSum } from '../api/types';
+import { ChartFrame } from './chartParts';
 import { Sec } from './Sections';
+import { UsageDaysChart, UsageDaysTable, UsageLegend } from './CostChart';
+import { noCost } from './dailyCost';
 import { barPercents, costText, limitHot, percentText, resetText, seenText, tokensText } from './usageText';
 
 /** Is the USAGE panel open? The header button sets it. */
@@ -61,25 +64,29 @@ function Trend({ weeks }: { weeks: UsageReport['weeks'] }) {
 }
 
 const WINDOWS = [{ days: 7, label: 'WEEK' }, { days: 30, label: 'MONTH' }];
+const SPLITS = [{ by: 'project', label: 'BY PROJECT' }, { by: 'model', label: 'BY MODEL' }] as const;
 
-/** The USAGE panel: limits, this week by project and by agent, the top 10 sessions, four weeks. */
+/** The USAGE panel: limits, the cost of each day, this week by project and by agent, the top 10 sessions, four weeks. */
 export function UsageHost({ store }: { store: Store }) {
   const open = usagePanel.value;
   const days = useSignal(7);
   const data = useSignal<UsageReport | null>(null);
   const failed = useSignal(false);
+  const split = useSignal<'project' | 'model'>('project');
+  const table = useSignal(false);
   useEffect(() => {
     if (!open) return;
     let live = true;
-    data.value = null;
     failed.value = false;
-    void store.usage(days.value).then((r) => {
+    // a new split keeps what is on screen until the answer comes; a new window or a new opening starts clean
+    void store.usage(days.value, split.value).then((r) => {
       if (!live) return;
       data.value = r;
       failed.value = r === null;
     });
     return () => { live = false; };
-  }, [open, days.value]);
+  }, [open, days.value, split.value]);
+  useEffect(() => { data.value = null; }, [open, days.value]);
   // Esc listens from before the paint, so the first one closes this and not the panel under it
   useLayoutEffect(() => {
     if (!open) return;
@@ -108,6 +115,9 @@ export function UsageHost({ store }: { store: Store }) {
             {WINDOWS.map((w) => (
               <button key={w.days} class={`btn sm${days.value === w.days ? '' : ' ghost'}`} aria-pressed={days.value === w.days} onClick={() => { days.value = w.days; }}>{w.label}</button>
             ))}
+            {SPLITS.map((x) => (
+              <button key={x.by} class={`btn sm${split.value === x.by ? '' : ' ghost'}`} aria-pressed={split.value === x.by} title="Splits the daily chart" onClick={() => { split.value = x.by; }}>{x.label}</button>
+            ))}
           </div>
           {!r && !failed.value && <p class="state">Loading…<i class="dots" /></p>}
           {failed.value && <p class="state">This engine cannot report usage. Update eye, then reload.</p>}
@@ -119,6 +129,14 @@ export function UsageHost({ store }: { store: Store }) {
           )}
           {r && !empty && (
             <>
+              {r.series && !noCost(r.series) && (
+                <Sec t={`DAILY COST, LAST ${days.value} DAYS`}>
+                  <ChartFrame title={`by ${r.series.by}`} table={table.value} onTable={(t) => { table.value = t; }}>
+                    <UsageLegend series={r.series} />
+                    {table.value ? <UsageDaysTable series={r.series} /> : <UsageDaysChart series={r.series} />}
+                  </ChartFrame>
+                </Sec>
+              )}
               <Sec t={`${range} BY PROJECT`} n={costText(r.totals)}><Bars rows={r.by_project} /></Sec>
               <Sec t="BY AGENT"><Bars rows={r.by_agent} /></Sec>
               <Sec t="TOP 10 SESSIONS"><Bars rows={r.top_sessions} onPick={pick} /></Sec>

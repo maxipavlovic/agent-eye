@@ -25,10 +25,10 @@ export interface Art {
  * - arrow: who acts next, on a chip.
  * - bang, clock: a mark box in the accent (Needs you, a reminder).
  * - clock-accent: the reminder clock beside the time, in the accent.
- * - crescent, signal: the calm mark boxes (a night run, Remote Control).
+ * - crescent, sunset, signal: the calm mark boxes (a night run, the clock's hint, Remote Control).
  * - up, down: the time stepper.
  */
-export type IconName = 'arrow' | 'bang' | 'clock' | 'clock-accent' | 'crescent' | 'signal' | 'up' | 'down';
+export type IconName = 'arrow' | 'bang' | 'clock' | 'clock-accent' | 'crescent' | 'sunset' | 'signal' | 'up' | 'down';
 
 export interface HeaderProps { store: Store }
 export interface ProjectBarProps { store: Store; total: number; ps: Project[]; filter: string | null; setFilter: (key: string | null) => void }

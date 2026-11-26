@@ -252,6 +252,24 @@ export interface UsageReport {
   limits: UsageLimits[];
   /** Sessions whose usage is still being counted in the background. */
   backfill_left: number;
+  /** Only when asked for with `series=project|model`. */
+  series?: UsageSeries;
+}
+
+/** The cost of every day of the window, split by project or by model. */
+export interface UsageSeries {
+  by: 'project' | 'model';
+  /** The five groups with the highest cost, biggest first, then "other" when anything folded into it. */
+  keys: string[];
+  /** Every local day of the window, oldest first; a group with no usage that day is missing from the maps. */
+  days: UsageDay[];
+}
+
+export interface UsageDay {
+  day: string;
+  /** USD by key; a key whose tokens have no price is missing here but present in `tokens`. */
+  cost: Record<string, number>;
+  tokens: Record<string, number>;
 }
 
 /** One local hour of the steering clock. */
@@ -540,6 +558,11 @@ export interface SettingsState {
     'night.isolation': ChoiceSetting;
     'remind.notify': BoolSetting;
     'agents.enabled': AgentsSetting;
+    'clock.enabled': BoolSetting;
+    'clock.llm': BoolSetting;
+    'clock.hints': BoolSetting;
+    'clock.break_minutes': IntSetting;
+    'clock.idle': BoolSetting & { available?: boolean };
   };
 }
 
@@ -575,7 +598,7 @@ export interface Source {
   /** The enabled agents (GET /api/agents). */
   agents(): Promise<{ agents: Agent[] }>;
   /** Usage over the last `days` days (GET /api/usage); an older engine answers 404. */
-  usage(days: number): Promise<UsageReport>;
+  usage(days: number, series?: 'project' | 'model'): Promise<UsageReport>;
   /** The steering clock over the last `weeks` weeks (GET /api/clock); an older engine answers 404. */
   clock(weeks: number): Promise<ClockReport>;
   move(id: string, column: MoveTarget): Promise<Card>;

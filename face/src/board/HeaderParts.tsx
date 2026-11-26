@@ -1,5 +1,6 @@
 import type { Store } from '../store';
 import { needsLane } from './gaze';
+import { hoursPanel } from './Hours';
 import { ideaForm } from './IdeaForm';
 import { TonightChip } from './Night';
 import { settingsPanel } from './Settings';
@@ -42,6 +43,18 @@ export function UsageButton() {
   return <button class="btn" title="What the sessions used and cost, and where the plan limits stand" aria-haspopup="dialog" onClick={() => { usagePanel.value = !usagePanel.value; }}>USAGE</button>;
 }
 
+/** HOURS: when you steer well or badly, and whether it is you or the model. */
+export function HoursButton() {
+  return <button class="btn" title="When you steer well or badly, and whether it is you or the model" aria-haspopup="dialog" onClick={() => { hoursPanel.value = !hoursPanel.value; }}>HOURS</button>;
+}
+
+/** The quiet mark beside HOURS while the clock has a hint (`[clock] hints`): its words are the label and the tooltip, and it opens HOURS. */
+export function HoursHint({ store }: { store: Store }) {
+  const hint = store.clockHint.value;
+  if (!hint) return null;
+  return <button class="hourhint" title={hint} onClick={() => { hoursPanel.value = true; }}><i aria-hidden="true" />{hint}</button>;
+}
+
 /** The gear: it opens SETTINGS (look, colour, layout, theme and the agent settings). */
 export function SettingsGear() {
   return (
@@ -54,12 +67,14 @@ export function SettingsGear() {
   );
 }
 
-/** The end of the row: the night, USAGE, the gear and + IDEA. The slot right after USAGE is for HOURS. */
+/** The end of the row: the night, USAGE, HOURS (with its hint), the gear and + IDEA. */
 export function HeaderEnd({ store }: { store: Store }) {
   return (
     <>
       <TonightChip store={store} />
       <UsageButton />
+      <HoursButton />
+      <HoursHint store={store} />
       <SettingsGear />
       <button class="btn plus" onClick={() => { ideaForm.value = {}; }}>+ IDEA</button>
     </>

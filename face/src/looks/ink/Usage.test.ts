@@ -39,13 +39,13 @@ const usageButton = (root: HTMLElement) => [...root.querySelectorAll('header.hd 
 
 describe('the USAGE panel', () => {
   it('opens from the header with limits, projects, agents, top sessions and the trend, and says it is an estimate', async () => {
-    const usage = vi.fn(async (days: number) => demoUsage(days));
+    const usage = vi.fn(async (days: number, series?: 'project' | 'model') => demoUsage(days, series));
     const root = await mount({ usage });
     expect(root.querySelector('.usage')).toBeNull();
     usageButton(root).click();
     await vi.waitFor(() => expect(root.querySelector('.usage .ubars')).not.toBeNull());
     const text = root.querySelector('.usage')!.textContent!;
-    expect(usage).toHaveBeenCalledWith(7);
+    expect(usage).toHaveBeenCalledWith(7, 'project');
     expect(text).toContain('API-equivalent estimate, not your bill');
     for (const t of ['PLAN LIMITS', 'THIS WEEK BY PROJECT', 'BY AGENT', 'TOP 10 SESSIONS', 'LAST 4 WEEKS']) expect(text).toContain(t);
     expect(text).toContain('billing');
@@ -59,12 +59,12 @@ describe('the USAGE panel', () => {
   });
 
   it('asks for a month when MONTH is pressed', async () => {
-    const usage = vi.fn(async (days: number) => demoUsage(days));
+    const usage = vi.fn(async (days: number, series?: 'project' | 'model') => demoUsage(days, series));
     const root = await mount({ usage });
     usageButton(root).click();
     await vi.waitFor(() => expect(root.querySelector('.usage .ubars')).not.toBeNull());
     ([...root.querySelectorAll('.usage .acts button')].find((b) => b.textContent === 'MONTH') as HTMLButtonElement).click();
-    await vi.waitFor(() => expect(usage).toHaveBeenLastCalledWith(30));
+    await vi.waitFor(() => expect(usage).toHaveBeenLastCalledWith(30, 'project'));
     await vi.waitFor(() => expect(root.querySelector('.usage')!.textContent).toContain('THIS MONTH BY PROJECT'));
   });
 

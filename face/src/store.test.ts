@@ -2,7 +2,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createStore } from './store';
 import { fixtureSource } from './data/fixture';
-import type { Board, Card, Column, ColumnId, Source } from './api/types';
+import type { Board, Card, ClockReport, Column, ColumnId, Source } from './api/types';
+import { demoClock } from './data/clockSample';
+import { hintClock } from './data/clockStates';
 
 function card(id: string, column: ColumnId): Card {
   return {
@@ -270,6 +272,45 @@ describe('agents', () => {
     await tick();
     expect(s.agents.value).toEqual([]);
     expect(s.toasts.value).toHaveLength(0);
+  });
+});
+
+describe('the clock', () => {
+  it('answers null, quietly, when the engine has no clock', async () => {
+    const s = createStore(source());
+    await tick();
+    expect(await s.clock(4)).toBeNull();
+    expect(s.clockHint.value).toBeNull();
+    expect(s.toasts.value).toHaveLength(0);
+  });
+
+  it('shows the hint only while hints are on and it says one', async () => {
+    const s = createStore(source({ clock: async () => hintClock() }));
+    await tick();
+    expect(s.clockHint.value).toBe('Your corrections usually rise now');
+    const off = createStore(source({ clock: async (): Promise<ClockReport> => ({ ...hintClock(), hints: false }) }));
+    await tick();
+    expect(off.clockHint.value).toBeNull();
+    const quiet = createStore(source({ clock: async () => demoClock(4) }));
+    await tick();
+    expect(quiet.clockHint.value).toBeNull();
+  });
+
+  it('asks again every few minutes while hints are on, and stops when they are not', async () => {
+    vi.useFakeTimers();
+    const clock = vi.fn(async () => hintClock());
+    const s = createStore(source({ clock }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(clock).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(5 * 60_000);
+    expect(clock).toHaveBeenCalledTimes(2);
+    clock.mockResolvedValue({ ...hintClock(), hints: false });
+    await vi.advanceTimersByTimeAsync(5 * 60_000);
+    expect(clock).toHaveBeenCalledTimes(3);
+    await vi.advanceTimersByTimeAsync(20 * 60_000);
+    expect(clock).toHaveBeenCalledTimes(3);
+    expect(s.clockHint.value).toBeNull();
+    vi.useRealTimers();
   });
 });
 
