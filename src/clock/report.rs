@@ -168,6 +168,25 @@ pub fn build(
     })
 }
 
+/// The hint for this moment without the offer to hand it to the night shift, for a surface that has no
+/// such key (the picker). None when hints are off or nothing applies.
+pub fn now_hint(
+    conn: &Connection,
+    cfg: &Config,
+    agents: &Agents,
+    now: i64,
+    off: OffsetFn,
+) -> Result<Option<String>> {
+    if !cfg.clock.enabled || !cfg.clock.hints {
+        return Ok(None);
+    }
+    let r = build(conn, cfg, agents, now, 4, off)?;
+    Ok(r.now.hint.map(|h| {
+        h.strip_suffix(OFFER)
+            .map_or(h.clone(), |t| t.trim_end().to_string())
+    }))
+}
+
 fn sums(hours: &[Hour], pick: impl Fn(&Hour) -> bool) -> (i64, i64) {
     hours
         .iter()

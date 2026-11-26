@@ -69,10 +69,16 @@ where
     B::Error: Send + Sync + 'static,
 {
     loop {
+        app.poll_clock_hint();
         term.draw(|f| draw(f, app))?;
         // Wait for one event, then take everything already queued before redrawing, so fast
-        // typing costs one search per frame.
-        if !event::poll(Duration::from_secs(3600))? {
+        // typing costs one search per frame. While the clock's hint is on its way, look again soon.
+        let wait = if app.hint_pending() {
+            Duration::from_millis(50)
+        } else {
+            Duration::from_secs(3600)
+        };
+        if !event::poll(wait)? {
             continue;
         }
         loop {

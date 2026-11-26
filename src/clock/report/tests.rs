@@ -235,6 +235,23 @@ fn the_hint_is_off_by_default_and_quiet_outside_the_bad_hours() {
 }
 
 #[test]
+fn the_picker_hint_is_the_hint_without_the_offer_to_press_t() {
+    let mut w = World::new();
+    w.steady_days_worse_evenings(1000);
+    let agents = Agents::default();
+    let hint = |cfg: &str| {
+        let cfg = Config::parse(cfg).unwrap();
+        now_hint(&w.db.conn, &cfg, &agents, NOW, &utc).unwrap()
+    };
+    assert_eq!(
+        hint("[clock]\nhints = true").as_deref(),
+        Some("Evening: your corrections usually run 2.0x now.")
+    );
+    assert_eq!(hint(""), None, "hints are off by default");
+    assert_eq!(hint("[clock]\nhints = true\nenabled = false"), None);
+}
+
+#[test]
 fn since_break_is_zero_after_a_long_quiet_and_counts_from_the_last_break_otherwise() {
     let mut w = World::new();
     for (m, correction) in [(0, false), (10, false), (20, true)] {

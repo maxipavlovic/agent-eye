@@ -397,3 +397,70 @@ fn a_night_run_shows_a_plain_night_mark_in_the_row_and_its_report_line_in_the_pr
     assert!(t.contains("Added the line."), "{t}");
     assert!(!t.contains("Second line."), "{t}");
 }
+
+fn with_hint(hint: Option<&str>) -> crate::tui::App {
+    let mut a = app("");
+    let (tx, rx) = std::sync::mpsc::channel();
+    a.watch_clock_hint(rx);
+    tx.send(hint.map(String::from)).unwrap();
+    a.poll_clock_hint();
+    a
+}
+
+#[test]
+fn the_clock_hint_follows_the_keys_when_there_is_room() {
+    let mut a = with_hint(Some("Evening: your corrections usually run 1.8x now."));
+    let t = render_text(&mut a, 160, 24).unwrap();
+    let foot = t.lines().last().unwrap();
+    assert!(
+        foot.contains("Esc quit   Evening: your corrections usually run 1.8x now."),
+        "{foot}"
+    );
+}
+
+#[test]
+fn the_clock_hint_gives_way_to_the_keys_on_a_narrow_screen() {
+    let mut a = with_hint(Some("Evening: your corrections usually run 1.8x now."));
+    let t = render_text(&mut a, 60, 24).unwrap();
+    let foot = t.lines().last().unwrap();
+    assert!(
+        foot.contains("Esc quit") && !foot.contains("Evening"),
+        "{foot}"
+    );
+}
+
+#[test]
+fn no_hint_leaves_the_keys_line_as_it_was() {
+    let mut none = with_hint(None);
+    let mut plain = app("");
+    assert_eq!(
+        render_text(&mut none, 160, 24).unwrap(),
+        render_text(&mut plain, 160, 24).unwrap()
+    );
+    assert!(!none.hint_pending(), "an answer of nothing ends the wait");
+}
+
+#[test]
+fn the_picker_waits_for_the_hint_without_showing_one_until_it_arrives() {
+    let mut a = app("");
+    let (tx, rx) = std::sync::mpsc::channel();
+    a.watch_clock_hint(rx);
+    a.poll_clock_hint();
+    assert!(a.hint_pending() && a.clock_hint.is_none());
+    tx.send(Some("Late: your corrections usually run 1.5x now.".into()))
+        .unwrap();
+    a.poll_clock_hint();
+    assert!(!a.hint_pending());
+    assert_eq!(
+        a.clock_hint.as_deref(),
+        Some("Late: your corrections usually run 1.5x now.")
+    );
+}
+
+#[test]
+fn a_reminder_input_keeps_the_footer_to_itself() {
+    let mut a = with_hint(Some("Evening: your corrections usually run 1.8x now."));
+    a.key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL));
+    let t = render_text(&mut a, 160, 24).unwrap();
+    assert!(!t.lines().last().unwrap().contains("Evening"));
+}

@@ -54,6 +54,10 @@ pub struct App {
     pub(super) remind: Option<super::remind::Input>,
     /// The list of what the selected session left behind, while it is open (Ctrl-L).
     pub(super) loose: Option<super::loose::List>,
+    /// The steering clock's hint for this moment, once it has been worked out (see `watch_clock_hint`).
+    pub(super) clock_hint: Option<String>,
+    /// Where the hint arrives from while it is still being worked out.
+    hint_rx: Option<std::sync::mpsc::Receiver<Option<String>>>,
 }
 
 impl App {
@@ -85,9 +89,36 @@ impl App {
             talk_cache: HashMap::new(),
             remind: None,
             loose: None,
+            clock_hint: None,
+            hint_rx: None,
         };
         a.research();
         a
+    }
+
+    /// Take the clock's hint from `rx` when it arrives. Working it out reads the database, which is slower
+    /// than opening the picker, so it is done on another thread and the picker shows it when it is ready.
+    pub fn watch_clock_hint(&mut self, rx: std::sync::mpsc::Receiver<Option<String>>) {
+        self.hint_rx = Some(rx);
+    }
+
+    /// Is the hint still being worked out? The screen then looks again soon.
+    pub(super) fn hint_pending(&self) -> bool {
+        self.hint_rx.is_some()
+    }
+
+    /// Pick up the hint if it has arrived.
+    pub(super) fn poll_clock_hint(&mut self) {
+        use std::sync::mpsc::TryRecvError;
+        let Some(rx) = &self.hint_rx else { return };
+        match rx.try_recv() {
+            Ok(h) => {
+                self.clock_hint = h;
+                self.hint_rx = None;
+            }
+            Err(TryRecvError::Disconnected) => self.hint_rx = None,
+            Err(TryRecvError::Empty) => {}
+        }
     }
 
     /// Run the query again.

@@ -395,10 +395,12 @@ pub fn draw(f: &mut Frame, app: &mut App) {
             None => format!("remind › {}▏  {note}", i.text),
         }
     });
+    let calm = clock_line(app, [hint_full, hint_mid, hint_short, hint_min], w);
     let text = match (&remind_text, &app.msg) {
         (Some(t), _) => t.clone(),
         (None, Some(m)) => m.clone(),
         (None, None) if app.loose.is_some() => super::loose::HINT.into(),
+        (None, None) if calm.is_some() => calm.unwrap_or_default(),
         (None, None) if hint_full.width() <= w => hint_full.into(),
         (None, None) if hint_mid.width() <= w => hint_mid.into(),
         (None, None) if hint_short.width() <= w => hint_short.into(),
@@ -408,6 +410,15 @@ pub fn draw(f: &mut Frame, app: &mut App) {
         Paragraph::new(Line::styled(clip(&text, w), pal.dim())),
         foot,
     );
+}
+
+/// The keys line with the steering clock's hint after it, when there is a hint and both fit. The longest
+/// keys line that leaves room wins; when none does, the keys stand alone.
+fn clock_line(app: &App, keys: [&str; 4], w: usize) -> Option<String> {
+    let hint = app.clock_hint.as_deref()?;
+    keys.iter()
+        .find(|k| k.width() + 3 + hint.width() <= w)
+        .map(|k| format!("{k}   {hint}"))
 }
 
 pub(super) fn clip_tail(s: &str, w: usize) -> String {

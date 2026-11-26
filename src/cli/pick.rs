@@ -78,6 +78,9 @@ pub fn run(g: &Global, a: &PickArgs) -> Result<()> {
     app.user = cfg.user.clone();
     app.usage_cfg = cfg.usage.clone();
     app.agents = agents.clone();
+    if cfg.clock.enabled && cfg.clock.hints {
+        app.watch_clock_hint(clock_hint(&paths, &cfg, &agents, now));
+    }
     app.all = a.all;
     if a.all {
         app.research();
@@ -146,4 +149,25 @@ pub fn run(g: &Global, a: &PickArgs) -> Result<()> {
             )
         }
     }
+}
+
+/// Work out the clock's hint on another thread with its own connection, so the picker opens at once.
+fn clock_hint(
+    paths: &crate::paths::Paths,
+    cfg: &crate::config::Config,
+    agents: &crate::agents::Agents,
+    now: i64,
+) -> std::sync::mpsc::Receiver<Option<String>> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let (paths, cfg, agents) = (paths.clone(), cfg.clone(), agents.clone());
+    std::thread::spawn(move || {
+        let hint = crate::db::Db::open(&paths.db_path())
+            .and_then(|db| {
+                let off = &crate::worked::summary::local_offset_ms;
+                crate::clock::report::now_hint(&db.conn, &cfg, &agents, now, off)
+            })
+            .unwrap_or(None);
+        let _ = tx.send(hint);
+    });
+    rx
 }
