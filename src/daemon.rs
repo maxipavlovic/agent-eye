@@ -4,6 +4,7 @@
 use crate::agents::{self, Agents, Wait, LEGACY_ID};
 use crate::archive;
 use crate::backup;
+use crate::clock;
 use crate::config::Config;
 use crate::db::{meta_set, Db};
 use crate::hook;
@@ -610,6 +611,7 @@ pub fn run(paths: Paths, cfg: Config, port: u16, board: bool) -> Result<()> {
             let mut last_night: Option<Instant> = None;
             let night_busy = Arc::new(AtomicBool::new(false));
             let usage_busy = Arc::new(AtomicBool::new(false));
+            let mut clock = clock::nightly::Clock::new();
             while !stop.load(Ordering::Relaxed) {
                 if let Err(e) = tick(&mut db, &paths, &cfg) {
                     log(&paths, &format!("tick failed: {e:#}"));
@@ -646,6 +648,7 @@ pub fn run(paths: Paths, cfg: Config, port: u16, board: bool) -> Result<()> {
                         });
                     }
                 }
+                clock.tick(&db, &paths, &cfg);
                 if !usage_busy.swap(true, Ordering::SeqCst) {
                     let (paths, cfg, busy) = (paths.clone(), cfg.clone(), usage_busy.clone());
                     std::thread::spawn(move || {

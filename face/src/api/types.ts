@@ -254,6 +254,68 @@ export interface UsageReport {
   backfill_left: number;
 }
 
+/** One local hour of the steering clock. */
+export interface ClockHour {
+  /** The local hour, 0 to 23. */
+  h: number;
+  prompts: number;
+  corrections: number;
+  interrupts: number;
+  tool_calls: number;
+  tool_errors: number;
+  /** The median thinking measure of the main agent in this hour, in its own unit; null when it did not think. */
+  think: number | null;
+  think_n: number;
+}
+
+/** Prompts and corrections by time since the last break: `<1h`, `1-2h`, `2-4h`, `4h+`. */
+export interface ClockBand {
+  band: string;
+  prompts: number;
+  corrections: number;
+}
+
+/** A run of local hours from `from_h` up to but not including `to_h`, which may be the next day (18 to 6). */
+export interface ClockRange {
+  from_h: number;
+  to_h: number;
+}
+
+export type ClockVerdictKind = 'you' | 'model' | 'both' | 'none' | 'too_few';
+
+/** GET /api/clock?weeks=N: whether a bad stretch was you or the model. */
+export interface ClockReport {
+  enabled: boolean;
+  /** Corrections are judged by a model. */
+  llm: boolean;
+  hints: boolean;
+  /** Breaks come from real idle time. */
+  idle: boolean;
+  from: string;
+  to: string;
+  prompts: number;
+  corrections: number;
+  /** Prompts in the window a model has not been asked about yet. */
+  pending: number;
+  /** Always 24 rows, in local time. */
+  hours: ClockHour[];
+  since_break: ClockBand[];
+  /** The hours that run clearly worse than the rest; empty when chance cannot be ruled out. */
+  bad: ClockRange[];
+  verdict: {
+    kind: ClockVerdictKind;
+    /** How much more the bad hours are corrected. */
+    you_ratio: number | null;
+    you_n: number | null;
+    /** The model's thinking in those hours over the rest. */
+    think_ratio: number | null;
+    tool_error_ratio: number | null;
+    text: string;
+  };
+  now: { in_bad: boolean; since_break_min: number | null; hint: string | null };
+  agents: { agent: string; prompts: number; corrections: number; think: string | null }[];
+}
+
 /** A session's usage over its whole life (detail cards); null while it is not counted. */
 export interface CardUsage extends UsageSum {
   estimate: string;
@@ -514,6 +576,8 @@ export interface Source {
   agents(): Promise<{ agents: Agent[] }>;
   /** Usage over the last `days` days (GET /api/usage); an older engine answers 404. */
   usage(days: number): Promise<UsageReport>;
+  /** The steering clock over the last `weeks` weeks (GET /api/clock); an older engine answers 404. */
+  clock(weeks: number): Promise<ClockReport>;
   move(id: string, column: MoveTarget): Promise<Card>;
   /** Manual hide / unhide of a session (POST /api/cards/:id/hidden). */
   setHidden(id: string, hidden: boolean): Promise<Card>;

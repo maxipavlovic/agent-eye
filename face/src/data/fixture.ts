@@ -1,3 +1,4 @@
+import { demoClock, emptyClock } from './clockSample';
 import { demoUsage, emptyUsage } from './usageSample';
 import type {
   Agent, ArchivePage, NightRun, NightState, Board, Card, CardDetail, ColumnId, ConversationPage, FolderCheck, Idea, LooseEnd, Message, SearchHit, SettingsState, Source, StartPlan, Tokens,
@@ -347,6 +348,7 @@ export function fixtureSource(demo = false): Source {
     ideas: () => delay(structuredClone(ideas)),
     agents: () => delay({ agents: structuredClone(agents) }),
     usage: (days) => delay(demo ? demoUsage(days) : emptyUsage(days)),
+    clock: (weeks) => delay(demo ? demoClock(weeks) : emptyClock(weeks)),
     move: (id, to) => {
       const c = find(id);
       if (!c) return Promise.reject(new Error(`No card ${id}`));

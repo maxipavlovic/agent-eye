@@ -1,5 +1,5 @@
 import type {
-  Agent, ArchivePage, Board, Card, CardDetail, Connection, ConversationPage, Idea, IdeaInput, MoveTarget, RemindInput, ResumePlan,
+  Agent, ArchivePage, Board, Card, CardDetail, ClockReport, Connection, ConversationPage, Idea, IdeaInput, MoveTarget, RemindInput, ResumePlan,
   FolderCheck, NightRun, NightState, RemindSettings, SearchHit, SettingsInput, SettingsState, Source, StartPlan, UsageReport,
 } from '../api/types';
 
@@ -46,6 +46,7 @@ export function liveSource(): Source {
     ideas: () => call<{ ideas: Idea[] }>('/api/ideas'),
     agents: () => call<{ agents: Agent[] }>('/api/agents'),
     usage: (days) => call<UsageReport>(`/api/usage?days=${days}`),
+    clock: (weeks) => call<ClockReport>(`/api/clock?weeks=${weeks}`),
     move: (id: string, column: MoveTarget) => call<Card>(`/api/cards/${enc(id)}/column`, { method: 'POST', body: { column } }),
     forget: async (id, transcript) => { await call<unknown>(`/api/sessions/${enc(id)}/forget`, { method: 'POST', body: { confirm: true, transcript } }); },
     setHidden: (id, hidden) => call<Card>(`/api/cards/${enc(id)}/hidden`, { method: 'POST', body: { hidden } }),

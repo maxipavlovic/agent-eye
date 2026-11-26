@@ -106,6 +106,14 @@ describe('liveSource requests', () => {
     expect(f).toHaveBeenCalledWith('/api/usage?days=30', { credentials: 'same-origin' });
   });
 
+  it('asks for the steering clock over a number of weeks', async () => {
+    const f = vi.fn().mockResolvedValue(json(200, { enabled: true, hours: [] }));
+    vi.stubGlobal('fetch', f);
+    const r = await liveSource().clock(8);
+    expect(r.enabled).toBe(true);
+    expect(f).toHaveBeenCalledWith('/api/clock?weeks=8', { credentials: 'same-origin' });
+  });
+
   it('sends the idea agent when one is chosen', async () => {
     const f = vi.fn().mockResolvedValue(json(200, { id: 'idea:1' }));
     vi.stubGlobal('fetch', f);

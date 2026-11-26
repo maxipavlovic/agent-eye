@@ -30,6 +30,7 @@ function source(over: Partial<Source> = {}): Source {
     ideas: async () => ({ ideas: [] }),
     agents: async () => ({ agents: [{ id: 'claude', name: 'Claude Code', short: 'Claude', default: true }] }),
     usage: async () => { throw new Error('no usage'); },
+    clock: async () => { throw new Error('no clock'); },
     move: async (id) => card(id, 'done'),
     setHidden: async (id) => card(id, 'paused'),
     forget: async () => {},

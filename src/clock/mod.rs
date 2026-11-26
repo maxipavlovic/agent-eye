@@ -8,6 +8,7 @@
 pub mod bands;
 pub mod detect;
 pub mod idle;
+pub mod nightly;
 pub mod pass;
 pub mod report;
 pub mod signals;

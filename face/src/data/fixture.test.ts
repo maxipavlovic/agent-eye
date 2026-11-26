@@ -10,6 +10,20 @@ describe('fixtureSource with the sample data', () => {
     expect(need.some((c) => c.blocked && nextParts(c.next).who === 'you')).toBe(true);
   });
 
+  it('has a steering clock: a whole empty one plain, and a demo whose verdict matches its hours', async () => {
+    const empty = await fixtureSource().clock(4);
+    expect(empty.hours).toHaveLength(24);
+    expect(empty.verdict.kind).toBe('too_few');
+    const demo = await fixtureSource(true).clock(4);
+    expect(demo.hours).toHaveLength(24);
+    expect(demo.hours.reduce((n, h) => n + h.prompts, 0)).toBe(demo.prompts);
+    expect(demo.since_break.reduce((n, b) => n + b.prompts, 0)).toBe(demo.prompts);
+    expect(demo.verdict.kind).toBe('you');
+    const evening = demo.hours.filter((h) => h.h >= 18);
+    const rate = (hs: typeof evening) => hs.reduce((n, h) => n + h.corrections, 0) / hs.reduce((n, h) => n + h.prompts, 0);
+    expect(rate(evening) / rate(demo.hours.filter((h) => h.h < 18))).toBeCloseTo(demo.verdict.you_ratio!, 0);
+  });
+
   it('moves the sample times so the board is as fresh as when it loads', async () => {
     const src = fixtureSource();
     const b = await src.board();
