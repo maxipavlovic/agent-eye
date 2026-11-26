@@ -11,6 +11,7 @@
 //! the file layout by its `storage/session/...` file.
 
 use super::events::{from_v1, from_v2, Ev, Loaded};
+use super::turns;
 use crate::agents::Transcript;
 use crate::model::Stamp;
 use crate::util::valid_session_id;
@@ -379,6 +380,7 @@ fn load_db(db: &Path, id: &str) -> Result<Loaded> {
             }
         }
         out.events = from_v2(&msgs, &parts);
+        out.turns = turns::from_v2(&msgs, &parts);
     } else if let Some((d, t)) = session("session") {
         (out.directory, out.title) = (d, t);
         let mut st = c.prepare("SELECT id, time_created, data FROM message WHERE session_id = ?1 ORDER BY time_created, id")?;
@@ -397,6 +399,7 @@ fn load_db(db: &Path, id: &str) -> Result<Loaded> {
             parts.entry(m).or_default().push(d);
         }
         out.events = from_v1(&msgs, &parts);
+        out.turns = turns::from_v1(&msgs, &parts);
     } else {
         anyhow::bail!("no session {id} in {}", db.display());
     }
@@ -452,6 +455,7 @@ fn load_files(session_file: &Path) -> Result<Loaded> {
             .to_string(),
         title: info.get("title").and_then(Value::as_str).map(String::from),
         events: from_v1(&msgs, &parts),
+        turns: turns::from_v1(&msgs, &parts),
         native: None,
     })
 }

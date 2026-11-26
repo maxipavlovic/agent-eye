@@ -4,6 +4,7 @@
 //! (`session_v2`: messages with `type` `user` / `assistant`, an assistant's `content` in
 //! `session_part` rows). See `notes` in `docs/agents.md`.
 
+use crate::turns::TurnEvent;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -53,17 +54,20 @@ pub struct Loaded {
     pub directory: String,
     pub title: Option<String>,
     pub events: Vec<Ev>,
+    /// The turn events of the session (`turns`). An export from before eye kept them has none.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub turns: Vec<TurnEvent>,
     /// What `opencode session export` printed for the session, when OpenCode could be asked: what
     /// `opencode session import` needs to put the session back.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub native: Option<Value>,
 }
 
-fn s<'a>(v: &'a Value, k: &str) -> &'a str {
+pub(super) fn s<'a>(v: &'a Value, k: &str) -> &'a str {
     v.get(k).and_then(Value::as_str).unwrap_or("")
 }
 
-fn n(v: &Value, k: &str) -> i64 {
+pub(super) fn n(v: &Value, k: &str) -> i64 {
     v.get(k).and_then(Value::as_f64).map_or(0, |x| x as i64)
 }
 
@@ -116,7 +120,7 @@ fn usage(ts: i64, model: &str, t: &Value) -> Option<Ev> {
     }
 }
 
-fn text_parts(parts: &[Value]) -> String {
+pub(super) fn text_parts(parts: &[Value]) -> String {
     parts
         .iter()
         .filter(|p| s(p, "type") == "text")

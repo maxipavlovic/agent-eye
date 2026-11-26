@@ -18,6 +18,7 @@ mod hooks;
 mod install;
 mod live;
 mod store;
+mod turns;
 
 use super::*;
 use crate::config::AgentCfg;
@@ -187,6 +188,7 @@ fn delta_of(l: &Loaded, session_id: &str) -> Delta {
     }
     trim_front_bytes(&mut d.prompts_text, PROMPTS_CAP);
     trim_front_bytes(&mut d.replies_text, REPLIES_CAP);
+    d.turns = l.turns.clone();
     d.lines = l.events.len() as u64;
     d.session_id = Some(session_id.to_string());
     d.cwd = Some(l.directory.clone()).filter(|c| !c.is_empty());
@@ -252,6 +254,15 @@ impl Agent for OpenCode {
                 prompt: matches!(e, Ev::Prompt { .. }),
             })
             .collect())
+    }
+
+    fn turn_events(&self, path: &Path) -> Result<Vec<TurnEvent>> {
+        Ok(store::load(path)?.turns)
+    }
+
+    /// What a `think` event counts: the reasoning tokens of an assistant message.
+    fn think_unit(&self) -> Option<&'static str> {
+        Some("reasoning_tokens")
     }
 
     fn usage_msgs(&self, path: &Path) -> Result<Vec<UsageMsg>> {

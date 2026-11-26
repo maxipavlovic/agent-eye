@@ -1,0 +1,191 @@
+{
+ "v1": {
+  "messages": [
+   [
+    "m1",
+    1793696400000,
+    {
+     "role": "user",
+     "time": {
+      "created": 1793696400000
+     }
+    }
+   ],
+   [
+    "m2",
+    1793696405000,
+    {
+     "role": "assistant",
+     "modelID": "big-1",
+     "time": {
+      "created": 1793696405000,
+      "completed": 1793696420000
+     },
+     "tokens": {
+      "input": 10,
+      "output": 5,
+      "reasoning": 300,
+      "cache": {
+       "read": 0,
+       "write": 0
+      }
+     }
+    }
+   ],
+   [
+    "m3",
+    1793696430000,
+    {
+     "role": "assistant",
+     "modelID": "big-1",
+     "time": {
+      "created": 1793696430000,
+      "completed": 1793696440000
+     },
+     "tokens": {
+      "input": 10,
+      "output": 5,
+      "reasoning": 0,
+      "cache": {
+       "read": 0,
+       "write": 0
+      }
+     },
+     "error": {
+      "name": "MessageAbortedError",
+      "data": {}
+     }
+    }
+   ],
+   [
+    "m4",
+    1793696700000,
+    {
+     "role": "user",
+     "time": {
+      "created": 1793696700000
+     }
+    }
+   ],
+   [
+    "m5",
+    1793696701000,
+    {
+     "role": "user",
+     "time": {
+      "created": 1793696701000
+     }
+    }
+   ],
+   [
+    "m6",
+    1793696710000,
+    {
+     "role": "assistant",
+     "modelID": "big-1",
+     "time": {
+      "created": 1793696710000,
+      "completed": 1793696760000
+     },
+     "tokens": {
+      "input": 10,
+      "output": 5,
+      "reasoning": 0,
+      "cache": {
+       "read": 0,
+       "write": 0
+      }
+     }
+    }
+   ]
+  ],
+  "parts": {
+   "m1": [
+    {
+     "type": "text",
+     "text": "fix the failing test"
+    },
+    {
+     "type": "text",
+     "text": "ctx",
+     "synthetic": true
+    }
+   ],
+   "m2": [
+    {
+     "type": "reasoning",
+     "text": "hm"
+    },
+    {
+     "type": "tool",
+     "tool": "bash",
+     "callID": "c1",
+     "state": {
+      "status": "completed",
+      "input": {
+       "command": "cargo test"
+      },
+      "time": {
+       "start": 1793696408000
+      }
+     }
+    },
+    {
+     "type": "tool",
+     "tool": "bash",
+     "callID": "c2",
+     "state": {
+      "status": "error",
+      "input": {
+       "command": "false"
+      },
+      "error": "exit 1",
+      "time": {
+       "start": 1793696412000
+      }
+     }
+    },
+    {
+     "type": "tool",
+     "tool": "edit",
+     "callID": "c3",
+     "state": {
+      "status": "error",
+      "input": {
+       "filePath": "/tmp/demo/a.rs"
+      },
+      "error": "The user rejected permission to use this specific tool call.",
+      "time": {
+       "start": 1793696414000
+      }
+     }
+    },
+    {
+     "type": "text",
+     "text": "stopped here for now"
+    },
+    {
+     "type": "step-finish"
+    }
+   ],
+   "m4": [
+    {
+     "type": "compaction",
+     "auto": true
+    }
+   ],
+   "m5": [
+    {
+     "type": "text",
+     "text": "try again"
+    }
+   ],
+   "m6": [
+    {
+     "type": "text",
+     "text": "all green"
+    }
+   ]
+  }
+ }
+}

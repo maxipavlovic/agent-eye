@@ -7,9 +7,12 @@ pub mod backfill;
 pub mod store;
 pub mod stream;
 
+use serde::{Deserialize, Serialize};
+
 /// What happened at one moment of a session. The wording is the same for every agent; how an agent's
 /// own records map to it is in `docs/agents.md`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum TurnKind {
     /// The user typed a prompt. `n` is its length in characters.
     Prompt,
@@ -49,7 +52,7 @@ impl TurnKind {
 
 /// One turn event of a session: when it happened (Unix ms), what it was, and its size (`n`, which
 /// each kind explains above; 0 when it has none).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TurnEvent {
     pub ts: i64,
     pub kind: TurnKind,
