@@ -14,6 +14,10 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 - `[clock] idle = true` (off by default) takes breaks from the machine's idle time on macOS and on Linux with logind, instead of from gaps between prompts. It reads one number once a minute, never keys or windows. `eye doctor` reports whether it is available.
 - `GET /api/usage` takes `series=project|model` and answers with the cost of every day split that way, and `eye usage --by-day` prints one row per day (see `docs/api.md`).
 
+- A **HOURS** button beside USAGE opens the steering clock: your corrections per 100 prompts for each hour of the day, how much the model thought against its usual, and failed tool calls, on one 24-hour axis with your bad hours shaded, plus corrections by time since your last break. Every hour has a tooltip, there is a table view, and thin data reads plainly ("Not enough data yet"). With `[clock] hints` on, a quiet mark beside HOURS and on the card you are working in says when your corrections usually rise.
+- USAGE draws the cost of every day as stacked columns, by project or by model, with a legend, tooltips and a table view.
+- The settings gear has a HOURS section: the clock, judging corrections, the hint, the break length and idle time (`clock.*` in `/api/settings`).
+
 ### Changed
 
 - The header no longer carries the Lanes / Grid, theme, look and colour buttons: they are in the settings panel, and their keys and saved settings are unchanged.

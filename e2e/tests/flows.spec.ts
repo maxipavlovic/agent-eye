@@ -1,3 +1,4 @@
+import { demoClock, emptyClock, tooFewClock } from '../../face/src/data/clockSample';
 import { spawn } from 'node:child_process';
 import { card, done, expect, lane, problems, sid, test } from '../support';
 
@@ -194,6 +195,58 @@ test.describe('usage', () => {
     await expect(panel.getByRole('heading', { name: /THIS MONTH BY PROJECT/ })).toBeVisible();
     await board.keyboard.press('Escape');
     await expect(panel).toHaveCount(0);
+  });
+});
+
+// The clock route is C2's; these flows answer it from the face's synthetic data so every state is drawn.
+const answer = (board: import('@playwright/test').Page, body: unknown, status = 200) =>
+  board.route('**/api/clock*', (r) => r.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) }));
+
+test.describe('usage chart', () => {
+  test('draws the daily cost, splits by model and has a table twin', async ({ board }) => {
+    await board.getByRole('button', { name: 'USAGE' }).click();
+    const panel = board.getByRole('complementary', { name: 'Usage' });
+    await expect(panel.getByRole('heading', { name: /DAILY COST/ })).toBeVisible();
+    await panel.getByRole('button', { name: 'BY MODEL' }).click();
+    await expect(panel.getByRole('button', { name: 'BY MODEL' })).toHaveAttribute('aria-pressed', 'true');
+    await panel.getByRole('button', { name: 'TABLE' }).first().click();
+    await expect(panel.locator('.ctable').first()).toBeVisible();
+  });
+});
+
+test.describe('hours', () => {
+  test('data: the verdict, the diagram and a tooltip per hour', async ({ board }) => {
+    await answer(board, demoClock());
+    await board.getByRole('button', { name: 'HOURS', exact: true }).click();
+    const panel = board.getByRole('complementary', { name: 'Hours' });
+    await expect(panel.locator('.verdict')).toContainText('Mostly you.');
+    await expect(panel.locator('.cdiagram')).toBeVisible();
+    await panel.locator('.cdiagram').focus();
+    await board.keyboard.press('Home');
+    await expect(panel.locator('.ctip')).toContainText('00:00–01:00');
+    await panel.getByRole('button', { name: 'TABLE' }).first().click();
+    await expect(panel.locator('.ctable tbody tr').first()).toBeVisible();
+    await board.keyboard.press('Escape');
+    await expect(panel).toHaveCount(0);
+  });
+
+  test('too few: a plain sentence and no chart', async ({ board }) => {
+    await answer(board, tooFewClock());
+    await board.getByRole('button', { name: 'HOURS', exact: true }).click();
+    const panel = board.getByRole('complementary', { name: 'Hours' });
+    await expect(panel).toContainText('Not enough data yet: 120 prompts, 6 corrections.');
+    await expect(panel.locator('.cdiagram')).toHaveCount(0);
+  });
+
+  test('empty: says nothing is recorded; a missing route says not available', async ({ board }) => {
+    await answer(board, emptyClock());
+    await board.getByRole('button', { name: 'HOURS', exact: true }).click();
+    await expect(board.getByRole('complementary', { name: 'Hours' })).toContainText('Nothing recorded yet');
+    await board.keyboard.press('Escape');
+    await board.unroute('**/api/clock*');
+    await answer(board, { error: 'no' }, 404);
+    await board.getByRole('button', { name: 'HOURS', exact: true }).click();
+    await expect(board.getByRole('complementary', { name: 'Hours' })).toContainText('Not available in this version');
   });
 });
 

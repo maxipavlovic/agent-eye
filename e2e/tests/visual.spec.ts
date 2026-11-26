@@ -3,6 +3,7 @@
 // in the pinned Playwright container (see docs/testing.md). The server clock, the browser clock
 // and the time zone are fixed, so what the page says about time is the same on every run.
 import type { Page } from '@playwright/test';
+import { demoClock } from '../../face/src/data/clockSample';
 import { card, expect, test } from '../support';
 
 const SCHEMES = ['light', 'dark'] as const;
@@ -40,6 +41,11 @@ const VIEWS: Record<string, (p: Page) => Promise<void>> = {
   settings: async (p) => {
     await p.getByRole('button', { name: 'Settings', exact: true }).click();
     await expect(p.getByRole('heading', { name: 'AGENTS' })).toBeVisible();
+  },
+  hours: async (p) => {
+    await p.route('**/api/clock*', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify(demoClock()) }));
+    await p.getByRole('button', { name: 'HOURS', exact: true }).click();
+    await expect(p.locator('.hours .cdiagram')).toBeVisible();
   },
   usage: async (p) => {
     await p.getByRole('button', { name: 'USAGE' }).click();
