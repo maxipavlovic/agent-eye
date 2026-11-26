@@ -16,6 +16,7 @@ mod live;
 mod results;
 mod rollout;
 mod script;
+mod turns;
 mod usage;
 mod work;
 
@@ -199,6 +200,15 @@ impl Agent for Codex {
 
     fn work_events(&self, path: &Path) -> Result<Vec<crate::worked::WorkEvent>> {
         work::read_events(path)
+    }
+
+    fn turn_events(&self, path: &Path) -> Result<Vec<TurnEvent>> {
+        turns::read_events(path)
+    }
+
+    /// What a `think` event counts: the reasoning tokens of the turn.
+    fn think_unit(&self) -> Option<&'static str> {
+        Some("reasoning_tokens")
     }
 
     fn usage_msgs(&self, path: &Path) -> Result<Vec<UsageMsg>> {

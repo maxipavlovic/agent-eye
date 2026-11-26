@@ -15,6 +15,7 @@
 use super::background::Tracker;
 use super::results;
 use super::script::{self, Call};
+use super::turns::Turns;
 use super::usage::{limits_of, Steps};
 use super::work::work_event;
 use crate::agents::append_only::for_each_line;
@@ -543,6 +544,9 @@ struct Carry {
     /// The state of the background shells (see `background`).
     #[serde(default)]
     background: Option<Value>,
+    /// The open turn and the reasoning total (see `turns`).
+    #[serde(default)]
+    turns: Option<Value>,
 }
 
 /// What reading a file found.
@@ -568,6 +572,7 @@ pub struct Reader<'a> {
     commits: HashMap<String, Option<String>>,
     order: Vec<String>,
     background: Tracker,
+    turns: Turns,
     restart: bool,
 }
 
@@ -595,6 +600,7 @@ impl<'a> Reader<'a> {
             order: carry.commits.iter().map(|(k, _)| k.clone()).collect(),
             commits: carry.commits.into_iter().collect(),
             background,
+            turns: Turns::resume(carry.turns.as_ref()),
             restart: false,
         }
     }
@@ -615,6 +621,9 @@ impl<'a> Reader<'a> {
         }
         if let Some(e) = ts.and_then(|t| work_event(&event, t)) {
             self.d.events.push(e);
+        }
+        if let Some(t) = ts {
+            self.turns.line(&v, &event, t);
         }
         let ts = ts.unwrap_or(0);
         self.background.line(&v);
@@ -807,7 +816,10 @@ impl<'a> Reader<'a> {
         self.order.retain(|k| self.commits.contains_key(k));
         let skip = self.order.len().saturating_sub(PENDING_CAP);
         self.d.signals = Some(self.background.signals());
+        let (turn_events, turns_carry) = self.turns.finish(!self.resumed);
+        self.d.turns = turn_events;
         let carry = Carry {
+            turns: turns_carry,
             cwd: self.cwd.clone(),
             background: self.background.state(),
             total: self.total.or(self.before),
@@ -1345,6 +1357,7 @@ mod tests {
             model: None,
             commits: vec![],
             background: None,
+            turns: None,
         })
         .unwrap();
         let jt = HashSet::new();

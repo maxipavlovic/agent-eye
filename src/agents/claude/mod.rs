@@ -206,6 +206,11 @@ impl Agent for Claude {
         turns::read_events(path)
     }
 
+    /// What a `think` event counts: the length of the signature of the thinking block.
+    fn think_unit(&self) -> Option<&'static str> {
+        Some("signature")
+    }
+
     fn usage_msgs(&self, path: &Path) -> Result<Vec<crate::usage::UsageMsg>> {
         transcript::usage_msgs(path)
     }

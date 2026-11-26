@@ -88,6 +88,11 @@ pub trait Agent: Send + Sync + std::fmt::Debug {
     fn turn_events(&self, _path: &Path) -> Result<Vec<TurnEvent>> {
         Ok(vec![])
     }
+    /// What `n` of a `think` event counts for this agent (`"signature"`, `"reasoning_tokens"`),
+    /// None when it reports no thinking. Thinking is only compared with the same agent's own.
+    fn think_unit(&self) -> Option<&'static str> {
+        None
+    }
     /// The token use of every message of the transcript at `path` (a session's own, or a
     /// sub-agent's), with its time and model: the same messages `parse_transcript` reports in
     /// `Delta::usage_msgs`, read from the whole file and nothing else (usage by day of a session
