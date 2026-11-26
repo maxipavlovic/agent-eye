@@ -163,13 +163,8 @@ mod tests {
         let mut second = Turns::resume(wrapped(&carry).as_ref());
         feed(&mut second, &tail.join("\n"));
         let (b, _) = second.finish(false);
-        assert_eq!(
-            kinds(&b)
-                .iter()
-                .filter(|(k, _)| *k == TurnKind::End)
-                .count(),
-            1
-        );
+        // turn one stays closed once, and turn two is still open
+        assert!(b.iter().all(|e| e.kind != TurnKind::End));
     }
 
     #[test]

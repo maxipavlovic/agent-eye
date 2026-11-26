@@ -84,7 +84,11 @@ impl Stream {
     /// Emit the `End` of the turn at `ts`, because the agent said it was done (a turn with no
     /// reply ends with no words).
     pub fn close_at(&mut self, ts: i64) {
-        let words = self.open.take().filter(|o| !o.closed).map_or(0, |o| o.words);
+        let words = self
+            .open
+            .take()
+            .filter(|o| !o.closed)
+            .map_or(0, |o| o.words);
         self.push(ts, TurnKind::End, words);
     }
 
