@@ -1,26 +1,71 @@
 //! Summaries through `agy -p`: print mode with `--output-format json` and `--json-schema`, which
 //! answers with one JSON object (`status`, `response`, `structured_output`, `usage`). agy has no
 //! flag to leave no conversation behind, so the run happens in a folder named `eye-ask-<uuid>`,
-//! and the scanner leaves conversations in such folders out.
+//! the scanner leaves conversations in such folders out, and the conversation is deleted after the
+//! call (`forget_ask`): its folder, database and row in `conversation_summaries.db`, which hold the
+//! prompt. A run that goes wrong or is killed is cleaned up the same way, by the folder it ran in.
 
-use super::files::ASK_PREFIX;
+use super::files::{self, ASK_PREFIX, BRAIN};
 use super::Agy;
 use crate::agents::{HeadlessReply, HeadlessRequest};
-use crate::util::{head_chars, new_uuid};
+use crate::util::{head_chars, new_uuid, valid_session_id};
 use anyhow::{Context, Result};
 use serde_json::{json, Value};
 use std::io::Read;
 use std::os::unix::fs::DirBuilderExt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
-struct Scratch(PathBuf);
+/// The folder a question runs in. When it goes out of scope the question's conversation is deleted
+/// from agy's folder (`agy`), then the folder itself.
+struct Scratch {
+    path: PathBuf,
+    agy: PathBuf,
+    /// The conversation the answer named, when there was one.
+    conversation: Option<String>,
+}
 
 impl Drop for Scratch {
     fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
+        let name = self
+            .path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned());
+        forget_ask(
+            &self.agy,
+            name.as_deref().unwrap_or_default(),
+            self.conversation.as_deref(),
+        );
+        let _ = std::fs::remove_dir_all(&self.path);
     }
+}
+
+/// Delete what a question left in agy's folder: the conversation the answer named and every
+/// conversation started in the question's folder (`folder_name`), each with its database and its row
+/// in `conversation_summaries.db`. Best effort, like the folder's removal: the answer is already in
+/// hand. While agy is open `history.jsonl` is not edited (see `files::delete`).
+fn forget_ask(agy: &Path, folder_name: &str, answered: Option<&str>) -> Vec<String> {
+    let mut ids: Vec<String> = answered.map(String::from).into_iter().collect();
+    if folder_name.starts_with(ASK_PREFIX) {
+        ids.extend(
+            files::summaries_with_folders(agy)
+                .into_iter()
+                .filter(|(_, s)| {
+                    s.folder
+                        .as_deref()
+                        .and_then(|f| Path::new(f).file_name())
+                        .is_some_and(|n| n.to_string_lossy() == folder_name)
+                })
+                .map(|(id, _)| id),
+        );
+    }
+    ids.sort();
+    ids.dedup();
+    ids.iter()
+        .filter(|id| valid_session_id(id))
+        .flat_map(|id| files::delete(agy, &agy.join(BRAIN).join(id), id).unwrap_or_default())
+        .collect()
 }
 
 /// The JSON in a reply that may be wrapped in a code fence.
@@ -96,7 +141,11 @@ pub fn ask(a: &Agy, req: &HeadlessRequest) -> Result<HeadlessReply> {
     std::fs::create_dir_all(req.work_dir)?;
     let dir = req.work_dir.join(format!("{ASK_PREFIX}{}", new_uuid()?));
     std::fs::DirBuilder::new().mode(0o700).create(&dir)?;
-    let scratch = Scratch(dir);
+    let mut scratch = Scratch {
+        path: dir,
+        agy: a.dir.clone(),
+        conversation: None,
+    };
     let mut prompt = format!("{}\n\n{}", req.system.trim_end(), req.input);
     if prompt.starts_with('-') {
         prompt.insert_str(0, "Task: ");
@@ -106,7 +155,7 @@ pub fn ask(a: &Agy, req: &HeadlessRequest) -> Result<HeadlessReply> {
     let started = Instant::now();
     let mut child = Command::new(&exe)
         .args(&args)
-        .current_dir(&scratch.0)
+        .current_dir(&scratch.path)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -136,12 +185,22 @@ pub fn ask(a: &Agy, req: &HeadlessRequest) -> Result<HeadlessReply> {
     };
     let out = String::from_utf8_lossy(&out.join().unwrap_or_default()).into_owned();
     let err = String::from_utf8_lossy(&err.join().unwrap_or_default()).into_owned();
+    scratch.conversation = conversation_of(&out);
     anyhow::ensure!(
         status.success(),
         "agy exited with {status}: {}",
         head_chars(err.trim(), 300)
     );
     reply_of(&out, started.elapsed().as_millis() as i64)
+}
+
+/// The id of the conversation `agy -p` says it made.
+fn conversation_of(stdout: &str) -> Option<String> {
+    serde_json::from_str::<Value>(stdout.trim())
+        .ok()?
+        .get("conversation_id")?
+        .as_str()
+        .map(String::from)
 }
 
 #[cfg(test)]
@@ -185,5 +244,120 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("did not answer"));
+    }
+
+    fn conversation(agy: &Path, id: &str) {
+        std::fs::create_dir_all(agy.join(BRAIN).join(id)).unwrap();
+        std::fs::create_dir_all(agy.join("conversations")).unwrap();
+        std::fs::write(agy.join("conversations").join(format!("{id}.db")), "x").unwrap();
+    }
+
+    fn summaries(agy: &Path, rows: &[(&str, &Path)]) {
+        let c = rusqlite::Connection::open(agy.join("conversation_summaries.db")).unwrap();
+        c.execute(
+            "CREATE TABLE conversation_summaries(conversation_id TEXT, title TEXT, workspace_uris TEXT,
+             parent_conversation_id TEXT, last_modified_time TEXT, source TEXT, agent_name TEXT, status TEXT)",
+            [],
+        )
+        .unwrap();
+        for (id, folder) in rows {
+            let uris = json!([format!("file://{}", folder.display())]).to_string();
+            c.execute(
+                "INSERT INTO conversation_summaries VALUES(?1, 'masked prompt', ?2, '', '', '', '', '')",
+                rusqlite::params![id, uris],
+            )
+            .unwrap();
+        }
+    }
+
+    fn left(agy: &Path) -> Vec<String> {
+        let mut v: Vec<String> = std::fs::read_dir(agy.join(BRAIN))
+            .unwrap()
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .collect();
+        v.sort();
+        v
+    }
+
+    fn rows(agy: &Path) -> Vec<String> {
+        let c = rusqlite::Connection::open(agy.join("conversation_summaries.db")).unwrap();
+        let mut st = c
+            .prepare("SELECT conversation_id FROM conversation_summaries")
+            .unwrap();
+        st.query_map([], |r| r.get(0)).unwrap().flatten().collect()
+    }
+
+    #[test]
+    fn the_conversation_a_question_made_is_deleted_with_its_summary_row() {
+        let t = tempfile::tempdir().unwrap();
+        let agy = t.path().join("agy");
+        let ask = t.path().join("work").join(format!("{ASK_PREFIX}1111"));
+        let mine = t.path().join("project");
+        conversation(&agy, "asked-1");
+        conversation(&agy, "mine-1");
+        summaries(&agy, &[("asked-1", &ask), ("mine-1", &mine)]);
+        let gone = forget_ask(&agy, &format!("{ASK_PREFIX}1111"), None);
+        assert!(
+            gone.iter().any(|g| g.contains("conversation_summaries.db")),
+            "{gone:?}"
+        );
+        // a person's own conversation stays, a question's goes: folder, database and row
+        assert_eq!(left(&agy), ["mine-1"]);
+        assert!(!agy.join("conversations/asked-1.db").exists());
+        assert!(agy.join("conversations/mine-1.db").exists());
+        assert_eq!(rows(&agy), ["mine-1"]);
+    }
+
+    #[test]
+    fn the_conversation_the_answer_names_is_deleted_even_when_no_row_says_where_it_ran() {
+        let t = tempfile::tempdir().unwrap();
+        let agy = t.path().join("agy");
+        conversation(&agy, "asked-2");
+        conversation(&agy, "mine-2");
+        summaries(&agy, &[("mine-2", &t.path().join("project"))]);
+        forget_ask(&agy, &format!("{ASK_PREFIX}2222"), Some("asked-2"));
+        assert_eq!(left(&agy), ["mine-2"]);
+        // a name that is not a conversation id never reaches the file system
+        assert!(forget_ask(&agy, "x", Some("../mine-2")).is_empty());
+        assert_eq!(left(&agy), ["mine-2"]);
+    }
+
+    #[test]
+    fn a_folder_that_is_not_a_question_deletes_only_what_the_answer_names() {
+        let t = tempfile::tempdir().unwrap();
+        let agy = t.path().join("agy");
+        let mine = t.path().join("project");
+        conversation(&agy, "mine-3");
+        summaries(&agy, &[("mine-3", &mine)]);
+        assert!(forget_ask(&agy, "project", None).is_empty());
+        assert_eq!(left(&agy), ["mine-3"]);
+    }
+
+    #[test]
+    fn the_scratch_folder_cleans_up_when_a_run_fails() {
+        let t = tempfile::tempdir().unwrap();
+        let agy = t.path().join("agy");
+        let work = t.path().join("work");
+        let path = work.join(format!("{ASK_PREFIX}3333"));
+        std::fs::create_dir_all(&path).unwrap();
+        conversation(&agy, "asked-4");
+        summaries(&agy, &[("asked-4", &path)]);
+        drop(Scratch {
+            path: path.clone(),
+            agy: agy.clone(),
+            conversation: None,
+        });
+        assert!(!path.exists() && left(&agy).is_empty() && rows(&agy).is_empty());
+    }
+
+    #[test]
+    fn the_answers_conversation_id_is_read() {
+        assert_eq!(
+            conversation_of(r#"{"conversation_id":"abc-1","status":"SUCCESS"}"#).as_deref(),
+            Some("abc-1")
+        );
+        assert_eq!(conversation_of("not json"), None);
+        assert_eq!(conversation_of(r#"{"status":"ERROR"}"#), None);
     }
 }

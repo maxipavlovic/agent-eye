@@ -204,7 +204,15 @@ pub(super) async fn api_settings_set(State(st): State<Shared>, Json(b): Json<Val
     st.paths
         .ensure_home()
         .and_then(|()| config::write_keys(&st.paths.config_path(), &keys))
-        .context("saving settings")?;
+        .map_err(|e| {
+            // a file that does not parse or a lock held elsewhere is for the user to fix; a
+            // disk that cannot be written is the server's trouble
+            if e.chain().any(|c| c.is::<std::io::Error>()) {
+                ApiError::from(e.context("saving settings"))
+            } else {
+                ApiError::bad(format!("saving settings: {e:#}"))
+            }
+        })?;
     Ok(Json(all(&fresh_cfg(&st))))
 }
 
@@ -385,6 +393,41 @@ mod tests {
             std::fs::read_to_string(&path).unwrap(),
             "[remind\nnotify = false\n"
         );
+    }
+
+    #[tokio::test]
+    async fn a_file_that_cannot_be_written_is_a_500_not_a_400() {
+        let e = env();
+        std::fs::create_dir(config_path(&e)).unwrap();
+        let (st, v) = post(&e, json!({"remind.notify": true})).await;
+        assert_eq!(st, StatusCode::INTERNAL_SERVER_ERROR, "{v}");
+        assert!(v["error"].as_str().unwrap().contains("saving settings"));
+    }
+
+    #[tokio::test]
+    async fn the_ranges_come_from_the_rules_the_config_and_the_cli_use() {
+        let e = env();
+        let (_, v) = call(&e, req("GET", "/api/settings", None)).await;
+        let s = &v["settings"];
+        assert_eq!(
+            s["night.parallel"]["min"],
+            *crate::config::PARALLEL_RANGE.start()
+        );
+        assert_eq!(
+            s["night.parallel"]["max"],
+            *crate::config::PARALLEL_RANGE.end()
+        );
+        assert_eq!(
+            s["clock.break_minutes"]["min"],
+            *crate::config_clock::BREAK_RANGE.start()
+        );
+        assert_eq!(
+            s["clock.break_minutes"]["max"],
+            *crate::config_clock::BREAK_RANGE.end()
+        );
+        let (st, v) = post(&e, json!({"clock.break_minutes": 241})).await;
+        assert_eq!(st, StatusCode::BAD_REQUEST);
+        assert!(v["error"].as_str().unwrap().contains("from 10 to 240"));
     }
 
     #[tokio::test]

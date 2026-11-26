@@ -81,6 +81,29 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_setting_changed_in_the_gear_counts_without_a_restart() {
+        let e = env();
+        let (_, v) = call(&e, req("GET", "/api/clock", None)).await;
+        assert_eq!(
+            (v["hints"].clone(), v["idle"].clone()),
+            (false.into(), false.into())
+        );
+        let body = serde_json::json!({"clock.hints": true, "clock.idle": true, "clock.llm": false});
+        let (s, _) = call(&e, req("POST", "/api/settings", Some(body))).await;
+        assert_eq!(s, StatusCode::OK);
+        let (_, v) = call(&e, req("GET", "/api/clock", None)).await;
+        assert_eq!(
+            (v["hints"].clone(), v["idle"].clone()),
+            (true.into(), true.into())
+        );
+        assert_eq!(
+            (v["llm"].clone(), v["judging"].clone()),
+            (false.into(), "off".into())
+        );
+        assert_eq!(v["judging_reason"], "[clock] llm is off");
+    }
+
+    #[tokio::test]
     async fn a_bad_window_is_a_400() {
         let e = env();
         for q in ["weeks=0", "weeks=13"] {

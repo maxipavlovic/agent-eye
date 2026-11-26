@@ -2,7 +2,9 @@
 //! so the prompt asks for strict JSON, the last text of the event stream is validated against the
 //! schema eye uses, and one invalid answer is asked again. The run is made `--archived` (out of
 //! OpenCode's lists) and its session is deleted afterwards, so it never shows up in eye or in
-//! OpenCode.
+//! OpenCode. The run is given permission rules that deny the shell, edits, web fetches and any
+//! folder outside its own empty one (`PERMISSIONS`), so text inside what it is asked about (a quoted
+//! web page, a tool's output) cannot make it do anything.
 
 use super::OpenCode;
 use crate::agents::{HeadlessReply, HeadlessRequest};
@@ -21,6 +23,12 @@ use std::time::{Duration, Instant};
 pub const FREE: &str = "free";
 /// Words in a model name that mark a small, fast one; the first free model with one is taken.
 const SMALL: [&str; 6] = ["flash", "lightning", "small", "mini", "nano", "lite"];
+
+/// OpenCode's permission rules for a question: nothing that acts is allowed. They are given as the
+/// run's inline config, which beats the user's own. The run is not given `--auto`, so nothing is
+/// approved on its behalf; what is left open is reading its own empty folder.
+const PERMISSIONS: &str =
+    r#"{"permission":{"bash":"deny","edit":"deny","webfetch":"deny","external_directory":"deny"}}"#;
 
 /// The flags a summary run needs `opencode run` to have.
 const FLAGS: [&str; 3] = ["--format", "--archived", "--title"];
@@ -284,15 +292,10 @@ fn prompt(req: &HeadlessRequest, problem: Option<&str>) -> String {
     p
 }
 
-/// Run `opencode run` once on `prompt`; its stdout. The session it made is deleted by the caller.
-fn run_once(
-    c: &OpenCode,
-    model: &str,
-    prompt: String,
-    dir: &Path,
-    timeout: Duration,
-) -> Result<String> {
+/// The command of one question: `opencode run` in its own archived session, with the deny rules.
+fn ask_command(c: &OpenCode, model: &str) -> Command {
     let mut cmd = command(c);
+    cmd.env("OPENCODE_CONFIG_CONTENT", PERMISSIONS);
     cmd.args([
         "run",
         "--standalone",
@@ -305,7 +308,18 @@ fn run_once(
     if !model.is_empty() {
         cmd.args(["-m", model]);
     }
-    let mut child = cmd
+    cmd
+}
+
+/// Run `opencode run` once on `prompt`; its stdout. The session it made is deleted by the caller.
+fn run_once(
+    c: &OpenCode,
+    model: &str,
+    prompt: String,
+    dir: &Path,
+    timeout: Duration,
+) -> Result<String> {
+    let mut child = ask_command(c, model)
         .current_dir(dir)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -396,6 +410,34 @@ pub fn ask(c: &OpenCode, req: &HeadlessRequest) -> Result<HeadlessReply> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn env_of(cmd: &Command, key: &str) -> Option<String> {
+        cmd.get_envs()
+            .find(|(k, _)| *k == key)
+            .and_then(|(_, v)| v.map(|v| v.to_string_lossy().into_owned()))
+    }
+
+    #[test]
+    fn a_question_runs_with_the_shell_edits_and_web_denied() {
+        let c = OpenCode::new(std::path::PathBuf::from("/nonexistent"));
+        let cmd = ask_command(&c, "provider/model");
+        let rules: Value =
+            serde_json::from_str(&env_of(&cmd, "OPENCODE_CONFIG_CONTENT").unwrap()).unwrap();
+        for tool in ["bash", "edit", "webfetch", "external_directory"] {
+            assert_eq!(rules["permission"][tool], "deny", "{tool}");
+        }
+        // nothing in the rules allows anything, and the run is not told to approve what it asks
+        assert!(!rules.to_string().contains("allow"));
+        let args: Vec<String> = cmd
+            .get_args()
+            .map(|a| a.to_string_lossy().into_owned())
+            .collect();
+        assert!(!args
+            .iter()
+            .any(|a| a == "--auto" || a.contains("dangerously")));
+        assert!(args.windows(2).any(|w| w == ["-m", "provider/model"]));
+        assert!(args.contains(&"--archived".to_string()));
+    }
 
     #[test]
     fn the_last_message_with_text_is_the_answer_and_usage_adds_up() {
