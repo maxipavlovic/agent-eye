@@ -77,7 +77,7 @@ describe('the HOURS panel', () => {
     const { root, header } = await mount({ clock: async () => demoClock(4) });
     header('HOURS').click();
     await vi.waitFor(() => expect(root.querySelector('.hours .cdiagram')).not.toBeNull());
-    const svg = root.querySelector<SVGElement>('.cdiagram')!;
+    const svg = root.querySelector<HTMLElement>('.cfocus')!;
     expect(root.querySelector('.ctip')).toBeNull();
     svg.dispatchEvent(new FocusEvent('focus'));
     await vi.waitFor(() => expect(root.querySelector('.ctip b')!.textContent).toBe('00:00–01:00'));

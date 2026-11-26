@@ -43,7 +43,7 @@ const VIEWS: Record<string, (p: Page) => Promise<void>> = {
     await expect(p.getByRole('heading', { name: 'AGENTS' })).toBeVisible();
   },
   hours: async (p) => {
-    await p.route('**/api/clock*', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify(demoClock()) }));
+    await p.route('**/api/clock*', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify(demoClock(4)) }));
     await p.getByRole('button', { name: 'HOURS', exact: true }).click();
     await expect(p.locator('.hours .cdiagram')).toBeVisible();
   },

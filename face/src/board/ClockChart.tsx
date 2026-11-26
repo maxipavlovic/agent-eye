@@ -68,8 +68,8 @@ export function HoursDiagram({ clock }: { clock: ClockReport }) {
   const first = clock.bad[0] ? bandLabel(clock.bad[0]) : '';
   const band0 = clock.bad[0] ? bandSpans(clock.bad[0])[0] : undefined;
   return (
-    <div class="cwrap">
-      <svg class="cdiagram" viewBox={`0 0 ${W} ${H}`} role="group" tabIndex={0} aria-label="Your hours, one column per hour of the day. Use the arrow keys to read each hour." onPointerMove={(e) => set(hourAt(e))} onPointerLeave={(e) => { if (document.activeElement !== e.currentTarget) set(null); }} onFocus={() => { if (active.value === null) set(0); }} onBlur={() => set(null)} onKeyDown={onKey}>
+    <div class="cwrap cfocus" role="group" tabIndex={0} aria-label="Your hours, one column per hour of the day. Use the arrow keys to read each hour." onFocus={() => { if (active.value === null) set(0); }} onBlur={() => set(null)} onKeyDown={onKey}>
+      <svg class="cdiagram" viewBox={`0 0 ${W} ${H}`} aria-hidden="true" onPointerMove={(e) => set(hourAt(e))} onPointerLeave={(e) => { if (document.activeElement !== e.currentTarget.parentElement) set(null); }}>
         {bands.map((b, i) => (
           [you, model, tool].map((s) => <rect key={`${i}-${s.y}`} class="cband" x={hx(b.from)} width={(b.to - b.from) * SLOT} y={yTop(s)} height={s.h - TITLE} />)
         ))}

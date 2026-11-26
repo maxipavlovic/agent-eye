@@ -1,4 +1,5 @@
-import { demoClock, emptyClock, tooFewClock } from '../../face/src/data/clockSample';
+import { demoClock, emptyClock } from '../../face/src/data/clockSample';
+import { tooFewClock } from '../../face/src/data/clockStates';
 import { spawn } from 'node:child_process';
 import { card, done, expect, lane, problems, sid, test } from '../support';
 
@@ -216,12 +217,12 @@ test.describe('usage chart', () => {
 
 test.describe('hours', () => {
   test('data: the verdict, the diagram and a tooltip per hour', async ({ board }) => {
-    await answer(board, demoClock());
+    await answer(board, demoClock(4));
     await board.getByRole('button', { name: 'HOURS', exact: true }).click();
     const panel = board.getByRole('complementary', { name: 'Hours' });
     await expect(panel.locator('.verdict')).toContainText('Mostly you.');
     await expect(panel.locator('.cdiagram')).toBeVisible();
-    await panel.locator('.cdiagram').focus();
+    await panel.locator('.cfocus').focus();
     await board.keyboard.press('Home');
     await expect(panel.locator('.ctip')).toContainText('00:00–01:00');
     await panel.getByRole('button', { name: 'TABLE' }).first().click();
@@ -239,7 +240,7 @@ test.describe('hours', () => {
   });
 
   test('empty: says nothing is recorded; a missing route says not available', async ({ board }) => {
-    await answer(board, emptyClock());
+    await answer(board, emptyClock(4));
     await board.getByRole('button', { name: 'HOURS', exact: true }).click();
     await expect(board.getByRole('complementary', { name: 'Hours' })).toContainText('Nothing recorded yet');
     await board.keyboard.press('Escape');

@@ -26,7 +26,7 @@
 .cwrap { position: relative; max-width: 760px; }
 .cwrap svg { display: block; width: 100%; height: auto; overflow: visible; }
 .cbreak { max-width: 440px; }
-.cdiagram:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
+.cfocus:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
 
 .cgrid { stroke: var(--c-grid); stroke-width: 1; vector-effect: non-scaling-stroke; }
 .cbase { stroke: var(--c-base); stroke-width: 1; vector-effect: non-scaling-stroke; }
