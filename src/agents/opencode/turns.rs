@@ -34,11 +34,8 @@ impl Builder {
     /// An assistant message: `m` its data, `content` its parts, `ts` when it began.
     fn assistant(&mut self, ts: i64, m: &Value, content: &[Value]) {
         let done = m.get("time").map_or(0, |t| n(t, "completed")).max(ts);
-        for p in content {
-            match s(p, "type") {
-                "tool" => self.tool(ts, p),
-                _ => {}
-            }
+        for p in content.iter().filter(|p| s(p, "type") == "tool") {
+            self.tool(ts, p);
         }
         let reasoning = m.get("tokens").map_or(0, |t| n(t, "reasoning"));
         if reasoning > 0 {
@@ -142,8 +139,11 @@ mod tests {
 
     const FIXTURE: &str = include_str!("../../../tests/fixtures/opencode-turns.json");
 
+    type Messages = Vec<(String, i64, Value)>;
+    type Parts = HashMap<String, Vec<Value>>;
+
     /// The fixture's older-layout messages and parts.
-    fn v1() -> (Vec<(String, i64, Value)>, HashMap<String, Vec<Value>>) {
+    fn v1() -> (Messages, Parts) {
         let f: Value = serde_json::from_str(FIXTURE).unwrap();
         let msgs = f["v1"]["messages"]
             .as_array()

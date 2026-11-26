@@ -17,7 +17,7 @@ are the ones for a session that is one text file which only grows (see "Storage 
 |---|---|---|
 | Identity | `id`, `name`, `short_name`, `detect` | `id` is stored in the database and used in config and the API (`"claude"`). `short_name` is used in sentences and as the owner in `next` lines (`Claude: fix the test`). `detect` also decides whether `eye install` turns the agent on. |
 | Sessions on disk | `transcripts`, `parse_transcript`, `owns_transcript` | `transcripts` lists what holds each session (a file, a folder, a database) with a change stamp. `parse_transcript(transcript, opts)` reads a session, all of it or what is new since the last read, and returns a `Delta` (see below). |
-| Turn events | `turn_events`, `Delta::turns` | Optional (the default reports none). When the user and the agent took their turns, for the steering clock: `prompt` (a real prompt; `n` its characters), `end` (the agent finished a turn; `n` the words it wrote), `interrupt`, `tool` (one call), `tool_error`, `refusal` (a call the user or a rule refused), `think` (one thinking block; `n` the agent's own measure of it, compared only with the same agent's) and `compact`. Only the session itself counts, not its sub-agents. `turn_events(path)` reads a whole transcript for the backfill and must report what `parse_transcript` reports for the whole file. |
+| Turn events | `turn_events`, `Delta::turns` | Optional (the default reports none). When the user and the agent took their turns, for the steering clock: `prompt` (a real prompt; `n` its characters), `end` (the agent finished a turn; `n` the words it wrote), `interrupt`, `tool` (one call), `tool_error`, `refusal` (a call the user or a rule refused), `think` (one thinking block; `n` the agent's own measure of it, compared only with the same agent's) and `compact`. Only the session itself counts, not its sub-agents. `turn_events(path)` reads a whole transcript for the backfill and must report what `parse_transcript` reports for the whole file. `think_unit()` names what `n` of a `think` counts (`signature`, `reasoning_tokens`, `thinking_chars`; none when the agent reports no thinking), so a reader never mixes units. |
 | Usage by day | `usage_msgs`, `Delta::usage_msgs`, `UsageRead::msgs`, `Delta::limits` | Optional (the default reports none). The token use of every assistant message with its time and model, which the core adds into days per model (`usage.md`); `Delta::limits` carries the plan limits a transcript reports, newest line wins. `usage_msgs(path)` reads a whole transcript (a session's or a sub-agent's) for the backfill and must add up to the same tokens as `parse_transcript`. |
 | Sub-agents, tokens, history | `subagents`, `read_usage`, `history_source`, `read_history`, `parse_history_line`, `own_dirs` | Optional. Sub-agents become child streams on the card; `read_usage` counts their tokens; the history keeps prompts of sessions whose transcripts were deleted. `read_usage` and `read_history` continue from a marker like `parse_transcript` does. |
 | Live state | `live_sessions`, `live_status_shows_prompts`, `jobs` | Optional. Which sessions are open now (busy, idle, waiting, with why it waits, its remote control link and the loops its live state shows) and which run in the background. `live_status_shows_prompts` defaults to yes; an agent whose live status stays `busy` while it waits on a permission prompt returns no, and then a prompt a hook recorded makes the session `waiting` instead of `busy` until a hook says it was answered. |
@@ -101,14 +101,49 @@ its file time until a checkpoint, so make the stamp from the folder, the `-wal` 
 not from the main file alone. Archive a consistent snapshot, not a copy of the live file: `VACUUM
 INTO` or the backup API, then compress it. `tests/support/folder_agent.rs` does this.
 
-## Turn events: the Claude Code mapping
+## Turn events by agent
 
-- `prompt`: a `user` line whose `message.content` is a string, unless it is `isMeta`, a compaction summary, starts with `<` (command and system wrappers) or is an interruption notice.
-- `interrupt`: `[Request interrupted...` as that string or as a text block of list content.
-- `tool`: every `tool_use` block of an `assistant` line. `tool_error`: a `tool_result` with `is_error`; it is a `refusal` when its first 400 characters say denied, rejected, "doesn't want", not allowed or permission.
-- `think`: a `thinking` block with a non-empty `signature`; `n` is the signature's length, which grows with the thinking. The text of a thinking block is not stored.
-- `end`: at the time of the turn's last `assistant` line, when the next prompt arrives or a read of the whole file ends. A read that stops inside a turn leaves the open turn in the carry, so it is closed once.
-- `compact`: a `system` line with `subtype` `compact_boundary`. Lines of sub-agents (`isSidechain`) are left out.
+Every adapter reports the kinds its files allow. `yes` is read and seen in real files or in the agent's own schema checked against a real export, `unconfirmed` is implemented from fixtures or documentation and not yet seen in a real file on the machines eye was built on, `no` cannot be told from the files (the footnote says why).
+
+| Kind | Claude Code | Codex CLI | agy | OpenCode |
+|---|---|---|---|---|
+| `prompt` | yes | yes | yes | yes |
+| `end` | yes | yes | yes | yes |
+| `interrupt` | yes | unconfirmed | no [1] | unconfirmed |
+| `tool` | yes | yes | yes | yes |
+| `tool_error` | yes | yes | yes | unconfirmed |
+| `refusal` | yes | unconfirmed | yes | unconfirmed |
+| `think` | yes (`signature`) | unconfirmed (`reasoning_tokens`) | yes (`thinking_chars`) | yes (`reasoning_tokens`) |
+| `compact` | yes | unconfirmed | no [2] | unconfirmed |
+
+1. agy writes no step for a stopped turn: a conversation shows only steps with status `DONE`, `ERROR`, `RUNNING` and `INVALID`, none of them a cancel.
+2. agy keeps no compaction step in its log.
+
+What each adapter reads:
+
+- **Claude Code.**
+  - `prompt`: a `user` line whose `message.content` is a string, unless it is `isMeta`, a compaction summary, starts with `<` (command and system wrappers) or is an interruption notice.
+  - `interrupt`: `[Request interrupted...` as that string or as a text block of list content.
+  - `tool`: every `tool_use` block of an `assistant` line. `tool_error`: a `tool_result` with `is_error`; it is a `refusal` when its first 400 characters say denied, rejected, "doesn't want", not allowed or permission.
+  - `think`: a `thinking` block with a non-empty `signature`; `n` is the signature's length, which grows with the thinking. The text of a thinking block is not stored.
+  - `end`: at the time of the turn's last `assistant` line, when the next prompt arrives or a read of the whole file ends. A read that stops inside a turn leaves the open turn in the carry, so it is closed once.
+  - `compact`: a `system` line with `subtype` `compact_boundary`. Lines of sub-agents (`isSidechain`) are left out.
+- **Codex CLI.**
+  - `prompt`: a user message that is not injected context (the prefix list in `codex/rollout.rs`).
+  - `end`: `task_complete`, at its time. A turn the user interrupted has no such line, so it ends at its last reply, when the next prompt arrives (as for Claude Code).
+  - `interrupt`: an `event_msg` of type `turn_aborted`. No local rollout holds one; the type is the one the live state reads (`live.rs`).
+  - `tool`: one per call (a legacy rollout's `function_call`, `custom_tool_call`, `local_shell_call`) or per finished item (a paginated rollout's `CommandExecution`, `FileChange`, ...), never both, as the two dialects are not mixed. `tool_error`: a result with a non-zero exit code. `refusal`: an item with status `declined`; a rollout records no other decision about an approval (a permission prompt is only seen by the hook).
+  - `think`: the growth of `reasoning_output_tokens` in the thread's token total since the last total, so a total written twice counts once. The totals of the rollouts on the build machine all had 0 reasoning tokens, so a non-zero value is unconfirmed.
+  - `compact`: `compacted` and `context_compacted`, two within 5 seconds counting once; neither is in a local rollout.
+- **agy.**
+  - `prompt`: a `USER_INPUT` step's `<USER_REQUEST>` text. `end`: the last `PLANNER_RESPONSE` before the next `USER_INPUT`.
+  - `tool`: one per entry of a `PLANNER_RESPONSE`'s `tool_calls`. `tool_error`: a `GENERIC` result with status `ERROR` or `INVALID`; it is a `refusal` when its error says a permission check failed (agy's own wording for a denied command).
+  - `think`: a `PLANNER_RESPONSE` with `thinking` text; `n` is its length in characters. The log has no token count for the thinking (`output_tokens` holds it inside the reply), and the database row of the call has none that could be told from other numbers.
+- **OpenCode.**
+  - `prompt`: a user message's text parts (not `synthetic` or `ignored`). `end`: `time.completed` of the last assistant message before the next prompt.
+  - `tool`: one per `tool` part. `tool_error`: a tool part whose `state.status` is `error`; it is a `refusal` when its error says the user or a rule rejected the call.
+  - `think`: `tokens.reasoning` of an assistant message, when above 0. `interrupt`: an assistant message with a `MessageAbortedError`. `compact`: a `compaction` part (older layout) or message (`session_v2`).
+  - A session is read whole every time it changes, so its turns are replaced each read and the last turn is closed at its end. The turns are kept in the archive export (`turns`), which an older eye ignores and which an older export lacks.
 
 ## Codex CLI: what a real second agent needed
 

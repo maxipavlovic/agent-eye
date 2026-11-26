@@ -7,6 +7,7 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 ### Added
 
 - Turn timing is now recorded locally: when you prompt, when the agent finishes, interrupts, tool calls and errors, refusals, thinking and compactions (timings and sizes only, never text). Sessions already indexed are read again once, in the background. New `[clock]` settings in `config.toml`.
+- Turn timing covers Codex CLI, Antigravity CLI and OpenCode too, with every kind their files allow; `docs/agents.md` lists which and why not.
 
 ## 0.4.1 - 2026-11-25
 
