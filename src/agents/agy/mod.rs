@@ -16,6 +16,7 @@ mod hooks;
 mod install;
 mod live;
 mod log;
+mod turns;
 mod wire;
 
 use super::*;
@@ -209,14 +210,15 @@ impl Agent for Agy {
                 .and_then(Value::as_u64),
         );
         let (from, before) = resumed.unwrap_or((0, 0));
-        let p = log::parse(&log, from, before as usize, &models)?;
+        let carry = opts.carry.filter(|_| resumed.is_some());
+        let p = log::parse(&log, from, before as usize, carry, &models)?;
         let mut d = p.delta;
         d.replaces = resumed.is_none();
         d.session_id = Some(t.session_id.clone());
         let s = self.summary(&t.session_id);
         d.cwd = s.folder;
         d.ai_title = s.title;
-        d.carry = Some(serde_json::json!({ "calls": p.model_calls }));
+        d.carry = Some(serde_json::json!({ "calls": p.model_calls, "turn": p.turn_carry }));
         if resumed.is_none() {
             // asked on a whole read only: it looks through agy's process logs
             d.origin_raw = self.origin_of(&t.session_id);
@@ -226,6 +228,16 @@ impl Agent for Agy {
 
     fn work_events(&self, path: &Path) -> Result<Vec<WorkEvent>> {
         log::work_events(&files::log_of(path))
+    }
+
+    fn turn_events(&self, path: &Path) -> Result<Vec<TurnEvent>> {
+        log::turn_events(&files::log_of(path))
+    }
+
+    /// What a `think` event counts: the characters of the model's thinking text (the log has no
+    /// token count for it).
+    fn think_unit(&self) -> Option<&'static str> {
+        Some("thinking_chars")
     }
 
     fn usage_msgs(&self, path: &Path) -> Result<Vec<UsageMsg>> {

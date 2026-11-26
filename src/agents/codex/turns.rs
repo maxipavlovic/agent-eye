@@ -53,7 +53,6 @@ impl Turns {
                 s.push(ts, TurnKind::Tool, 0);
             }
             Event::Output { text, .. } => {
-                s.reply(ts, 0);
                 if exit_code(text).is_some_and(|c| c != 0) {
                     s.push(ts, TurnKind::ToolError, 0);
                 }

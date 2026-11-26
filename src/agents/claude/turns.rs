@@ -176,6 +176,11 @@ mod tests {
         }
     }
 
+    /// The carry as the transcript reader stores it: under `turn`.
+    fn wrapped(carry: &Option<Value>) -> Option<Value> {
+        Some(serde_json::json!({ "turn": carry }))
+    }
+
     fn kinds(events: &[TurnEvent]) -> Vec<(TurnKind, i64)> {
         events.iter().map(|e| (e.kind, e.n)).collect()
     }
@@ -229,7 +234,7 @@ mod tests {
         feed(&mut first, &head.join("\n"));
         let (a, carry) = first.finish(false);
         assert_eq!(a.iter().filter(|e| e.kind == TurnKind::End).count(), 1);
-        let mut second = Turns::resume(carry.as_ref());
+        let mut second = Turns::resume(wrapped(&carry).as_ref());
         feed(&mut second, &tail.join("\n"));
         let (b, _) = second.finish(true);
         let ends = |e: &[TurnEvent]| e.iter().filter(|e| e.kind == TurnKind::End).count();
@@ -255,7 +260,7 @@ mod tests {
         );
         let (a, carry) = first.finish(true);
         assert_eq!(a.last().map(|e| e.kind), Some(TurnKind::End));
-        let mut second = Turns::resume(carry.as_ref());
+        let mut second = Turns::resume(wrapped(&carry).as_ref());
         feed(
             &mut second,
             FIXTURE

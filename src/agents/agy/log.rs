@@ -5,11 +5,13 @@
 //! the model call (`input_tokens` without the cache, `cache_read_tokens`, `output_tokens` with the
 //! thinking). The prompt is wrapped in `<USER_REQUEST>`.
 
+use super::turns::Turns;
 use crate::agents::append_only::for_each_line;
 use crate::agents::outputs::{cap_str, scan_jira, scan_jira_urls, scan_pr, Seen, RESULT_SCAN_CAP};
 use crate::agents::{Delta, TailItem, UsageMsg, PROMPTS_CAP, REPLIES_CAP};
 use crate::conversation::Message;
 use crate::model::Tokens;
+use crate::turns::TurnEvent;
 use crate::util::{head_chars, iso_to_ms, tail_chars, trim_front_bytes};
 use crate::worked::WorkEvent;
 use anyhow::Result;
@@ -24,9 +26,13 @@ const TAIL_ITEMS_MAX: usize = 90;
 #[derive(Debug, Default, Clone)]
 pub struct Step {
     pub kind: String,
+    /// `DONE`, `ERROR`, `RUNNING` or `INVALID`.
+    pub status: String,
     pub ts: Option<i64>,
     pub content: String,
     pub error: Option<String>,
+    /// Characters of the model's thinking text on a model call.
+    pub thinking: i64,
     /// (name, arguments)
     pub tools: Vec<(String, Value)>,
     pub tokens: Option<Tokens>,
@@ -67,12 +73,17 @@ pub fn decode(line: &[u8]) -> Option<Step> {
         .unwrap_or_default();
     Some(Step {
         kind: s("type"),
+        status: s("status"),
         ts: v
             .get("created_at")
             .and_then(Value::as_str)
             .and_then(iso_to_ms),
         content: s("content"),
         error: v.get("error").and_then(Value::as_str).map(String::from),
+        thinking: v
+            .get("thinking")
+            .and_then(Value::as_str)
+            .map_or(0, |t| t.chars().count() as i64),
         tools,
         tokens,
         model: Some(s("model")).filter(|m| !m.is_empty()),
@@ -137,22 +148,27 @@ fn each_step(path: &Path, from: u64, mut each: impl FnMut(Step)) -> Result<u64> 
 pub struct Parsed {
     pub delta: Delta,
     pub model_calls: usize,
+    /// The open turn at the end of the read, to carry to the next one.
+    pub turn_carry: Option<Value>,
 }
 
 /// Read the log from byte `from`. `calls_before` is the number of model calls read earlier
-/// (`models[i]` is the model of the i-th call).
+/// (`models[i]` is the model of the i-th call) and `turn_carry` the open turn the read before left.
 pub fn parse(
     path: &Path,
     from: u64,
     calls_before: usize,
+    turn_carry: Option<&Value>,
     models: &dyn Fn() -> Vec<String>,
 ) -> Result<Parsed> {
+    let mut turns = Turns::resume(turn_carry);
     let mut d = Delta::default();
     let mut seen = Seen::new();
     let mut calls = calls_before;
     let mut models_cache: Option<Vec<String>> = None;
     let end = each_step(path, from, |s| {
         d.lines += 1;
+        turns.step(&s);
         if let Some(ts) = s.ts {
             d.first_ts = Some(d.first_ts.map_or(ts, |t| t.min(ts)));
             d.last_ts = Some(d.last_ts.map_or(ts, |t| t.max(ts)));
@@ -246,9 +262,12 @@ pub fn parse(
     d.bytes_read = end.saturating_sub(from);
     trim_front_bytes(&mut d.prompts_text, PROMPTS_CAP);
     trim_front_bytes(&mut d.replies_text, REPLIES_CAP);
+    let (turn_events, turn_carry) = turns.finish(from == 0);
+    d.turns = turn_events;
     Ok(Parsed {
         delta: d,
         model_calls: calls,
+        turn_carry,
     })
 }
 
@@ -373,8 +392,15 @@ pub fn last_reply(path: &Path) -> Option<String> {
         .map(|s| s.content.trim().to_string())
 }
 
+/// The turn events of the whole log.
+pub fn turn_events(path: &Path) -> Result<Vec<TurnEvent>> {
+    let mut turns = Turns::resume(None);
+    each_step(path, 0, |s| turns.step(&s))?;
+    Ok(turns.finish(true).0)
+}
+
 pub fn usage_msgs(path: &Path, models: &dyn Fn() -> Vec<String>) -> Result<Vec<UsageMsg>> {
-    Ok(parse(path, 0, 0, models)?.delta.usage_msgs)
+    Ok(parse(path, 0, 0, None, models)?.delta.usage_msgs)
 }
 
 #[cfg(test)]
