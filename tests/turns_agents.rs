@@ -275,3 +275,149 @@ fn opencode_turns_come_from_the_read_a_session_that_grows_and_the_backfill() {
     e.backfill();
     assert_eq!(e.counts(), opencode_counts());
 }
+
+/// The cases every agent has, one session each: what its files hold at first, how it grows, and
+/// what the database ends up with.
+#[derive(Clone, Copy)]
+enum Agent {
+    Codex,
+    Agy,
+    OpenCode,
+}
+
+const AGENTS: [Agent; 3] = [Agent::Codex, Agent::Agy, Agent::OpenCode];
+
+impl Agent {
+    fn id(self) -> &'static str {
+        match self {
+            Agent::Codex => "codex",
+            Agent::Agy => "agy",
+            Agent::OpenCode => "opencode",
+        }
+    }
+
+    fn counts(self) -> Vec<(String, i64)> {
+        match self {
+            Agent::Codex => codex_counts(),
+            Agent::Agy => agy_counts(),
+            Agent::OpenCode => opencode_counts(),
+        }
+    }
+
+    /// A session with all that its fixture holds but the last lines, which `grow` adds.
+    fn write_short(self, e: &Env) {
+        match self {
+            Agent::Codex => write(&codex_rollout(e), &halves(CODEX, 15).0),
+            Agent::Agy => write(&agy_log(e), &halves(AGY, 11).0),
+            Agent::OpenCode => opencode_files(e, 5),
+        }
+    }
+
+    fn grow(self, e: &Env) {
+        match self {
+            Agent::Codex => append(&codex_rollout(e), &halves(CODEX, 15).1),
+            Agent::Agy => append(&agy_log(e), &halves(AGY, 11).1),
+            Agent::OpenCode => opencode_files(e, 6),
+        }
+    }
+
+    fn remove(self, e: &Env) {
+        let gone = match self {
+            Agent::Codex => codex_rollout(e),
+            Agent::Agy => agy_log(e),
+            Agent::OpenCode => e.dir.join("storage"),
+        };
+        match gone.is_dir() {
+            true => std::fs::remove_dir_all(gone).unwrap(),
+            false => std::fs::remove_file(gone).unwrap(),
+        }
+    }
+}
+
+/// A session that has grown and been read again, as the daemon would have it.
+fn read_session(a: Agent) -> Env {
+    let mut e = Env::new(a.id());
+    a.write_short(&e);
+    e.scan();
+    a.grow(&e);
+    e.scan();
+    e
+}
+
+#[test]
+fn a_full_scan_replaces_the_turns_of_every_agent_instead_of_adding() {
+    for a in AGENTS {
+        let mut e = read_session(a);
+        scan(&mut e.db, &e.cfg, true).unwrap();
+        assert_eq!(e.counts(), a.counts(), "{}", a.id());
+    }
+}
+
+#[test]
+fn the_backfill_of_every_agent_leaves_the_cursor_alone() {
+    for a in AGENTS {
+        let mut e = read_session(a);
+        let cursors = |e: &Env| -> Vec<(String, String)> {
+            e.db.conn
+                .prepare("SELECT path, marker FROM cursor ORDER BY path")
+                .unwrap()
+                .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))
+                .unwrap()
+                .collect::<rusqlite::Result<_>>()
+                .unwrap()
+        };
+        let before = cursors(&e);
+        e.forget_turns();
+        e.backfill();
+        assert_eq!(cursors(&e), before, "{}", a.id());
+        assert_eq!(e.counts(), a.counts(), "{}", a.id());
+    }
+}
+
+#[test]
+fn a_codex_or_agy_session_that_is_not_counted_yet_waits_for_the_backfill_when_it_grows() {
+    // OpenCode is read whole each time, so its read stands for the whole session and counts it
+    for a in [Agent::Codex, Agent::Agy] {
+        let mut e = Env::new(a.id());
+        a.write_short(&e);
+        e.scan();
+        e.forget_turns();
+        a.grow(&e);
+        e.scan();
+        assert!(e.counts().is_empty(), "{}", a.id());
+        e.backfill();
+        assert_eq!(e.counts(), a.counts(), "{}", a.id());
+    }
+}
+
+#[test]
+fn a_session_of_any_agent_whose_files_are_gone_waits_for_nothing() {
+    for a in AGENTS {
+        let mut e = read_session(a);
+        e.forget_turns();
+        a.remove(&e);
+        e.scan();
+        assert_eq!(
+            backfill::waiting(&e.db, &e.agents()).unwrap(),
+            0,
+            "{}",
+            a.id()
+        );
+    }
+}
+
+#[test]
+fn an_empty_home_of_any_agent_has_nothing_to_backfill() {
+    for a in AGENTS {
+        let mut e = Env::new(a.id());
+        e.scan();
+        e.backfill();
+        assert!(e.counts().is_empty(), "{}", a.id());
+        assert_eq!(
+            backfill::waiting(&e.db, &e.agents()).unwrap(),
+            0,
+            "{}",
+            a.id()
+        );
+    }
+}
