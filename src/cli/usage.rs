@@ -1,11 +1,11 @@
 //! `eye usage`: what the sessions of the last days used and cost, and where the plan limits stand.
 
 use super::Global;
-use crate::usage::{backfill, prices, report};
+use crate::usage::{backfill, prices, report, series};
 use crate::util::{fmt_tokens, now_ms, printable};
 use anyhow::{bail, Result};
 
-pub fn run(g: &Global, days: i64, by: &str, json: bool) -> Result<()> {
+pub fn run(g: &Global, days: i64, by: &str, by_day: bool, json: bool) -> Result<()> {
     let Some(by) = report::By::parse(by) else {
         bail!("--by takes project, folder, agent, model or session, not '{by}'");
     };
@@ -25,8 +25,22 @@ pub fn run(g: &Global, days: i64, by: &str, json: bool) -> Result<()> {
         now,
         &crate::worked::summary::local_offset_ms,
     )?;
+    let by_day = by_day.then(|| {
+        series::build(
+            &env.db.conn,
+            &env.cfg.usage,
+            days,
+            report::By::Project,
+            now,
+            &crate::worked::summary::local_offset_ms,
+        )
+    });
     if json {
-        println!("{}", r.json(now));
+        let mut v = r.json(now);
+        if let Some(s) = by_day {
+            v["series"] = s?.json();
+        }
+        println!("{v}");
         return Ok(());
     }
     for l in r.limit_lines(now) {
@@ -47,6 +61,9 @@ pub fn run(g: &Global, days: i64, by: &str, json: bool) -> Result<()> {
         println!("no usage in this window");
         println!("{}", prices::LABEL);
         return Ok(());
+    }
+    if let Some(s) = by_day {
+        return print_days(&r, &s?);
     }
     let width = r
         .rows
@@ -90,6 +107,33 @@ pub fn run(g: &Global, days: i64, by: &str, json: bool) -> Result<()> {
             r.backfill_left
         );
     }
+    Ok(())
+}
+
+/// One row per day, the days with no usage included, then the total.
+fn print_days(r: &report::Report, s: &series::Series) -> Result<()> {
+    println!(
+        "{:<10}  {:>8}  {:>8}  {:>8}  {:>10}",
+        "day", "in", "out", "cache", "est. cost"
+    );
+    for (day, sum) in s.day_totals() {
+        println!(
+            "{day:<10}  {:>8}  {:>8}  {:>8}  {:>10}",
+            fmt_tokens(sum.t[0]),
+            fmt_tokens(sum.t[1]),
+            fmt_tokens(sum.t[2] + sum.t[3]),
+            sum.cost_text()
+        );
+    }
+    println!(
+        "{:<10}  {:>8}  {:>8}  {:>8}  {:>10}",
+        "total",
+        fmt_tokens(r.totals.t[0]),
+        fmt_tokens(r.totals.t[1]),
+        fmt_tokens(r.totals.t[2] + r.totals.t[3]),
+        r.totals.cost_text()
+    );
+    println!("{}", prices::LABEL);
     Ok(())
 }
 

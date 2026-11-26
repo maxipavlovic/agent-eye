@@ -11,6 +11,7 @@ pub mod backfill;
 pub mod limits;
 pub mod prices;
 pub mod report;
+pub mod series;
 pub mod statusline;
 pub mod store;
 

@@ -236,6 +236,18 @@ fn usage_with_nothing_counted_says_so_and_json_is_empty() {
 }
 
 #[test]
+fn usage_by_day_lists_every_day_of_the_window_and_json_gets_the_series() {
+    let w = usage_world();
+    let out = w.ok(&["usage", "--by-day", "--days", "3"]);
+    assert!(out.contains("day") && out.contains("total"), "{out}");
+    let day_rows = out.lines().filter(|l| l.starts_with("20")).count();
+    assert_eq!(day_rows, 3, "{out}");
+    let j = w.json(&["usage", "--json", "--by-day", "--days", "3"]);
+    assert_eq!(j["series"]["days"].as_array().unwrap().len(), 3);
+    assert_eq!(w.json(&["usage", "--json"]).get("series"), None);
+}
+
+#[test]
 fn usage_groups_by_project_agent_model_and_session() {
     let w = usage_world();
     let by = |what: &str| w.ok(&["usage", "--by", what]);

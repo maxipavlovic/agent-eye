@@ -303,6 +303,9 @@ pub enum Cmd {
         /// Group rows by project, folder, agent, model or session
         #[arg(long, default_value = "project")]
         by: String,
+        /// One row per day instead of per group
+        #[arg(long = "by-day")]
+        by_day: bool,
         #[arg(long)]
         json: bool,
     },

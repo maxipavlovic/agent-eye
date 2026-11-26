@@ -12,6 +12,7 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 - `GET /api/settings` and `POST /api/settings`: a whitelist of config keys with their types and allowed values, written under the same lock as the CLI, comments kept; an unknown key or a bad value is a 400 and nothing is written (see `docs/api.md`).
 - `eye clock`: the steering clock. It shows your correction rate by hour of the day and by time since your last break, which hours run clearly worse than the rest (only when the difference is more than chance), and whether a bad stretch looks like you or the model, from the model's thinking and its failed tool calls in the same hours. `--weeks N`, `--json`, `--brief` (one line, for an agent). A model judges which prompts were corrections once a night (and with `eye clock detect`), through the agent and model that write summaries; `[clock] llm = false` stops it. The board's API gets `GET /api/clock`. See `docs/clock.md`.
 - `[clock] idle = true` (off by default) takes breaks from the machine's idle time on macOS and on Linux with logind, instead of from gaps between prompts. It reads one number once a minute, never keys or windows. `eye doctor` reports whether it is available.
+- `GET /api/usage` takes `series=project|model` and answers with the cost of every day split that way, and `eye usage --by-day` prints one row per day (see `docs/api.md`).
 
 ### Changed
 

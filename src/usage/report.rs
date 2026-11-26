@@ -61,7 +61,7 @@ pub struct Sum {
 }
 
 impl Sum {
-    fn add(&mut self, t: [i64; 4], model: &str, cfg: &UsageCfg) {
+    pub(super) fn add(&mut self, t: [i64; 4], model: &str, cfg: &UsageCfg) {
         for (a, b) in self.t.iter_mut().zip(t) {
             *a += b;
         }
@@ -89,7 +89,7 @@ impl Sum {
             format!("${:.2}", self.cost)
         }
     }
-    fn json(&self) -> Value {
+    pub(super) fn json(&self) -> Value {
         json!({
             "input": self.t[0], "output": self.t[1], "cache_write": self.t[2], "cache_read": self.t[3],
             "total": self.total(),
@@ -99,7 +99,7 @@ impl Sum {
     }
 }
 
-fn round2(x: f64) -> f64 {
+pub(super) fn round2(x: f64) -> f64 {
     (x * 100.0).round() / 100.0
 }
 
@@ -162,17 +162,17 @@ pub struct Report {
     pub backfill_left: usize,
 }
 
-struct Cell {
-    sid: String,
-    day: String,
-    model: String,
-    agent: String,
-    project: String,
-    title: String,
-    t: [i64; 4],
+pub(super) struct Cell {
+    pub sid: String,
+    pub day: String,
+    pub model: String,
+    pub agent: String,
+    pub project: String,
+    pub title: String,
+    pub t: [i64; 4],
 }
 
-fn load_cells(conn: &Connection, from: &str, to: &str) -> Result<Vec<Cell>> {
+pub(super) fn load_cells(conn: &Connection, from: &str, to: &str) -> Result<Vec<Cell>> {
     let mut st = conn.prepare(
         "SELECT u.session_id, u.day, u.model, COALESCE(s.agent,'claude'),
                 COALESCE(s.repo_root, s.cwd, s.project_dir, ''), COALESCE(s.title, s.first_prompt, ''),
@@ -293,7 +293,7 @@ fn is_temp(p: &str) -> bool {
 
 /// The name the board's project bar gives a folder: its last segment, `home` for the home folder.
 /// None for a session with no folder and for temp folders (they count as "other").
-fn project_label(p: &str) -> Option<String> {
+pub(super) fn project_label(p: &str) -> Option<String> {
     let p = p.trim_end_matches('/');
     if p.is_empty() || is_temp(p) {
         return None;

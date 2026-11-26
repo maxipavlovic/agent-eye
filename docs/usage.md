@@ -11,6 +11,7 @@ eye usage                      # the last 7 days, by project
 eye usage --month --by agent   # the last 30 days
 eye usage --days 14 --by model
 eye usage --week --by session  # top sessions first
+eye usage --days 14 --by-day   # one row per day
 eye usage --week --json        # the same data the board gets
 ```
 

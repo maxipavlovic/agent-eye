@@ -176,8 +176,15 @@ pub fn run() -> Result<()> {
             week: _,
             month,
             by,
+            by_day,
             json,
-        } => usage::run(&g, days.unwrap_or(if month { 30 } else { 7 }), &by, json),
+        } => usage::run(
+            &g,
+            days.unwrap_or(if month { 30 } else { 7 }),
+            &by,
+            by_day,
+            json,
+        ),
         Cmd::Pick(a) => pick::run(&g, &a),
         Cmd::Init { shell, key } => {
             print!(
