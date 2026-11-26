@@ -93,7 +93,9 @@ on.
 - `[clock] idle` is already off unless you turned it on.
 
 `[clock] hints = true` fills `now.hint` of `/api/clock` while you are in a bad hour, for a board that
-chooses to show it. Nothing pops up in the terminal.
+chooses to show it. The board shows it as a mark beside HOURS and on the card you are working in, and puts
+Continue tonight first in that card's menu. The picker shows it after the keys line when the screen is wide
+enough. Nothing pops up.
 
 ## Other agents
 

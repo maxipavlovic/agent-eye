@@ -1,5 +1,5 @@
 import { demoClock, emptyClock } from '../../face/src/data/clockSample';
-import { tooFewClock } from '../../face/src/data/clockStates';
+import { hintClock, tooFewClock } from '../../face/src/data/clockStates';
 import { spawn } from 'node:child_process';
 import { card, done, expect, lane, problems, sid, test } from '../support';
 
@@ -214,6 +214,12 @@ test.describe('usage chart', () => {
     await expect(panel.locator('.ctable').first()).toBeVisible();
   });
 });
+
+// It is evening and hints are on: the engine says so in the words it uses.
+const evening = () => {
+  const c = hintClock();
+  return { ...c, now: { ...c.now, hint: 'Evening: your corrections usually run 1.8x now. Hand this to the night shift? (T)' } };
+};
 
 test.describe('hours', () => {
   test('data: the verdict, the diagram and a tooltip per hour', async ({ board }) => {
@@ -430,5 +436,29 @@ test.describe('looks', () => {
     await expect(board.locator('html')).toHaveAttribute('data-look', look);
     await expect(board.getByRole('region', { name: /^needs you/i })).toBeVisible();
   });
-});
 
+  test('hint: the header mark opens HOURS, the card you work in has its mark, and its menu offers Continue tonight first', async ({ board }) => {
+    await answer(board, evening());
+    await board.reload();
+    const mark = board.getByRole('button', { name: /^Evening: your corrections usually run 1\.8x now/ });
+    await expect(mark).toBeVisible();
+    await mark.click();
+    await expect(board.getByRole('complementary', { name: 'Hours' })).toBeVisible();
+    await board.keyboard.press('Escape');
+    // only the card you have open carries the mark
+    await expect(board.getByRole('img', { name: /^Evening: your corrections/ })).toHaveCount(0);
+    await card(board, /Fix stale tokens/).click();
+    await expect(board.getByRole('heading', { level: 2, name: /Fix stale tokens/ })).toBeVisible();
+    await expect(board.getByRole('img', { name: /^Evening: your corrections/ })).toHaveCount(1);
+    await board.keyboard.press('Escape');
+    await card(board, /Fix stale tokens/).click({ button: 'right' });
+    const items = board.getByRole('menu').getByRole('menuitem');
+    await expect(items.first()).toHaveText('CONTINUE TONIGHT…');
+    await expect(board.getByRole('menu')).toContainText('Evening: your corrections usually run 1.8x now.');
+    await expect(board.getByRole('menu')).not.toContainText('Hand this to the night shift');
+    // a card that is not waiting on you gets the usual menu
+    await board.keyboard.press('Escape');
+    await card(board, /Add dark mode/).click({ button: 'right' });
+    await expect(board.getByRole('menu').getByRole('menuitem').first()).toHaveText('MARK DONE');
+  });
+});

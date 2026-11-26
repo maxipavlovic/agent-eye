@@ -17,6 +17,8 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 - A **HOURS** button beside USAGE opens the steering clock: your corrections per 100 prompts for each hour of the day, how much the model thought against its usual, and failed tool calls, on one 24-hour axis with your bad hours shaded, plus corrections by time since your last break. Every hour has a tooltip, there is a table view, and thin data reads plainly ("Not enough data yet"). With `[clock] hints` on, a quiet mark beside HOURS and on the card you are working in says when your corrections usually rise.
 - USAGE draws the cost of every day as stacked columns, by project or by model, with a legend, tooltips and a table view.
 - The settings gear has a HOURS section: the clock, judging corrections, the hint, the break length and idle time (`clock.*` in `/api/settings`).
+- With `[clock] hints = true`, the picker's footer shows the clock's hint after the keys when the screen is wide enough. It is worked out in the background, so the picker still opens at once.
+- While the hint is set, **Continue tonight** comes first in the right-click menu, in MORE and in the panel's actions of the live session you are working in, with the reason in one plain line. T does what it did.
 
 ### Changed
 
