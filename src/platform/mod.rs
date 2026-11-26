@@ -6,6 +6,7 @@
 //! chooses between macOS and Linux is `MACOS` below; anything that is not macOS is treated as Linux.
 
 pub mod clipboard;
+pub mod idle;
 mod launchd;
 pub mod notify;
 pub mod procs;

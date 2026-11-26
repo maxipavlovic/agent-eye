@@ -10,6 +10,8 @@ pub mod backup;
 pub mod cli;
 /// Which board column a session is in.
 pub mod columns;
+/// The steering clock: which hours you steer worse, and whether it was you or the model.
+pub mod clock;
 /// The settings in `config.toml`.
 pub mod config;
 /// `[clock]` in `config.toml`: the steering clock's settings.

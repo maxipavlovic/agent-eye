@@ -57,7 +57,7 @@ pub fn mask_secrets(text: &str) -> String {
 }
 
 /// FNV-1a: stable across Rust versions, unlike `DefaultHasher`.
-fn hash_hex(s: &str) -> String {
+pub(crate) fn hash_hex(s: &str) -> String {
     let mut h: u64 = 0xcbf29ce484222325;
     for b in s.as_bytes() {
         h ^= u64::from(*b);
