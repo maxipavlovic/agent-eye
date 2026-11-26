@@ -103,7 +103,7 @@ INTO` or the backup API, then compress it. `tests/support/folder_agent.rs` does 
 
 ## Turn events by agent
 
-Every adapter reports the kinds its files allow. `yes` is read and seen in real files or in the agent's own schema checked against a real export, `unconfirmed` is implemented from fixtures or documentation and not yet seen in a real file on the machines eye was built on, `no` cannot be told from the files (the footnote says why).
+Every adapter reports the kinds its files allow. One rule is the same for all of them: a turn gets one `end`, at the time of the agent's last activity in it, once the turn is known to be over (the next prompt arrives, or Codex says `task_complete`). The last turn of a session has no `end` until then. Turns of sessions in an excluded or temp folder are not kept (they are not indexed), and with `[clock] enabled = false` nothing new is kept. A prompt that a forked session copied from its parent (same time and length) is kept once. `yes` is read and seen in real files or in the agent's own schema checked against a real export, `unconfirmed` is implemented from fixtures or documentation and not yet seen in a real file on the machines eye was built on, `no` cannot be told from the files (the footnote says why).
 
 | Kind | Claude Code | Codex CLI | agy | OpenCode |
 |---|---|---|---|---|
@@ -122,28 +122,28 @@ Every adapter reports the kinds its files allow. `yes` is read and seen in real 
 What each adapter reads:
 
 - **Claude Code.**
-  - `prompt`: a `user` line whose `message.content` is a string, unless it is `isMeta`, a compaction summary, starts with `<` (command and system wrappers) or is an interruption notice.
+  - `prompt`: a `user` line whose `message.content` is a string, or the text blocks of list content (a pasted image, the feedback on a rejected tool call), unless it is `isMeta`, a compaction summary, starts with `<` (command and system wrappers) or is an interruption notice.
   - `interrupt`: `[Request interrupted...` as that string or as a text block of list content.
-  - `tool`: every `tool_use` block of an `assistant` line. `tool_error`: a `tool_result` with `is_error`; it is a `refusal` when its first 400 characters say denied, rejected, "doesn't want", not allowed or permission.
+  - `tool`: every `tool_use` block of an `assistant` line. `tool_error`: a `tool_result` with `is_error`; it is a `refusal` when its first 400 characters say denied, rejected, "doesn't want", not allowed or permission. The user's feedback on a rejected call comes as a text block next to the result and is a prompt.
   - `think`: a `thinking` block with a non-empty `signature`; `n` is the signature's length, which grows with the thinking. The text of a thinking block is not stored.
-  - `end`: at the time of the turn's last `assistant` line, when the next prompt arrives or a read of the whole file ends. A read that stops inside a turn leaves the open turn in the carry, so it is closed once.
+  - `end`: at the time of the turn's last `assistant` line, when the next prompt arrives. A read that stops inside a turn, or at the end of the file, leaves the open turn in the carry, so it is closed once, whenever it is read.
   - `compact`: a `system` line with `subtype` `compact_boundary`. Lines of sub-agents (`isSidechain`) are left out.
 - **Codex CLI.**
   - `prompt`: a user message that is not injected context (the prefix list in `codex/rollout.rs`).
   - `end`: `task_complete`, at its time. A turn the user interrupted has no such line, so it ends at its last reply, when the next prompt arrives (as for Claude Code).
   - `interrupt`: an `event_msg` of type `turn_aborted`. No local rollout holds one; the type is the one the live state reads (`live.rs`).
-  - `tool`: one per call (a legacy rollout's `function_call`, `custom_tool_call`, `local_shell_call`) or per finished item (a paginated rollout's `CommandExecution`, `FileChange`, ...), never both, as the two dialects are not mixed. `tool_error`: a result with a non-zero exit code. `refusal`: an item with status `declined`; a rollout records no other decision about an approval (a permission prompt is only seen by the hook).
+  - `tool`: one per call (a legacy rollout's `function_call`, `custom_tool_call`, `local_shell_call`) or per finished item (a paginated rollout's `CommandExecution`, `FileChange`, ...), never both, as the two dialects are not mixed. `tool_error`: a result with a non-zero exit code. `refusal`: an item with status `declined`, or (older rollouts) a call whose output starts with "exec command rejected by user" or "patch rejected by user", which is what Codex hands the model when the user says no. A paginated `FileChange` or `McpToolCall` with status `failed` is also a `tool_error`. A permission prompt itself is only seen by the hook.
   - `think`: the growth of `reasoning_output_tokens` in the thread's token total since the last total, so a total written twice counts once. The totals of the rollouts on the build machine all had 0 reasoning tokens, so a non-zero value is unconfirmed.
   - `compact`: `compacted` and `context_compacted`, two within 5 seconds counting once; neither is in a local rollout.
 - **agy.**
   - `prompt`: a `USER_INPUT` step's `<USER_REQUEST>` text. `end`: the last `PLANNER_RESPONSE` before the next `USER_INPUT`.
-  - `tool`: one per entry of a `PLANNER_RESPONSE`'s `tool_calls`. `tool_error`: a `GENERIC` result with status `ERROR` or `INVALID`; it is a `refusal` when its error says a permission check failed (agy's own wording for a denied command).
+  - `tool`: one per entry of a `PLANNER_RESPONSE`'s `tool_calls`. `tool_error`: a `GENERIC` result with status `ERROR` or `INVALID`; an `ERROR` is a `refusal` when its error says a permission check failed or the user denied the call (agy's own wording for a denied command). An `INVALID` call (the model wrote it wrongly) never is.
   - `think`: a `PLANNER_RESPONSE` with `thinking` text; `n` is its length in characters. The log has no token count for the thinking (`output_tokens` holds it inside the reply), and the database row of the call has none that could be told from other numbers.
 - **OpenCode.**
   - `prompt`: a user message's text parts (not `synthetic` or `ignored`). `end`: `time.completed` of the last assistant message before the next prompt.
   - `tool`: one per `tool` part. `tool_error`: a tool part whose `state.status` is `error`; it is a `refusal` when its error says the user or a rule rejected the call.
   - `think`: `tokens.reasoning` of an assistant message, when above 0. `interrupt`: an assistant message with a `MessageAbortedError`. `compact`: a `compaction` part (older layout) or message (`session_v2`).
-  - A session is read whole every time it changes, so its turns are replaced each read and the last turn is closed at its end. The turns are kept in the archive export (`turns`), which an older eye ignores and which an older export lacks.
+  - A session is read whole every time it changes, so its turns are replaced each read. The turns are kept in the archive export (`turns`), which an older eye ignores. An export made before eye kept them gets them when it is read: from its native export when that has the older layout's messages, otherwise from its events (prompts, tool calls and each turn's last reply only).
 
 ## Codex CLI: what a real second agent needed
 
