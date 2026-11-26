@@ -5,6 +5,7 @@
 
 pub mod backfill;
 pub mod store;
+pub mod stream;
 
 /// What happened at one moment of a session. The wording is the same for every agent; how an agent's
 /// own records map to it is in `docs/agents.md`.

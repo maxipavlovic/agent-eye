@@ -1,20 +1,14 @@
-//! The turn events of a Claude Code transcript, for the steering clock (`crate::turns`).
-//!
-//! A turn ends with the last assistant line before the next prompt, which is only known once that
-//! prompt arrives. The read that sees the prompt emits the `End`, so a read that stops in the
-//! middle of a turn keeps the open turn (time of its last assistant line, words so far) in the
-//! carry instead of emitting anything; the next read picks it up and the turn is closed once.
-//! A read of the whole transcript also closes the last turn at its end, as nothing more is known
-//! about it, and marks it closed in the carry, so a continuation of that same turn is not closed a
-//! second time. The carry is cheaper than finding the start of the open turn again from the file.
+//! The turn events of a Claude Code transcript, for the steering clock (`crate::turns`). A turn
+//! ends with the last assistant line before the next prompt (see `crate::turns::stream`).
 
 use super::super::append_only::for_each_line;
 use super::transcript::{line_type, result_text};
+use crate::turns::stream::Stream;
 use crate::turns::{TurnEvent, TurnKind};
 use crate::util::iso_to_ms;
 use anyhow::Result;
 use regex::Regex;
-use serde_json::{json, Value};
+use serde_json::Value;
 use std::path::Path;
 use std::sync::LazyLock;
 
@@ -25,37 +19,13 @@ static RE_REFUSAL: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?i)denied|rejected|doesn't want|not allowed|permission").expect("static regex")
 });
 
-/// The agent's turn that has not been closed yet.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct Open {
-    /// Time of its last assistant line.
-    ts: i64,
-    /// Words of reply text so far.
-    words: i64,
-    /// Its `End` has been emitted (a whole read stopped inside it).
-    closed: bool,
-}
-
 /// Collects the turn events of the lines it is shown, in file order.
-pub(super) struct Turns {
-    events: Vec<TurnEvent>,
-    open: Option<Open>,
-}
+pub(super) struct Turns(Stream);
 
 impl Turns {
     /// Start from the open turn an earlier read left in its carry (None: nothing is open).
     pub(super) fn resume(carry: Option<&Value>) -> Turns {
-        let open = carry.and_then(|c| c.get("turn")).and_then(|t| {
-            Some(Open {
-                ts: t.get("ts")?.as_i64()?,
-                words: t.get("words")?.as_i64()?,
-                closed: t.get("closed")?.as_bool()?,
-            })
-        });
-        Turns {
-            events: vec![],
-            open,
-        }
+        Turns(Stream::resume(carry))
     }
 
     /// Take one transcript line of type `ty`. Sub-agent lines and lines without a time are not
@@ -82,7 +52,7 @@ impl Turns {
     }
 
     fn push(&mut self, ts: i64, kind: TurnKind, n: i64) {
-        self.events.push(TurnEvent::new(ts, kind, n));
+        self.0.push(ts, kind, n);
     }
 
     fn user(&mut self, v: &Value, ts: i64) {
@@ -96,7 +66,7 @@ impl Turns {
                 if flag("isMeta") || flag("isCompactSummary") || t.trim_start().starts_with('<') {
                     return;
                 }
-                self.close_open();
+                self.0.close();
                 self.push(ts, TurnKind::Prompt, t.chars().count() as i64);
             }
             Value::Array(blocks) => {
@@ -159,42 +129,12 @@ impl Turns {
                 _ => {}
             }
         }
-        match &mut self.open {
-            Some(o) if o.closed => {}
-            Some(o) => {
-                o.ts = ts;
-                o.words += words;
-            }
-            None => {
-                self.open = Some(Open {
-                    ts,
-                    words,
-                    closed: false,
-                });
-            }
-        }
-    }
-
-    /// Emit the `End` of the open turn, once.
-    fn close_open(&mut self) {
-        if let Some(o) = self.open.take().filter(|o| !o.closed) {
-            self.push(o.ts, TurnKind::End, o.words);
-        }
+        self.0.reply(ts, words);
     }
 
     /// The events, and the turn to carry to the next read. A `whole` read closes the last turn.
-    pub(super) fn finish(mut self, whole: bool) -> (Vec<TurnEvent>, Option<Value>) {
-        if whole {
-            if let Some(o) = self.open.as_mut().filter(|o| !o.closed) {
-                let end = TurnEvent::new(o.ts, TurnKind::End, o.words);
-                o.closed = true;
-                self.events.push(end);
-            }
-        }
-        let carry = self
-            .open
-            .map(|o| json!({"ts": o.ts, "words": o.words, "closed": o.closed}));
-        (self.events, carry)
+    pub(super) fn finish(self, whole: bool) -> (Vec<TurnEvent>, Option<Value>) {
+        self.0.finish(whole)
     }
 }
 
@@ -340,14 +280,14 @@ mod tests {
             let v = serde_json::json!({"type":"user","timestamp":"2026-11-02T10:00:00.000Z",
                 "message":{"content":[{"type":"tool_result","is_error":true,"content":text}]}});
             t.line(&v, "user");
-            assert_eq!(t.events.last().map(|e| e.kind), Some(want), "{text}");
+            assert_eq!(t.0.last().map(|e| e.kind), Some(want), "{text}");
         }
         // an error that only mentions it past the first 400 characters is a plain error
         let long = format!("{} permission", "x".repeat(400));
         let v = serde_json::json!({"type":"user","timestamp":"2026-11-02T10:00:00.000Z",
             "message":{"content":[{"type":"tool_result","is_error":true,"content":long}]}});
         t.line(&v, "user");
-        assert_eq!(t.events.last().map(|e| e.kind), Some(TurnKind::ToolError));
+        assert_eq!(t.0.last().map(|e| e.kind), Some(TurnKind::ToolError));
     }
 
     #[test]
@@ -359,7 +299,7 @@ mod tests {
         let think = serde_json::json!({"type":"assistant","timestamp":"2026-11-02T10:00:01.000Z",
             "message":{"content":[{"type":"thinking","thinking":"hm","signature":""}]}});
         t.line(&think, "assistant");
-        assert!(t.events.is_empty());
+        assert!(t.0.last().is_none());
     }
 
     #[test]
