@@ -240,7 +240,10 @@ fn usage_by_day_lists_every_day_of_the_window_and_json_gets_the_series() {
     let w = usage_world();
     let out = w.ok(&["usage", "--by-day", "--days", "3"]);
     assert!(out.contains("day") && out.contains("total"), "{out}");
-    let day_rows = out.lines().filter(|l| l.starts_with("20")).count();
+    let day_rows = out
+        .lines()
+        .filter(|l| l.starts_with("20") && !l.contains(" to "))
+        .count();
     assert_eq!(day_rows, 3, "{out}");
     let j = w.json(&["usage", "--json", "--by-day", "--days", "3"]);
     assert_eq!(j["series"]["days"].as_array().unwrap().len(), 3);
