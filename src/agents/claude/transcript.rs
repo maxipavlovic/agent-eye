@@ -169,7 +169,7 @@ pub fn parse_reader<R: BufRead>(mut r: R, from: u64, opts: &ParseOpts) -> Result
     }
     d.signals = Some(tracker.signals());
     let signals_out = tracker.state();
-    let (turn_events, turn_out) = turns.finish(opts.since.is_none());
+    let (turn_events, turn_out) = turns.finish();
     d.turns = turn_events;
     if !pending_out.is_empty() || signals_out.is_some() || turn_out.is_some() {
         d.carry = Some(

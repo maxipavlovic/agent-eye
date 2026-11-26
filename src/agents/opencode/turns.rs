@@ -19,8 +19,8 @@ static RE_REFUSAL: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?i)rejected|prevents you|denied|not allowed|permission").expect("static regex")
 });
 
-/// Turns the messages of a session, in order, into turn events. The session is read whole, so the
-/// last turn is closed at its end.
+/// Turns the messages of a session, in order, into turn events. The last turn has no `End` until
+/// a prompt follows it, as for every agent.
 #[derive(Default)]
 struct Builder(Stream);
 
@@ -70,7 +70,7 @@ impl Builder {
     }
 
     fn finish(self) -> Vec<TurnEvent> {
-        self.0.finish(true).0
+        self.0.finish().0
     }
 }
 
@@ -135,6 +135,7 @@ pub fn from_v2(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::turns::testing::{end_times, kinds};
     use serde_json::json;
 
     const FIXTURE: &str = include_str!("../../../tests/fixtures/opencode-turns.json");
@@ -166,10 +167,6 @@ mod tests {
         (msgs, parts)
     }
 
-    fn kinds(events: &[TurnEvent]) -> Vec<(TurnKind, i64)> {
-        events.iter().map(|e| (e.kind, e.n)).collect()
-    }
-
     #[test]
     fn a_session_reports_every_kind_once() {
         let (msgs, parts) = v1();
@@ -189,34 +186,41 @@ mod tests {
                 (Compact, 0),
                 (End, 4),
                 (Prompt, 9),
-                (End, 2),
             ]
         );
     }
 
     #[test]
     fn an_end_is_the_completed_time_of_the_last_assistant_message_of_its_turn() {
-        let (msgs, parts) = v1();
-        let events = from_v1(&msgs, &parts);
-        let ends: Vec<i64> = events
-            .iter()
-            .filter(|e| e.kind == TurnKind::End)
-            .map(|e| e.ts)
-            .collect();
+        let (mut msgs, parts) = v1();
         let at = |m: i64, s: i64| (1_793_696_400 + m * 60 + s) * 1000;
-        assert_eq!(ends, vec![at(0, 40), at(6, 0)]);
+        assert_eq!(end_times(&from_v1(&msgs, &parts)), vec![at(0, 40)]);
+        // the second turn ends when a prompt follows it
+        msgs.push((
+            "next".into(),
+            at(9, 0),
+            json!({"role": "user", "time": {"created": at(9, 0)}}),
+        ));
+        let mut parts = parts;
+        parts.insert(
+            "next".into(),
+            vec![json!({"type": "text", "text": "ship it"})],
+        );
+        assert_eq!(
+            end_times(&from_v1(&msgs, &parts)),
+            vec![at(0, 40), at(6, 0)]
+        );
     }
 
     #[test]
     fn reading_the_session_again_gives_the_same_events() {
-        // OpenCode sessions are read whole each time, so a re-read mid-turn replaces the events
-        // and the open turn is closed once
+        // OpenCode sessions are read whole each time, so a re-read mid-turn replaces the events and
+        // the turn that was open gets its one `End` when the prompt after it is read
         let (msgs, parts) = v1();
         let whole = from_v1(&msgs, &parts);
         let first_half = from_v1(&msgs[..2], &parts);
-        let ends = |e: &[TurnEvent]| e.iter().filter(|e| e.kind == TurnKind::End).count();
-        assert_eq!(ends(&first_half), 1);
-        assert_eq!(ends(&whole), 2);
+        assert!(end_times(&first_half).is_empty());
+        assert_eq!(end_times(&whole).len(), 1);
         assert_eq!(from_v1(&msgs, &parts), whole);
     }
 
@@ -244,6 +248,12 @@ mod tests {
                 5000,
                 json!({"time": {"completed": 6000}}),
             ),
+            (
+                "e".to_string(),
+                "user".to_string(),
+                7000,
+                json!({"text": "next"}),
+            ),
         ];
         let mut parts = HashMap::new();
         parts.insert(
@@ -260,10 +270,11 @@ mod tests {
                 (Refusal, 0),
                 (Think, 7),
                 (Compact, 0),
-                (End, 4)
+                (End, 4),
+                (Prompt, 4)
             ]
         );
-        assert_eq!(events.last().map(|e| e.ts), Some(6000));
+        assert_eq!(end_times(&events), vec![6000]);
     }
 
     #[test]
@@ -281,9 +292,6 @@ mod tests {
             vec![json!({"type": "tool", "state": {"status": "completed"}})],
         );
         let events = from_v1(&msgs, &parts);
-        assert_eq!(
-            kinds(&events),
-            vec![(TurnKind::Tool, 0), (TurnKind::End, 0)]
-        );
+        assert_eq!(kinds(&events), vec![(TurnKind::Tool, 0)]);
     }
 }

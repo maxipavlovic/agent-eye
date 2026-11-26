@@ -95,7 +95,7 @@ fn kinds(pairs: &[(&str, i64)]) -> Vec<(String, i64)> {
 fn all_of_the_fixture() -> Vec<(String, i64)> {
     kinds(&[
         ("compact", 1),
-        ("end", 2),
+        ("end", 1),
         ("interrupt", 1),
         ("prompt", 2),
         ("refusal", 1),
@@ -123,13 +123,55 @@ fn a_session_that_grows_gets_what_is_new_and_a_scan_that_finds_nothing_changes_n
     append(&e.transcript, &(tail.join("\n") + "\n"));
     e.scan();
     e.scan();
-    // the first read closed the turn it stopped in, and the lines that continue it do not close it again
+    // the turn the first read stopped in stays open: the last turn has no end until a prompt follows
     let counts = e.counts();
     let n = |k: &str| counts.iter().find(|(c, _)| c == k).map_or(0, |(_, n)| *n);
     assert_eq!(
         (n("prompt"), n("end"), n("compact"), n("tool")),
-        (2, 2, 1, 2)
+        (2, 1, 1, 2)
     );
+}
+
+/// The times of the session's `end` events, in order.
+fn end_times(e: &Env) -> Vec<i64> {
+    e.db.conn
+        .prepare("SELECT ts FROM turn WHERE session_id=?1 AND kind='end' ORDER BY ts")
+        .unwrap()
+        .query_map([SID], |r| r.get(0))
+        .unwrap()
+        .collect::<rusqlite::Result<_>>()
+        .unwrap()
+}
+
+/// A prompt after the fixture's last reply (10:07:00).
+const NEXT_PROMPT: &str = r#"{"type": "user", "timestamp": "2026-11-02T10:09:00.000Z", "cwd": "/tmp/demo", "sessionId": "eeeeeeee-0000-4000-8000-000000000005", "message": {"content": "thanks, now ship it"}}"#;
+
+#[test]
+fn a_turn_a_first_read_caught_in_the_middle_ends_once_at_its_last_reply() {
+    let lines: Vec<&str> = FIXTURE.lines().collect();
+    let (head, tail) = lines.split_at(14);
+    let mut e = Env::new(&(head.join("\n") + "\n"));
+    e.scan();
+    append(
+        &e.transcript,
+        &(tail.join("\n") + "\n" + NEXT_PROMPT + "\n"),
+    );
+    e.scan();
+    // the end of the second turn is its last reply (10:07:00), not the one the first read saw
+    let ends = end_times(&e);
+    assert_eq!(ends.len(), 2);
+    assert_eq!(ends[1] - ends[0], (7 * 60 - (2 * 60 + 10)) * 1000);
+}
+
+#[test]
+fn a_session_active_during_the_upgrade_gets_one_end_for_its_open_turn() {
+    let mut e = Env::new(FIXTURE);
+    e.scan();
+    e.forget_turns();
+    e.backfill();
+    append(&e.transcript, &(NEXT_PROMPT.to_string() + "\n"));
+    e.scan();
+    assert_eq!(end_times(&e).len(), 2);
 }
 
 #[test]

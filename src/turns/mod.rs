@@ -6,6 +6,8 @@
 pub mod backfill;
 pub mod store;
 pub mod stream;
+#[cfg(test)]
+pub mod testing;
 
 use serde::{Deserialize, Serialize};
 

@@ -262,7 +262,7 @@ pub fn parse(
     d.bytes_read = end.saturating_sub(from);
     trim_front_bytes(&mut d.prompts_text, PROMPTS_CAP);
     trim_front_bytes(&mut d.replies_text, REPLIES_CAP);
-    let (turn_events, turn_carry) = turns.finish(from == 0);
+    let (turn_events, turn_carry) = turns.finish();
     d.turns = turn_events;
     Ok(Parsed {
         delta: d,
@@ -396,7 +396,7 @@ pub fn last_reply(path: &Path) -> Option<String> {
 pub fn turn_events(path: &Path) -> Result<Vec<TurnEvent>> {
     let mut turns = Turns::resume(None);
     each_step(path, 0, |s| turns.step(&s))?;
-    Ok(turns.finish(true).0)
+    Ok(turns.finish().0)
 }
 
 pub fn usage_msgs(path: &Path, models: &dyn Fn() -> Vec<String>) -> Result<Vec<UsageMsg>> {

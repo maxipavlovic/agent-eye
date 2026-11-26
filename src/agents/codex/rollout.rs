@@ -816,7 +816,7 @@ impl<'a> Reader<'a> {
         self.order.retain(|k| self.commits.contains_key(k));
         let skip = self.order.len().saturating_sub(PENDING_CAP);
         self.d.signals = Some(self.background.signals());
-        let (turn_events, turns_carry) = self.turns.finish(!self.resumed);
+        let (turn_events, turns_carry) = self.turns.finish();
         self.d.turns = turn_events;
         let carry = Carry {
             turns: turns_carry,

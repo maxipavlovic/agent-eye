@@ -132,9 +132,16 @@ fn codex_counts() -> Vec<(String, i64)> {
     ])
 }
 
+/// OpenCode says nothing when a turn is done, so the last turn has no end yet.
+fn opencode_counts() -> Vec<(String, i64)> {
+    let mut counts = codex_counts();
+    counts.iter_mut().find(|(k, _)| k == "end").unwrap().1 = 1;
+    counts
+}
+
 fn agy_counts() -> Vec<(String, i64)> {
     kinds(&[
-        ("end", 2),
+        ("end", 1),
         ("prompt", 2),
         ("refusal", 1),
         ("think", 1),
@@ -260,16 +267,12 @@ fn opencode_turns_come_from_the_read_a_session_that_grows_and_the_backfill() {
     // the first read stops after the aborted message; the session is read whole again when it grows
     opencode_files(&e, 3);
     e.scan();
-    let first = e.counts();
-    assert_eq!(
-        first.iter().find(|(k, _)| k == "end").map(|(_, n)| *n),
-        Some(1)
-    );
+    assert!(e.counts().iter().all(|(k, _)| k != "end"));
     opencode_files(&e, 6);
     e.scan();
     e.scan();
-    assert_eq!(e.counts(), codex_counts());
+    assert_eq!(e.counts(), opencode_counts());
     e.forget_turns();
     e.backfill();
-    assert_eq!(e.counts(), codex_counts());
+    assert_eq!(e.counts(), opencode_counts());
 }
