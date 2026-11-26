@@ -142,6 +142,19 @@ describe('liveSource requests', () => {
     await expect(s.remindSettings()).rejects.toMatchObject({ status: 404 });
   });
 
+  it('reads the settings and posts only the keys that changed, and the engine\'s refusal is the message', async () => {
+    const f = vi.fn().mockResolvedValue(json(200, { settings: {} }));
+    vi.stubGlobal('fetch', f);
+    const s = liveSource();
+    await s.settings();
+    expect(f).toHaveBeenCalledWith('/api/settings', { credentials: 'same-origin' });
+    await s.saveSettings({ 'night.parallel': 3 });
+    expect(f.mock.calls[1]![0]).toBe('/api/settings');
+    expect(f.mock.calls[1]![1]).toMatchObject({ method: 'POST', body: '{"night.parallel":3}' });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json(400, { error: 'night.parallel: give a number from 1 to 8' })));
+    await expect(s.saveSettings({ 'night.parallel': 99 })).rejects.toThrow('give a number from 1 to 8');
+  });
+
   it('turns {error} into the message', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json(400, { error: 'Workspace not trusted' })));
     await expect(liveSource().resume('a', false)).rejects.toThrow('Workspace not trusted');

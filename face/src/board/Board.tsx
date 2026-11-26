@@ -17,6 +17,7 @@ import { useLayout } from './layout';
 import { Results } from './Results';
 import { Toasts } from './Toasts';
 import { NightHost } from './Night';
+import { SettingsHost } from './Settings';
 import { UsageHost } from './Usage';
 import { useWalk } from './walk';
 import { useLook } from './look';
@@ -65,7 +66,7 @@ export function Board({ store }: { store: Store }) {
 
   return (
     <div class="app">
-      <Header store={store} layout={layout} setLayout={setLayout} />
+      <Header store={store} />
       <div class="strip" />
       {b && !searching && !fresh && <ProjectBar store={store} total={all.length} ps={ps} filter={f} setFilter={(k) => { filter.value = k; }} />}
       {store.error.value && <div class="err">ERROR · {store.error.value}</div>}
@@ -109,6 +110,7 @@ export function Board({ store }: { store: Store }) {
       <RemindFormHost store={store} />
       <ForgetHost store={store} />
       <UsageHost store={store} />
+      <SettingsHost store={store} layout={layout} setLayout={setLayout} folded={folded} setFold={setFold} />
       <NightHost store={store} />
       <KeyHelpHost store={store} />
       <CardMenu store={store} />

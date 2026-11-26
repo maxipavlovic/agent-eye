@@ -1,6 +1,6 @@
 import type {
   Agent, ArchivePage, Board, Card, CardDetail, Connection, ConversationPage, Idea, IdeaInput, MoveTarget, RemindInput, ResumePlan,
-  FolderCheck, NightRun, NightState, RemindSettings, SearchHit, Source, StartPlan, UsageReport,
+  FolderCheck, NightRun, NightState, RemindSettings, SearchHit, SettingsInput, SettingsState, Source, StartPlan, UsageReport,
 } from '../api/types';
 
 const UNAUTHORIZED = 'Not signed in: open the link that `eye board` prints.';
@@ -69,6 +69,8 @@ export function liveSource(): Source {
     nightDiscard: (id, loseChanges) => call<{ ok: boolean; note?: string }>(`/api/night/${id}/discard`, { method: 'POST', body: { confirm: true, lose_changes: loseChanges } }),
     nightBring: (id) => call<{ ok: boolean; note?: string }>(`/api/night/${id}/bring`, { method: 'POST', body: { confirm: true } }),
     nightOpen: (id) => call<{ ok: boolean }>(`/api/night/${id}/open`, { method: 'POST', body: {} }),
+    settings: () => call<SettingsState>('/api/settings'),
+    saveSettings: (input: SettingsInput) => call<SettingsState>('/api/settings', { method: 'POST', body: input }),
     remindSettings: () => call<RemindSettings>('/api/remind/settings'),
     setRemindSettings: (input) => call<RemindSettings>('/api/remind/settings', { method: 'POST', body: input }),
     subscribe(onChange, onState) {

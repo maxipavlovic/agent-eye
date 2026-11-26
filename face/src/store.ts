@@ -4,7 +4,7 @@ import { pushPref } from './prefs';
 import { signal, computed, effect, batch, type Signal, type ReadonlySignal } from '@preact/signals';
 import type {
   Agent, ArchivePage, Board, Card, CardDetail, ColumnId, Connection, ConversationPage, IdeaInput, MoveTarget,
-  FolderCheck, LooseAct, NightPlanInput, NightState, RemindInput, RemindSettings, ResumePlan, SearchHit, Source, StartPlan, UsageReport,
+  FolderCheck, LooseAct, NightPlanInput, NightState, RemindInput, RemindSettings, ResumePlan, SearchHit, SettingsInput, SettingsState, Source, StartPlan, UsageReport,
 } from './api/types';
 
 export type ThemePref = 'auto' | 'light' | 'dark';
@@ -56,6 +56,10 @@ export interface Store {
   resume(id: string, fork?: boolean): Promise<ResumePlan | null>;
   /** Usage over the last `days` days; null (quietly) when the engine cannot say. */
   usage(days: number): Promise<UsageReport | null>;
+  /** The config keys the board may change; null (quietly) when the engine has no settings. */
+  settings(): Promise<SettingsState | null>;
+  /** Saves the given keys; the new state, or null with a toast that says why nothing was saved. */
+  saveSettings(input: SettingsInput): Promise<SettingsState | null>;
   /** Messages of a session, newest page first; null (quietly) when they cannot be had. */
   conversation(id: string, before?: number | null, limit?: number): Promise<ConversationPage | null>;
   /** True when saved; on failure a toast says why and the caller keeps the form open. */
@@ -303,6 +307,22 @@ export function createStore(src: Source, { defaultTheme = 'auto' }: { defaultThe
     }
   }
 
+  async function settings() {
+    try {
+      return await src.settings();
+    } catch {
+      return null;
+    }
+  }
+
+  async function saveSettings(input: SettingsInput) {
+    try {
+      return await src.saveSettings(input);
+    } catch (e) {
+      return fail(e);
+    }
+  }
+
   async function conversation(id: string, before: number | null = null, limit = 10) {
     try {
       return await src.conversation(id, limit, before);
@@ -464,7 +484,7 @@ export function createStore(src: Source, { defaultTheme = 'auto' }: { defaultThe
   return {
     source: src.name,
     board, selected, detail, query, results, searching, connection, themePref, accent, theme, toasts, agents, notice, night, needsYou, error,
-    open, close, search, move, setHidden, forget, resume, usage, conversation, addIdea, editIdea, startIdea, folderCheck: (path) => src.folderCheck(path), remind, looseAct, looseActAll, looseSend, loadNotice, setNotice, loadNight, nightSettings, nightPlan, nightCancel, nightLimit, nightDiscard, nightOpen, nightBring,
+    open, close, search, move, setHidden, forget, resume, usage, settings, saveSettings, conversation, addIdea, editIdea, startIdea, folderCheck: (path) => src.folderCheck(path), remind, looseAct, looseActAll, looseSend, loadNotice, setNotice, loadNight, nightSettings, nightPlan, nightCancel, nightLimit, nightDiscard, nightOpen, nightBring,
     archive: (offset, limit = 50) => src.archive(offset, limit),
     setTheme, setAccent, toast, dismissToast, refresh,
   };

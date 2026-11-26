@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createStore } from './store';
+import { fixtureSource } from './data/fixture';
 import type { Board, Card, Column, ColumnId, Source } from './api/types';
 
 function card(id: string, column: ColumnId): Card {
@@ -51,6 +52,8 @@ function source(over: Partial<Source> = {}): Source {
     nightBring: async () => ({ ok: true }),
     remindSettings: async () => ({ notify: false, available: true }),
     setRemindSettings: async ({ notify }) => ({ notify, available: true }),
+    settings: async () => { throw new Error('HTTP 404'); },
+    saveSettings: async () => { throw new Error('HTTP 404'); },
     subscribe: () => () => {},
     ...over,
   };
@@ -412,6 +415,21 @@ describe('remind', () => {
     await store.setNotice(true);
     expect(store.notice.value).toEqual({ notify: false, available: true });
     expect(store.toasts.value.at(-1)).toMatchObject({ tone: 'error', text: 'cannot write the config' });
+  });
+
+  it('reads the settings quietly, and says why a save was refused', async () => {
+    const old = createStore(source());
+    await expect(old.settings()).resolves.toBeNull();
+    expect(old.toasts.value).toHaveLength(0);
+    const state = (await fixtureSource().settings());
+    const saveSettings = vi.fn(async () => state);
+    const store = createStore(source({ settings: async () => state, saveSettings }));
+    await expect(store.settings()).resolves.toEqual(state);
+    await expect(store.saveSettings({ 'night.parallel': 3 })).resolves.toEqual(state);
+    expect(saveSettings).toHaveBeenCalledWith({ 'night.parallel': 3 });
+    const refused = createStore(source({ saveSettings: async () => { throw new Error('night.parallel: give a number from 1 to 8'); } }));
+    await expect(refused.saveSettings({ 'night.parallel': 99 })).resolves.toBeNull();
+    expect(refused.toasts.value.at(-1)).toMatchObject({ tone: 'error', text: 'night.parallel: give a number from 1 to 8' });
   });
 
   it('keeps the form open and says why when the engine cannot read the time', async () => {

@@ -457,6 +457,33 @@ export interface RemindSettings {
   available: boolean;
 }
 
+/** One setting of GET /api/settings; `restart` says the daemon reads it only when it starts. */
+export interface BoolSetting { type: 'bool'; value: boolean; restart?: boolean }
+export interface TextSetting { type: 'text'; max: number; value: string; restart?: boolean }
+export interface IntSetting { type: 'int'; min: number; max: number; value: number }
+export interface ChoiceSetting { type: 'choice'; choices: string[]; value: string }
+/** `HH:MM-HH:MM`, local time. */
+export interface WindowSetting { type: 'window'; value: string }
+/** The agents eye follows: `value` is the enabled ids in order, `choices` every agent eye knows. */
+export interface AgentsSetting { type: 'agents'; choices: Array<{ id: string; name: string }>; value: string[]; restart?: boolean }
+
+/** GET and POST /api/settings: the config keys the board may change, read from the file each time. */
+export interface SettingsState {
+  settings: {
+    'summary.enabled': BoolSetting;
+    'summary.model': TextSetting;
+    'night.enabled': BoolSetting;
+    'night.window': WindowSetting;
+    'night.parallel': IntSetting;
+    'night.isolation': ChoiceSetting;
+    'remind.notify': BoolSetting;
+    'agents.enabled': AgentsSetting;
+  };
+}
+
+/** Body of POST /api/settings: any of the keys, each with its new value; the engine checks all before it writes. */
+export type SettingsInput = { [K in keyof SettingsState['settings']]?: SettingsState['settings'][K]['value'] };
+
 export interface ResumePlan {
   dry_run: boolean;
   /** What happened or would: 'iterm', 'terminal' or 'copy'. */
@@ -513,6 +540,10 @@ export interface Source {
   remindSettings(): Promise<RemindSettings>;
   /** Turns the desktop notice on or off; it takes effect at once (POST /api/remind/settings). */
   setRemindSettings(input: { notify: boolean }): Promise<RemindSettings>;
+  /** The config keys the board may change (GET /api/settings); an older engine answers 404. */
+  settings(): Promise<SettingsState>;
+  /** Writes the given keys (POST /api/settings); the engine refuses the whole request when one is wrong. */
+  saveSettings(input: SettingsInput): Promise<SettingsState>;
   /** The night shift: switch, window, planned and finished runs (GET /api/night); an older engine answers 404. */
   night(): Promise<NightState>;
   /** Changes the switch, the window or `parallel` (POST /api/night/settings). */

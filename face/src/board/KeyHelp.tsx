@@ -23,6 +23,7 @@ export const KEY_LIST: ReadonlyArray<readonly [string, string]> = [
   ['← →', 'Previous or next card'],
   ['/', 'Search (also ⌘K)'],
   ['Esc', 'Close'],
+  [',', 'Settings (look, colour, layout, theme, agents)'],
   ['?', 'This list'],
 ];
 
@@ -36,6 +37,7 @@ export const IDEA_KEY_LIST: ReadonlyArray<readonly [string, string]> = [
   ['← →', 'Previous or next card'],
   ['/', 'Search (also ⌘K)'],
   ['Esc', 'Close'],
+  [',', 'Settings (look, colour, layout, theme, agents)'],
   ['?', 'This list'],
 ];
 

@@ -62,17 +62,11 @@ a:hover { background: var(--ink); color: var(--paper); text-decoration: none; }
 .theme button + button { border-left: 2px solid var(--ink); }
 .theme button.on { background: var(--ink); color: var(--paper); }
 .theme button.on svg [fill='var(--paper)'] { fill: var(--ink); }
-/* accent picker: one square button wearing the accent; its popover holds the eight swatches, the chosen one ringed in ink */
-.accpick { position: relative; }
-.accbtn { width: 36px; height: 36px; display: grid; place-items: center; padding: 0; background: var(--paper); border: 2px solid var(--ink); }
-.accbtn i { width: 18px; height: 18px; background: var(--accent); border: 2px solid var(--ink); }
-.accbtn[aria-expanded='true'] { background: var(--ink); }
-.accpop { position: absolute; top: calc(100% + 8px); right: 0; display: flex; gap: 8px; padding: 10px; background: var(--paper); border: 2px solid var(--ink); box-shadow: 4px 4px 0 var(--ink); z-index: 10; }
-/* the popover: the looks (when the page has more than one), then the accents */
-.accpop { flex-direction: column; }
-.accpop .looks, .accpop .accs { display: flex; gap: 8px; }
-.lookbtn { font: 400 16px/1 var(--f-label); background: var(--paper); color: var(--ink); border: 2px solid var(--ink); padding: 7px 10px 6px; }
-.lookbtn:hover, .lookbtn[aria-pressed='true'] { background: var(--ink); color: var(--paper); }
+/* the settings gear, and the eight accent swatches in the panel */
+.btn.gear { height: 40px; padding: 0 12px; display: inline-flex; align-items: center; }
+.btn.gear svg { stroke-width: 2; stroke-linecap: square; }
+.btn.gear[aria-pressed='true'] { background: var(--ink); color: var(--paper); }
+.accs { display: flex; flex-wrap: wrap; gap: 8px; }
 .acc { width: 24px; height: 24px; padding: 0; border: 2px solid var(--ink); background: var(--accent); cursor: pointer; flex: none; }
 .acc[aria-pressed='true'] { box-shadow: 0 0 0 2px var(--paper), 0 0 0 4px var(--ink); }
 .acc:hover { transform: translate(-1px, -1px); }
@@ -548,7 +542,7 @@ a.mk:hover { background: var(--ink); color: var(--paper); }
 
 /* ───────── tablets and touch ───────── */
 @media (max-width: 1200px), (pointer: coarse) {
-  .theme button, .accbtn { width: 40px; height: 40px; }
+  .theme button { width: 40px; height: 40px; }
   .theme.seg button { height: 40px; }
   .acc { width: 32px; height: 32px; }
   .pbar button { min-height: 40px; }
@@ -573,11 +567,6 @@ a.mk:hover { background: var(--ink); color: var(--paper); }
   .gridview { grid-template-columns: minmax(0, 2fr) minmax(240px, 1fr); }
 }
 @media (max-width: 900px) {
-  /* on a phone the popover spans the header, so eight swatches never run off the screen */
-  .hd { position: relative; }
-  .accpick { position: static; }
-  .accpop { left: 12px; right: 12px; top: 100%; }
-  .accpop .accs { justify-content: space-between; }
   .hd { gap: 10px; }
   .conn.live, .conn.fixture { display: none; }
   .gridview { grid-template-columns: minmax(0, 1fr); }
@@ -652,8 +641,8 @@ a.mk:hover { background: var(--ink); color: var(--paper); }
 @media (max-width: 1200px), (pointer: coarse) { .fchips button { min-height: 40px; } }
 
 /* Usage panel: Inter 17px body, ink on paper, one accent only for a limit above 80%. */
-.usage .umeta, .usage .unote { font: 400 17px/1.5 var(--f-body); color: var(--ink); margin: 10px 0 0; max-width: 66ch; }
-.usage .state, .usage .uempty { font: 400 17px/1.5 var(--f-body); max-width: 66ch; margin: 18px 0 0; }
+.usage .umeta, .usage .unote, .settings .umeta { font: 400 17px/1.5 var(--f-body); color: var(--ink); margin: 10px 0 0; max-width: 66ch; }
+.usage .state, .usage .uempty, .settings .state { font: 400 17px/1.5 var(--f-body); max-width: 66ch; margin: 18px 0 0; }
 .usage .acts { margin-top: 22px; }
 .ubars, .ulimits { list-style: none; margin: 0; padding: 0; font: 400 17px/1.5 var(--f-body); }
 .ubars li { display: grid; grid-template-columns: 12em minmax(0, 1fr) 5.5em 7.5em; gap: 14px; align-items: center; padding: 6px 0; }
@@ -760,3 +749,11 @@ a.mk:hover { background: var(--ink); color: var(--paper); }
 
 /* the board embedded in the site's page (not full screen): the site's own switch sets the theme, so the header keeps room for + IDEA */
 :root[data-embed] .hd .theme[aria-label='Theme'] { display: none; }
+
+/* SETTINGS: one row per setting, the name and the control on a line and one plain line under it */
+.srow { margin: 0 0 20px; }
+.srow .umeta { margin-top: 8px; }
+.settings .nrow { flex-wrap: wrap; row-gap: 10px; }
+.settings .nrow > span { min-width: 10em; }
+.settings .nset { margin-top: 14px; }
+.settings .more { margin-top: 44px; }

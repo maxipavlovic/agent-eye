@@ -1,14 +1,10 @@
-import { Pix } from '../../pixel/Pix';
 import type { HeaderProps } from '../../board/look';
 import type { Project } from '../../board/model';
-import { ConnState, HeaderEnd, LayoutSwitch, NeedsButton, SearchField, ThemeSwitch } from '../../board/HeaderParts';
-import { AUTO, INK_CC, LAYOUT_ICON, MOON, SUN } from './art';
+import { ConnState, HeaderEnd, NeedsButton, SearchField } from '../../board/HeaderParts';
 import { Eye } from './Eye';
 
-const THEME_ICON = { light: SUN, dark: MOON, auto: AUTO };
-
-/** Brand, search, the Needs you button, connection state, layout and theme switches, and + IDEA. */
-export function Header({ store, layout, setLayout }: HeaderProps) {
+/** Brand, search, the Needs you button, connection state, the night, USAGE, the settings gear and + IDEA. */
+export function Header({ store }: HeaderProps) {
   return (
     <header class="hd">
       <div class="brand"><Eye alert={store.needsYou.value > 0} /><span class="word">EYE</span></div>
@@ -16,8 +12,6 @@ export function Header({ store, layout, setLayout }: HeaderProps) {
       <div class="grow" />
       <NeedsButton store={store} />
       <ConnState store={store} />
-      <LayoutSwitch layout={layout} setLayout={setLayout} icon={(k) => <Pix rows={LAYOUT_ICON[k]} pal={INK_CC} scale={2} />} />
-      <ThemeSwitch store={store} icon={(k) => <Pix rows={THEME_ICON[k]} pal={INK_CC} scale={2} />} />
       <HeaderEnd store={store} />
     </header>
   );

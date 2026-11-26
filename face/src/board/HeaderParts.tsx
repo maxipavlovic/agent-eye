@@ -1,10 +1,8 @@
-import type { ComponentChildren } from 'preact';
-import type { Store, ThemePref } from '../store';
-import { AccentPicker } from './AccentPicker';
+import type { Store } from '../store';
 import { needsLane } from './gaze';
 import { ideaForm } from './IdeaForm';
-import type { Layout } from './layout';
 import { TonightChip } from './Night';
+import { settingsPanel } from './Settings';
 import { usagePanel } from './Usage';
 
 // The header's controls, the same in every look; a look's Header arranges them and draws their icons.
@@ -39,36 +37,30 @@ export function ConnState({ store }: { store: Store }) {
   return <span class={`conn ${conn}`} title={`data: ${conn}`}><i />{CONN[conn] ?? conn}</span>;
 }
 
-/** Lanes or Grid, each drawn by the look. */
-export function LayoutSwitch({ layout, setLayout, icon }: { layout: Layout; setLayout: (l: Layout) => void; icon: (l: Layout) => ComponentChildren }) {
+/** USAGE: what the sessions used and cost, and where the plan limits stand. */
+export function UsageButton() {
+  return <button class="btn" title="What the sessions used and cost, and where the plan limits stand" aria-haspopup="dialog" onClick={() => { usagePanel.value = !usagePanel.value; }}>USAGE</button>;
+}
+
+/** The gear: it opens SETTINGS (look, colour, layout, theme and the agent settings). */
+export function SettingsGear() {
   return (
-    <div class="theme layout" role="group" aria-label="Layout">
-      {(['lanes', 'grid'] as const).map((k) => (
-        <button key={k} class={layout === k ? 'on' : ''} aria-pressed={layout === k} title={k === 'lanes' ? 'Lanes' : 'Grid'} onClick={() => setLayout(k)}>{icon(k)}</button>
-      ))}
-    </div>
+    <button class="btn gear" title="Settings (,)" aria-label="Settings" aria-haspopup="dialog" aria-keyshortcuts="," aria-pressed={settingsPanel.value} onClick={() => { settingsPanel.value = !settingsPanel.value; }}>
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" aria-hidden="true">
+        <circle cx="12" cy="12" r="3.5" />
+        <path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M18.7 5.3l-2.1 2.1M7.4 16.6l-2.1 2.1" />
+      </svg>
+    </button>
   );
 }
 
-/** Light, dark or as the system is, each drawn by the look. */
-export function ThemeSwitch({ store, icon }: { store: Store; icon: (t: ThemePref) => ComponentChildren }) {
-  const pref = store.themePref.value;
-  return (
-    <div class="theme" role="group" aria-label="Theme">
-      {(['light', 'dark', 'auto'] as const).map((k) => (
-        <button key={k} class={pref === k ? 'on' : ''} aria-pressed={pref === k} title={k} onClick={() => store.setTheme(k)}>{icon(k)}</button>
-      ))}
-    </div>
-  );
-}
-
-/** The end of the row: the look and colour, the night, USAGE and + IDEA. */
+/** The end of the row: the night, USAGE, the gear and + IDEA. The slot right after USAGE is for HOURS. */
 export function HeaderEnd({ store }: { store: Store }) {
   return (
     <>
-      <AccentPicker store={store} />
       <TonightChip store={store} />
-      <button class="btn" title="What the sessions used and cost, and where the plan limits stand" aria-haspopup="dialog" onClick={() => { usagePanel.value = !usagePanel.value; }}>USAGE</button>
+      <UsageButton />
+      <SettingsGear />
       <button class="btn plus" onClick={() => { ideaForm.value = {}; }}>+ IDEA</button>
     </>
   );

@@ -2,7 +2,6 @@ import { createContext, type ComponentChildren, type ComponentType, type JSX } f
 import { useContext } from 'preact/hooks';
 import type { Agent, Column, ColumnId, TopicStatus } from '../api/types';
 import type { Store } from '../store';
-import type { Layout } from './layout';
 import type { Project } from './model';
 
 /**
@@ -31,7 +30,7 @@ export interface Art {
  */
 export type IconName = 'arrow' | 'bang' | 'clock' | 'clock-accent' | 'crescent' | 'signal' | 'up' | 'down';
 
-export interface HeaderProps { store: Store; layout: Layout; setLayout: (l: Layout) => void }
+export interface HeaderProps { store: Store }
 export interface ProjectBarProps { store: Store; total: number; ps: Project[]; filter: string | null; setFilter: (key: string | null) => void }
 /** A lane's header. `inline` puts the name beside the icon (the grid); `fold` folds the lane. */
 export interface HeadProps { col: Column; inline?: boolean; fold?: () => void }

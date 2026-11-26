@@ -1,6 +1,6 @@
 import { demoUsage, emptyUsage } from './usageSample';
 import type {
-  Agent, ArchivePage, NightRun, NightState, Board, Card, CardDetail, ColumnId, ConversationPage, FolderCheck, Idea, LooseEnd, Message, SearchHit, Source, StartPlan, Tokens,
+  Agent, ArchivePage, NightRun, NightState, Board, Card, CardDetail, ColumnId, ConversationPage, FolderCheck, Idea, LooseEnd, Message, SearchHit, SettingsState, Source, StartPlan, Tokens,
 } from '../api/types';
 
 // fixtures/sample/ is synthetic: every build, test, screenshot and the site use it. fixtures/real/
@@ -211,6 +211,20 @@ function conversationOf(d: CardDetail): Message[] {
   }
   return out;
 }
+
+/** The settings the sample shows: the engine's defaults, with the two agents of the demo. */
+const SETTINGS: SettingsState = {
+  settings: {
+    'summary.enabled': { type: 'bool', value: true, restart: true },
+    'summary.model': { type: 'text', max: 64, value: '', restart: true },
+    'night.enabled': { type: 'bool', value: false },
+    'night.window': { type: 'window', value: '01:00-07:00' },
+    'night.parallel': { type: 'int', min: 1, max: 8, value: 2 },
+    'night.isolation': { type: 'choice', choices: ['worktree', 'copy'], value: 'worktree' },
+    'remind.notify': { type: 'bool', value: false },
+    'agents.enabled': { type: 'agents', choices: [{ id: AGENT.id, name: AGENT.name }, { id: CODEX.id, name: CODEX.name }], value: [AGENT.id], restart: true },
+  },
+};
 
 /** A Source over the bundled snapshot. Writes change only the in-memory copy. */
 /** `demo`: the site's and the look's board, with the states that need showing (a second agent, reminders for tomorrow); the tests use the plain sample. */
@@ -518,6 +532,8 @@ export function fixtureSource(demo = false): Source {
       return delay({ ok: true, note: `branch ${r.branch} is now in ${r.folder} (fixture)` });
     },
     nightOpen: () => delay({ ok: true }),
+    settings: () => delay(structuredClone(SETTINGS)),
+    saveSettings: () => Promise.reject(new Error('The sample board cannot save settings')),
     remindSettings: () => delay({ ...notice }),
     setRemindSettings: (input) => {
       notice.notify = input.notify;

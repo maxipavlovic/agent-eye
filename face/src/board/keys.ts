@@ -9,6 +9,7 @@ import { leftoversOpen } from './Loose';
 import { hideSession, QUICK, quickMove } from './Move';
 import { canContinueTonight, canPlanIdea, nightAsk, tonightOpen } from './Night';
 import { closeRemind, openRemind, remindForm } from './Remind';
+import { settingsPanel } from './Settings';
 import type { Walk } from './walk';
 
 /** Board keys: / or ⌘K / Ctrl-K searches, ← → walk the cards, Esc backs out one level, ? lists the keys. The open session's panel
@@ -58,6 +59,7 @@ export function useKeys(store: Store, step: Walk['step']) {
       }
       const panelKey = !typing && !ideaForm.value && !!store.selected.value && !!d && plain && !e.shiftKey ? e.key.toLowerCase() : '';
       if (e.key === '?' && !typing && !ideaForm.value && plain) { e.preventDefault(); keyHelp.value = true; return; }
+      if (e.key === ',' && !typing && !ideaForm.value && plain) { e.preventDefault(); settingsPanel.value = !settingsPanel.value; return; }
       if (panelKey && d && panelAct(store, d, panelKey)) { e.preventDefault(); return; }
       const findKey = (e.key === '/' && !typing && !e.metaKey && !e.ctrlKey)
         || (e.key.toLowerCase() === 'k' && (e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && !ideaForm.value);

@@ -7,6 +7,7 @@ import { keepPrefsLocal } from '../../prefs';
 import { createStore } from '../../store';
 import { ideaForm } from '../../board/IdeaForm';
 import { remindForm } from '../../board/Remind';
+import { settingsPanel } from '../../board/Settings';
 import { Root } from './Root';
 import { resetFolds } from '../../board/Sections';
 import { dateValue } from '../../board/DatePick';
@@ -59,6 +60,7 @@ afterEach(() => {
   if (mounted) { render(null, mounted); mounted.remove(); mounted = null; }
   ideaForm.value = null;
   remindForm.value = null;
+  settingsPanel.value = false;
   document.body.innerHTML = '';
 });
 
@@ -94,11 +96,13 @@ describe('the board', () => {
 
   it('switches to the grid and remembers it', async () => {
     const { $ } = await mount();
-    $('.layout button:nth-child(2)')!.click();
+    $('button[aria-label=Settings]')!.click();
+    await vi.waitFor(() => expect($('.settings')).not.toBeNull());
+    $('.settings [aria-label=Layout] button:nth-child(2)')!.click();
     await vi.waitFor(() => expect($('.board.gridview')).not.toBeNull());
     expect(localStorage.getItem('eye.ink.layout')).toBe('grid');
     expect($('.needsbox .ngrid .card.need')).not.toBeNull();
-    $('.layout button:nth-child(1)')!.click();
+    $('.settings [aria-label=Layout] button:nth-child(1)')!.click();
     await vi.waitFor(() => expect($('.board.lanes')).not.toBeNull());
   });
 
@@ -702,68 +706,5 @@ describe('an idea whose folder does not exist', () => {
     f.dispatchEvent(new Event('input', { bubbles: true }));
     await vi.waitFor(() => expect(folderCheck).toHaveBeenCalled());
     expect($('.modal .fhint')).toBeNull();
-  });
-});
-
-describe('the accent picker', () => {
-  afterEach(() => { delete document.documentElement.dataset.accent; });
-
-  it('is one button next to the theme switch, showing the current accent, with no swatches until opened', async () => {
-    const { $, $$ } = await mount();
-    const b = $<HTMLButtonElement>('.hd .accbtn')!;
-    expect(b.tagName).toBe('BUTTON');
-    expect(b.dataset.accent).toBe('vermilion');
-    expect(b.getAttribute('aria-label')).toBe('Accent colour: Vermilion (original)');
-    expect(b.getAttribute('aria-expanded')).toBe('false');
-    expect($$('.hd .acc')).toHaveLength(0);
-    expect($('.hd [aria-label="Theme"]')!.nextElementSibling).toBe($('.hd .accpick'));
-  });
-
-  it('opens eight named swatches in one popover, the chosen one marked', async () => {
-    const { $, $$ } = await mount();
-    $<HTMLButtonElement>('.hd .accbtn')!.click();
-    await vi.waitFor(() => expect($('.hd .accpop')).not.toBeNull());
-    const sw = $$<HTMLButtonElement>('.hd .accpop .acc');
-    expect(sw.map((s) => s.getAttribute('aria-label'))).toEqual(['Vermilion (original)', 'Cobalt', 'Teal', 'Moss', 'Amber', 'Magenta', 'Violet', 'Graphite']);
-    expect(sw.map((s) => s.title)).toEqual(sw.map((s) => s.getAttribute('aria-label')));
-    expect(sw.map((s) => s.getAttribute('aria-pressed'))).toEqual(['true', ...Array(7).fill('false')]);
-    expect($('.hd .accbtn')!.getAttribute('aria-expanded')).toBe('true');
-  });
-
-  it('picking a swatch sets the accent, closes the popover and returns the focus to the button', async () => {
-    const { $, $$ } = await mount();
-    $<HTMLButtonElement>('.hd .accbtn')!.click();
-    await vi.waitFor(() => expect($('.hd .accpop')).not.toBeNull());
-    $$<HTMLButtonElement>('.hd .accpop .acc').find((s) => s.getAttribute('aria-label') === 'Moss')!.click();
-    await vi.waitFor(() => expect(document.documentElement.dataset.accent).toBe('moss'));
-    await vi.waitFor(() => expect($('.hd .accpop')).toBeNull());
-    expect($('.hd .accbtn')!.getAttribute('aria-label')).toBe('Accent colour: Moss');
-    expect(document.activeElement).toBe($('.hd .accbtn'));
-  });
-
-  it('closes on Esc, with the focus back on the button, and on a click outside', async () => {
-    const { $ } = await mount();
-    const b = $<HTMLButtonElement>('.hd .accbtn')!;
-    b.click();
-    await vi.waitFor(() => expect($('.hd .accpop')).not.toBeNull());
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-    await vi.waitFor(() => expect($('.hd .accpop')).toBeNull());
-    expect(document.activeElement).toBe(b);
-    b.click();
-    await vi.waitFor(() => expect($('.hd .accpop')).not.toBeNull());
-    document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
-    await vi.waitFor(() => expect($('.hd .accpop')).toBeNull());
-    expect(document.documentElement.dataset.accent).toBeUndefined();
-  });
-
-  it('stays open while the focus moves between its swatches and closes when Tab leaves it', async () => {
-    const { $, $$ } = await mount();
-    $<HTMLButtonElement>('.hd .accbtn')!.click();
-    await vi.waitFor(() => expect($('.hd .accpop')).not.toBeNull());
-    const [first, second] = $$<HTMLButtonElement>('.hd .accpop .acc');
-    first!.dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: second }));
-    expect($('.hd .accpop')).not.toBeNull();
-    second!.dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: document.body }));
-    await vi.waitFor(() => expect($('.hd .accpop')).toBeNull());
   });
 });

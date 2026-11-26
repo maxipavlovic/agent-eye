@@ -9,6 +9,7 @@ import { resetFolds } from '../../board/Sections';
 import { CODE } from './Header';
 import { Root } from './Root';
 import { openFold } from '../../board/Sections';
+import { settingsPanel } from '../../board/Settings';
 
 let mounted: HTMLElement | null = null;
 
@@ -30,7 +31,7 @@ beforeAll(() => {
   Element.prototype.scrollTo ??= () => {};
 });
 beforeEach(() => { localStorage.clear(); resetFolds(); delete document.documentElement.dataset.look; });
-afterEach(() => { if (mounted) { render(null, mounted); mounted.remove(); mounted = null; } });
+afterEach(() => { settingsPanel.value = false; if (mounted) { render(null, mounted); mounted.remove(); mounted = null; } });
 
 describe('the iris board', () => {
   it('draws the header as cells with the eye, its code and the same controls as every look', async () => {
@@ -39,7 +40,10 @@ describe('the iris board', () => {
     expect($('.hd .brand svg.eye')).not.toBeNull();
     expect($<HTMLInputElement>('#q')!.placeholder).toBe('Search every session');
     const names = $$('.hd button').map((b) => b.textContent?.trim() || b.getAttribute('title'));
-    for (const n of ['Lanes', 'Grid', 'light', 'dark', 'auto', 'USAGE', '+ IDEA']) expect(names).toContain(n);
+    for (const n of ['USAGE', 'Settings (,)', '+ IDEA']) expect(names).toContain(n);
+    // the look, colour, layout and theme controls moved into the settings panel
+    for (const n of ['Lanes', 'Grid', 'light', 'dark', 'auto']) expect(names).not.toContain(n);
+    expect($('.hd .accpick')).toBeNull();
   });
 
   it('heads every lane with its count, object, one fact and a timeline with one tick per card', async () => {
@@ -76,7 +80,9 @@ describe('the iris board', () => {
 
   it('switches to the grid with one-line heads that keep the fact, and keeps that choice as its own', async () => {
     const { $, $$ } = await mount();
-    $<HTMLButtonElement>('button[title=Grid]')!.click();
+    $<HTMLButtonElement>('button[aria-label=Settings]')!.click();
+    await vi.waitFor(() => expect($('.settings')).not.toBeNull());
+    ([...$$('.settings [aria-label=Layout] button')].find((b) => b.textContent === 'GRID') as HTMLButtonElement).click();
     await vi.waitFor(() => expect($('.gridview')).not.toBeNull());
     expect($$('.gridview .chead.inline small').length).toBeGreaterThan(2);
     expect(localStorage.getItem('eye.iris.layout')).toBe('grid');
@@ -102,10 +108,10 @@ describe('the iris board', () => {
     expect(localStorage.getItem('eye.ink.panel')).toBeNull();
   });
 
-  it('offers the looks in the colour picker when the page has a look, iris pressed', async () => {
+  it('offers the looks in the settings panel when the page has a look, iris pressed', async () => {
     document.documentElement.dataset.look = 'iris';
     const { $, $$ } = await mount();
-    $<HTMLButtonElement>('.accbtn')!.click();
+    $<HTMLButtonElement>('button[aria-label=Settings]')!.click();
     await vi.waitFor(() => expect($('[aria-label=Look]')).not.toBeNull());
     const looks = $$('[aria-label=Look] button');
     expect(looks.map((b) => [b.textContent, b.getAttribute('aria-pressed')])).toEqual([['INK', 'false'], ['IRIS', 'true']]);
@@ -114,7 +120,7 @@ describe('the iris board', () => {
 
   it('shows only the colours where the page has one look (the offline sample)', async () => {
     const { $ } = await mount();
-    $<HTMLButtonElement>('.accbtn')!.click();
+    $<HTMLButtonElement>('button[aria-label=Settings]')!.click();
     await vi.waitFor(() => expect($('.accs')).not.toBeNull());
     expect($('[aria-label=Look]')).toBeNull();
   });

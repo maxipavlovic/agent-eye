@@ -24,7 +24,7 @@ a { color: inherit; text-decoration: underline; text-decoration-thickness: var(-
 a:hover { background: var(--ink); color: var(--paper); text-decoration: none; }
 
 /* the type roles */
-.btn, .lnk, .fact, .lookbtn, .qmove button, .menu button, .tag, .ot, .chip, .ageh span, .chead h2, .rail .vl,
+.btn, .lnk, .fact, .qmove button, .menu button, .tag, .ot, .chip, .ageh span, .chead h2, .rail .vl,
 .minitile, .needbtn > span, .modal label, .modal .pick legend, .nplan label, .nplan .pick legend, .sec h4, .page .x,
 .empty, .loading, .welcome h2, .tact, .dphead span, .dpgrid th, .nrow, .theme.seg button, .nline b, .receipt .rt {
   font-family: var(--f-disp); font-stretch: 125%; font-weight: 600; text-transform: uppercase; letter-spacing: .08em;
@@ -92,16 +92,12 @@ a:hover { background: var(--ink); color: var(--paper); text-decoration: none; }
 :root[data-theme='dark'] .hd > .btn.plus:hover { background: var(--lit); }
 .hd > .btn.tonight[aria-pressed='true'] { background: var(--lit); }
 
-/* look and accent: one button wearing the accent; its popover holds the looks and the eight swatches */
-.accpick { position: relative; }
-.accbtn { width: 34px; height: 34px; display: grid; place-items: center; border: var(--hair) solid var(--rule); }
-.accbtn i { width: 14px; height: 14px; border-radius: 50%; background: var(--accent); }
-.accbtn[aria-expanded='true'], .accbtn:hover { background: var(--lit); }
-.accpop { position: absolute; top: calc(100% + 13px); right: -1px; z-index: 20; display: flex; flex-direction: column; gap: 12px; padding: 14px; background: var(--paper); border: var(--hair) solid var(--rule); box-shadow: var(--sheet); }
-.accpop .looks, .accpop .accs { display: flex; gap: 8px; }
-.lookbtn { font-size: 13px; padding: 8px 12px; border: var(--hair) solid var(--rule); }
-.lookbtn:hover { background: var(--lit); }
-.lookbtn[aria-pressed='true'] { background: var(--ink); color: var(--paper); }
+/* the settings gear, and the eight accent swatches in the panel */
+.hd > .btn.gear { padding: 0 14px; }
+.btn.gear svg { stroke-width: var(--hair); }
+.btn.gear svg * { vector-effect: non-scaling-stroke; }
+.btn.gear[aria-pressed='true'] { background: var(--lit); color: var(--ink); }
+.accs { display: flex; flex-wrap: wrap; gap: 8px; }
 .acc { width: 24px; height: 24px; border-radius: 50%; background: var(--accent); flex: none; }
 .acc[aria-pressed='true'] { box-shadow: 0 0 0 3px var(--paper), 0 0 0 calc(3px + var(--hair) * 2) var(--ink); }
 
@@ -569,8 +565,8 @@ mark { background: var(--ink); color: var(--paper); padding: 0 3px; }
 .keyhelp .where { grid-template-columns: 4.5em 1fr; margin: 12px 0 8px; }
 
 /* usage: numbers in the text face; the accent only for a limit above 80% */
-.usage .umeta, .usage .unote { font: 400 17px/1.5 var(--f-body); margin: 10px 0 0; max-width: 66ch; }
-.usage .state, .usage .uempty { font: 400 17px/1.5 var(--f-body); max-width: 66ch; margin: 18px 0 0; }
+.usage .umeta, .usage .unote, .settings .umeta { font: 400 17px/1.5 var(--f-body); margin: 10px 0 0; max-width: 66ch; }
+.usage .state, .usage .uempty, .settings .state { font: 400 17px/1.5 var(--f-body); max-width: 66ch; margin: 18px 0 0; }
 .usage .acts { margin-top: 22px; }
 .ubars, .ulimits { list-style: none; margin: 0; padding: 0; font: 400 17px/1.5 var(--f-body); }
 .ubars li { display: grid; grid-template-columns: 12em minmax(0, 1fr) 5.5em 7.5em; gap: 14px; align-items: center; padding: 6px 0; }
@@ -657,7 +653,7 @@ mark { background: var(--ink); color: var(--paper); padding: 0 3px; }
   /* a working session: a short stroke runs along its top rule */
   .card .ants { opacity: 1; animation: scan 2.4s cubic-bezier(.45, 0, .55, 1) infinite alternate; }
   /* a menu settles in place */
-  .ctx, .menu, .accpop { animation: settle .14s cubic-bezier(.2, .7, .2, 1); }
+  .ctx, .menu { animation: settle .14s cubic-bezier(.2, .7, .2, 1); }
   /* the lashes lift and fall while something needs you */
   .eye.alert .lash { animation: lash 1.6s ease-in-out infinite; }
   /* something waits on you: the bell rings every few seconds */
@@ -685,7 +681,7 @@ mark { background: var(--ink); color: var(--paper); padding: 0 3px; }
   .brand { padding: 0 12px; }
 }
 @media (max-width: 1200px), (pointer: coarse) {
-  .theme button, .accbtn { width: 40px; height: 40px; }
+  .theme button { width: 40px; height: 40px; }
   .acc { width: 30px; height: 30px; }
   .btn.sm { min-height: 40px; }
   .qmove button, .page .x { min-height: 40px; }
@@ -720,9 +716,6 @@ mark { background: var(--ink); color: var(--paper); padding: 0 3px; }
 @media (max-width: 900px) {
   :root { --inset: 0px; }
   .app { border: 0; }
-  .accpick { position: static; }
-  .accpop { left: 8px; right: 8px; top: 100%; }
-  .accpop .accs { justify-content: space-between; }
   .gridview { grid-template-columns: minmax(0, 1fr); }
   .gridview .side { border-left: 0; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
   /* the side's boxes sit in a row (or two): each draws its own bottom line again */
@@ -752,3 +745,11 @@ mark { background: var(--ink); color: var(--paper); padding: 0 3px; }
 
 /* the board embedded in the site's page: the site's own switch sets the theme */
 :root[data-embed] .hd .theme[aria-label='Theme'] { display: none; }
+
+/* SETTINGS: one row per setting, the name and the control on a line and one plain line under it */
+.srow { margin: 0 0 20px; }
+.srow .umeta { margin-top: 8px; }
+.settings .nrow { flex-wrap: wrap; row-gap: 10px; }
+.settings .nrow > span { min-width: 10em; }
+.settings .nset { margin-top: 14px; }
+.settings .more { margin-top: 44px; }

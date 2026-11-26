@@ -1,21 +1,18 @@
 import type { HeaderProps, ProjectBarProps } from '../../board/look';
-import { ConnState, HeaderEnd, LayoutSwitch, NeedsButton, SearchField, ThemeSwitch } from '../../board/HeaderParts';
-import { LAYOUT_ICON, THEME_ICON } from './art';
+import { ConnState, HeaderEnd, NeedsButton, SearchField } from '../../board/HeaderParts';
 import { Eye } from './Eye';
 
 /** The look's code, as a part number on a drawing: in the header and the title block. */
 export const CODE = 'IR–1';
 
-/** One row of cells, as on a drawing: the eye and its code, search, Needs you, the connection, layout, theme, look and colour, the night, usage and + IDEA. */
-export function Header({ store, layout, setLayout }: HeaderProps) {
+/** One row of cells, as on a drawing: the eye and its code, search, Needs you, the connection, the night, usage, the settings gear and + IDEA. */
+export function Header({ store }: HeaderProps) {
   return (
     <header class="hd">
       <div class="brand"><Eye alert={store.needsYou.value > 0} /><span class="word">EYE</span><span class="code">{CODE}</span></div>
       <SearchField store={store} keyAfter />
       <NeedsButton store={store} />
       <ConnState store={store} />
-      <LayoutSwitch layout={layout} setLayout={setLayout} icon={(k) => LAYOUT_ICON[k]()} />
-      <ThemeSwitch store={store} icon={(k) => THEME_ICON[k]()} />
       <HeaderEnd store={store} />
     </header>
   );

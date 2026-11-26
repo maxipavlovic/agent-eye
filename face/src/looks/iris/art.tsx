@@ -32,19 +32,6 @@ const svg = (w: number, h: number, body: JSX.Element, cls = 'ico') => (
   <svg class={cls} width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden="true">{body}</svg>
 );
 
-/** The header's Lanes | Grid switch. */
-export const LAYOUT_ICON = {
-  lanes: () => svg(20, 20, <path class="s" d="M2.25 3.25h4v13.5h-4zM8 3.25h4v13.5H8zM13.75 3.25h4v13.5h-4z" />),
-  grid: () => svg(20, 20, <path class="s" d="M2.75 2.75h6v6h-6zM11.25 2.75h6v6h-6zM2.75 11.25h6v6h-6zM11.25 11.25h6v6h-6z" />),
-};
-
-/** The header's theme switch: light, dark, as the system is. */
-export const THEME_ICON = {
-  light: () => svg(20, 20, <><circle class="s" cx="10" cy="10" r="3.75" /><path class="s" d="M10 1.75v2.5M10 15.75v2.5M1.75 10h2.5M15.75 10h2.5M4.15 4.15l1.8 1.8M14.05 14.05l1.8 1.8M4.15 15.85l1.8-1.8M14.05 5.95l1.8-1.8" /></>),
-  dark: () => svg(20, 20, <path class="s" d="M16.2 12.6A7 7 0 0 1 7.4 3.8a7 7 0 1 0 8.8 8.8Z" />),
-  auto: () => svg(20, 20, <><circle class="s" cx="10" cy="10" r="7.25" /><path d="M10 2.75a7.25 7.25 0 0 0 0 14.5Z" fill="currentColor" /></>),
-};
-
 const ICON: Record<IconName, () => JSX.Element> = {
   arrow: () => svg(16, 8, <path class="s" d="M0 4h15M11.5.5 15 4l-3.5 3.5" />, 'ico arrow'),
   bang: () => svg(14, 14, <><rect x="6.35" y="2.4" width="1.3" height="6.2" fill="currentColor" /><circle cx="7" cy="10.9" r="1" fill="currentColor" /></>),
