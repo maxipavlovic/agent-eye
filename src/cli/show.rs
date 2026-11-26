@@ -7,6 +7,7 @@ use crate::model::{Column, Session};
 use crate::resume;
 use crate::scan;
 use crate::search;
+use crate::turns;
 use crate::util::{ago, fmt_ts, head_chars, now_ms, printable, short_id, tokens_line};
 use crate::worked;
 use anyhow::{Context, Result};
@@ -18,6 +19,9 @@ pub fn scan(g: &Global, full: bool, json: bool) -> Result<()> {
     let t0 = std::time::Instant::now();
     let worked = worked::backfill::run_all(&mut env.db, &env.paths, &env.agents)?;
     let worked_ms = t0.elapsed().as_millis();
+    let t0 = std::time::Instant::now();
+    let turns = turns::backfill::run_all(&mut env.db, &env.paths, &env.agents)?;
+    let turns_ms = t0.elapsed().as_millis();
     let kinds = env
         .db
         .count_group("SELECT kind, count(*) FROM session GROUP BY kind ORDER BY 2 DESC")?;
@@ -31,7 +35,8 @@ pub fn scan(g: &Global, full: bool, json: bool) -> Result<()> {
         println!(
             "{}",
             json!({"stats": st, "sessions_by_kind": m(&kinds), "outputs_by_kind": m(&outs),
-                   "worked": {"counted": worked.counted, "unreadable": worked.unreadable, "ms": worked_ms}})
+                   "worked": {"counted": worked.counted, "unreadable": worked.unreadable, "ms": worked_ms},
+                   "turns": {"counted": turns.counted, "unreadable": turns.unreadable, "ms": turns_ms}})
         );
     } else {
         let fmt = |v: &[(String, i64)]| {
@@ -52,6 +57,12 @@ pub fn scan(g: &Global, full: bool, json: bool) -> Result<()> {
             println!(
                 "work timeline: {} sessions counted, {} unreadable, in {} ms",
                 worked.counted, worked.unreadable, worked_ms
+            );
+        }
+        if turns.counted + turns.unreadable > 0 {
+            println!(
+                "turns: {} sessions counted, {} unreadable, in {} ms",
+                turns.counted, turns.unreadable, turns_ms
             );
         }
         println!("sessions: {}", fmt(&kinds));

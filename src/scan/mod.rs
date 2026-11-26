@@ -201,6 +201,7 @@ fn scan_agent(
         transcript::apply(&tx, agent, f, &d, reset, cfg, repo_cache)
             .with_context(|| format!("indexing {}", f.path.display()))?;
         crate::worked::store::record(&tx, &f.session_id, &d.events, reset)?;
+        crate::turns::store::record(&tx, &f.session_id, &d.turns, reset)?;
         // A read that starts over leaves the session to the usage backfill (its sub-agents are
         // counted there too); a read that goes on adds what is new.
         if reset {

@@ -5,7 +5,7 @@ use rusqlite::{params, Connection, OptionalExtension, Row, TransactionBehavior};
 use std::path::Path;
 
 /// The schema version this build writes; older databases are migrated on open.
-pub const SCHEMA_VERSION: i64 = 17;
+pub const SCHEMA_VERSION: i64 = 18;
 
 const SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS session(id TEXT PRIMARY KEY, agent TEXT NOT NULL DEFAULT 'claude', project_dir TEXT, cwd TEXT, repo_root TEXT, title TEXT, title_source TEXT,
@@ -50,6 +50,12 @@ CREATE TABLE IF NOT EXISTS usage_day(session_id TEXT NOT NULL, day TEXT NOT NULL
   PRIMARY KEY(session_id, day, model)) WITHOUT ROWID;
 CREATE INDEX IF NOT EXISTS idx_usage_day_day ON usage_day(day);
 CREATE TABLE IF NOT EXISTS usage_state(session_id TEXT PRIMARY KEY, unreadable INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS turn(session_id TEXT NOT NULL, ts INTEGER NOT NULL, kind TEXT NOT NULL, n INTEGER NOT NULL DEFAULT 0);
+CREATE INDEX IF NOT EXISTS idx_turn_session_ts ON turn(session_id, ts);
+CREATE TABLE IF NOT EXISTS turn_state(session_id TEXT PRIMARY KEY, unreadable INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS correction(session_id TEXT NOT NULL, prompt_ts INTEGER NOT NULL, verdict TEXT, phrase TEXT, model TEXT,
+  judged_at INTEGER, input_hash TEXT, PRIMARY KEY(session_id, prompt_ts)) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS idle_span(start_ms INTEGER PRIMARY KEY, end_ms INTEGER NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_stream_session ON stream(session_id);
 CREATE INDEX IF NOT EXISTS idx_output_session ON output(session_id);
 CREATE INDEX IF NOT EXISTS idx_event_session ON event(session_id);
@@ -258,6 +264,9 @@ impl Db {
                 self.add_column("session", &format!("{col} TEXT"))?;
             }
         }
+        // v18: `turn` and `turn_state` (when the user and the agent took their turns), `correction`
+        // and `idle_span` (for the steering clock) are created with the schema above. They start
+        // empty; sessions without turns get them from `turns::backfill`, from their transcripts.
         if cur == 1 || (cur > 0 && cur < 4) {
             // v2 keeps pending tool_use ids and Jira candidates, v4 token counts: re-read every
             // transcript once.

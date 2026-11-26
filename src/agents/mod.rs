@@ -82,6 +82,12 @@ pub trait Agent: Send + Sync + std::fmt::Debug {
     fn work_events(&self, _path: &Path) -> Result<Vec<WorkEvent>> {
         Ok(vec![])
     }
+    /// The turn events of the transcript at `path`: the same `Delta::turns` a read of the whole
+    /// file reports, and nothing else (the turns of a session read before eye kept them). `path`
+    /// exists. The default knows none.
+    fn turn_events(&self, _path: &Path) -> Result<Vec<TurnEvent>> {
+        Ok(vec![])
+    }
     /// The token use of every message of the transcript at `path` (a session's own, or a
     /// sub-agent's), with its time and model: the same messages `parse_transcript` reports in
     /// `Delta::usage_msgs`, read from the whole file and nothing else (usage by day of a session

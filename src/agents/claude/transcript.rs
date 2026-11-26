@@ -8,6 +8,7 @@ use super::super::outputs::{
 };
 use super::super::{Delta, ParseOpts, PROMPTS_CAP, REPLIES_CAP};
 use super::signals::Tracker;
+use super::turns::Turns;
 use super::work::work_event;
 use crate::model::Tokens;
 use crate::usage::UsageMsg;
@@ -100,6 +101,7 @@ pub fn parse_reader<R: BufRead>(mut r: R, from: u64, opts: &ParseOpts) -> Result
     let mut offset = from;
     let (pending_in, signals_in) = split_carry(opts.carry);
     let mut tracker = Tracker::resume(signals_in);
+    let mut turns = Turns::resume(opts.carry);
     let mut pending: HashMap<String, Pending> = pending_in.iter().cloned().collect();
     let mut order: Vec<String> = pending_in.iter().map(|(k, _)| k.clone()).collect();
     let mut seen = Seen::new();
@@ -146,6 +148,7 @@ pub fn parse_reader<R: BufRead>(mut r: R, from: u64, opts: &ParseOpts) -> Result
             ty
         };
         tracker.line(&v, ty);
+        turns.line(&v, ty);
         process(&v, ty, &mut d, &mut pending, &mut seen, opts);
         if pending.len() > order.len() || order.len() > PENDING_CAP * 4 {
             order.retain(|k| pending.contains_key(k));
@@ -166,8 +169,12 @@ pub fn parse_reader<R: BufRead>(mut r: R, from: u64, opts: &ParseOpts) -> Result
     }
     d.signals = Some(tracker.signals());
     let signals_out = tracker.state();
-    if !pending_out.is_empty() || signals_out.is_some() {
-        d.carry = Some(serde_json::json!({"pending": pending_out, "signals": signals_out}));
+    let (turn_events, turn_out) = turns.finish(opts.since.is_none());
+    d.turns = turn_events;
+    if !pending_out.is_empty() || signals_out.is_some() || turn_out.is_some() {
+        d.carry = Some(
+            serde_json::json!({"pending": pending_out, "signals": signals_out, "turn": turn_out}),
+        );
     }
     trim_front_bytes(&mut d.prompts_text, PROMPTS_CAP);
     trim_front_bytes(&mut d.replies_text, REPLIES_CAP);

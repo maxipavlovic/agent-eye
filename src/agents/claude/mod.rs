@@ -13,6 +13,7 @@ mod live;
 mod prompt;
 mod signals;
 mod transcript;
+mod turns;
 mod work;
 
 use super::*;
@@ -199,6 +200,10 @@ impl Agent for Claude {
 
     fn work_events(&self, path: &Path) -> Result<Vec<crate::worked::WorkEvent>> {
         work::read_events(path)
+    }
+
+    fn turn_events(&self, path: &Path) -> Result<Vec<crate::turns::TurnEvent>> {
+        turns::read_events(path)
     }
 
     fn usage_msgs(&self, path: &Path) -> Result<Vec<crate::usage::UsageMsg>> {

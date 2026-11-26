@@ -66,6 +66,8 @@ pub mod summarize;
 /// The terminal picker screen.
 pub mod tui;
 /// The days a session was worked on.
+/// Turn events (when the user and the agent took their turns), stored for the steering clock.
+pub mod turns;
 /// Usage by day and model, the cost estimate, and the plan limits.
 pub mod usage;
 /// Small helpers.

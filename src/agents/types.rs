@@ -5,6 +5,7 @@
 pub use crate::activity::{BgTask, LoopInfo, Signals};
 pub use crate::model::Stamp;
 use crate::model::Tokens;
+pub use crate::turns::{TurnEvent, TurnKind};
 pub use crate::usage::{LimitWindow, PlanLimits, UsageMsg};
 pub use crate::worked::WorkEvent;
 use serde_json::Value;
@@ -130,6 +131,10 @@ pub struct Delta {
     /// The time of every message read (prompt, reply, tool result), prompts marked, for the work
     /// timeline. All of them, in any order; the core adds them up (`crate::worked`).
     pub events: Vec<WorkEvent>,
+    /// When the user and the agent took their turns in the session itself (not its sub-agents), for
+    /// the steering clock (`crate::turns`). What is new when `replaces` is false, the whole session
+    /// otherwise. An adapter that cannot tell leaves it empty.
+    pub turns: Vec<TurnEvent>,
     /// Token use of the lines read (`subagents_total` stays 0).
     pub usage: Tokens,
     /// Id of the last message counted in `usage`; carried to the next read so a message that
