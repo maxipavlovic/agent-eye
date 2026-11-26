@@ -6,8 +6,8 @@ use super::api::{ApiError, ApiResult};
 use super::{AppState, Shared};
 use crate::agents;
 use crate::config::{self, Config};
-use crate::config_clock::ClockCfg;
 use crate::night::clock;
+use crate::platform::idle;
 use axum::extract::State;
 use axum::Json;
 use serde_json::{json, Map, Value};
@@ -69,12 +69,17 @@ fn describe(cfg: &Config, key: &str) -> Value {
         }
         "remind.notify" => json!({"type": "bool", "value": cfg.remind.notify}),
         "clock.enabled" => json!({"type": "bool", "value": cfg.clock.enabled}),
-        "clock.llm" => json!({"type": "bool", "value": ClockCfg::llm_on(cfg)}),
+        "clock.llm" => {
+            json!({"type": "bool", "value": cfg.clock.llm.unwrap_or(cfg.summary.enabled)})
+        }
         "clock.hints" => json!({"type": "bool", "value": cfg.clock.hints}),
         "clock.break_minutes" => {
             json!({"type": "int", "min": 10, "max": 240, "value": cfg.clock.break_minutes})
         }
-        "clock.idle" => json!({"type": "bool", "value": cfg.clock.idle}),
+        "clock.idle" => json!({
+            "type": "bool", "value": cfg.clock.idle,
+            "available": idle::idle_ms(&idle::RealSys).is_some(),
+        }),
         _ => {
             let choices: Vec<Value> = known_agents(cfg)
                 .into_iter()
@@ -229,6 +234,7 @@ mod tests {
         assert_eq!(s["clock.enabled"]["value"], true);
         assert_eq!(s["clock.hints"]["value"], false);
         assert_eq!(s["clock.idle"]["value"], false);
+        assert!(s["clock.idle"]["available"].is_boolean());
         assert_eq!(
             s["clock.break_minutes"],
             json!({"type": "int", "min": 10, "max": 240, "value": 45})
