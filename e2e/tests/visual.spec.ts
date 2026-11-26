@@ -1,5 +1,5 @@
 // Screenshots of the real page: the board in both layouts, the panel, an idea's panel, the menu, the idea form and
-// the usage panel, light and dark, at two widths. Baselines are made by `scripts/e2e.sh --update`
+// the usage and settings panels, light and dark, at two widths. Baselines are made by `scripts/e2e.sh --update`
 // in the pinned Playwright container (see docs/testing.md). The server clock, the browser clock
 // and the time zone are fixed, so what the page says about time is the same on every run.
 import type { Page } from '@playwright/test';
@@ -8,7 +8,13 @@ import { card, expect, test } from '../support';
 const SCHEMES = ['light', 'dark'] as const;
 const WIDTHS = [1440, 1000] as const;
 
-const layout = (p: Page, name: 'Lanes' | 'Grid') => p.getByRole('group', { name: 'Layout' }).getByRole('button', { name }).click();
+// the layout lives in the settings panel: open it, press, and close it again
+const layout = async (p: Page, name: 'Lanes' | 'Grid') => {
+  await p.getByRole('button', { name: 'Settings', exact: true }).click();
+  await p.getByRole('group', { name: 'Layout' }).getByRole('button', { name }).click();
+  await p.keyboard.press('Escape');
+  await expect(p.getByRole('complementary', { name: 'Settings' })).toHaveCount(0);
+};
 
 const VIEWS: Record<string, (p: Page) => Promise<void>> = {
   lanes: async (p) => { await layout(p, 'Lanes'); },
@@ -30,6 +36,10 @@ const VIEWS: Record<string, (p: Page) => Promise<void>> = {
   'idea-form': async (p) => {
     await p.getByRole('button', { name: '+ IDEA' }).click();
     await expect(p.getByRole('form', { name: 'New idea' })).toBeVisible();
+  },
+  settings: async (p) => {
+    await p.getByRole('button', { name: 'Settings', exact: true }).click();
+    await expect(p.getByRole('heading', { name: 'AGENTS' })).toBeVisible();
   },
   usage: async (p) => {
     await p.getByRole('button', { name: 'USAGE' }).click();

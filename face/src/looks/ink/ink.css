@@ -64,7 +64,7 @@ a:hover { background: var(--ink); color: var(--paper); text-decoration: none; }
 .theme button.on svg [fill='var(--paper)'] { fill: var(--ink); }
 /* the settings gear, and the eight accent swatches in the panel */
 .btn.gear { height: 40px; padding: 0 12px; display: inline-flex; align-items: center; }
-.btn.gear svg { stroke-width: 2; stroke-linecap: square; }
+.btn.gear svg { stroke-width: 2; stroke-linejoin: miter; }
 .btn.gear[aria-pressed='true'] { background: var(--ink); color: var(--paper); }
 .accs { display: flex; flex-wrap: wrap; gap: 8px; }
 .acc { width: 24px; height: 24px; padding: 0; border: 2px solid var(--ink); background: var(--accent); cursor: pointer; flex: none; }

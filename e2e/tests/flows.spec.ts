@@ -197,6 +197,44 @@ test.describe('usage', () => {
   });
 });
 
+test.describe('settings', () => {
+  test('the gear changes the theme and the layout, keeps the shortcuts, and closes on Esc', async ({ board, eye, look }) => {
+    const panel = board.getByRole('complementary', { name: 'Settings' });
+    await board.getByRole('button', { name: 'Settings', exact: true }).click();
+    await expect(panel.getByRole('heading', { name: 'LOOK' })).toBeVisible();
+    await panel.getByRole('group', { name: 'Theme' }).getByRole('button', { name: 'DARK' }).click();
+    await expect(board.locator('html')).toHaveAttribute('data-theme', 'dark');
+    await panel.getByRole('group', { name: 'Layout' }).getByRole('button', { name: 'GRID' }).click();
+    await expect(board.locator('.board.gridview')).toBeVisible();
+    await board.keyboard.press('Escape');
+    await expect(panel).toHaveCount(0);
+    // the board's keys still work: `,` brings the panel back, Esc closes it, `/` goes to the search
+    await board.keyboard.press(',');
+    await expect(panel).toBeVisible();
+    await board.keyboard.press('Escape');
+    await expect(panel).toHaveCount(0);
+    await board.keyboard.press('/');
+    await expect(board.getByPlaceholder('Search every session')).toBeFocused();
+    await board.getByRole('button', { name: 'Settings', exact: true }).click();
+    await panel.getByRole('group', { name: 'Layout' }).getByRole('button', { name: 'LANES' }).click();
+    await expect(board.locator('.board.lanes')).toBeVisible();
+    // the choices are the engine's too, under the look's own keys
+    const prefs = await eye.api('/api/prefs');
+    expect(prefs['eye.theme']).toBe('dark');
+    expect(prefs[`eye.${look}.layout`]).toBe('lanes');
+  });
+
+  test('an agent setting is saved into the config at once, and a key left to the file is refused', async ({ board, eye }) => {
+    const panel = board.getByRole('complementary', { name: 'Settings' });
+    await board.getByRole('button', { name: 'Settings', exact: true }).click();
+    await panel.getByRole('group', { name: 'Summaries' }).getByRole('button', { name: 'ON' }).click();
+    await expect(panel.getByRole('status')).toHaveText('Saved');
+    expect((await eye.api('/api/settings')).settings['summary.enabled'].value).toBe(true);
+    await expect(panel).toContainText('config.toml');
+    expect((await eye.api('/api/settings', { 'board.port': 1 })).error).toMatch(/not a setting/);
+  });
+});
+
 test.describe('leftovers', () => {
   test('Ignore asks first, and a yes removes the item', async ({ board, eye }) => {
     await card(board, /Fix stale tokens/).click();
@@ -269,9 +307,9 @@ test.describe('export', () => {
 });
 
 test.describe('looks', () => {
-  test('the picker switches the look, and the engine remembers it for the next page', async ({ board, eye, look }) => {
+  test('the settings panel switches the look, and the engine remembers it for the next page', async ({ board, eye, look }) => {
     const other = look === 'ink' ? 'iris' : 'ink';
-    await board.getByRole('button', { name: /^Accent colour/ }).click();
+    await board.getByRole('button', { name: 'Settings', exact: true }).click();
     const looks = board.getByRole('group', { name: 'Look' });
     await expect(looks.getByRole('button', { name: look.toUpperCase() })).toHaveAttribute('aria-pressed', 'true');
     await looks.getByRole('button', { name: other.toUpperCase() }).click();
@@ -306,12 +344,14 @@ test.describe('looks', () => {
   test('each look keeps its own layout: Grid in one, Lanes in the other, both back after switching', async ({ board, eye, look }) => {
     const other = look === 'ink' ? 'iris' : 'ink';
     const pick = async (name: string) => {
-      await board.getByRole('button', { name: /^Accent colour/ }).click();
+      await board.getByRole('button', { name: 'Settings', exact: true }).click();
       await board.getByRole('group', { name: 'Look' }).getByRole('button', { name: name.toUpperCase() }).click();
       await expect(board.locator('html')).toHaveAttribute('data-look', name);
     };
+    await board.getByRole('button', { name: 'Settings', exact: true }).click();
     await board.getByRole('group', { name: 'Layout' }).getByRole('button', { name: 'Grid' }).click();
     await expect(board.locator('.board.gridview')).toBeVisible();
+    await board.keyboard.press('Escape');
     await pick(other);
     await expect(board.locator('.board.lanes')).toBeVisible();
     // the layout comes back from the engine, not only from this browser

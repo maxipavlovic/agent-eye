@@ -167,13 +167,13 @@ describe('the agent settings', () => {
     expect($$<HTMLButtonElement>('.settings [aria-label=Agents] button').every((b) => b.disabled)).toBe(true);
   });
 
-  it('names each setting with one plain line, and points to eye config for the rest', async () => {
+  it('names each setting with one plain line, and points to config.toml for the rest', async () => {
     const { $, $$, open } = await mount(engine().source);
     await open();
     await vi.waitFor(() => expect($('.settings [aria-label=Agents]')).not.toBeNull());
     expect($$('.settings .sec h4').map((h4) => h4.textContent)).toEqual(['LOOK', 'BOARD', 'SUMMARIES', 'NIGHT SHIFT', 'REMINDERS', 'AGENTS']);
     expect($('.settings')!.textContent).toContain('Takes effect when the background service restarts');
-    expect($('.settings .more')!.textContent).toContain('eye config');
+    expect($('.settings .more')!.textContent).toContain('config.toml');
     expect($('.settings .more')!.textContent).toContain('docs/config.md');
   });
 

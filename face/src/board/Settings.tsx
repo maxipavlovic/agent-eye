@@ -114,7 +114,7 @@ export function SettingsHost({ store, layout, setLayout, folded, setFold }: { st
           {!loaded.value && <p class="state">Loading…<i class="dots" /></p>}
           {loaded.value && !state.value && <p class="state">This engine has no agent settings. Update eye, then reload.</p>}
           {state.value && <AgentSettings store={store} state={state.value} save={save} />}
-          <p class="umeta more">More in <code>eye config</code>: folders, prices, exclude lists and the night sandbox. See <code>docs/config.md</code>.</p>
+          <p class="umeta more">More in <code>~/.agent-eye/config.toml</code>: folders, prices, exclude lists and the night sandbox. See <code>docs/config.md</code>.</p>
         </div>
         <div class="dis" />
       </aside>

@@ -8,6 +8,12 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 - Turn timing is now recorded locally: when you prompt, when the agent finishes, interrupts, tool calls and errors, refusals, thinking and compactions (timings and sizes only, never text). Sessions already indexed are read again once, in the background. New `[clock]` settings in `config.toml`.
 - Turn timing covers Codex CLI, Antigravity CLI and OpenCode too, with every kind their files allow; `docs/agents.md` lists which and why not.
+- A **settings gear** in the header of both looks (or the `,` key). It holds the look, colour, layout and theme that used to crowd the header, which makes room for USAGE and what comes next to it, and the settings that so far lived only in `config.toml`: summaries (on, model), the night shift (on, window, at once, where runs work), desktop notices for reminders, and which agents eye follows. Each says in one line what it does and saves at once.
+- `GET /api/settings` and `POST /api/settings`: a whitelist of config keys with their types and allowed values, written under the same lock as the CLI, comments kept; an unknown key or a bad value is a 400 and nothing is written (see `docs/api.md`).
+
+### Changed
+
+- The header no longer carries the Lanes / Grid, theme, look and colour buttons: they are in the settings panel, and their keys and saved settings are unchanged.
 
 ## 0.4.1 - 2026-11-25
 

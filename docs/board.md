@@ -45,6 +45,7 @@ In a session's panel, when no field has the focus:
 | X | Forget |
 | ← → | Previous or next card |
 | / or ⌘K | Search |
+| , | Settings (the gear) |
 | Esc | Close |
 | ? | The list of keys |
 
@@ -59,11 +60,25 @@ An idea's panel has START, IN BACKGROUND, TONIGHT and EDIT in one row, and REMIN
 | M | Remind me |
 | ← → | Previous or next card |
 | / or ⌘K | Search |
+| , | Settings (the gear) |
 | Esc | Close |
 | ? | The list of keys |
 
 ## The header
 
-Search (every session, archive included; the best match first), the Needs you count, the live connection, Lanes / Grid, the theme (light, dark, auto), the look and the accent colour (one button: **INK** or **IRIS**, then eight colours), **Tonight: N** while night runs are planned (see `night.md`), USAGE (cost and plan limits, see `usage.md`) and **+ IDEA**. The theme, look, accent, layout, folded lanes and the panel sections you keep open are shared by every browser on this machine (`ui.json`); each look keeps its own layout, folded lanes and open sections.
+Search (every session, archive included; the best match first), the Needs you count, the live connection, **Tonight: N** while night runs are planned (see `night.md`), USAGE (cost and plan limits, see `usage.md`), the **settings gear** and **+ IDEA**. The theme, look, accent, layout, folded lanes and the panel sections you keep open are shared by every browser on this machine (`ui.json`); each look keeps its own layout, folded lanes and open sections.
+
+## Settings
+
+The gear (or the `,` key) opens SETTINGS. Every change applies at once and the panel says **Saved**.
+
+- **Look**: INK or IRIS, the eight accent colours, Lanes or Grid, and light, dark or auto.
+- **Board**: which lanes are folded.
+- **Summaries**: on or off, and the model (`[summary] enabled`, `model`).
+- **Night shift**: on or off, the window, how many runs at once and where runs work (`[night] enabled`, `window`, `parallel`, `isolation`). The window is checked as `eye night window` checks it.
+- **Reminders**: the desktop notice (`[remind] notify`).
+- **Agents**: which agents eye follows (`[agents] enabled`), in the order of the file; new ones are added at the end, and the first is the default.
+
+They are written into `config.toml` (comments and other keys stay), through `/api/settings` (see `api.md`). The background service reads the night shift and reminder keys again on each pass; summaries and agents count after it restarts, and the panel says so. Folders, prices, exclude lists and the night sandbox switches are not in the panel: they stay in `config.toml` (see `config.md`). On the sample board (the site's demo) the settings are shown, but nothing is saved.
 
 **Looks.** Ink is pixel art on warm paper. Iris draws the board as a technical drawing in one-pixel lines: header cells, big condensed counts, and under each lane name one fact (how long the oldest ask has waited, who you are waiting on, how many are working) and a timeline with one tick per session, two weeks ago on the left, now on the right. A title block under the board counts what is on it. Its drawings move a little: the eye blinks, the bell rings while something waits on you, the hourglass turns over while you wait on others; with reduced motion set in your system, nothing moves on its own. Both have the same cards, panel, keys and colours. Switching looks loads the page again; `?look=iris` in the address shows one for that page only and saves nothing.

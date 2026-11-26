@@ -47,8 +47,8 @@ export function SettingsGear() {
   return (
     <button class="btn gear" title="Settings (,)" aria-label="Settings" aria-haspopup="dialog" aria-keyshortcuts="," aria-pressed={settingsPanel.value} onClick={() => { settingsPanel.value = !settingsPanel.value; }}>
       <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" aria-hidden="true">
-        <circle cx="12" cy="12" r="3.5" />
-        <path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M18.7 5.3l-2.1 2.1M7.4 16.6l-2.1 2.1" />
+        <path d="M10.17 4.62 L10.28 1.64 L13.72 1.64 L13.83 4.62 L15.92 5.49 L18.10 3.46 L20.54 5.90 L18.51 8.08 L19.38 10.17 L22.36 10.28 L22.36 13.72 L19.38 13.83 L18.51 15.92 L20.54 18.10 L18.10 20.54 L15.92 18.51 L13.83 19.38 L13.72 22.36 L10.28 22.36 L10.17 19.38 L8.08 18.51 L5.90 20.54 L3.46 18.10 L5.49 15.92 L4.62 13.83 L1.64 13.72 L1.64 10.28 L4.62 10.17 L5.49 8.08 L3.46 5.90 L5.90 3.46 L8.08 5.49Z" />
+        <circle cx="12" cy="12" r="3" />
       </svg>
     </button>
   );
