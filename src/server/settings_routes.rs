@@ -6,6 +6,7 @@ use super::api::{ApiError, ApiResult};
 use super::{AppState, Shared};
 use crate::agents;
 use crate::config::{self, Config};
+use crate::config_clock::ClockCfg;
 use crate::night::clock;
 use axum::extract::State;
 use axum::Json;
@@ -21,6 +22,11 @@ const KEYS: &[&str] = &[
     "night.isolation",
     "remind.notify",
     "agents.enabled",
+    "clock.enabled",
+    "clock.llm",
+    "clock.hints",
+    "clock.break_minutes",
+    "clock.idle",
 ];
 
 /// The longest model name accepted: they are short names such as `haiku` or `provider/model`.
@@ -62,6 +68,13 @@ fn describe(cfg: &Config, key: &str) -> Value {
             json!({"type": "choice", "choices": ["worktree", "copy"], "value": cfg.night.isolation})
         }
         "remind.notify" => json!({"type": "bool", "value": cfg.remind.notify}),
+        "clock.enabled" => json!({"type": "bool", "value": cfg.clock.enabled}),
+        "clock.llm" => json!({"type": "bool", "value": ClockCfg::llm_on(cfg)}),
+        "clock.hints" => json!({"type": "bool", "value": cfg.clock.hints}),
+        "clock.break_minutes" => {
+            json!({"type": "int", "min": 10, "max": 240, "value": cfg.clock.break_minutes})
+        }
+        "clock.idle" => json!({"type": "bool", "value": cfg.clock.idle}),
         _ => {
             let choices: Vec<Value> = known_agents(cfg)
                 .into_iter()
@@ -84,7 +97,8 @@ fn all(cfg: &Config) -> Value {
 fn toml_value(cfg: &Config, key: &str, v: &Value) -> Result<String, String> {
     let want = |what: &str| format!("{key}: give {what}");
     match key {
-        "summary.enabled" | "night.enabled" | "remind.notify" => v
+        "summary.enabled" | "night.enabled" | "remind.notify" | "clock.enabled" | "clock.llm"
+        | "clock.hints" | "clock.idle" => v
             .as_bool()
             .map(|b| b.to_string())
             .ok_or_else(|| want("true or false")),
@@ -110,6 +124,11 @@ fn toml_value(cfg: &Config, key: &str, v: &Value) -> Result<String, String> {
             .filter(|n| (1..=8).contains(n))
             .map(|n| n.to_string())
             .ok_or_else(|| want("a number from 1 to 8")),
+        "clock.break_minutes" => v
+            .as_u64()
+            .filter(|n| (10..=240).contains(n))
+            .map(|n| n.to_string())
+            .ok_or_else(|| want("a number from 10 to 240")),
         "night.isolation" => match v.as_str() {
             Some(m @ ("worktree" | "copy")) => Ok(format!("{m:?}")),
             _ => Err(want("worktree or copy")),
@@ -194,7 +213,7 @@ mod tests {
         let (st, v) = call(&e, req("GET", "/api/settings", None)).await;
         assert_eq!(st, StatusCode::OK);
         let s = &v["settings"];
-        assert_eq!(s.as_object().unwrap().len(), 8);
+        assert_eq!(s.as_object().unwrap().len(), 13);
         assert_eq!(
             s["summary.enabled"],
             json!({"type": "bool", "value": true, "restart": true})
@@ -207,6 +226,13 @@ mod tests {
         assert_eq!(s["night.isolation"]["choices"], json!(["worktree", "copy"]));
         assert_eq!(s["remind.notify"]["value"], false);
         assert_eq!(s["agents.enabled"]["value"], json!(["claude"]));
+        assert_eq!(s["clock.enabled"]["value"], true);
+        assert_eq!(s["clock.hints"]["value"], false);
+        assert_eq!(s["clock.idle"]["value"], false);
+        assert_eq!(
+            s["clock.break_minutes"],
+            json!({"type": "int", "min": 10, "max": 240, "value": 45})
+        );
         let ids: Vec<&str> = s["agents.enabled"]["choices"]
             .as_array()
             .unwrap()
@@ -252,6 +278,36 @@ mod tests {
         assert!(text.contains("something_new = 1"), "{text}");
         let (_, again) = call(&e, req("GET", "/api/settings", None)).await;
         assert_eq!(again, v);
+    }
+
+    #[tokio::test]
+    async fn the_clock_keys_are_written_and_llm_follows_summary_until_set() {
+        let e = env();
+        let (_, v) = call(&e, req("GET", "/api/settings", None)).await;
+        assert_eq!(v["settings"]["clock.llm"]["value"], true);
+        let (st, v) = post(&e, json!({"summary.enabled": false})).await;
+        assert_eq!(st, StatusCode::OK);
+        assert_eq!(v["settings"]["clock.llm"]["value"], false);
+        let (st, v) = post(
+            &e,
+            json!({"clock.llm": true, "clock.hints": true, "clock.break_minutes": 30, "clock.idle": true, "clock.enabled": false}),
+        )
+        .await;
+        assert_eq!(st, StatusCode::OK, "{v}");
+        let s = &v["settings"];
+        assert_eq!(s["clock.llm"]["value"], true);
+        assert_eq!(s["clock.hints"]["value"], true);
+        assert_eq!(s["clock.break_minutes"]["value"], 30);
+        assert_eq!(s["clock.idle"]["value"], true);
+        assert_eq!(s["clock.enabled"]["value"], false);
+        for bad in [
+            json!({"clock.break_minutes": 5}),
+            json!({"clock.break_minutes": 241}),
+            json!({"clock.hints": "on"}),
+        ] {
+            let (st, _) = post(&e, bad).await;
+            assert_eq!(st, StatusCode::BAD_REQUEST);
+        }
     }
 
     #[tokio::test]
