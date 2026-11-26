@@ -20,7 +20,7 @@ pub fn scan(g: &Global, full: bool, json: bool) -> Result<()> {
     let worked = worked::backfill::run_all(&mut env.db, &env.paths, &env.agents)?;
     let worked_ms = t0.elapsed().as_millis();
     let t0 = std::time::Instant::now();
-    let turns = turns::backfill::run_all(&mut env.db, &env.paths, &env.agents)?;
+    let turns = turns::backfill::run_all(&mut env.db, &env.paths, &env.cfg)?;
     let turns_ms = t0.elapsed().as_millis();
     let kinds = env
         .db

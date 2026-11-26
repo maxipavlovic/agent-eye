@@ -52,6 +52,7 @@ CREATE INDEX IF NOT EXISTS idx_usage_day_day ON usage_day(day);
 CREATE TABLE IF NOT EXISTS usage_state(session_id TEXT PRIMARY KEY, unreadable INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS turn(session_id TEXT NOT NULL, ts INTEGER NOT NULL, kind TEXT NOT NULL, n INTEGER NOT NULL DEFAULT 0);
 CREATE INDEX IF NOT EXISTS idx_turn_session_ts ON turn(session_id, ts);
+CREATE INDEX IF NOT EXISTS idx_turn_kind_ts ON turn(kind, ts);
 CREATE TABLE IF NOT EXISTS turn_state(session_id TEXT PRIMARY KEY, unreadable INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS correction(session_id TEXT NOT NULL, prompt_ts INTEGER NOT NULL, verdict TEXT, phrase TEXT, model TEXT,
   judged_at INTEGER, input_hash TEXT, PRIMARY KEY(session_id, prompt_ts)) WITHOUT ROWID;
@@ -267,6 +268,11 @@ impl Db {
         // v18: `turn` and `turn_state` (when the user and the agent took their turns), `correction`
         // and `idle_span` (for the steering clock) are created with the schema above. They start
         // empty; sessions without turns get them from `turns::backfill`, from their transcripts.
+        // A build of 18 that stored the turns of sessions outside the index is cleaned once.
+        if self.meta_get("turns_unindexed_dropped")?.is_none() {
+            crate::turns::store::drop_unindexed(&self.conn)?;
+            self.meta_set("turns_unindexed_dropped", "1")?;
+        }
         if cur == 1 || (cur > 0 && cur < 4) {
             // v2 keeps pending tool_use ids and Jira candidates, v4 token counts: re-read every
             // transcript once.

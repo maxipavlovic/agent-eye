@@ -11,6 +11,7 @@ use super::store;
 use super::TurnEvent;
 use crate::agents::Agents;
 use crate::archive;
+use crate::config::Config;
 use crate::db::Db;
 use crate::model::Session;
 use crate::paths::Paths;
@@ -47,7 +48,11 @@ fn enabled_ids(agents: &Agents) -> String {
 }
 
 /// Read up to `limit` sessions that have no turns yet, the most recently active first.
-pub fn run_batch(db: &mut Db, paths: &Paths, agents: &Agents, limit: usize) -> Result<Pass> {
+pub fn run_batch(db: &mut Db, paths: &Paths, cfg: &Config, limit: usize) -> Result<Pass> {
+    if !cfg.clock.enabled {
+        return Ok(Pass::default());
+    }
+    let agents = &crate::agents::enabled(cfg);
     let enabled = enabled_ids(agents);
     let ids: Vec<String> = db
         .conn
@@ -98,16 +103,29 @@ pub fn run_batch(db: &mut Db, paths: &Paths, agents: &Agents, limit: usize) -> R
 }
 
 /// Read every session that has no turns yet, in batches of `BATCH`.
-pub fn run_all(db: &mut Db, paths: &Paths, agents: &Agents) -> Result<Pass> {
+pub fn run_all(db: &mut Db, paths: &Paths, cfg: &Config) -> Result<Pass> {
     let mut total = Pass::default();
     loop {
-        let pass = run_batch(db, paths, agents, BATCH)?;
+        let pass = run_batch(db, paths, cfg, BATCH)?;
         total.counted += pass.counted;
         total.unreadable += pass.unreadable;
         total.left = pass.left;
         if pass.counted + pass.unreadable == 0 || pass.left == 0 {
             return Ok(total);
         }
+    }
+}
+
+/// One batch in the daemon's usage thread, so the board and the picker stay quick. The line to log,
+/// when there is something to say.
+pub fn round(paths: &Paths, cfg: &Config) -> Option<String> {
+    match Db::open(&paths.db_path()).and_then(|mut db| run_batch(&mut db, paths, cfg, BATCH)) {
+        Ok(p) if p.counted + p.unreadable > 0 => Some(format!(
+            "turn events: {} sessions counted, {} unreadable, {} to go",
+            p.counted, p.unreadable, p.left
+        )),
+        Ok(_) => None,
+        Err(e) => Some(format!("turn events: {e:#}")),
     }
 }
 

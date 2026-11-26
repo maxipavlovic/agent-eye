@@ -331,29 +331,8 @@ fn usage_round(paths: &Paths, cfg: &Config) {
         Ok(_) => {}
         Err(e) => log(paths, &format!("usage by day: {e:#}")),
     }
-    turns_round(paths, cfg);
-}
-
-/// One batch of the turn-events backfill, in the usage thread for the same reason.
-fn turns_round(paths: &Paths, cfg: &Config) {
-    let r = Db::open(&paths.db_path()).and_then(|mut db| {
-        turns::backfill::run_batch(
-            &mut db,
-            paths,
-            &agents::enabled(cfg),
-            turns::backfill::BATCH,
-        )
-    });
-    match r {
-        Ok(p) if p.counted + p.unreadable > 0 => log(
-            paths,
-            &format!(
-                "turn events: {} sessions counted, {} unreadable, {} to go",
-                p.counted, p.unreadable, p.left
-            ),
-        ),
-        Ok(_) => {}
-        Err(e) => log(paths, &format!("turn events: {e:#}")),
+    if let Some(line) = turns::backfill::round(paths, cfg) {
+        log(paths, &line);
     }
 }
 

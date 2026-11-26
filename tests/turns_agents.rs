@@ -69,8 +69,7 @@ impl Env {
     }
 
     fn backfill(&mut self) {
-        let agents = self.agents();
-        backfill::run_all(&mut self.db, &self.paths, &agents).unwrap();
+        backfill::run_all(&mut self.db, &self.paths, &self.cfg).unwrap();
     }
 
     /// How many events of each kind the database has.

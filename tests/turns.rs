@@ -63,8 +63,7 @@ impl Env {
     }
 
     fn backfill(&mut self) -> backfill::Pass {
-        let agents = self.agents();
-        backfill::run_all(&mut self.db, &self.paths, &agents).unwrap()
+        backfill::run_all(&mut self.db, &self.paths, &self.cfg).unwrap()
     }
 
     /// How many events of each kind the session has.
@@ -267,4 +266,90 @@ fn an_empty_home_has_nothing_to_backfill() {
     e.scan();
     let pass = e.backfill();
     assert_eq!((pass.counted, pass.unreadable, pass.left), (0, 0, 0));
+}
+
+/// How many turn rows the database has, of any session.
+fn all_rows(e: &Env) -> i64 {
+    e.db.conn
+        .query_row("SELECT count(*) FROM turn", [], |r| r.get(0))
+        .unwrap()
+}
+
+#[test]
+fn a_session_in_an_excluded_folder_gets_no_turns() {
+    let mut e = Env::new(FIXTURE);
+    e.cfg.exclude.paths = vec!["/tmp/demo".into()];
+    e.scan();
+    assert_eq!(all_rows(&e), 0);
+    assert_eq!(e.backfill().counted, 0);
+    let rows: i64 =
+        e.db.conn
+            .query_row("SELECT count(*) FROM turn_state", [], |r| r.get(0))
+            .unwrap();
+    assert_eq!(rows, 0);
+}
+
+#[test]
+fn a_session_in_a_temp_folder_gets_no_turns_unless_temp_folders_are_followed() {
+    let mut e = Env::new(FIXTURE);
+    e.cfg.exclude.temp = true;
+    e.scan();
+    assert_eq!(all_rows(&e), 0);
+    e.cfg.exclude.temp = false;
+    scan(&mut e.db, &e.cfg, true).unwrap();
+    assert!(
+        all_rows(&e) > 0,
+        "the session is indexed once it is allowed"
+    );
+}
+
+#[test]
+fn with_the_clock_off_nothing_new_is_recorded_and_what_is_there_stays() {
+    let mut e = Env::new(FIXTURE);
+    e.scan();
+    let before = all_rows(&e);
+    e.cfg.clock.enabled = false;
+    append(&e.transcript, &(NEXT_PROMPT.to_string() + "\n"));
+    e.scan();
+    scan(&mut e.db, &e.cfg, true).unwrap();
+    assert_eq!(all_rows(&e), before);
+    // the back-fill reads nothing either, and does not say it is done
+    e.forget_turns();
+    let pass = e.backfill();
+    assert_eq!((pass.counted, pass.unreadable), (0, 0));
+    assert_eq!(all_rows(&e), 0);
+    assert!(e.db.meta_get(backfill::DONE_KEY).unwrap().is_none());
+    // switched on again, the back-fill catches up
+    e.cfg.clock.enabled = true;
+    assert_eq!(e.backfill().counted, 1);
+    assert!(all_rows(&e) > before);
+}
+
+#[test]
+fn turns_of_sessions_outside_the_index_are_cleared_once_when_the_database_is_opened() {
+    let mut e = Env::new(FIXTURE);
+    e.scan();
+    let kept = all_rows(&e);
+    e.db.conn
+        .execute_batch(
+            "INSERT INTO turn(session_id, ts, kind, n) VALUES('ghost', 1, 'prompt', 5);
+             INSERT INTO turn_state(session_id) VALUES('ghost');
+             DELETE FROM meta WHERE key='turns_unindexed_dropped';",
+        )
+        .unwrap();
+    let db = Db::open(&e.paths.db_path()).unwrap();
+    let ghosts: i64 = db
+        .conn
+        .query_row(
+            "SELECT (SELECT count(*) FROM turn WHERE session_id='ghost')
+                  + (SELECT count(*) FROM turn_state WHERE session_id='ghost')",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    let rows: i64 = db
+        .conn
+        .query_row("SELECT count(*) FROM turn", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!((ghosts, rows), (0, kept));
 }

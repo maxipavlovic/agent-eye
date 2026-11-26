@@ -26,7 +26,7 @@ pub fn run(g: &Global, sub: Option<ClockCmd>, weeks: i64, json: bool, brief: boo
     // Sessions read before turns were kept get theirs now, so the numbers are whole. A one-line
     // answer for an agent skips it: the daemon does this in the background.
     if !brief {
-        backfill::run_all(&mut env.db, &env.paths, &env.agents)?;
+        backfill::run_all(&mut env.db, &env.paths, &env.cfg)?;
     }
     let r = report::build(
         &env.db.conn,
@@ -49,7 +49,7 @@ pub fn run(g: &Global, sub: Option<ClockCmd>, weeks: i64, json: bool, brief: boo
 /// Judge the prompts nobody has judged yet, with a progress line per call.
 fn detect(g: &Global) -> Result<()> {
     let mut env = g.open()?;
-    backfill::run_all(&mut env.db, &env.paths, &env.agents)?;
+    backfill::run_all(&mut env.db, &env.paths, &env.cfg)?;
     let out = pass::run(
         &env.db,
         &env.paths,

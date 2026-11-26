@@ -65,6 +65,8 @@ fn night_cwd(wt: &str, cwd: Option<String>) -> Option<String> {
 }
 
 /// Store what one parse of a transcript found: the session row, its tokens, outputs and search text.
+/// False when the session is not indexed (it is in an excluded or temp folder), so nothing else
+/// about it is stored either.
 pub(super) fn apply(
     tx: &Connection,
     agent: &dyn Agent,
@@ -73,7 +75,7 @@ pub(super) fn apply(
     reset_in: bool,
     cfg: &Config,
     repo_cache: &mut HashMap<String, Option<String>>,
-) -> Result<()> {
+) -> Result<bool> {
     let sid = f.session_id.as_str();
     let found: Option<Ex> = tx
         .query_row(
@@ -113,7 +115,7 @@ pub(super) fn apply(
         None => cwd,
     };
     if cwd.as_deref().is_some_and(|c| cfg.is_excluded(c)) {
-        return Ok(());
+        return Ok(false);
     }
     let root = match &night {
         // a night run's session belongs to the project it was planned for, not to its worktree or copy
@@ -343,7 +345,7 @@ pub(super) fn apply(
         PROMPTS_CAP,
         REPLIES_CAP,
     )?;
-    Ok(())
+    Ok(true)
 }
 
 pub(super) fn add_output(
