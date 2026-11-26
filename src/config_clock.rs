@@ -4,7 +4,7 @@ use crate::config::Config;
 use serde::Deserialize;
 
 /// The shortest and longest `break_minutes`.
-const BREAK_RANGE: std::ops::RangeInclusive<u32> = 10..=240;
+pub const BREAK_RANGE: std::ops::RangeInclusive<u32> = 10..=240;
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]

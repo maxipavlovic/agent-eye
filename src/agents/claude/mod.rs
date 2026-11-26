@@ -206,6 +206,10 @@ impl Agent for Claude {
         turns::read_events(path)
     }
 
+    fn turn_kinds(&self) -> &'static [TurnKind] {
+        crate::agents::ALL_TURN_KINDS
+    }
+
     /// What a `think` event counts: the length of the signature of the thinking block.
     fn think_unit(&self) -> Option<&'static str> {
         Some("signature")

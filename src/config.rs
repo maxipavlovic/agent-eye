@@ -415,6 +415,9 @@ impl Default for BoardCfg {
 }
 
 /// `[night]`: runs that start by themselves while you are away. See `docs/night.md`.
+/// How many night runs may go at once.
+pub const PARALLEL_RANGE: std::ops::RangeInclusive<u32> = 1..=8;
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct NightCfg {
@@ -562,6 +565,27 @@ impl Config {
         let mut cfg = cfg;
         cfg.night_dir = path.parent().map(|p| p.join("night"));
         Ok(cfg)
+    }
+
+    /// The settings as the file says now, for a long-running part (the daemon, the board) that
+    /// should see a change made after it started. What the file does not hold (the folder root and
+    /// the night folder and a folder given on the command line, set by the process that loaded it)
+    /// is kept from `self`, and so is `self` whole when the file cannot be read or parsed.
+    pub fn fresh(&self, path: &Path) -> Config {
+        let Some(mut c) = std::fs::read_to_string(path)
+            .ok()
+            .and_then(|t| Config::parse(&t).ok())
+        else {
+            return self.clone();
+        };
+        c.folder_root.clone_from(&self.folder_root);
+        c.night_dir.clone_from(&self.night_dir);
+        for (id, a) in &self.agents.each {
+            if a.dir_override.is_some() {
+                c.agents.each.entry(id.clone()).or_default().dir_override = a.dir_override.clone();
+            }
+        }
+        c
     }
 
     /// The ids in `[agents] enabled`; Claude Code when the key is not set.

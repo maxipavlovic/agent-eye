@@ -13,7 +13,8 @@ pub(super) struct ClockQ {
     weeks: Option<i64>,
 }
 
-/// The report (see `docs/api.md`) for the last `weeks` weeks (default 4, 1 to 12).
+/// The report (see `docs/api.md`) for the last `weeks` weeks (default 4, 1 to 12), made with the
+/// settings in the file now, so a change in the gear counts at once.
 pub(super) async fn api_clock(State(st): State<Shared>, Query(q): Query<ClockQ>) -> ApiResult {
     let weeks = q.weeks.unwrap_or(4);
     if !(1..=MAX_WEEKS).contains(&weeks) {
@@ -23,9 +24,10 @@ pub(super) async fn api_clock(State(st): State<Shared>, Query(q): Query<ClockQ>)
     }
     blocking(move || {
         let db = open_db(&st)?;
+        let cfg = st.cfg.fresh(&st.paths.config_path());
         let r = report::build(
             &db.conn,
-            &st.cfg,
+            &cfg,
             &st.agents,
             now_ms(),
             weeks,

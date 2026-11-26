@@ -95,9 +95,10 @@ fn worse_evenings_with_a_steady_model_are_you() {
     assert_eq!((r.prompts, r.corrections), (650, 68));
     assert_eq!(
         r.bad,
-        [Range {
+        [Bad {
             from_h: 19,
-            to_h: 21
+            to_h: 21,
+            label: "evening"
         }]
     );
     assert_eq!(r.verdict.kind, Kind::You);
@@ -137,13 +138,20 @@ fn a_model_that_slips_while_you_stay_steady_is_the_model() {
         w.hour(h, 50, 4, 1000);
     }
     // an hour with a high rate but too few corrections to rule out chance, and a shallower model
-    w.hour(19, 20, 3, 500);
+    w.hour(19, 40, 6, 500);
     let r = w.report("");
     assert_eq!(r.verdict.kind, Kind::Model);
-    assert!(r.bad.is_empty());
+    // the hours the sentence names are the hours the chart gets
+    assert_eq!(
+        r.bad
+            .iter()
+            .map(|b| (b.from_h, b.to_h, b.label))
+            .collect::<Vec<_>>(),
+        [(19, 20, "evening")]
+    );
     assert_eq!(
         r.verdict.text,
-        "Evenings: your corrections about the same. Model thinking \u{2212}50%. Tool errors flat. Mostly the model."
+        "Evenings: your corrections not clearly different. Model thinking \u{2212}50%. Tool errors flat. Mostly the model."
     );
 }
 
@@ -216,9 +224,15 @@ fn the_hint_is_off_by_default_and_quiet_outside_the_bad_hours() {
     assert_eq!(off.now.hint, None);
     let on = w.report("[clock]\nhints = true");
     assert_eq!(
-        on.now.hint.as_deref(),
-        Some("Evening: your corrections usually run 2.0x now. Hand this to the night shift? (T)")
+        on.now.hint,
+        Some(Hint {
+            text: "Evening: your corrections usually run 2.0x now.".into(),
+            offer: false
+        })
     );
+    // the offer is a flag: it is there when the night shift is
+    let night = w.report("[clock]\nhints = true\n[night]\nenabled = true");
+    assert_eq!(night.now.hint.map(|h| h.offer), Some(true));
     // the same data seen at 11:00 is outside it
     let agents = Agents::default();
     let cfg = Config::parse("[clock]\nhints = true").unwrap();
@@ -235,7 +249,7 @@ fn the_hint_is_off_by_default_and_quiet_outside_the_bad_hours() {
 }
 
 #[test]
-fn the_picker_hint_is_the_hint_without_the_offer_to_press_t() {
+fn the_picker_hint_is_the_hint_text() {
     let mut w = World::new();
     w.steady_days_worse_evenings(1000);
     let agents = Agents::default();
@@ -282,26 +296,39 @@ fn since_break_is_zero_after_a_long_quiet_and_counts_from_the_last_break_otherwi
 }
 
 #[test]
-fn breaks_come_from_idle_spans_when_idle_is_on() {
+fn breaks_come_from_idle_spans_and_gaps_together_when_idle_is_on() {
     let mut w = World::new();
-    for m in [0, 5, 70, 75] {
-        w.turn(NOW - 100 * 60_000 + m * 60_000, "prompt", 10);
+    for m in [150, 125, 100, 75, 50] {
+        w.turn(NOW - m * 60_000, "prompt", 10);
     }
-    // the user was away from minute 20 to minute 60 of that stretch
+    // the user was away from minute 100 to minute 60 before now: no gap between prompts shows it
     w.db.conn
         .execute(
             "INSERT INTO idle_span(start_ms, end_ms) VALUES(?1,?2)",
-            [NOW - 80 * 60_000, NOW - 40 * 60_000],
+            [NOW - 100 * 60_000, NOW - 60 * 60_000],
         )
         .unwrap();
     let by_gaps = w.report("[clock]\nbreak_minutes = 30");
     let by_idle = w.report("[clock]\nbreak_minutes = 30\nidle = true");
     assert!(by_idle.idle && !by_gaps.idle);
     let counts = |r: &Report| r.since_break.iter().map(|b| b.prompts).collect::<Vec<_>>();
-    // by gaps: breaks at minute 0 and 70; the second stretch has two prompts at 0 and 5 minutes
-    assert_eq!(counts(&by_gaps), [4, 0, 0, 0]);
-    // by idle: only prompts after the span count: 30 and 35 minutes after it ended
-    assert_eq!(counts(&by_idle), [2, 0, 0, 0]);
+    // by gaps: one stretch from the first prompt, the last two are over an hour in
+    assert_eq!(counts(&by_gaps), [3, 2, 0, 0]);
+    // with idle: the span ends before the last prompt, which starts a fresh stretch
+    assert_eq!(counts(&by_idle), [4, 1, 0, 0]);
+}
+
+#[test]
+fn a_night_with_no_idle_span_is_still_a_break() {
+    // the daemon was not running overnight, so there is no span; the gap is there
+    let mut w = World::new();
+    for m in [12 * 60 + 30, 12 * 60, 20, 10] {
+        w.turn(NOW - m * 60_000, "prompt", 10);
+    }
+    let r = w.report("[clock]\nidle = true");
+    let counts: Vec<_> = r.since_break.iter().map(|b| b.prompts).collect();
+    assert_eq!(counts, [4, 0, 0, 0]);
+    assert_eq!(r.now.since_break_min, Some(20));
 }
 
 #[test]
@@ -315,9 +342,23 @@ fn agents_are_listed_with_their_thinking_unit() {
             agent: "claude".into(),
             prompts: 3,
             corrections: 1,
-            think: Some("signature")
+            think: Some("signature"),
+            think_unit: Some("signature"),
+            think_ratio: None,
+            tool_error_ratio: None,
+            signals: vec![
+                "prompt",
+                "end",
+                "interrupt",
+                "tool",
+                "tool_error",
+                "refusal",
+                "think",
+                "compact"
+            ],
         }]
     );
+    assert_eq!(r.think_agent.as_deref(), Some("claude"));
 }
 
 #[test]
@@ -341,11 +382,14 @@ fn the_json_has_the_documented_fields() {
             "hints",
             "hours",
             "idle",
+            "judging",
+            "judging_reason",
             "llm",
             "now",
             "pending",
             "prompts",
             "since_break",
+            "think_agent",
             "to",
             "verdict"
         ]
@@ -375,10 +419,122 @@ fn the_json_has_the_documented_fields() {
         ]
     );
     assert_eq!(keys(&j["now"]), ["hint", "in_bad", "since_break_min"]);
+    assert!(j["now"]["hint"].is_null());
     assert_eq!(j["verdict"]["kind"], "you");
-    assert_eq!(j["bad"][0], serde_json::json!({"from_h": 19, "to_h": 21}));
+    assert_eq!(
+        j["bad"][0],
+        serde_json::json!({"from_h": 19, "to_h": 21, "label": "evening"})
+    );
+    assert_eq!(
+        keys(&j["agents"][0]),
+        [
+            "agent",
+            "corrections",
+            "prompts",
+            "signals",
+            "think",
+            "think_ratio",
+            "think_unit",
+            "tool_error_ratio"
+        ]
+    );
+    assert_eq!(j["judging"], "on");
+    assert!(j["judging_reason"].is_null());
     assert_eq!(
         keys(&j["since_break"][0]),
         ["band", "corrections", "prompts"]
     );
+}
+
+#[test]
+fn a_few_thoughts_in_the_hours_are_no_model_side() {
+    let mut w = World::new();
+    w.steady_days_worse_evenings(1000);
+    let hour19 = "kind='think' AND (ts % 86400000)/3600000 IN (19, 20)";
+    w.db.conn
+        .execute(
+            &format!(
+                "DELETE FROM turn WHERE {hour19} AND rowid NOT IN
+                 (SELECT rowid FROM turn WHERE {hour19} LIMIT 12)"
+            ),
+            [],
+        )
+        .unwrap();
+    let r = w.report("");
+    assert_eq!(r.verdict.kind, Kind::You);
+    assert_eq!(r.verdict.think_ratio, None);
+    assert!(r
+        .verdict
+        .text
+        .contains("No thinking data. Tool errors flat."));
+}
+
+#[test]
+fn nothing_measured_on_the_model_side_is_said_so() {
+    let mut w = World::new();
+    // no tool calls and no thinking at all
+    for h in 9..18 {
+        for i in 0..50 {
+            let ts = D0 + h * H + i * 1000;
+            w.turn(ts - 500, "end", 5);
+            w.turn(ts, "prompt", 30);
+            if i < 4 {
+                w.db.conn
+                    .execute(
+                        "INSERT INTO correction(session_id, prompt_ts, verdict) VALUES('s',?1,'yes')",
+                        [ts],
+                    )
+                    .unwrap();
+            }
+        }
+    }
+    for i in 0..100 {
+        let ts = D0 + 19 * H + i * 1000;
+        w.turn(ts - 500, "end", 5);
+        w.turn(ts, "prompt", 30);
+        if i < 16 {
+            w.db.conn
+                .execute(
+                    "INSERT INTO correction(session_id, prompt_ts, verdict) VALUES('s',?1,'yes')",
+                    [ts],
+                )
+                .unwrap();
+        }
+    }
+    let r = w.report("");
+    assert_eq!(r.verdict.kind, Kind::Unmeasured);
+    assert!(r.verdict.text.contains("No model-side data"));
+    assert!(!r.verdict.text.contains("flat"));
+    assert_eq!(r.bad.len(), 1);
+}
+
+#[test]
+fn the_report_says_why_corrections_are_not_judged() {
+    let w = World::new();
+    let judging = |cfg: &str| {
+        let r = w.report(cfg);
+        (r.judging, r.judging_reason)
+    };
+    assert_eq!(judging(""), (Judging::On, None));
+    assert_eq!(
+        judging("[clock]\nllm = false"),
+        (Judging::Off, Some("[clock] llm is off".into()))
+    );
+    let (j, why) = judging("[summary]\nenabled = false");
+    assert_eq!(j, Judging::Off);
+    assert!(why.unwrap().contains("[summary] enabled"));
+    let (j, why) = judging("[clock]\nenabled = false");
+    assert_eq!(j, Judging::Off);
+    assert!(why.unwrap().contains("clock is off"));
+    let none = build(
+        &w.db.conn,
+        &Config::default(),
+        &Agents::default(),
+        NOW,
+        4,
+        &utc,
+    )
+    .unwrap();
+    assert_eq!(none.judging, Judging::Unavailable);
+    assert!(none.judging_reason.unwrap().contains("no enabled agent"));
 }

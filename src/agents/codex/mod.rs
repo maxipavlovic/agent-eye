@@ -206,6 +206,10 @@ impl Agent for Codex {
         turns::read_events(path)
     }
 
+    fn turn_kinds(&self) -> &'static [TurnKind] {
+        crate::agents::ALL_TURN_KINDS
+    }
+
     /// What a `think` event counts: the reasoning tokens of the turn.
     fn think_unit(&self) -> Option<&'static str> {
         Some("reasoning_tokens")

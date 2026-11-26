@@ -14,10 +14,7 @@ use serde_json::{json, Value};
 
 /// The settings now: the file is read again, so a switch made elsewhere counts at once.
 fn fresh_cfg(st: &super::AppState) -> Config {
-    std::fs::read_to_string(st.paths.config_path())
-        .ok()
-        .and_then(|t| Config::parse(&t).ok())
-        .unwrap_or_else(|| st.cfg.clone())
+    st.cfg.fresh(&st.paths.config_path())
 }
 
 fn state_json(st: &super::AppState, db: &crate::db::Db) -> Result<Value, ApiError> {

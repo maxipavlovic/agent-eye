@@ -260,6 +260,10 @@ impl Agent for OpenCode {
         Ok(store::load(path)?.turns)
     }
 
+    fn turn_kinds(&self) -> &'static [TurnKind] {
+        crate::agents::ALL_TURN_KINDS
+    }
+
     /// What a `think` event counts: the reasoning tokens of an assistant message.
     fn think_unit(&self) -> Option<&'static str> {
         Some("reasoning_tokens")

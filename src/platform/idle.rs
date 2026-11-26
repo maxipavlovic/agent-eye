@@ -1,8 +1,10 @@
 //! How long the machine has had no keyboard or mouse input, for the steering clock's breaks. It
 //! reads one number and nothing else: never which keys, which window or which app.
 //!
-//! macOS asks the HID system for its idle time (`ioreg`), Linux asks logind for the session's idle
-//! hint. Where neither answers (no desktop session, a server, another system) the sensor is
+//! macOS asks the HID system for its idle time (`ioreg`), Linux asks logind for the idle hint of
+//! the user's graphical session. A systemd user service has no `XDG_SESSION_ID`, so the session is
+//! found through logind (`loginctl show-user`), the same from the daemon and from a terminal. Where
+//! neither answers (no desktop session, a server, another system) the sensor is
 //! unavailable and eye keeps taking breaks from the gaps between prompts. Both readers are compiled
 //! everywhere and tested on fixed text; `Sys` is what they ask the machine.
 
@@ -14,7 +16,6 @@ pub trait Sys {
     fn macos(&self) -> bool;
     /// What a program prints on stdout, None when it is missing or fails.
     fn output(&self, program: &str, args: &[&str]) -> Option<String>;
-    fn env(&self, key: &str) -> Option<String>;
     fn now_ms(&self) -> i64;
 }
 
@@ -33,10 +34,6 @@ impl Sys for RealSys {
             .then(|| String::from_utf8_lossy(&out.stdout).into_owned())
     }
 
-    fn env(&self, key: &str) -> Option<String> {
-        std::env::var(key).ok().filter(|v| !v.is_empty())
-    }
-
     fn now_ms(&self) -> i64 {
         crate::util::now_ms()
     }
@@ -47,13 +44,31 @@ pub fn idle_ms(sys: &dyn Sys) -> Option<i64> {
     if sys.macos() {
         parse_hid_idle(&sys.output("ioreg", &["-c", "IOHIDSystem", "-d", "4"])?)
     } else {
-        let id = sys.env("XDG_SESSION_ID")?;
+        let id = graphical_session(sys)?;
         let text = sys.output(
             "loginctl",
             &["show-session", &id, "-p", "IdleHint", "-p", "IdleSinceHint"],
         )?;
         parse_idle_hint(&text, sys.now_ms())
     }
+}
+
+/// The id of the user's graphical session: the `Display` of `loginctl show-user`, which logind sets
+/// for the session on the user's seat that shows a desktop. None when there is none (a server, a
+/// remote login, no logind).
+pub fn graphical_session(sys: &dyn Sys) -> Option<String> {
+    let uid = sys.output("id", &["-u"])?.trim().to_string();
+    let text = sys.output("loginctl", &["show-user", &uid, "-p", "Display"])?;
+    parse_display(&text)
+}
+
+/// The session id of a `Display=2` line; an empty value (no graphical session) is None.
+pub fn parse_display(text: &str) -> Option<String> {
+    let id = text
+        .lines()
+        .find_map(|l| l.strip_prefix("Display="))?
+        .trim();
+    (!id.is_empty() && id.bytes().all(|b| b.is_ascii_alphanumeric())).then(|| id.to_string())
 }
 
 /// `"HIDIdleTime" = 4513072000` in the `ioreg` listing: nanoseconds, as milliseconds.
@@ -98,7 +113,6 @@ mod tests {
     struct Fake {
         macos: bool,
         out: HashMap<&'static str, String>,
-        env: Option<&'static str>,
     }
 
     impl Sys for Fake {
@@ -108,11 +122,15 @@ mod tests {
         fn output(&self, program: &str, _: &[&str]) -> Option<String> {
             self.out.get(program).cloned()
         }
-        fn env(&self, _: &str) -> Option<String> {
-            self.env.map(String::from)
-        }
         fn now_ms(&self) -> i64 {
             1_000_000
+        }
+    }
+
+    fn linux(out: &[(&'static str, &str)]) -> Fake {
+        Fake {
+            macos: false,
+            out: out.iter().map(|(k, v)| (*k, v.to_string())).collect(),
         }
     }
 
@@ -138,39 +156,45 @@ mod tests {
     }
 
     #[test]
+    fn the_graphical_session_is_the_users_display_not_an_environment_variable() {
+        assert_eq!(parse_display("Display=2\n").as_deref(), Some("2"));
+        assert_eq!(parse_display("Display=c1\n").as_deref(), Some("c1"));
+        // no graphical session, a server, or something that is not an id
+        assert_eq!(parse_display("Display=\n"), None);
+        assert_eq!(parse_display("Name=x\n"), None);
+        assert_eq!(parse_display("Display=1; rm\n"), None);
+        let ok = linux(&[("id", "1000\n"), ("loginctl", "Display=2\n")]);
+        assert_eq!(graphical_session(&ok).as_deref(), Some("2"));
+        assert_eq!(
+            graphical_session(&linux(&[("loginctl", "Display=2\n")])),
+            None
+        );
+    }
+
+    #[test]
     fn the_reader_follows_the_system() {
         let mac = Fake {
             macos: true,
             out: HashMap::from([("ioreg", IOREG.to_string())]),
-            env: None,
         };
         assert_eq!(idle_ms(&mac), Some(4513));
-        let linux = Fake {
-            macos: false,
-            out: HashMap::from([("loginctl", "IdleHint=no\nIdleSinceHint=0\n".to_string())]),
-            env: Some("3"),
-        };
-        assert_eq!(idle_ms(&linux), Some(0));
+        // a systemd user service has no XDG_SESSION_ID: the session comes from logind
+        let desktop = linux(&[
+            ("id", "1000\n"),
+            ("loginctl", "Display=2\nIdleHint=no\nIdleSinceHint=0\n"),
+        ]);
+        assert_eq!(idle_ms(&desktop), Some(0));
     }
 
     #[test]
     fn a_system_that_cannot_say_is_unavailable() {
-        let no_session = Fake {
-            macos: false,
-            out: HashMap::from([("loginctl", "IdleHint=no\n".to_string())]),
-            env: None,
-        };
+        let no_session = linux(&[("id", "1000\n"), ("loginctl", "Display=\nIdleHint=no\n")]);
         assert_eq!(idle_ms(&no_session), None);
-        let no_tool = Fake {
-            macos: false,
-            out: HashMap::new(),
-            env: Some("3"),
-        };
+        let no_tool = linux(&[]);
         assert_eq!(idle_ms(&no_tool), None);
         let no_ioreg = Fake {
             macos: true,
             out: HashMap::new(),
-            env: None,
         };
         assert_eq!(idle_ms(&no_ioreg), None);
     }

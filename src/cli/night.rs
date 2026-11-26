@@ -46,7 +46,13 @@ pub fn run(g: &Global, sub: Option<NightCmd>) -> Result<()> {
             Ok(())
         }
         NightCmd::Parallel { n } => {
-            anyhow::ensure!((1..=8).contains(&n), "parallel is a number from 1 to 8");
+            let range = crate::config::PARALLEL_RANGE;
+            anyhow::ensure!(
+                range.contains(&n),
+                "parallel is a number from {} to {}",
+                range.start(),
+                range.end()
+            );
             let env = g.open()?;
             crate::config::write_night(&env.paths.config_path(), "parallel", &n.to_string())?;
             println!("up to {n} runs at once");

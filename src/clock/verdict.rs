@@ -1,18 +1,20 @@
 //! Whether a bad stretch is you or the model: the model's side measured in the same hours as the
 //! user's, and the plain-English line that says so, with the counts.
 
-use super::bands::{local_hour, Range};
-use super::signals::Data;
+use super::bands::{self, local_hour, Range};
+use super::signals::{Call, Data};
 use crate::night::clock::OffsetFn;
 use serde::Serialize;
-use std::collections::HashMap;
 
 /// The window needs this many prompts and corrections before it is judged.
 pub const MIN_PROMPTS: i64 = 300;
 pub const MIN_CORRECTIONS: i64 = 30;
+/// An agent's thinking is compared only when it thought at least this often inside the hours and
+/// outside them.
+pub const MIN_THINK_N: usize = 30;
 /// The model's thinking moved when its ratio leaves this range...
 const THINK_FLAT: (f64, f64) = (0.9, 1.1);
-/// ...and its failed tool calls when theirs leave this one.
+/// ...and its failed tool calls when theirs leave this one (and more than chance explains it).
 const ERRORS_FLAT: (f64, f64) = (0.8, 1.25);
 
 /// How the model behaved in some hours compared with the other hours. None: nothing to compare.
@@ -23,13 +25,34 @@ pub struct ModelSide {
     pub think_ratio: Option<f64>,
     /// Failed tool calls per call in the hours over the same elsewhere.
     pub tool_error_ratio: Option<f64>,
+    /// Some agent's failed calls differ in those hours by more than chance and by more than
+    /// `ERRORS_FLAT` (tested per agent, never pooled).
+    pub tool_errors_moved: bool,
 }
 
 impl ModelSide {
-    pub fn moved(&self) -> bool {
-        let out = |r: Option<f64>, (lo, hi): (f64, f64)| r.is_some_and(|r| r < lo || r > hi);
-        out(self.think_ratio, THINK_FLAT) || out(self.tool_error_ratio, ERRORS_FLAT)
+    /// Was anything on the model's side measured?
+    pub fn measured(&self) -> bool {
+        self.think_ratio.is_some() || self.tool_error_ratio.is_some()
     }
+
+    pub fn moved(&self) -> bool {
+        let think = self
+            .think_ratio
+            .is_some_and(|r| r < THINK_FLAT.0 || r > THINK_FLAT.1);
+        think || self.tool_errors_moved
+    }
+}
+
+/// One agent's side in the hours of a band.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AgentSide {
+    pub agent: String,
+    pub think_ratio: Option<f64>,
+    pub tool_error_ratio: Option<f64>,
+    pub tool_errors_moved: bool,
+    /// Its calls inside the hours: how much its ratio weighs.
+    calls_in: i64,
 }
 
 fn median_f(v: &mut [f64]) -> Option<f64> {
@@ -37,46 +60,126 @@ fn median_f(v: &mut [f64]) -> Option<f64> {
     (!v.is_empty()).then(|| v[v.len() / 2])
 }
 
-/// The model's side inside the hours set in `mask` against the rest.
+/// Each agent's side inside the hours set in `mask` against the rest, in agent order. An agent's
+/// failed calls are compared with its own rate elsewhere (agents fail at different rates), and its
+/// thinking with its own median, each only when there is enough of it on both sides.
+pub fn agent_sides(data: &Data, off: OffsetFn, mask: &[bool]) -> Vec<AgentSide> {
+    let inside = |ts: i64| mask[local_hour(ts, off)];
+    let mut agents: Vec<&str> = data
+        .thinks
+        .iter()
+        .map(|t| t.agent.as_str())
+        .chain(data.tools.iter().map(|c| c.agent.as_str()))
+        .collect();
+    agents.sort_unstable();
+    agents.dedup();
+    agents
+        .into_iter()
+        .map(|agent| {
+            let calls = |list: &[Call]| {
+                let n = list.iter().filter(|c| c.agent == agent);
+                let inn = n.clone().filter(|c| inside(c.ts)).count() as i64;
+                (inn, n.count() as i64 - inn)
+            };
+            let (calls_in, calls_out) = calls(&data.tools);
+            let (err_in, err_out) = calls(&data.tool_errors);
+            let tool_error_ratio = (calls_in > 0 && calls_out > 0 && err_out > 0)
+                .then(|| (err_in as f64 / calls_in as f64) / (err_out as f64 / calls_out as f64));
+            let tool_errors_moved = tool_error_ratio
+                .is_some_and(|r| r < ERRORS_FLAT.0 || r > ERRORS_FLAT.1)
+                && errors_differ((err_in, calls_in), (err_out, calls_out));
+            AgentSide {
+                agent: agent.to_string(),
+                think_ratio: think_ratio(data, agent, &inside).map(|t| t.0),
+                tool_error_ratio,
+                tool_errors_moved,
+                calls_in,
+            }
+        })
+        .collect()
+}
+
+/// Do failed calls differ between two groups of calls (`(errors, calls)` each) by more than chance
+/// explains? The same test and floor as for the user's side: p under 0.1, and 10 or more errors in
+/// the group with the higher rate.
+fn errors_differ(a: (i64, i64), b: (i64, i64)) -> bool {
+    let higher = if bands::rate(a.0, a.1) >= bands::rate(b.0, b.1) {
+        a
+    } else {
+        b
+    };
+    higher.0 >= bands::MIN_EVENTS && bands::proportion_p(a, b).is_some_and(|p| p < bands::MAX_P)
+}
+
+/// An agent's thinking in the hours over its thinking elsewhere, with its values taken against its
+/// own median so agents can be pooled. None without `MIN_THINK_N` thoughts on both sides.
+fn think_ratio(
+    data: &Data,
+    agent: &str,
+    inside: &dyn Fn(i64) -> bool,
+) -> Option<(f64, Vec<f64>, Vec<f64>)> {
+    let mut own: Vec<i64> = data
+        .thinks
+        .iter()
+        .filter(|t| t.agent == agent)
+        .map(|t| t.n)
+        .collect();
+    own.sort_unstable();
+    let median = *own.get(own.len() / 2).filter(|m| **m > 0)? as f64;
+    let (mut bad, mut rest) = (vec![], vec![]);
+    for t in data.thinks.iter().filter(|t| t.agent == agent) {
+        let v = t.n as f64 / median;
+        if inside(t.ts) {
+            bad.push(v);
+        } else {
+            rest.push(v);
+        }
+    }
+    if bad.len() < MIN_THINK_N || rest.len() < MIN_THINK_N {
+        return None;
+    }
+    let (b, r) = (median_f(&mut bad)?, median_f(&mut rest)?);
+    (r > 0.0).then(|| (b / r, bad, rest))
+}
+
+/// The model's side inside the hours set in `mask` against the rest, over all agents.
 pub fn model_side(data: &Data, off: OffsetFn, mask: &[bool]) -> ModelSide {
     let inside = |ts: i64| mask[local_hour(ts, off)];
-    let mut own: HashMap<&str, Vec<i64>> = HashMap::new();
-    for t in &data.thinks {
-        own.entry(&t.agent).or_default().push(t.n);
-    }
-    let own: HashMap<&str, f64> = own
-        .into_iter()
-        .filter_map(|(a, mut v)| {
-            v.sort_unstable();
-            let m = v[v.len() / 2];
-            (m > 0).then_some((a, m as f64))
-        })
-        .collect();
     let (mut bad, mut rest) = (vec![], vec![]);
-    for t in &data.thinks {
-        if let Some(m) = own.get(t.agent.as_str()) {
-            let v = t.n as f64 / m;
-            if inside(t.ts) {
-                bad.push(v);
-            } else {
-                rest.push(v);
-            }
+    let mut seen: Vec<&str> = data.thinks.iter().map(|t| t.agent.as_str()).collect();
+    seen.sort_unstable();
+    seen.dedup();
+    for agent in seen {
+        if let Some((_, b, r)) = think_ratio(data, agent, &inside) {
+            bad.extend(b);
+            rest.extend(r);
         }
     }
     let think_ratio = match (median_f(&mut bad), median_f(&mut rest)) {
         (Some(b), Some(r)) if r > 0.0 => Some(b / r),
         _ => None,
     };
-    let count = |ts: &[i64]| {
-        let n = ts.iter().filter(|t| inside(**t)).count() as f64;
-        (n, ts.len() as f64 - n)
+    let sides = agent_sides(data, off, mask);
+    // the agent whose errors moved and who made most calls speaks for the band; with none that
+    // moved, the measured agents' ratios are averaged, weighted by their calls
+    let moved = sides
+        .iter()
+        .filter(|s| s.tool_errors_moved)
+        .max_by_key(|s| s.calls_in);
+    let tool_error_ratio = match moved {
+        Some(s) => s.tool_error_ratio,
+        None => {
+            let (sum, weight) = sides
+                .iter()
+                .filter_map(|s| Some((s.tool_error_ratio?, s.calls_in as f64)))
+                .fold((0.0, 0.0), |(a, w), (r, n)| (a + r * n, w + n));
+            (weight > 0.0).then(|| sum / weight)
+        }
     };
-    let ((calls_in, calls_out), (err_in, err_out)) = (count(&data.tools), count(&data.tool_errors));
-    let tool_error_ratio = (calls_in > 0.0 && calls_out > 0.0 && err_out > 0.0)
-        .then(|| (err_in / calls_in) / (err_out / calls_out));
     ModelSide {
         think_ratio,
         tool_error_ratio,
+        tool_errors_moved: moved.is_some(),
     }
 }
 
@@ -86,8 +189,18 @@ pub enum Kind {
     You,
     Model,
     Both,
+    /// The user's side is clear but nothing on the model's side was measured (an agent that reports
+    /// neither thinking nor tool results): it cannot be said whose it was.
+    Unmeasured,
     None,
     TooFew,
+}
+
+impl Kind {
+    /// Does the verdict name hours (the bad band the chart draws)?
+    pub fn names_hours(self) -> bool {
+        !matches!(self, Kind::None | Kind::TooFew)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -112,19 +225,32 @@ pub struct Findings<'a> {
     pub band: Option<(&'a [Range], ModelSide)>,
 }
 
-/// The time of day a run of hours starts in.
+/// The time of day an hour is in, lower case: morning 05-11, afternoon 12-16, evening 17-21, night
+/// 22-04. The one naming of hours: the verdict, the hint and the board's chart all use it.
 pub fn part_of_day(h: usize) -> &'static str {
     match h {
-        5..=11 => "Morning",
-        12..=16 => "Afternoon",
-        17..=21 => "Evening",
-        _ => "Night",
+        5..=11 => "morning",
+        12..=16 => "afternoon",
+        17..=21 => "evening",
+        _ => "night",
     }
+}
+
+/// How a run of hours is named: by the part of day it starts in.
+pub fn range_label(r: &Range) -> &'static str {
+    part_of_day(r.from_h)
+}
+
+pub fn capitalized(word: &str) -> String {
+    let mut c = word.chars();
+    c.next()
+        .map(|f| f.to_uppercase().chain(c).collect())
+        .unwrap_or_default()
 }
 
 fn label(ranges: &[Range]) -> String {
     match ranges {
-        [r] => format!("{}s", part_of_day(r.from_h)),
+        [r] => format!("{}s", capitalized(range_label(r))),
         _ => {
             let spans: Vec<String> = ranges
                 .iter()
@@ -137,7 +263,7 @@ fn label(ranges: &[Range]) -> String {
 }
 
 /// `−8%` or `+12%` for a ratio.
-fn change(r: f64) -> String {
+pub fn change(r: f64) -> String {
     let p = ((r - 1.0) * 100.0).round() as i64;
     match p {
         0 => "unchanged".into(),
@@ -172,41 +298,60 @@ pub fn decide(f: &Findings) -> Verdict {
         };
         return v;
     }
-    let model = f.band.map(|(_, m)| m);
-    v.kind = match (f.you.is_some(), model.is_some_and(|m| m.moved())) {
-        (true, false) => Kind::You,
-        (false, true) => Kind::Model,
-        (true, true) => Kind::Both,
-        (false, false) => Kind::None,
-    };
-    let Some((ranges, m)) = f.band.filter(|_| v.kind != Kind::None) else {
-        v.text = format!(
-            "No clear pattern in {} prompts and {} corrections: no hours stand out clearly and the model's side is steady.",
+    let no_pattern = |model: &str| {
+        format!(
+            "No clear pattern in {} prompts and {} corrections: {model}.",
             f.prompts, f.corrections
-        );
+        )
+    };
+    let Some((ranges, m)) = f.band else {
+        v.kind = Kind::None;
+        v.text = no_pattern("no hours stand out clearly");
         return v;
     };
+    v.kind = match (f.you.is_some(), m.moved(), m.measured()) {
+        (true, _, false) => Kind::Unmeasured,
+        (true, false, true) => Kind::You,
+        (false, true, _) => Kind::Model,
+        (true, true, true) => Kind::Both,
+        (false, false, _) => Kind::None,
+    };
+    if v.kind == Kind::None {
+        v.text = no_pattern(if m.measured() {
+            "the hours that stand out are not clearly different and the model's side is steady"
+        } else {
+            "the hours that stand out are not clearly different and the model's side has no data"
+        });
+        return v;
+    }
     v.you_ratio = f.you.map(|(r, _)| round(r, 1));
     v.you_n = f.you.map(|(_, n)| n);
     v.think_ratio = m.think_ratio.map(|r| round(r, 2));
     v.tool_error_ratio = m.tool_error_ratio.map(|r| round(r, 2));
     let yours = match f.you {
         Some((r, n)) => format!("{:.1}x more corrections ({n})", round(r, 1)),
-        None => "your corrections about the same".into(),
+        None => "your corrections not clearly different".into(),
     };
-    let think = m.think_ratio.map_or("No thinking data".into(), |r| {
-        format!("Model thinking {}", change(r))
-    });
-    let errors = match m.tool_error_ratio {
-        Some(r) if r < ERRORS_FLAT.0 || r > ERRORS_FLAT.1 => format!("Tool errors {}", change(r)),
-        _ => "Tool errors flat".into(),
+    let model = if v.kind == Kind::Unmeasured {
+        "No model-side data, so it cannot be said whether it was you or the model.".to_string()
+    } else {
+        let think = m.think_ratio.map_or("No thinking data".into(), |r| {
+            format!("Model thinking {}", change(r))
+        });
+        let errors = match m.tool_error_ratio {
+            None => "No tool-error data".into(),
+            Some(r) if m.tool_errors_moved => format!("Tool errors {}", change(r)),
+            Some(r) if (ERRORS_FLAT.0..=ERRORS_FLAT.1).contains(&r) => "Tool errors flat".into(),
+            Some(_) => "Tool errors not clearly different".into(),
+        };
+        let tail = match v.kind {
+            Kind::You => "Mostly you.",
+            Kind::Model => "Mostly the model.",
+            _ => "Both moved.",
+        };
+        format!("{think}. {errors}. {tail}")
     };
-    let tail = match v.kind {
-        Kind::You => "Mostly you.",
-        Kind::Model => "Mostly the model.",
-        _ => "Both moved.",
-    };
-    v.text = format!("{}: {yours}. {think}. {errors}. {tail}", label(ranges));
+    v.text = format!("{}: {yours}. {model}", label(ranges));
     v
 }
 
@@ -230,10 +375,17 @@ mod tests {
     const FLAT: ModelSide = ModelSide {
         think_ratio: Some(0.95),
         tool_error_ratio: Some(1.0),
+        tool_errors_moved: false,
     };
     const SHALLOW: ModelSide = ModelSide {
         think_ratio: Some(0.8),
         tool_error_ratio: Some(1.0),
+        tool_errors_moved: false,
+    };
+    const BLIND: ModelSide = ModelSide {
+        think_ratio: None,
+        tool_error_ratio: None,
+        tool_errors_moved: false,
     };
 
     fn kind(prompts: i64, corrections: i64, you: bool, band: Option<ModelSide>) -> Verdict {
@@ -246,46 +398,122 @@ mod tests {
         })
     }
 
-    #[test]
-    fn the_model_side_compares_each_agent_with_itself() {
-        let think = |h: i64, agent: &str, n| Think {
+    fn think(h: i64, agent: &str, n: i64) -> Think {
+        Think {
             ts: h * H,
             agent: agent.into(),
             n,
-        };
-        let d = Data {
-            thinks: vec![
-                // the claude values are large and the codex ones small: only the ratio counts
-                think(19, "claude", 800),
-                think(10, "claude", 1000),
-                think(11, "claude", 1000),
-                think(19, "codex", 8),
-                think(10, "codex", 10),
-                think(11, "codex", 10),
-            ],
-            tools: vec![
-                19 * H,
-                19 * H,
-                10 * H,
-                10 * H,
-                10 * H,
-                11 * H,
-                11 * H,
-                12 * H,
-            ],
-            tool_errors: vec![19 * H, 10 * H, 11 * H],
-            ..Data::default()
-        };
+        }
+    }
+
+    fn call(h: i64, agent: &str) -> Call {
+        Call {
+            ts: h * H,
+            agent: agent.into(),
+        }
+    }
+
+    /// `n` thoughts of `value` in hour `h`.
+    fn thoughts(h: i64, agent: &str, value: i64, n: usize) -> Vec<Think> {
+        (0..n).map(|_| think(h, agent, value)).collect()
+    }
+
+    /// `calls` tool calls of `agent` in hour `h`, `errors` of them failed.
+    fn tools(data: &mut Data, h: i64, agent: &str, calls: usize, errors: usize) {
+        data.tools.extend((0..calls).map(|_| call(h, agent)));
+        data.tool_errors.extend((0..errors).map(|_| call(h, agent)));
+    }
+
+    #[test]
+    fn the_model_side_compares_each_agent_with_itself() {
+        let mut d = Data::default();
+        // the claude values are large and the codex ones small: only the ratio counts
+        for (agent, evening, day) in [("claude", 800, 1000), ("codex", 8, 10)] {
+            d.thinks.extend(thoughts(19, agent, evening, 40));
+            d.thinks.extend(thoughts(10, agent, day, 40));
+            d.thinks.extend(thoughts(11, agent, day, 40));
+        }
         let m = model_side(&d, &utc, &evening());
         assert!((m.think_ratio.unwrap() - 0.8).abs() < 1e-9);
-        // 1 of 2 calls against 2 of 6
-        assert!((m.tool_error_ratio.unwrap() - 1.5).abs() < 1e-9);
-        assert!(m.moved());
+        assert!(m.moved() && m.measured());
         let none = model_side(&Data::default(), &utc, &evening());
         assert_eq!(
-            (none.think_ratio, none.tool_error_ratio, none.moved()),
-            (None, None, false)
+            (
+                none.think_ratio,
+                none.tool_error_ratio,
+                none.moved(),
+                none.measured()
+            ),
+            (None, None, false, false)
         );
+    }
+
+    #[test]
+    fn thinking_needs_enough_thoughts_on_both_sides() {
+        let mut d = Data::default();
+        d.thinks
+            .extend(thoughts(19, "claude", 500, MIN_THINK_N - 1));
+        d.thinks.extend(thoughts(10, "claude", 1000, 200));
+        assert_eq!(model_side(&d, &utc, &evening()).think_ratio, None);
+        d.thinks.extend(thoughts(19, "claude", 500, 1));
+        assert!(model_side(&d, &utc, &evening()).think_ratio.is_some());
+        let mut few_outside = Data::default();
+        few_outside.thinks.extend(thoughts(19, "claude", 500, 200));
+        few_outside.thinks.extend(thoughts(10, "claude", 1000, 5));
+        assert_eq!(model_side(&few_outside, &utc, &evening()).think_ratio, None);
+    }
+
+    #[test]
+    fn a_handful_of_errors_is_not_the_model_moving() {
+        // 3 errors in 40 calls against 100 in 4000: ratio 3.0, but not enough events to say
+        let mut d = Data::default();
+        tools(&mut d, 19, "claude", 40, 3);
+        tools(&mut d, 10, "claude", 4000, 100);
+        let m = model_side(&d, &utc, &evening());
+        assert!(m.tool_error_ratio.unwrap() > 2.9);
+        assert!(!m.tool_errors_moved && !m.moved());
+        // the same rates on ten times the data are
+        let mut big = Data::default();
+        tools(&mut big, 19, "claude", 400, 30);
+        tools(&mut big, 10, "claude", 4000, 100);
+        assert!(model_side(&big, &utc, &evening()).tool_errors_moved);
+    }
+
+    #[test]
+    fn a_big_difference_between_agents_is_not_the_hours() {
+        // codex runs only in the evening and fails 10%, claude runs all day and fails 2%: within
+        // each agent the evening is the same as the rest, so nothing moved
+        let mut d = Data::default();
+        tools(&mut d, 19, "codex", 400, 40);
+        tools(&mut d, 19, "claude", 400, 8);
+        tools(&mut d, 10, "claude", 4000, 80);
+        let m = model_side(&d, &utc, &evening());
+        assert!(!m.tool_errors_moved);
+        let codex = agent_sides(&d, &utc, &evening())
+            .into_iter()
+            .find(|s| s.agent == "codex")
+            .unwrap();
+        // codex has no calls outside the hours: no ratio of its own
+        assert_eq!(codex.tool_error_ratio, None);
+        assert!((m.tool_error_ratio.unwrap() - 1.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn the_agent_whose_errors_moved_speaks_for_the_band() {
+        let mut d = Data::default();
+        tools(&mut d, 19, "claude", 400, 40);
+        tools(&mut d, 10, "claude", 4000, 100);
+        tools(&mut d, 19, "codex", 100, 5);
+        tools(&mut d, 10, "codex", 1000, 50);
+        let m = model_side(&d, &utc, &evening());
+        assert!(m.tool_errors_moved);
+        assert!((m.tool_error_ratio.unwrap() - 4.0).abs() < 1e-9);
+        let sides = agent_sides(&d, &utc, &evening());
+        let flags: Vec<_> = sides
+            .iter()
+            .map(|s| (s.agent.as_str(), s.tool_errors_moved))
+            .collect();
+        assert_eq!(flags, [("claude", true), ("codex", false)]);
     }
 
     #[test]
@@ -297,12 +525,15 @@ mod tests {
         assert_eq!(kind(900, 90, true, Some(SHALLOW)).kind, Kind::Both);
         assert_eq!(kind(900, 90, false, Some(FLAT)).kind, Kind::None);
         assert_eq!(kind(900, 90, false, None).kind, Kind::None);
+        assert_eq!(kind(900, 90, true, Some(BLIND)).kind, Kind::Unmeasured);
+        assert_eq!(kind(900, 90, false, Some(BLIND)).kind, Kind::None);
+        assert!(Kind::Unmeasured.names_hours() && !Kind::None.names_hours());
     }
 
     #[test]
     fn the_text_has_the_counts_in_plain_words() {
         assert_eq!(
-            kind(2231, 205, true, Some(ModelSide { think_ratio: Some(0.92), tool_error_ratio: Some(0.91) })).text,
+            kind(2231, 205, true, Some(ModelSide { think_ratio: Some(0.92), tool_error_ratio: Some(0.91), tool_errors_moved: false })).text,
             "Evenings: 1.8x more corrections (105). Model thinking \u{2212}8%. Tool errors flat. Mostly you."
         );
         let t = kind(
@@ -312,24 +543,56 @@ mod tests {
             Some(ModelSide {
                 think_ratio: Some(1.0),
                 tool_error_ratio: Some(1.5),
+                tool_errors_moved: true,
             }),
         )
         .text;
         assert_eq!(
             t,
-            "Evenings: your corrections about the same. Model thinking unchanged. Tool errors +50%. Mostly the model."
+            "Evenings: your corrections not clearly different. Model thinking unchanged. Tool errors +50%. Mostly the model."
         );
         assert!(kind(900, 90, true, Some(SHALLOW))
             .text
             .ends_with("Both moved."));
         assert_eq!(
             kind(900, 90, false, None).text,
-            "No clear pattern in 900 prompts and 90 corrections: no hours stand out clearly and the model's side is steady."
+            "No clear pattern in 900 prompts and 90 corrections: no hours stand out clearly."
         );
         assert_eq!(
             kind(120, 12, false, None).text,
             "Too few to tell yet: 120 prompts and 12 corrections (it needs 300 and 30)."
         );
+    }
+
+    #[test]
+    fn nothing_measured_is_said_and_never_called_flat() {
+        let t = kind(900, 90, true, Some(BLIND)).text;
+        assert_eq!(
+            t,
+            "Evenings: 1.8x more corrections (105). No model-side data, so it cannot be said whether it was you or the model."
+        );
+        assert!(!t.contains("flat"));
+        let one = ModelSide {
+            think_ratio: None,
+            tool_error_ratio: Some(1.0),
+            tool_errors_moved: false,
+        };
+        assert_eq!(
+            kind(900, 90, true, Some(one)).text,
+            "Evenings: 1.8x more corrections (105). No thinking data. Tool errors flat. Mostly you."
+        );
+        assert!(kind(900, 90, false, Some(BLIND))
+            .text
+            .ends_with("the model's side has no data."));
+        // a ratio out of the flat range that chance explains is not called flat either
+        let loose = ModelSide {
+            think_ratio: Some(1.0),
+            tool_error_ratio: Some(3.0),
+            tool_errors_moved: false,
+        };
+        assert!(kind(900, 90, true, Some(loose))
+            .text
+            .contains("Tool errors not clearly different."));
     }
 
     #[test]
@@ -343,6 +606,42 @@ mod tests {
         });
         assert_eq!(v.kind, Kind::TooFew);
         assert!(v.text.contains("llm is off"));
+    }
+
+    #[test]
+    fn hours_are_named_by_one_rule() {
+        let names: Vec<_> = [0, 4, 5, 11, 12, 16, 17, 21, 22, 23]
+            .map(part_of_day)
+            .into();
+        assert_eq!(
+            names,
+            [
+                "night",
+                "night",
+                "morning",
+                "morning",
+                "afternoon",
+                "afternoon",
+                "evening",
+                "evening",
+                "night",
+                "night"
+            ]
+        );
+        assert_eq!(
+            range_label(&Range {
+                from_h: 18,
+                to_h: 2
+            }),
+            "evening"
+        );
+        assert_eq!(
+            range_label(&Range {
+                from_h: 23,
+                to_h: 3
+            }),
+            "night"
+        );
     }
 
     #[test]

@@ -30,6 +30,18 @@ mod types;
 
 pub use types::*;
 
+/// Every kind of turn event.
+pub const ALL_TURN_KINDS: &[TurnKind] = &[
+    TurnKind::Prompt,
+    TurnKind::End,
+    TurnKind::Interrupt,
+    TurnKind::Tool,
+    TurnKind::ToolError,
+    TurnKind::Refusal,
+    TurnKind::Think,
+    TurnKind::Compact,
+];
+
 use crate::config::{AgentCfg, Config};
 use crate::conversation::Message;
 use crate::model::Session;
@@ -87,6 +99,12 @@ pub trait Agent: Send + Sync + std::fmt::Debug {
     /// exists. The default knows none.
     fn turn_events(&self, _path: &Path) -> Result<Vec<TurnEvent>> {
         Ok(vec![])
+    }
+    /// The kinds of turn event this agent can report at all (`docs/agents.md`, "Turn events by
+    /// agent"). A kind outside the list is no signal for the agent, which is not the same as
+    /// zero. The default reports none.
+    fn turn_kinds(&self) -> &'static [TurnKind] {
+        &[]
     }
     /// What `n` of a `think` event counts for this agent (`"signature"`, `"reasoning_tokens"`),
     /// None when it reports no thinking. Thinking is only compared with the same agent's own.

@@ -1,16 +1,19 @@
 //! The settings the board's gear panel shows and changes: a whitelist of `config.toml` keys, each
 //! with its type and what it may be. Everything else (folders, homes, prices, exclude lists, the
-//! dangerous night switches) stays in the file and `eye config`; a key not listed here is a 400.
+//! dangerous night switches) stays in `config.toml`; a key not listed here is a 400.
 
 use super::api::{ApiError, ApiResult};
 use super::{AppState, Shared};
 use crate::agents;
-use crate::config::{self, Config};
+use crate::config::{self, Config, PARALLEL_RANGE};
+use crate::config_clock::BREAK_RANGE;
 use crate::night::clock;
 use crate::platform::idle;
+use anyhow::Context;
 use axum::extract::State;
 use axum::Json;
 use serde_json::{json, Map, Value};
+use std::ops::RangeInclusive;
 
 /// Every key the board may change, in the order the panel shows them.
 const KEYS: &[&str] = &[
@@ -34,10 +37,22 @@ const MODEL_MAX: usize = 64;
 
 /// The settings now: the file is read again, so a change made elsewhere shows at once.
 fn fresh_cfg(st: &AppState) -> Config {
-    std::fs::read_to_string(st.paths.config_path())
-        .ok()
-        .and_then(|t| Config::parse(&t).ok())
-        .unwrap_or_else(|| st.cfg.clone())
+    st.cfg.fresh(&st.paths.config_path())
+}
+
+/// A whole number inside `range` as the text to put after `key =`, or what the key takes.
+fn int_in(key: &str, v: &Value, range: &RangeInclusive<u32>) -> Result<String, String> {
+    v.as_u64()
+        .and_then(|n| u32::try_from(n).ok())
+        .filter(|n| range.contains(n))
+        .map(|n| n.to_string())
+        .ok_or_else(|| {
+            format!(
+                "{key}: give a number from {} to {}",
+                range.start(),
+                range.end()
+            )
+        })
 }
 
 /// The ids and names of every agent eye knows, enabled or not.
@@ -62,31 +77,33 @@ fn describe(cfg: &Config, key: &str) -> Value {
             json!({"type": "window", "value": w.text()})
         }
         "night.parallel" => {
-            json!({"type": "int", "min": 1, "max": 8, "value": cfg.night.parallel})
+            json!({"type": "int", "min": PARALLEL_RANGE.start(), "max": PARALLEL_RANGE.end(), "value": cfg.night.parallel})
         }
         "night.isolation" => {
             json!({"type": "choice", "choices": ["worktree", "copy"], "value": cfg.night.isolation})
         }
         "remind.notify" => json!({"type": "bool", "value": cfg.remind.notify}),
-        "clock.enabled" => json!({"type": "bool", "value": cfg.clock.enabled}),
+        // the daemon's scan records turns by the setting it started with
+        "clock.enabled" => json!({"type": "bool", "value": cfg.clock.enabled, "restart": true}),
         "clock.llm" => {
             json!({"type": "bool", "value": cfg.clock.llm.unwrap_or(cfg.summary.enabled)})
         }
         "clock.hints" => json!({"type": "bool", "value": cfg.clock.hints}),
         "clock.break_minutes" => {
-            json!({"type": "int", "min": 10, "max": 240, "value": cfg.clock.break_minutes})
+            json!({"type": "int", "min": BREAK_RANGE.start(), "max": BREAK_RANGE.end(), "value": cfg.clock.break_minutes})
         }
         "clock.idle" => json!({
             "type": "bool", "value": cfg.clock.idle,
             "available": idle::idle_ms(&idle::RealSys).is_some(),
         }),
-        _ => {
+        "agents.enabled" => {
             let choices: Vec<Value> = known_agents(cfg)
                 .into_iter()
                 .map(|(id, name)| json!({"id": id, "name": name}))
                 .collect();
             json!({"type": "agents", "choices": choices, "value": cfg.enabled_agent_ids(), "restart": true})
         }
+        _ => unreachable!("{key} is in KEYS without being described"),
     }
 }
 
@@ -124,21 +141,13 @@ fn toml_value(cfg: &Config, key: &str, v: &Value) -> Result<String, String> {
             )?;
             Ok(format!("{:?}", w.text()))
         }
-        "night.parallel" => v
-            .as_u64()
-            .filter(|n| (1..=8).contains(n))
-            .map(|n| n.to_string())
-            .ok_or_else(|| want("a number from 1 to 8")),
-        "clock.break_minutes" => v
-            .as_u64()
-            .filter(|n| (10..=240).contains(n))
-            .map(|n| n.to_string())
-            .ok_or_else(|| want("a number from 10 to 240")),
+        "night.parallel" => int_in(key, v, &PARALLEL_RANGE),
+        "clock.break_minutes" => int_in(key, v, &BREAK_RANGE),
         "night.isolation" => match v.as_str() {
             Some(m @ ("worktree" | "copy")) => Ok(format!("{m:?}")),
             _ => Err(want("worktree or copy")),
         },
-        _ => {
+        "agents.enabled" => {
             let known = known_agents(cfg);
             let ids: Vec<&str> = v
                 .as_array()
@@ -157,6 +166,7 @@ fn toml_value(cfg: &Config, key: &str, v: &Value) -> Result<String, String> {
             let ids: Vec<String> = ids.iter().map(|i| i.to_string()).collect();
             Ok(config::agents_list(&ids))
         }
+        _ => unreachable!("{key} is in KEYS without being checked"),
     }
 }
 
@@ -194,7 +204,7 @@ pub(super) async fn api_settings_set(State(st): State<Shared>, Json(b): Json<Val
     st.paths
         .ensure_home()
         .and_then(|()| config::write_keys(&st.paths.config_path(), &keys))
-        .map_err(|e| ApiError::bad(format!("saving settings: {e:#}")))?;
+        .context("saving settings")?;
     Ok(Json(all(&fresh_cfg(&st))))
 }
 

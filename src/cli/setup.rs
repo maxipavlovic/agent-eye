@@ -76,9 +76,18 @@ pub fn doctor(g: &Global) -> Result<()> {
     let o = Opts::resolve(&paths, None, None)?;
     let mut res = install::doctor(&o, &paths, &cfg, &agents);
     res.extend(crate::backup::checks(&paths, &cfg, crate::util::now_ms()));
+    let daemon = match crate::daemon::running_pid(&paths) {
+        None => crate::clock::idle::Daemon::Stopped,
+        Some(_) => crate::clock::idle::Daemon::Running(
+            Db::open(&paths.db_path())
+                .ok()
+                .and_then(|db| crate::clock::idle::noted(&db.conn)),
+        ),
+    };
     res.extend(crate::clock::idle::checks(
         &cfg,
         &crate::platform::idle::RealSys,
+        daemon,
     ));
     let warn = res.iter().filter(|c| !c.ok).count();
     for c in &res {

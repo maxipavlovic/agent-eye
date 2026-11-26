@@ -58,20 +58,59 @@ fn same_span(conn: &Connection, start: i64) -> Result<Option<i64>> {
         .optional()?)
 }
 
-/// The `eye doctor` line about the idle sensor: whether this system can say how long it has been
-/// idle, and whether it is on.
-pub fn checks(cfg: &Config, sys: &dyn Sys) -> Vec<Check> {
+/// `meta` key where the daemon notes whether it could read the idle time (`ok` or `none`), so that
+/// `eye doctor`, which runs in a terminal, reports what the daemon itself can do.
+pub const SENSOR_KEY: &str = "clock_idle_sensor";
+
+/// What `eye doctor` knows about the daemon's idle sampling.
+pub enum Daemon {
+    /// No daemon is running: nothing is being sampled.
+    Stopped,
+    /// The daemon runs; it last noted that it could (`Some(true)`) or could not (`Some(false)`)
+    /// read the idle time, or has not tried yet.
+    Running(Option<bool>),
+}
+
+/// The state the daemon noted in `meta`, as `Daemon::Running` wants it.
+pub fn noted(conn: &Connection) -> Option<bool> {
+    let v: Option<String> = conn
+        .query_row("SELECT value FROM meta WHERE key=?1", [SENSOR_KEY], |r| {
+            r.get(0)
+        })
+        .optional()
+        .ok()
+        .flatten();
+    v.map(|v| v == "ok")
+}
+
+/// The `eye doctor` line about the idle sensor: whether the daemon can say how long it has been
+/// idle, and whether it is on. The daemon's own note counts; this process's reading only says what
+/// a terminal sees, which is why it is used when the daemon is not running.
+pub fn checks(cfg: &Config, sys: &dyn Sys, daemon: Daemon) -> Vec<Check> {
     if !cfg.clock.enabled {
         return vec![];
     }
-    let available = idle_ms(sys).is_some();
-    vec![match (cfg.clock.idle, available) {
-        (true, true) => Check::ok("idle sensor: available, on (breaks come from real idle time)"),
-        (true, false) => Check::warn(
-            "idle sensor: on in [clock], but this system cannot report idle time; breaks come from gaps between prompts",
+    let here = idle_ms(sys).is_some();
+    vec![match (cfg.clock.idle, daemon) {
+        (false, _) => Check::ok(if here {
+            "idle sensor: available, off (set [clock] idle = true to use it)"
+        } else {
+            "idle sensor: not available on this system, off"
+        }),
+        (true, Daemon::Running(Some(true))) => {
+            Check::ok("idle sensor: on, the daemon reads idle time (breaks come from real idle time)")
+        }
+        (true, Daemon::Running(Some(false))) => Check::warn(
+            "idle sensor: on in [clock], but the daemon cannot read idle time; breaks come from gaps between prompts",
         ),
-        (false, true) => Check::ok("idle sensor: available, off (set [clock] idle = true to use it)"),
-        (false, false) => Check::ok("idle sensor: not available on this system, off"),
+        (true, Daemon::Running(None)) => Check::ok(
+            "idle sensor: on, the daemon has not tried to read idle time yet (it does once a minute)",
+        ),
+        (true, Daemon::Stopped) => Check::warn(if here {
+            "idle sensor: on, and this system can report idle time, but the daemon is not running, so none is recorded"
+        } else {
+            "idle sensor: on in [clock], but this system cannot report idle time; breaks come from gaps between prompts"
+        }),
     }]
 }
 
@@ -142,28 +181,50 @@ mod tests {
         fn output(&self, _: &str, _: &[&str]) -> Option<String> {
             self.0.then(|| "\"HIDIdleTime\" = 1000000000".to_string())
         }
-        fn env(&self, _: &str) -> Option<String> {
-            None
-        }
         fn now_ms(&self) -> i64 {
             0
         }
     }
 
     #[test]
-    fn doctor_says_whether_the_sensor_is_available_and_on() {
+    fn doctor_reports_what_the_daemon_can_sample() {
         let cfg = |t: &str| Config::parse(t).unwrap();
-        let line = |t: &str, ok: bool| {
-            let c = checks(&cfg(t), &Machine(ok));
+        let line = |t: &str, here: bool, d: Daemon| {
+            let c = checks(&cfg(t), &Machine(here), d);
             (c[0].ok, c[0].msg.clone())
         };
-        assert!(line("", true).1.contains("available, off"));
-        assert!(line("[clock]\nidle = true", true)
+        let on = "[clock]\nidle = true";
+        assert!(line("", true, Daemon::Stopped).1.contains("available, off"));
+        assert!(line(on, false, Daemon::Running(Some(true)))
             .1
-            .contains("available, on"));
-        let (ok, msg) = line("[clock]\nidle = true", false);
+            .contains("the daemon reads"));
+        // the terminal can read it but the daemon cannot: the daemon's word counts
+        let (ok, msg) = line(on, true, Daemon::Running(Some(false)));
+        assert!(!ok && msg.contains("the daemon cannot read idle time"));
+        assert!(line(on, true, Daemon::Running(None)).0);
+        let (ok, msg) = line(on, true, Daemon::Stopped);
+        assert!(!ok && msg.contains("daemon is not running"));
+        let (ok, msg) = line(on, false, Daemon::Stopped);
         assert!(!ok && msg.contains("cannot report idle time"));
-        assert!(line("", false).0, "off and unavailable is nothing to fix");
-        assert!(checks(&cfg("[clock]\nenabled = false"), &Machine(true)).is_empty());
+        assert!(
+            line("", false, Daemon::Stopped).0,
+            "off and unavailable is nothing to fix"
+        );
+        assert!(checks(
+            &cfg("[clock]\nenabled = false"),
+            &Machine(true),
+            Daemon::Stopped
+        )
+        .is_empty());
+    }
+
+    #[test]
+    fn the_daemons_note_is_read_back() {
+        let db = Db::open_memory().unwrap();
+        assert_eq!(noted(&db.conn), None);
+        crate::db::meta_set(&db.conn, SENSOR_KEY, "none").unwrap();
+        assert_eq!(noted(&db.conn), Some(false));
+        crate::db::meta_set(&db.conn, SENSOR_KEY, "ok").unwrap();
+        assert_eq!(noted(&db.conn), Some(true));
     }
 }

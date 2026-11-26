@@ -16,11 +16,12 @@ pub const MIN_HOUR_PROMPTS: i64 = 20;
 /// An hour is bad when its correction rate is this many times the median hour's.
 const BAD_FACTOR: f64 = 1.5;
 /// The band counts only when chance explains the difference less than this often.
-const MAX_P: f64 = 0.1;
+pub const MAX_P: f64 = 0.1;
 /// A ratio is reported as at most this much (a rest with no corrections at all).
 const MAX_RATIO: f64 = 99.0;
-/// ...and holds at least this many corrections.
-const MIN_BAD_CORRECTIONS: i64 = 10;
+/// ...and rests on at least this many events (corrections, failed tool calls) in the group that is
+/// higher.
+pub const MIN_EVENTS: i64 = 10;
 
 /// The labels of the time-since-break bands, shortest first.
 pub const BAND_NAMES: [&str; 4] = ["<1h", "1-2h", "2-4h", "4h+"];
@@ -78,19 +79,14 @@ pub fn hours(data: &Data, off: OffsetFn) -> Vec<Hour> {
         h.prompts += 1;
         h.corrections += i64::from(p.correction);
     }
-    for (list, pick) in [
-        (&data.interrupts, 0),
-        (&data.tools, 1),
-        (&data.tool_errors, 2),
-    ] {
-        for ts in list {
-            let h = &mut hours[local_hour(*ts, off)];
-            match pick {
-                0 => h.interrupts += 1,
-                1 => h.tool_calls += 1,
-                _ => h.tool_errors += 1,
-            }
-        }
+    for ts in &data.interrupts {
+        hours[local_hour(*ts, off)].interrupts += 1;
+    }
+    for c in &data.tools {
+        hours[local_hour(c.ts, off)].tool_calls += 1;
+    }
+    for c in &data.tool_errors {
+        hours[local_hour(c.ts, off)].tool_errors += 1;
     }
     if let Some(main) = main_think_agent(data) {
         let mut by_hour: Vec<Vec<i64>> = vec![vec![]; 24];
@@ -112,14 +108,12 @@ pub struct Band {
     pub corrections: i64,
 }
 
-/// When the user came back from each break, oldest first. With `idle` (the ends of idle spans) a
-/// break is a span; without it a break is a gap of `break_ms` between two prompts, and the prompt
-/// that ends it is the break's end. Without idle data the first prompt starts the first stretch.
+/// When the user came back from each break, oldest first: the end of every idle span (`idle`, when
+/// the sensor is on) and the prompt that ends every gap of `break_ms` between two prompts. Both
+/// count, because the daemon samples idle time only while it runs: a night the machine slept
+/// leaves no span, but the gap is there. The first prompt starts the first stretch.
 pub fn break_ends(prompts: &[Prompt], idle: Option<&[i64]>, break_ms: i64) -> Vec<i64> {
-    if let Some(idle) = idle {
-        return idle.to_vec();
-    }
-    let mut ends = vec![];
+    let mut ends: Vec<i64> = idle.map(<[i64]>::to_vec).unwrap_or_default();
     let mut last: Option<i64> = None;
     for p in prompts {
         if last.is_none_or(|l| p.ts - l >= break_ms) {
@@ -127,6 +121,8 @@ pub fn break_ends(prompts: &[Prompt], idle: Option<&[i64]>, break_ms: i64) -> Ve
         }
         last = Some(p.ts);
     }
+    ends.sort_unstable();
+    ends.dedup();
     ends
 }
 
@@ -232,23 +228,30 @@ pub fn rate(corrections: i64, prompts: i64) -> f64 {
 /// corrections in the first group. `(corrections, prompts)` for each.
 pub fn passes_gate(bad: (i64, i64), rest: (i64, i64)) -> Option<f64> {
     let ((c1, n1), (c2, n2)) = (bad, rest);
-    if c1 < MIN_BAD_CORRECTIONS || n1 == 0 || n2 == 0 {
+    if c1 < MIN_EVENTS || rate(c1, n1) <= rate(c2, n2) {
         return None;
     }
-    let (r1, r2) = (rate(c1, n1), rate(c2, n2));
-    let pooled = (c1 + c2) as f64 / (n1 + n2) as f64;
-    let se = (pooled * (1.0 - pooled) * (1.0 / n1 as f64 + 1.0 / n2 as f64)).sqrt();
-    if se == 0.0 || r1 <= r2 {
-        return None;
-    }
-    let z = (r1 - r2) / se;
-    (two_sided_p(z) < MAX_P).then(|| {
+    (proportion_p(bad, rest)? < MAX_P).then(|| {
+        let (r1, r2) = (rate(c1, n1), rate(c2, n2));
         if r2 == 0.0 {
             MAX_RATIO
         } else {
             (r1 / r2).min(MAX_RATIO)
         }
     })
+}
+
+/// The chance that two groups differ in their rate this much (or more) when they do not: a two-sided
+/// two-proportion z-test. `(events, size)` for each. None when it cannot be told: a group is empty,
+/// or there are no events or only events.
+pub fn proportion_p(a: (i64, i64), b: (i64, i64)) -> Option<f64> {
+    let ((c1, n1), (c2, n2)) = (a, b);
+    if n1 == 0 || n2 == 0 {
+        return None;
+    }
+    let pooled = (c1 + c2) as f64 / (n1 + n2) as f64;
+    let se = (pooled * (1.0 - pooled) * (1.0 / n1 as f64 + 1.0 / n2 as f64)).sqrt();
+    (se > 0.0).then(|| two_sided_p((rate(c1, n1) - rate(c2, n2)) / se))
 }
 
 /// P(|Z| > z) for a standard normal Z.
@@ -273,7 +276,7 @@ fn erfc(x: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::clock::signals::Think;
+    use crate::clock::signals::{Call, Think};
 
     const H: i64 = HOUR_MS;
 
@@ -288,6 +291,12 @@ mod tests {
             ts,
             agent: "claude".into(),
             correction,
+        }
+    }
+    fn call(ts: i64) -> Call {
+        Call {
+            ts,
+            agent: "claude".into(),
         }
     }
     fn hour(h: usize, prompts: i64, corrections: i64) -> Hour {
@@ -315,8 +324,8 @@ mod tests {
         let d = Data {
             prompts: vec![prompt(H, true), prompt(H + 5, false), prompt(5 * H, false)],
             interrupts: vec![H],
-            tools: vec![H, H, 5 * H],
-            tool_errors: vec![5 * H],
+            tools: [H, H, 5 * H].map(call).into(),
+            tool_errors: vec![call(5 * H)],
             thinks: vec![
                 Think {
                     ts: H,
@@ -361,8 +370,12 @@ mod tests {
             .collect();
         let gaps = break_ends(&ps, None, 45 * MIN_MS);
         assert_eq!(gaps, [0, 100 * MIN_MS]);
+        // a span the prompts do not show counts too, and a gap counts when no span covers it (the
+        // daemon was not running overnight)
         let idle = break_ends(&ps, Some(&[50 * MIN_MS]), 45 * MIN_MS);
-        assert_eq!(idle, [50 * MIN_MS]);
+        assert_eq!(idle, [0, 50 * MIN_MS, 100 * MIN_MS]);
+        let same = break_ends(&ps, Some(&[100 * MIN_MS]), 45 * MIN_MS);
+        assert_eq!(same, [0, 100 * MIN_MS]);
         assert!(break_ends(&[], None, 1).is_empty());
     }
 

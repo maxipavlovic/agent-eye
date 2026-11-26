@@ -361,15 +361,7 @@ fn turns_round(paths: &Paths, cfg: &Config) {
 /// `eye night on` counts at the next pass; a run that already goes is watched even when the shift
 /// was switched off since. Failures go to the log.
 fn night_round(paths: &Paths, cfg: &Config) {
-    let cfg = std::fs::read_to_string(paths.config_path())
-        .ok()
-        .and_then(|t| Config::parse(&t).ok())
-        .map(|mut c| {
-            c.folder_root = cfg.folder_root.clone();
-            c.night_dir = cfg.night_dir.clone();
-            c
-        })
-        .unwrap_or_else(|| cfg.clone());
+    let cfg = cfg.fresh(&paths.config_path());
     let agents = agents::enabled(&cfg);
     let sys = crate::night::sched::RealSys::new(paths, &cfg, &agents);
     let r = Db::open(&paths.db_path())

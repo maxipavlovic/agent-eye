@@ -5,6 +5,7 @@ use super::Global;
 use crate::clock::bands::{rate, MIN_HOUR_PROMPTS};
 use crate::clock::pass;
 use crate::clock::report::{self, Report, MAX_WEEKS};
+use crate::clock::verdict;
 use crate::turns::backfill;
 use crate::util::now_ms;
 use crate::worked::summary::local_offset_ms;
@@ -168,6 +169,14 @@ fn text(r: &Report, weeks: i64) -> String {
         );
     }
     let _ = writeln!(o, "\n{}", r.verdict.text);
+    if !r.agents.is_empty() {
+        let _ = writeln!(
+            o,
+            "\nBy agent, in the worse hours against its own other hours"
+        );
+        o.push_str(&agent_lines(r));
+        o.push('\n');
+    }
     if let Some(m) = r.now.since_break_min {
         let _ = writeln!(
             o,
@@ -180,10 +189,32 @@ fn text(r: &Report, weeks: i64) -> String {
         );
     }
     if let Some(h) = &r.now.hint {
-        let _ = writeln!(o, "{h}");
+        let _ = writeln!(o, "{}", h.text);
     }
-    if !r.llm {
-        let _ = writeln!(o, "Corrections are not being judged ([clock] llm is off).");
+    if let Some(why) = &r.judging_reason {
+        let _ = writeln!(o, "Corrections are not being judged: {why}.");
+    }
+    o
+}
+
+/// One line per agent: its prompts and corrections, and its model side in the worse hours against
+/// its own elsewhere. A signal the agent does not have (or has too little of) is a dash.
+fn agent_lines(r: &Report) -> String {
+    use std::fmt::Write;
+    let mut o = String::new();
+    let width = r.agents.iter().map(|a| a.agent.len()).max().unwrap_or(0);
+    let change = |x: Option<f64>| x.map_or("\u{2014}".to_string(), verdict::change);
+    for a in &r.agents {
+        let _ = writeln!(
+            o,
+            "  {:<width$}  {} prompts, {} corrections ({:.1} per 100); thinking {}, tool errors {}",
+            a.agent,
+            a.prompts,
+            a.corrections,
+            per_100(a.corrections, a.prompts),
+            change(a.think_ratio),
+            change(a.tool_error_ratio),
+        );
     }
     o
 }
@@ -191,8 +222,8 @@ fn text(r: &Report, weeks: i64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::clock::bands::{Band, Hour, Range};
-    use crate::clock::report::Now;
+    use crate::clock::bands::{Band, Hour};
+    use crate::clock::report::{AgentRow, Bad, Judging, Now};
     use crate::clock::verdict::{Kind, Verdict};
 
     fn report() -> Report {
@@ -211,6 +242,8 @@ mod tests {
         Report {
             enabled: true,
             llm: true,
+            judging: Judging::On,
+            judging_reason: None,
             hints: false,
             idle: false,
             from: "2026-11-03".into(),
@@ -231,10 +264,12 @@ mod tests {
                 corrections,
             })
             .into(),
-            bad: vec![Range {
+            bad: vec![Bad {
                 from_h: 19,
                 to_h: 21,
+                label: "evening",
             }],
+            think_agent: None,
             verdict: Verdict {
                 kind: Kind::You,
                 you_ratio: Some(2.0),
@@ -249,6 +284,19 @@ mod tests {
                 hint: None,
             },
             agents: vec![],
+        }
+    }
+
+    fn agent(name: &str, think: Option<f64>, errors: Option<f64>) -> AgentRow {
+        AgentRow {
+            agent: name.into(),
+            prompts: 1000,
+            corrections: 100,
+            think: None,
+            think_unit: None,
+            think_ratio: think,
+            tool_error_ratio: errors,
+            signals: vec![],
         }
     }
 
@@ -305,5 +353,33 @@ mod tests {
         assert!(t.contains("the last 1 week,"));
         assert!(t.contains(&"··".repeat(24)));
         assert!(t.contains("No hours stand out."));
+    }
+
+    #[test]
+    fn each_agent_gets_a_line_with_a_dash_for_a_missing_signal() {
+        let mut r = report();
+        r.agents = vec![
+            agent("claude", Some(0.92), Some(1.5)),
+            agent("agy", None, None),
+        ];
+        let t = text(&r, 4);
+        assert!(
+            t.contains("  claude  1000 prompts, 100 corrections (10.0 per 100); thinking \u{2212}8%, tool errors +50%\n"),
+            "{t}"
+        );
+        assert!(
+            t.contains("  agy     1000 prompts, 100 corrections (10.0 per 100); thinking \u{2014}, tool errors \u{2014}\n"),
+            "{t}"
+        );
+    }
+
+    #[test]
+    fn the_report_says_why_judging_is_off() {
+        let mut r = report();
+        r.judging = Judging::Unavailable;
+        r.judging_reason = Some("no enabled agent can judge corrections".into());
+        assert!(text(&r, 4).ends_with(
+            "Corrections are not being judged: no enabled agent can judge corrections.\n"
+        ));
     }
 }

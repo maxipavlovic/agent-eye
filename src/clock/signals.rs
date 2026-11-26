@@ -15,6 +15,13 @@ pub struct Prompt {
     pub correction: bool,
 }
 
+/// A tool call, with the agent that made it (agents fail at different rates, so errors are only
+/// compared within one agent).
+pub struct Call {
+    pub ts: i64,
+    pub agent: String,
+}
+
 pub struct Think {
     pub ts: i64,
     pub agent: String,
@@ -27,8 +34,8 @@ pub struct Think {
 pub struct Data {
     pub prompts: Vec<Prompt>,
     pub interrupts: Vec<i64>,
-    pub tools: Vec<i64>,
-    pub tool_errors: Vec<i64>,
+    pub tools: Vec<Call>,
+    pub tool_errors: Vec<Call>,
     pub thinks: Vec<Think>,
 }
 
@@ -52,8 +59,14 @@ pub fn load(conn: &Connection, from_ms: i64) -> Result<Data> {
                 correction: r.get(4)?,
             }),
             "interrupt" => data.interrupts.push(ts),
-            "tool" => data.tools.push(ts),
-            "tool_error" => data.tool_errors.push(ts),
+            "tool" => data.tools.push(Call {
+                ts,
+                agent: r.get(3)?,
+            }),
+            "tool_error" => data.tool_errors.push(Call {
+                ts,
+                agent: r.get(3)?,
+            }),
             _ => data.thinks.push(Think {
                 ts,
                 agent: r.get(3)?,

@@ -234,6 +234,17 @@ impl Agent for Agy {
         log::turn_events(&files::log_of(path))
     }
 
+    fn turn_kinds(&self) -> &'static [TurnKind] {
+        &[
+            TurnKind::Prompt,
+            TurnKind::End,
+            TurnKind::Tool,
+            TurnKind::ToolError,
+            TurnKind::Refusal,
+            TurnKind::Think,
+        ]
+    }
+
     /// What a `think` event counts: the characters of the model's thinking text (the log has no
     /// token count for it).
     fn think_unit(&self) -> Option<&'static str> {
