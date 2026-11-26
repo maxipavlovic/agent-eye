@@ -127,6 +127,12 @@ pub struct SetupArgs {
 }
 
 #[derive(Subcommand)]
+pub enum ClockCmd {
+    /// Ask the model which prompts since the last pass were corrections (what the daemon does at night)
+    Detect,
+}
+
+#[derive(Subcommand)]
 pub enum NightCmd {
     /// Switch the night shift on (`[night] enabled = true`)
     On,
@@ -437,6 +443,21 @@ pub enum Cmd {
         session: Option<String>,
         #[arg(long)]
         json: bool,
+    },
+    /// The steering clock: which hours you steer worse, and whether it was you or the model
+    /// `clock detect` judges the prompts that have not been judged yet, now
+    #[command(args_conflicts_with_subcommands = true)]
+    Clock {
+        #[command(subcommand)]
+        sub: Option<ClockCmd>,
+        /// The last N weeks (1 to 12)
+        #[arg(long, default_value_t = 4)]
+        weeks: i64,
+        #[arg(long)]
+        json: bool,
+        /// Only the verdict, as one line
+        #[arg(long)]
+        brief: bool,
     },
     /// The night shift: runs that start by themselves inside a time window, in their own worktree or copy
     Night {

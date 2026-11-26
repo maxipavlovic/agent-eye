@@ -5,6 +5,7 @@ mod args;
 mod ask;
 mod backup;
 mod board;
+mod clock;
 mod data;
 mod forget;
 mod ideas;
@@ -227,6 +228,12 @@ pub fn run() -> Result<()> {
         } => data::mark(&g, &args, current, next.as_deref()),
         Cmd::Remind { args, note, clear } => remind::run(&g, &args, note.as_deref(), clear),
         Cmd::Loose { sub, session, json } => loose::run(&g, sub, session.as_deref(), json),
+        Cmd::Clock {
+            sub,
+            weeks,
+            json,
+            brief,
+        } => clock::run(&g, sub, weeks, json, brief),
         Cmd::Night { sub } => night::run(&g, sub),
         Cmd::Daemon { port, no_board } => setup::daemon(&g, port, no_board),
         Cmd::Install { a, board } => setup::install(&g, &a, board),

@@ -5,6 +5,7 @@ mod api;
 mod board;
 mod card;
 mod cards;
+mod clock_routes;
 mod face;
 mod guard;
 mod idea_routes;
@@ -112,6 +113,7 @@ pub fn router(state: Shared) -> Router {
         .route("/api/search", get(cards::api_search))
         .route("/api/agents", get(agent_routes::api_agents))
         .route("/api/usage", get(usage_routes::api_usage))
+        .route("/api/clock", get(clock_routes::api_clock))
         .route(
             "/api/ideas",
             get(idea_routes::api_ideas).post(idea_routes::api_idea_add),
