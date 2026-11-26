@@ -7,7 +7,7 @@
 //! `MessageAbortedError`; a tool part that failed has `state.status` `error`, and is a refusal
 //! when its error says the user or a rule rejected the call.
 
-use super::events::{n, s, text_parts};
+use super::events::{n, s, text_parts, Ev};
 use crate::turns::stream::Stream;
 use crate::turns::{TurnEvent, TurnKind};
 use regex::Regex;
@@ -97,6 +97,44 @@ pub fn from_v1(
             }
             "assistant" => b.assistant(ts, m, ps),
             _ => {}
+        }
+    }
+    b.finish()
+}
+
+/// Turn events of the session an archive copy from before eye kept them holds, from its native
+/// export when that has the older layout's messages (`info` and `parts` each). None when it has not.
+pub fn from_native(native: &Value) -> Option<Vec<TurnEvent>> {
+    let mut messages = vec![];
+    let mut parts = HashMap::new();
+    for m in native.get("messages")?.as_array()? {
+        let info = m.get("info")?;
+        let id = s(info, "id");
+        if id.is_empty() || s(info, "role").is_empty() {
+            return None;
+        }
+        let created = info.get("time").map_or(0, |t| n(t, "created"));
+        messages.push((id.to_string(), created, info.clone()));
+        let ps = m.get("parts").and_then(Value::as_array).cloned();
+        parts.insert(id.to_string(), ps.unwrap_or_default());
+    }
+    Some(from_v1(&messages, &parts))
+}
+
+/// Turn events from what an archive copy keeps of every session: prompts, tool calls and the time
+/// of the last reply of each turn. That is all its events say, so a copy that has no native export
+/// has no thinking, errors, refusals, interrupts or compactions.
+pub fn from_events(events: &[Ev]) -> Vec<TurnEvent> {
+    let mut b = Builder::default();
+    for e in events {
+        match e {
+            Ev::Prompt { ts, text } => b.prompt(*ts, text),
+            Ev::Reply { ts, text } => b.0.reply(*ts, text.split_whitespace().count() as i64),
+            Ev::Tool { ts, .. } => {
+                b.0.reply(*ts, 0);
+                b.0.push(*ts, TurnKind::Tool, 0);
+            }
+            Ev::Usage { .. } => {}
         }
     }
     b.finish()
@@ -293,5 +331,88 @@ mod tests {
         );
         let events = from_v1(&msgs, &parts);
         assert_eq!(kinds(&events), vec![(TurnKind::Tool, 0)]);
+    }
+
+    /// The fixture's messages in the shape of `opencode session export`.
+    fn native() -> Value {
+        let (msgs, parts) = v1();
+        let messages: Vec<Value> = msgs
+            .iter()
+            .map(|(id, _, m)| {
+                let mut info = m.clone();
+                info["id"] = id.as_str().into();
+                json!({"info": info, "parts": parts.get(id).cloned().unwrap_or_default()})
+            })
+            .collect();
+        json!({"info": {"id": "ses_1"}, "messages": messages})
+    }
+
+    #[test]
+    fn an_archive_copy_without_turns_gets_them_from_its_native_export() {
+        let (msgs, parts) = v1();
+        assert_eq!(from_native(&native()), Some(from_v1(&msgs, &parts)));
+        // a layout this reads no messages of is left to the events
+        let v2 = json!({"messages": [{"info": {"id": "a", "type": "user"}, "parts": []}]});
+        assert_eq!(from_native(&v2), None);
+        assert_eq!(from_native(&json!({"info": {}})), None);
+    }
+
+    #[test]
+    fn the_events_of_a_copy_give_prompts_tools_and_the_end_of_each_turn() {
+        let events = vec![
+            Ev::Prompt {
+                ts: 1000,
+                text: "fix it".into(),
+            },
+            Ev::Tool {
+                ts: 2000,
+                line: "bash".into(),
+            },
+            Ev::Reply {
+                ts: 3000,
+                text: "done now".into(),
+            },
+            Ev::Prompt {
+                ts: 9000,
+                text: "thanks".into(),
+            },
+        ];
+        use TurnKind::*;
+        let turns = from_events(&events);
+        assert_eq!(
+            kinds(&turns),
+            vec![(Prompt, 6), (Tool, 0), (End, 2), (Prompt, 6)]
+        );
+        assert_eq!(end_times(&turns), vec![3000]);
+        assert!(from_events(&[]).is_empty());
+    }
+
+    #[test]
+    fn a_session_archived_before_turns_were_kept_is_read_with_them() {
+        let dir = tempfile::tempdir().unwrap();
+        let old = |native: Option<Value>| {
+            let l = crate::agents::opencode::events::Loaded {
+                eye_export: 1,
+                id: "ses_1".into(),
+                events: vec![Ev::Prompt {
+                    ts: 1000,
+                    text: "hello".into(),
+                }],
+                native,
+                ..Default::default()
+            };
+            let p = dir.path().join(if l.native.is_some() {
+                "n.json"
+            } else {
+                "e.json"
+            });
+            std::fs::write(&p, serde_json::to_vec(&l).unwrap()).unwrap();
+            crate::agents::opencode::store::load(&p).unwrap().turns
+        };
+        // from the events: one prompt
+        assert_eq!(kinds(&old(None)), vec![(TurnKind::Prompt, 5)]);
+        // from the native export: all the kinds it has
+        let from_native = old(Some(native()));
+        assert!(from_native.iter().any(|e| e.kind == TurnKind::Refusal));
     }
 }

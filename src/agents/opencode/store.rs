@@ -476,8 +476,16 @@ pub fn load(path: &Path) -> Result<Loaded> {
 }
 
 fn load_export(path: &Path) -> Result<Loaded> {
-    let l: Loaded = serde_json::from_slice(&std::fs::read(path)?)?;
+    let mut l: Loaded = serde_json::from_slice(&std::fs::read(path)?)?;
     anyhow::ensure!(l.eye_export == 1, "not an export");
+    // a copy made before eye kept turn events has none: rebuild them from what it does keep
+    if l.turns.is_empty() {
+        l.turns = l
+            .native
+            .as_ref()
+            .and_then(turns::from_native)
+            .unwrap_or_else(|| turns::from_events(&l.events));
+    }
     Ok(l)
 }
 
