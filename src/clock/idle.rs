@@ -113,10 +113,14 @@ mod tests {
     #[test]
     fn a_restart_in_the_middle_of_a_span_continues_it() {
         let db = Db::open_memory().unwrap();
-        Sampler::default().sample(&db.conn, 110 * MIN, 10 * MIN).unwrap();
+        Sampler::default()
+            .sample(&db.conn, 110 * MIN, 10 * MIN)
+            .unwrap();
         // a new sampler, one minute later; the start differs by a few milliseconds
         let mut again = Sampler::default();
-        again.sample(&db.conn, 111 * MIN + 12, 11 * MIN + 20).unwrap();
+        again
+            .sample(&db.conn, 111 * MIN + 12, 11 * MIN + 20)
+            .unwrap();
         assert_eq!(spans(&db), [(100 * MIN, 111 * MIN + 12)]);
     }
 
@@ -154,7 +158,9 @@ mod tests {
             (c[0].ok, c[0].msg.clone())
         };
         assert!(line("", true).1.contains("available, off"));
-        assert!(line("[clock]\nidle = true", true).1.contains("available, on"));
+        assert!(line("[clock]\nidle = true", true)
+            .1
+            .contains("available, on"));
         let (ok, msg) = line("[clock]\nidle = true", false);
         assert!(!ok && msg.contains("cannot report idle time"));
         assert!(line("", false).0, "off and unavailable is nothing to fix");

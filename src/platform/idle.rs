@@ -50,14 +50,7 @@ pub fn idle_ms(sys: &dyn Sys) -> Option<i64> {
         let id = sys.env("XDG_SESSION_ID")?;
         let text = sys.output(
             "loginctl",
-            &[
-                "show-session",
-                &id,
-                "-p",
-                "IdleHint",
-                "-p",
-                "IdleSinceHint",
-            ],
+            &["show-session", &id, "-p", "IdleHint", "-p", "IdleSinceHint"],
         )?;
         parse_idle_hint(&text, sys.now_ms())
     }
@@ -134,7 +127,10 @@ mod tests {
     fn linux_idle_time_is_read_from_the_session_hint() {
         let idle = "IdleHint=yes\nIdleSinceHint=940000000\nIdleSinceHintMonotonic=0\n";
         assert_eq!(parse_idle_hint(idle, 1_000_000), Some(60_000));
-        assert_eq!(parse_idle_hint("IdleHint=no\nIdleSinceHint=0\n", 5), Some(0));
+        assert_eq!(
+            parse_idle_hint("IdleHint=no\nIdleSinceHint=0\n", 5),
+            Some(0)
+        );
         // idle with no start time, no hint at all, and nonsense are all "cannot say"
         assert_eq!(parse_idle_hint("IdleHint=yes\nIdleSinceHint=0\n", 5), None);
         assert_eq!(parse_idle_hint("", 5), None);

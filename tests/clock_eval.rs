@@ -29,14 +29,18 @@ fn corrections_are_told_from_the_rest() {
         |_| PathBuf::from(std::env::var("HOME").expect("HOME")).join(".claude"),
         PathBuf::from,
     );
-    let labels: Value =
-        serde_json::from_str(&std::fs::read_to_string(labels_dir.join("clock_labels.json")).unwrap())
-            .unwrap();
+    let labels: Value = serde_json::from_str(
+        &std::fs::read_to_string(labels_dir.join("clock_labels.json")).unwrap(),
+    )
+    .unwrap();
     let claude = Claude::new(claude_dir.clone());
     let mut items: Vec<((String, bool), Exchange)> = vec![];
     let mut missing = vec![];
     for l in labels.as_array().expect("clock_labels.json is a list") {
-        let (id, sid) = (l["id"].as_str().unwrap_or("?"), l["session_id"].as_str().unwrap_or(""));
+        let (id, sid) = (
+            l["id"].as_str().unwrap_or("?"),
+            l["session_id"].as_str().unwrap_or(""),
+        );
         let ts = l["prompt_ts"].as_i64().unwrap_or(0);
         let found = transcript(&claude_dir, sid)
             .and_then(|p| claude.read_conversation(&p).ok())
@@ -55,7 +59,10 @@ fn corrections_are_told_from_the_rest() {
             None => missing.push(id.to_string()),
         }
     }
-    let through_filter = items.iter().filter(|(_, e)| detect::is_candidate(&e.prompt)).count();
+    let through_filter = items
+        .iter()
+        .filter(|(_, e)| detect::is_candidate(&e.prompt))
+        .count();
     let work = tempfile::tempdir().unwrap();
     let (mut tp, mut fp, mut fneg, mut tn) = (0, 0, 0, 0);
     let mut wrong = vec![];
@@ -75,14 +82,37 @@ fn corrections_are_told_from_the_rest() {
             }
         }
     }
-    let pct = |a: i32, b: i32| if b == 0 { 0.0 } else { 100.0 * f64::from(a) / f64::from(b) };
+    let pct = |a: i32, b: i32| {
+        if b == 0 {
+            0.0
+        } else {
+            100.0 * f64::from(a) / f64::from(b)
+        }
+    };
     let (precision, recall) = (pct(tp, tp + fp), pct(tp, tp + fneg));
-    println!("model {model}: {} labelled, {} not found in the transcripts {missing:?}", tp + fp + fneg + tn, missing.len());
+    println!(
+        "model {model}: {} labelled, {} not found in the transcripts {missing:?}",
+        tp + fp + fneg + tn,
+        missing.len()
+    );
     println!("cue filter lets through {through_filter} of the found exchanges");
-    println!("true corrections found {tp}/{}, false alarms {fp}, missed {fneg}, correct no {tn}", tp + fneg);
-    println!("precision {precision:.0}% ({tp}/{}), recall {recall:.0}% ({tp}/{})", tp + fp, tp + fneg);
+    println!(
+        "true corrections found {tp}/{}, false alarms {fp}, missed {fneg}, correct no {tn}",
+        tp + fneg
+    );
+    println!(
+        "precision {precision:.0}% ({tp}/{}), recall {recall:.0}% ({tp}/{})",
+        tp + fp,
+        tp + fneg
+    );
     println!("wrong: {wrong:?}");
-    if let Some(min) = std::env::var("EYE_EVAL_MIN").ok().and_then(|v| v.parse::<f64>().ok()) {
-        assert!(precision >= min && recall >= min, "precision {precision:.0}% recall {recall:.0}% under {min}%");
+    if let Some(min) = std::env::var("EYE_EVAL_MIN")
+        .ok()
+        .and_then(|v| v.parse::<f64>().ok())
+    {
+        assert!(
+            precision >= min && recall >= min,
+            "precision {precision:.0}% recall {recall:.0}% under {min}%"
+        );
     }
 }

@@ -194,9 +194,9 @@ pub fn decide(f: &Findings) -> Verdict {
         Some((r, n)) => format!("{:.1}x more corrections ({n})", round(r, 1)),
         None => "your corrections about the same".into(),
     };
-    let think = m
-        .think_ratio
-        .map_or("No thinking data".into(), |r| format!("Model thinking {}", change(r)));
+    let think = m.think_ratio.map_or("No thinking data".into(), |r| {
+        format!("Model thinking {}", change(r))
+    });
     let errors = match m.tool_error_ratio {
         Some(r) if r < ERRORS_FLAT.0 || r > ERRORS_FLAT.1 => format!("Tool errors {}", change(r)),
         _ => "Tool errors flat".into(),
@@ -223,7 +223,10 @@ mod tests {
     fn evening() -> Vec<bool> {
         (0..24).map(|h| (18..24).contains(&h)).collect()
     }
-    const EVENING: [Range; 1] = [Range { from_h: 18, to_h: 0 }];
+    const EVENING: [Range; 1] = [Range {
+        from_h: 18,
+        to_h: 0,
+    }];
     const FLAT: ModelSide = ModelSide {
         think_ratio: Some(0.95),
         tool_error_ratio: Some(1.0),
@@ -245,7 +248,11 @@ mod tests {
 
     #[test]
     fn the_model_side_compares_each_agent_with_itself() {
-        let think = |h: i64, agent: &str, n| Think { ts: h * H, agent: agent.into(), n };
+        let think = |h: i64, agent: &str, n| Think {
+            ts: h * H,
+            agent: agent.into(),
+            n,
+        };
         let d = Data {
             thinks: vec![
                 // the claude values are large and the codex ones small: only the ratio counts
@@ -256,7 +263,16 @@ mod tests {
                 think(10, "codex", 10),
                 think(11, "codex", 10),
             ],
-            tools: vec![19 * H, 19 * H, 10 * H, 10 * H, 10 * H, 11 * H, 11 * H, 12 * H],
+            tools: vec![
+                19 * H,
+                19 * H,
+                10 * H,
+                10 * H,
+                10 * H,
+                11 * H,
+                11 * H,
+                12 * H,
+            ],
             tool_errors: vec![19 * H, 10 * H, 11 * H],
             ..Data::default()
         };
@@ -266,7 +282,10 @@ mod tests {
         assert!((m.tool_error_ratio.unwrap() - 1.5).abs() < 1e-9);
         assert!(m.moved());
         let none = model_side(&Data::default(), &utc, &evening());
-        assert_eq!((none.think_ratio, none.tool_error_ratio, none.moved()), (None, None, false));
+        assert_eq!(
+            (none.think_ratio, none.tool_error_ratio, none.moved()),
+            (None, None, false)
+        );
     }
 
     #[test]
@@ -286,12 +305,23 @@ mod tests {
             kind(2231, 205, true, Some(ModelSide { think_ratio: Some(0.92), tool_error_ratio: Some(0.91) })).text,
             "Evenings: 1.8x more corrections (105). Model thinking \u{2212}8%. Tool errors flat. Mostly you."
         );
-        let t = kind(900, 90, false, Some(ModelSide { think_ratio: Some(1.0), tool_error_ratio: Some(1.5) })).text;
+        let t = kind(
+            900,
+            90,
+            false,
+            Some(ModelSide {
+                think_ratio: Some(1.0),
+                tool_error_ratio: Some(1.5),
+            }),
+        )
+        .text;
         assert_eq!(
             t,
             "Evenings: your corrections about the same. Model thinking unchanged. Tool errors +50%. Mostly the model."
         );
-        assert!(kind(900, 90, true, Some(SHALLOW)).text.ends_with("Both moved."));
+        assert!(kind(900, 90, true, Some(SHALLOW))
+            .text
+            .ends_with("Both moved."));
         assert_eq!(
             kind(900, 90, false, None).text,
             "No clear pattern in 900 prompts and 90 corrections: no hours stand out clearly and the model's side is steady."
@@ -304,17 +334,41 @@ mod tests {
 
     #[test]
     fn with_judging_off_the_text_says_so() {
-        let v = decide(&Findings { prompts: 900, corrections: 0, llm: false, you: None, band: None });
+        let v = decide(&Findings {
+            prompts: 900,
+            corrections: 0,
+            llm: false,
+            you: None,
+            band: None,
+        });
         assert_eq!(v.kind, Kind::TooFew);
         assert!(v.text.contains("llm is off"));
     }
 
     #[test]
     fn several_runs_are_named_by_their_hours() {
-        let two = [Range { from_h: 2, to_h: 4 }, Range { from_h: 22, to_h: 1 }];
+        let two = [
+            Range { from_h: 2, to_h: 4 },
+            Range {
+                from_h: 22,
+                to_h: 1,
+            },
+        ];
         assert_eq!(label(&two), "Hours 02:00-04:00 and 22:00-01:00");
-        assert_eq!(label(&[Range { from_h: 9, to_h: 12 }]), "Mornings");
-        assert_eq!(label(&[Range { from_h: 13, to_h: 15 }]), "Afternoons");
+        assert_eq!(
+            label(&[Range {
+                from_h: 9,
+                to_h: 12
+            }]),
+            "Mornings"
+        );
+        assert_eq!(
+            label(&[Range {
+                from_h: 13,
+                to_h: 15
+            }]),
+            "Afternoons"
+        );
         assert_eq!(label(&[Range { from_h: 1, to_h: 5 }]), "Nights");
     }
 }

@@ -36,7 +36,12 @@ impl Env {
         cfg.exclude.temp = false;
         cfg.override_agent_dir("claude", tmp.path().join("claude"));
         let db = Db::open(&paths.db_path()).unwrap();
-        Env { tmp, paths, cfg, db }
+        Env {
+            tmp,
+            paths,
+            cfg,
+            db,
+        }
     }
 
     /// A transcript of `prompts`, each answered, one a minute from 10:00 on 2 Nov 2026 (the
@@ -52,10 +57,17 @@ impl Env {
         for (i, p) in prompts.iter().enumerate() {
             text += &line("user", i * 2, json!(p));
             text += "\n";
-            text += &line("assistant", i * 2 + 1, json!([{"type": "text", "text": format!("did {i}")}]));
+            text += &line(
+                "assistant",
+                i * 2 + 1,
+                json!([{"type": "text", "text": format!("did {i}")}]),
+            );
             text += "\n";
         }
-        let path = self.tmp.path().join(format!("claude/projects/-tmp-demo/{sid}.jsonl"));
+        let path = self
+            .tmp
+            .path()
+            .join(format!("claude/projects/-tmp-demo/{sid}.jsonl"));
         std::fs::write(path, text).unwrap();
         crate::scan::scan(&mut self.db, &self.cfg, false).unwrap();
     }
@@ -68,7 +80,15 @@ impl Env {
     }
 
     fn run(&self) -> Outcome {
-        run(&self.db, &self.paths, &self.cfg, &self.agents(), NOW, &mut |_| {}).unwrap()
+        run(
+            &self.db,
+            &self.paths,
+            &self.cfg,
+            &self.agents(),
+            NOW,
+            &mut |_| {},
+        )
+        .unwrap()
     }
 
     fn calls(&self) -> usize {
@@ -99,18 +119,39 @@ fn say(prompts: &[&str]) -> Vec<String> {
 #[test]
 fn only_prompts_with_a_cue_word_go_to_the_model() {
     let mut e = Env::new();
-    e.session("s1", &say(&["fix the build", "no, that is wrong", "ok thanks", "why is it wrong again"]));
+    e.session(
+        "s1",
+        &say(&[
+            "fix the build",
+            "no, that is wrong",
+            "ok thanks",
+            "why is it wrong again",
+        ]),
+    );
     let out = e.run();
-    assert_eq!((out.sent, out.corrections, out.pending, out.stopped), (2, 2, 0, None));
+    assert_eq!(
+        (out.sent, out.corrections, out.pending, out.stopped),
+        (2, 2, 0, None)
+    );
     assert_eq!(e.calls(), 1);
     let rows = e.rows("s1");
     // the first prompt follows no turn, so it is no candidate and has no row
     assert_eq!(
         rows,
         [
-            (2, "yes".to_string(), "was wrong".to_string(), Some("haiku".to_string())),
+            (
+                2,
+                "yes".to_string(),
+                "was wrong".to_string(),
+                Some("haiku".to_string())
+            ),
             (4, "no".to_string(), String::new(), None),
-            (6, "yes".to_string(), "was wrong".to_string(), Some("haiku".to_string())),
+            (
+                6,
+                "yes".to_string(),
+                "was wrong".to_string(),
+                Some("haiku".to_string())
+            ),
         ]
     );
 }
@@ -124,7 +165,10 @@ fn nothing_is_judged_twice() {
     assert_eq!((again.sent, again.pending), (0, 0));
     assert_eq!(e.calls(), 1);
     // a new prompt is picked up on its own
-    e.session("s1", &say(&["fix it", "no, wrong", "carry on", "stop, wrong again"]));
+    e.session(
+        "s1",
+        &say(&["fix it", "no, wrong", "carry on", "stop, wrong again"]),
+    );
     let next = e.run();
     assert_eq!((next.sent, next.corrections), (1, 1));
     assert_eq!(e.calls(), 2);
@@ -146,7 +190,11 @@ fn a_forked_session_reuses_the_verdicts_of_its_parent() {
 #[test]
 fn a_failed_call_stops_the_pass_and_leaves_those_prompts_pending() {
     let mut e = Env::new();
-    script(&e.tmp.path().join("bin"), "claude", "echo 'usage limit reached' >&2; exit 1");
+    script(
+        &e.tmp.path().join("bin"),
+        "claude",
+        "echo 'usage limit reached' >&2; exit 1",
+    );
     e.session("s1", &say(&["fix it", "no, wrong", "carry on", "ok"]));
     let out = e.run();
     assert_eq!((out.sent, out.corrections), (0, 0));

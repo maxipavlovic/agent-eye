@@ -78,8 +78,12 @@ impl Clock {
 
     fn start_pass(&self, db: &Db, paths: &Paths, cfg: &Config) {
         let done = db.meta_get(DONE_KEY).ok().flatten();
-        let Some(night) = due(cfg, now_ms(), done.as_deref(), &crate::worked::summary::local_offset_ms)
-        else {
+        let Some(night) = due(
+            cfg,
+            now_ms(),
+            done.as_deref(),
+            &crate::worked::summary::local_offset_ms,
+        ) else {
             return;
         };
         if self.busy.swap(true, Ordering::SeqCst) {
@@ -115,7 +119,9 @@ fn round(paths: &Paths, cfg: &Config) {
                 o.sent,
                 o.corrections,
                 o.pending,
-                o.stopped.map(|s| format!(", stopped: {s}")).unwrap_or_default()
+                o.stopped
+                    .map(|s| format!(", stopped: {s}"))
+                    .unwrap_or_default()
             ),
         ),
         Err(e) => log(paths, &format!("corrections: {e:#}")),
@@ -141,19 +147,37 @@ mod tests {
     fn without_the_night_shift_it_is_due_from_four_in_the_morning_once_a_day() {
         let c = cfg("");
         assert_eq!(due(&c, at("2026-11-26", "03:59"), None, &plus2), None);
-        assert_eq!(due(&c, at("2026-11-26", "04:00"), None, &plus2).as_deref(), Some("2026-11-26"));
-        assert_eq!(due(&c, at("2026-11-26", "15:00"), None, &plus2).as_deref(), Some("2026-11-26"));
-        assert_eq!(due(&c, at("2026-11-26", "15:00"), Some("2026-11-26"), &plus2), None);
-        assert_eq!(due(&c, at("2026-11-27", "04:00"), Some("2026-11-26"), &plus2).as_deref(), Some("2026-11-27"));
+        assert_eq!(
+            due(&c, at("2026-11-26", "04:00"), None, &plus2).as_deref(),
+            Some("2026-11-26")
+        );
+        assert_eq!(
+            due(&c, at("2026-11-26", "15:00"), None, &plus2).as_deref(),
+            Some("2026-11-26")
+        );
+        assert_eq!(
+            due(&c, at("2026-11-26", "15:00"), Some("2026-11-26"), &plus2),
+            None
+        );
+        assert_eq!(
+            due(&c, at("2026-11-27", "04:00"), Some("2026-11-26"), &plus2).as_deref(),
+            Some("2026-11-27")
+        );
     }
 
     #[test]
     fn with_the_night_shift_it_is_due_inside_its_window_once_a_night() {
         let c = cfg("[night]\nenabled = true\nwindow = \"23:00-05:00\"");
         assert_eq!(due(&c, at("2026-11-26", "22:59"), None, &plus2), None);
-        assert_eq!(due(&c, at("2026-11-26", "23:30"), None, &plus2).as_deref(), Some("2026-11-26"));
+        assert_eq!(
+            due(&c, at("2026-11-26", "23:30"), None, &plus2).as_deref(),
+            Some("2026-11-26")
+        );
         // after midnight it is the same night
-        assert_eq!(due(&c, at("2026-11-27", "01:00"), Some("2026-11-26"), &plus2), None);
+        assert_eq!(
+            due(&c, at("2026-11-27", "01:00"), Some("2026-11-26"), &plus2),
+            None
+        );
         assert_eq!(due(&c, at("2026-11-27", "05:00"), None, &plus2), None);
     }
 
@@ -161,7 +185,13 @@ mod tests {
     fn it_is_never_due_when_judging_is_off() {
         let now = at("2026-11-26", "10:00");
         assert_eq!(due(&cfg("[clock]\nllm = false"), now, None, &plus2), None);
-        assert_eq!(due(&cfg("[clock]\nenabled = false"), now, None, &plus2), None);
-        assert_eq!(due(&cfg("[summary]\nenabled = false"), now, None, &plus2), None);
+        assert_eq!(
+            due(&cfg("[clock]\nenabled = false"), now, None, &plus2),
+            None
+        );
+        assert_eq!(
+            due(&cfg("[summary]\nenabled = false"), now, None, &plus2),
+            None
+        );
     }
 }

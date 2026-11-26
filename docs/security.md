@@ -97,6 +97,7 @@ folder is tightened on the next run):
 
 - `eye.db`: titles, first prompts, the recent text of prompts and replies (for search), outputs
   (pull request links, commits, folders), summaries, ideas, hook events (short fields: the last 300 characters of each finished reply, not masked, and what a permission prompt asks, secrets masked; no prompts and no tool output), kept for 30 days.
+- The steering clock (`clock.md`) adds, to `eye.db`, when you and the agent took turns (`turn`: a time, a kind and a size such as a prompt's length or a reply's word count; never text), which prompts a model judged to be corrections (`correction`: the verdict, a few words naming the complaint, the model, a hash of what was judged) and, with `[clock] idle = true`, the stretches of 5 minutes or more when the machine had no keyboard or mouse input (`idle_span`: a start and an end).
 - `archive/`: a **full compressed copy of each transcript**. It holds whatever was in the session,
   including anything sensitive you pasted. It is not masked. Delete `~/.agent-eye/archive` (or run
   `eye uninstall --purge`) to remove it.
@@ -138,6 +139,12 @@ excerpt is **masked** for API keys, cloud and GitHub tokens, Slack tokens, JWTs,
 Sessions that are hidden, archived, or in an excluded folder are skipped. `[summary] enabled =
 false` turns summaries off completely, and then nothing is sent anywhere. Summaries use your agent's
 plan.
+
+### The steering clock
+
+`[clock] idle = true` makes the daemon read, once a minute, how long it has been since the last keyboard or mouse input: on macOS the `HIDIdleTime` value from `ioreg -c IOHIDSystem`, on Linux the `IdleHint` and `IdleSinceHint` of your own session from `loginctl show-session`. It reads that one number. It never sees which keys, which window or which application, and nothing leaves the machine. Only stretches of 5 minutes or more are stored (start and end). It is off by default; `eye doctor` says whether the system can report it and whether it is on.
+
+The corrections pass (`[clock] llm`, on when summaries are on) sends **prompts of 1,500 characters or fewer that contain a word like "no", "wrong" or "again", each with the last 700 characters of the reply before it**, masked the way summary excerpts are, to the agent and model that write summaries, through the same no-tools, no-session call. Sessions in excluded folders are never sent. It runs once a night (up to 300 exchanges) and with `eye clock detect`. `[clock] llm = false` stops it.
 
 ## Commands built from session data
 

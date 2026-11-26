@@ -75,7 +75,15 @@ impl World {
 
     fn report(&self, cfg: &str) -> Report {
         let agents = Agents::from_vec(vec![Arc::new(Claude::new("/nonexistent".into()))]);
-        build(&self.db.conn, &Config::parse(cfg).unwrap(), &agents, NOW, 4, &utc).unwrap()
+        build(
+            &self.db.conn,
+            &Config::parse(cfg).unwrap(),
+            &agents,
+            NOW,
+            4,
+            &utc,
+        )
+        .unwrap()
     }
 }
 
@@ -85,13 +93,31 @@ fn worse_evenings_with_a_steady_model_are_you() {
     w.steady_days_worse_evenings(1000);
     let r = w.report("");
     assert_eq!((r.prompts, r.corrections), (650, 68));
-    assert_eq!(r.bad, [Range { from_h: 19, to_h: 21 }]);
+    assert_eq!(
+        r.bad,
+        [Range {
+            from_h: 19,
+            to_h: 21
+        }]
+    );
     assert_eq!(r.verdict.kind, Kind::You);
-    assert_eq!((r.verdict.you_ratio, r.verdict.you_n), (Some(2.0), Some(32)));
+    assert_eq!(
+        (r.verdict.you_ratio, r.verdict.you_n),
+        (Some(2.0), Some(32))
+    );
     assert_eq!(r.verdict.think_ratio, Some(1.0));
-    assert!(r.verdict.text.starts_with("Evenings: 2.0x more corrections (32)."));
-    assert_eq!((r.hours.len(), r.hours[19].prompts, r.hours[19].think), (24, 100, Some(1000)));
-    assert_eq!((r.from.as_str(), r.to.as_str()), ("2026-11-03", "2026-12-01"));
+    assert!(r
+        .verdict
+        .text
+        .starts_with("Evenings: 2.0x more corrections (32)."));
+    assert_eq!(
+        (r.hours.len(), r.hours[19].prompts, r.hours[19].think),
+        (24, 100, Some(1000))
+    );
+    assert_eq!(
+        (r.from.as_str(), r.to.as_str()),
+        ("2026-11-03", "2026-12-01")
+    );
 }
 
 #[test]
@@ -138,7 +164,10 @@ fn too_few_prompts_or_corrections_say_so() {
     w.hour(10, 100, 5, 1000);
     let r = w.report("");
     assert_eq!(r.verdict.kind, Kind::TooFew);
-    assert!(r.verdict.text.starts_with("Too few to tell yet: 100 prompts and 5 corrections"));
+    assert!(r
+        .verdict
+        .text
+        .starts_with("Too few to tell yet: 100 prompts and 5 corrections"));
     assert!(r.bad.is_empty());
 }
 
@@ -149,7 +178,10 @@ fn an_empty_database_gives_a_whole_empty_report() {
     assert_eq!(r.hours.len(), 24);
     assert_eq!(r.since_break.len(), 4);
     assert_eq!(r.verdict.kind, Kind::TooFew);
-    assert_eq!((r.now.in_bad, r.now.since_break_min, r.now.hint.clone()), (false, None, None));
+    assert_eq!(
+        (r.now.in_bad, r.now.since_break_min, r.now.hint.clone()),
+        (false, None, None)
+    );
     assert!(r.agents.is_empty());
 }
 
@@ -190,7 +222,15 @@ fn the_hint_is_off_by_default_and_quiet_outside_the_bad_hours() {
     // the same data seen at 11:00 is outside it
     let agents = Agents::default();
     let cfg = Config::parse("[clock]\nhints = true").unwrap();
-    let morning = build(&w.db.conn, &cfg, &agents, NOW - 8 * H - 30 * 60_000, 4, &utc).unwrap();
+    let morning = build(
+        &w.db.conn,
+        &cfg,
+        &agents,
+        NOW - 8 * H - 30 * 60_000,
+        4,
+        &utc,
+    )
+    .unwrap();
     assert!(!morning.now.in_bad && morning.now.hint.is_none());
 }
 
@@ -212,7 +252,15 @@ fn since_break_is_zero_after_a_long_quiet_and_counts_from_the_last_break_otherwi
     // the stretch began 30 minutes ago, the last prompt 10 minutes ago
     assert_eq!(r.now.since_break_min, Some(30));
     assert_eq!(r.since_break[0].prompts, 3);
-    let later = build(&w.db.conn, &Config::default(), &Agents::default(), NOW + 2 * H, 4, &utc).unwrap();
+    let later = build(
+        &w.db.conn,
+        &Config::default(),
+        &Agents::default(),
+        NOW + 2 * H,
+        4,
+        &utc,
+    )
+    .unwrap();
     assert_eq!(later.now.since_break_min, Some(0));
 }
 
@@ -246,7 +294,12 @@ fn agents_are_listed_with_their_thinking_unit() {
     let r = w.report("");
     assert_eq!(
         r.agents,
-        [AgentRow { agent: "claude".into(), prompts: 3, corrections: 1, think: Some("signature") }]
+        [AgentRow {
+            agent: "claude".into(),
+            prompts: 3,
+            corrections: 1,
+            think: Some("signature")
+        }]
     );
 }
 
@@ -263,17 +316,52 @@ fn the_json_has_the_documented_fields() {
     assert_eq!(
         keys(&j),
         [
-            "agents", "bad", "corrections", "enabled", "from", "hints", "hours", "idle", "llm", "now",
-            "pending", "prompts", "since_break", "to", "verdict"
+            "agents",
+            "bad",
+            "corrections",
+            "enabled",
+            "from",
+            "hints",
+            "hours",
+            "idle",
+            "llm",
+            "now",
+            "pending",
+            "prompts",
+            "since_break",
+            "to",
+            "verdict"
         ]
     );
     assert_eq!(
         keys(&j["hours"][0]),
-        ["corrections", "h", "interrupts", "prompts", "think", "think_n", "tool_calls", "tool_errors"]
+        [
+            "corrections",
+            "h",
+            "interrupts",
+            "prompts",
+            "think",
+            "think_n",
+            "tool_calls",
+            "tool_errors"
+        ]
     );
-    assert_eq!(keys(&j["verdict"]), ["kind", "text", "think_ratio", "tool_error_ratio", "you_n", "you_ratio"]);
+    assert_eq!(
+        keys(&j["verdict"]),
+        [
+            "kind",
+            "text",
+            "think_ratio",
+            "tool_error_ratio",
+            "you_n",
+            "you_ratio"
+        ]
+    );
     assert_eq!(keys(&j["now"]), ["hint", "in_bad", "since_break_min"]);
     assert_eq!(j["verdict"]["kind"], "you");
     assert_eq!(j["bad"][0], serde_json::json!({"from_h": 19, "to_h": 21}));
-    assert_eq!(keys(&j["since_break"][0]), ["band", "corrections", "prompts"]);
+    assert_eq!(
+        keys(&j["since_break"][0]),
+        ["band", "corrections", "prompts"]
+    );
 }

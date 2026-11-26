@@ -59,7 +59,11 @@ mod tests {
         let e = env();
         add_session(&e.db, "a1", "one", None, 1, 1);
         let now = crate::util::now_ms();
-        for (ts, kind) in [(now - 1000, "prompt"), (now - 900, "tool"), (now - 800, "tool_error")] {
+        for (ts, kind) in [
+            (now - 1000, "prompt"),
+            (now - 900, "tool"),
+            (now - 800, "tool_error"),
+        ] {
             e.db.conn
                 .execute(
                     "INSERT INTO turn(session_id, ts, kind, n) VALUES('a1',?1,?2,0)",

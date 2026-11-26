@@ -109,7 +109,11 @@ fn input(batch: &[&Exchange]) -> String {
             format!(
                 "[{}]\nAGENT (end of its reply): {}\nUSER: {}\n",
                 i + 1,
-                if e.reply.is_empty() { "(no text)" } else { &e.reply },
+                if e.reply.is_empty() {
+                    "(no text)"
+                } else {
+                    &e.reply
+                },
                 e.prompt
             )
         })
@@ -148,7 +152,11 @@ fn parse(output: &Value, n: usize) -> Vec<Option<Judged>> {
             let what = o.get("what").and_then(Value::as_str).unwrap_or("").trim();
             Some(Judged {
                 correction,
-                what: if correction { what.into() } else { String::new() },
+                what: if correction {
+                    what.into()
+                } else {
+                    String::new()
+                },
             })
         })
         .collect()
@@ -212,7 +220,10 @@ mod tests {
     fn a_long_prompt_is_never_a_candidate() {
         let long = format!("no {}", "x".repeat(MAX_PROMPT_CHARS));
         assert!(!is_candidate(&long));
-        assert!(is_candidate(&format!("no {}", "x".repeat(MAX_PROMPT_CHARS - 3))));
+        assert!(is_candidate(&format!(
+            "no {}",
+            "x".repeat(MAX_PROMPT_CHARS - 3)
+        )));
     }
 
     #[test]
@@ -236,14 +247,20 @@ mod tests {
 
     #[test]
     fn the_same_exchange_hashes_the_same_and_a_changed_one_does_not() {
-        let e = |p: &str| Exchange { prompt: p.into(), reply: "r".into() };
+        let e = |p: &str| Exchange {
+            prompt: p.into(),
+            reply: "r".into(),
+        };
         assert_eq!(e("a").hash(), e("a").hash());
         assert_ne!(e("a").hash(), e("b").hash());
     }
 
     #[test]
     fn batches_stop_at_a_hundred_exchanges_or_the_byte_limit() {
-        let ex = |n: usize| Exchange { prompt: "p".repeat(n), reply: String::new() };
+        let ex = |n: usize| Exchange {
+            prompt: "p".repeat(n),
+            reply: String::new(),
+        };
         let many: Vec<(usize, Exchange)> = (0..250).map(|i| (i, ex(10))).collect();
         let sizes: Vec<usize> = batches(many).iter().map(Vec::len).collect();
         assert_eq!(sizes, [100, 100, 50]);
@@ -258,8 +275,14 @@ mod tests {
     #[test]
     fn the_call_numbers_the_exchanges_and_asks_for_every_one() {
         let (a, b) = (
-            Exchange { prompt: "no".into(), reply: "done".into() },
-            Exchange { prompt: "ok".into(), reply: String::new() },
+            Exchange {
+                prompt: "no".into(),
+                reply: "done".into(),
+            },
+            Exchange {
+                prompt: "ok".into(),
+                reply: String::new(),
+            },
         );
         let text = input(&[&a, &b]);
         assert!(text.contains("[1]\nAGENT (end of its reply): done\nUSER: no"));
@@ -277,8 +300,20 @@ mod tests {
             "3": {"c": "maybe", "what": ""},
         });
         let got = parse(&out, 4);
-        assert_eq!(got[0], Some(Judged { correction: true, what: "too long".into() }));
-        assert_eq!(got[1], Some(Judged { correction: false, what: String::new() }));
+        assert_eq!(
+            got[0],
+            Some(Judged {
+                correction: true,
+                what: "too long".into()
+            })
+        );
+        assert_eq!(
+            got[1],
+            Some(Judged {
+                correction: false,
+                what: String::new()
+            })
+        );
         assert_eq!((got[2].clone(), got[3].clone()), (None, None));
     }
 }

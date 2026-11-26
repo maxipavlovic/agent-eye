@@ -188,10 +188,7 @@ pub fn ranges(mask: &[bool]) -> Vec<Range> {
         match (mask[h], start) {
             (true, None) => start = Some(h),
             (false, Some(s)) => {
-                out.push(Range {
-                    from_h: s,
-                    to_h: h,
-                });
+                out.push(Range { from_h: s, to_h: h });
                 start = None;
             }
             _ => {}
@@ -321,15 +318,34 @@ mod tests {
             tools: vec![H, H, 5 * H],
             tool_errors: vec![5 * H],
             thinks: vec![
-                Think { ts: H, agent: "claude".into(), n: 100 },
-                Think { ts: H, agent: "claude".into(), n: 300 },
-                Think { ts: H, agent: "claude".into(), n: 200 },
-                Think { ts: 5 * H, agent: "codex".into(), n: 7 },
+                Think {
+                    ts: H,
+                    agent: "claude".into(),
+                    n: 100,
+                },
+                Think {
+                    ts: H,
+                    agent: "claude".into(),
+                    n: 300,
+                },
+                Think {
+                    ts: H,
+                    agent: "claude".into(),
+                    n: 200,
+                },
+                Think {
+                    ts: 5 * H,
+                    agent: "codex".into(),
+                    n: 7,
+                },
             ],
         };
         let hs = hours(&d, &utc);
         assert_eq!(hs.len(), 24);
-        assert_eq!((hs[1].prompts, hs[1].corrections, hs[1].interrupts), (2, 1, 1));
+        assert_eq!(
+            (hs[1].prompts, hs[1].corrections, hs[1].interrupts),
+            (2, 1, 1)
+        );
         assert_eq!((hs[1].tool_calls, hs[5].tool_errors), (2, 1));
         assert_eq!((hs[1].think, hs[1].think_n), (Some(200), 3));
         // the other agent's unit is not mixed in
@@ -339,7 +355,10 @@ mod tests {
 
     #[test]
     fn a_break_is_a_gap_between_prompts_or_an_idle_span() {
-        let ps: Vec<Prompt> = [0, 10, 20, 100, 110].iter().map(|m| prompt(m * MIN_MS, false)).collect();
+        let ps: Vec<Prompt> = [0, 10, 20, 100, 110]
+            .iter()
+            .map(|m| prompt(m * MIN_MS, false))
+            .collect();
         let gaps = break_ends(&ps, None, 45 * MIN_MS);
         assert_eq!(gaps, [0, 100 * MIN_MS]);
         let idle = break_ends(&ps, Some(&[50 * MIN_MS]), 45 * MIN_MS);
@@ -353,11 +372,20 @@ mod tests {
         let ps: Vec<Prompt> = [0, 30, 59, 60, 130, 250, 400].map(at).into();
         // the same prompts, with a break at 0 from gaps: the gaps are all under the threshold
         let by_gaps = since_break(&ps, &break_ends(&ps, None, 600 * MIN_MS));
-        let counts: Vec<_> = by_gaps.iter().map(|b| (b.band, b.prompts, b.corrections)).collect();
-        assert_eq!(counts, [("<1h", 3, 2), ("1-2h", 1, 1), ("2-4h", 1, 1), ("4h+", 2, 2)]);
+        let counts: Vec<_> = by_gaps
+            .iter()
+            .map(|b| (b.band, b.prompts, b.corrections))
+            .collect();
+        assert_eq!(
+            counts,
+            [("<1h", 3, 2), ("1-2h", 1, 1), ("2-4h", 1, 1), ("4h+", 2, 2)]
+        );
         // idle data that starts at 100 min leaves the earlier prompts out
         let by_idle = since_break(&ps, &[100 * MIN_MS]);
-        assert_eq!(by_idle.iter().map(|b| b.prompts).collect::<Vec<_>>(), [1, 0, 1, 1]);
+        assert_eq!(
+            by_idle.iter().map(|b| b.prompts).collect::<Vec<_>>(),
+            [1, 0, 1, 1]
+        );
         assert_eq!(since_break_min(&[100 * MIN_MS], 99 * MIN_MS), None);
         assert_eq!(since_break_min(&[100 * MIN_MS], 100 * MIN_MS), Some(0));
     }
@@ -366,7 +394,10 @@ mod tests {
     fn ranges_wrap_around_midnight() {
         let mask = |on: &[usize]| (0..24).map(|h| on.contains(&h)).collect::<Vec<_>>();
         let r = |from_h, to_h| Range { from_h, to_h };
-        assert_eq!(ranges(&mask(&[18, 19, 20, 21, 22, 23, 0, 1, 2, 3, 4, 5])), [r(18, 6)]);
+        assert_eq!(
+            ranges(&mask(&[18, 19, 20, 21, 22, 23, 0, 1, 2, 3, 4, 5])),
+            [r(18, 6)]
+        );
         assert_eq!(ranges(&mask(&[9, 10, 11])), [r(9, 12)]);
         assert_eq!(ranges(&mask(&[2, 3, 22, 23, 0])), [r(2, 4), r(22, 1)]);
         assert_eq!(ranges(&mask(&[23])), [r(23, 0)]);

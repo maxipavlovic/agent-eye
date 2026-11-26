@@ -54,6 +54,10 @@ Confirm in one line what you changed.
 
 `eye usage --week` (or `--month`, `--days N`; `--by project|folder|agent|model|session`) prints tokens and an API-equivalent cost estimate with the plan limits on top. Say it is an estimate, not their bill.
 
+## Steering clock
+
+`eye clock --brief` prints one line: whether the user's corrections run worse at some hours, and whether this is such an hour. Run it when the user asks how their steering is going. When it says it is one of those hours, you may offer to plan the rest for tonight (`eye night add`); never bring it up otherwise.
+
 ## Leftovers
 
 `eye loose [<session>] --json` lists each session's leftovers: servers still running, containers, worktrees, commits on no remote and uncommitted files, each with the session that left it. Only list them. Stopping or removing something (`eye loose stop|remove <key>`) is the user's call: run it only when they ask, and only for the item they named.

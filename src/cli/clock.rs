@@ -27,7 +27,14 @@ pub fn run(g: &Global, sub: Option<ClockCmd>, weeks: i64, json: bool, brief: boo
     if !brief {
         backfill::run_all(&mut env.db, &env.paths, &env.agents)?;
     }
-    let r = report::build(&env.db.conn, &env.cfg, &env.agents, now_ms(), weeks, &local_offset_ms)?;
+    let r = report::build(
+        &env.db.conn,
+        &env.cfg,
+        &env.agents,
+        now_ms(),
+        weeks,
+        &local_offset_ms,
+    )?;
     if json {
         println!("{}", r.json());
     } else if brief {
@@ -42,9 +49,14 @@ pub fn run(g: &Global, sub: Option<ClockCmd>, weeks: i64, json: bool, brief: boo
 fn detect(g: &Global) -> Result<()> {
     let mut env = g.open()?;
     backfill::run_all(&mut env.db, &env.paths, &env.agents)?;
-    let out = pass::run(&env.db, &env.paths, &env.cfg, &env.agents, now_ms(), &mut |l| {
-        eprintln!("{l}")
-    })?;
+    let out = pass::run(
+        &env.db,
+        &env.paths,
+        &env.cfg,
+        &env.agents,
+        now_ms(),
+        &mut |l| eprintln!("{l}"),
+    )?;
     println!(
         "{} exchanges judged in {} sessions, {} corrections; {} prompts still wait for a later pass",
         out.sent, out.sessions, out.corrections, out.pending
@@ -116,7 +128,10 @@ fn text(r: &Report, weeks: i64) -> String {
         .map(|x| x.map_or("··".to_string(), |x| level(x, max).to_string().repeat(2)))
         .collect();
     let ruler: String = (0..24).step_by(3).map(|h| format!("{h:<6}")).collect();
-    let _ = writeln!(o, "Corrections per 100 prompts, by local hour (· = under {MIN_HOUR_PROMPTS} prompts)");
+    let _ = writeln!(
+        o,
+        "Corrections per 100 prompts, by local hour (· = under {MIN_HOUR_PROMPTS} prompts)"
+    );
     let _ = writeln!(o, "{strip}\n{ruler}");
     if r.bad.is_empty() {
         let _ = writeln!(o, "No hours stand out.\n");
@@ -154,7 +169,15 @@ fn text(r: &Report, weeks: i64) -> String {
     }
     let _ = writeln!(o, "\n{}", r.verdict.text);
     if let Some(m) = r.now.since_break_min {
-        let _ = writeln!(o, "Now: {m} min since your last break{}.", if r.now.in_bad { ", in one of the worse hours" } else { "" });
+        let _ = writeln!(
+            o,
+            "Now: {m} min since your last break{}.",
+            if r.now.in_bad {
+                ", in one of the worse hours"
+            } else {
+                ""
+            }
+        );
     }
     if let Some(h) = &r.now.hint {
         let _ = writeln!(o, "{h}");
@@ -196,10 +219,22 @@ mod tests {
             corrections: 210,
             pending: 12,
             hours,
-            since_break: [("<1h", 1000, 70), ("1-2h", 500, 50), ("2-4h", 0, 0), ("4h+", 500, 90)]
-                .map(|(band, prompts, corrections)| Band { band, prompts, corrections })
-                .into(),
-            bad: vec![Range { from_h: 19, to_h: 21 }],
+            since_break: [
+                ("<1h", 1000, 70),
+                ("1-2h", 500, 50),
+                ("2-4h", 0, 0),
+                ("4h+", 500, 90),
+            ]
+            .map(|(band, prompts, corrections)| Band {
+                band,
+                prompts,
+                corrections,
+            })
+            .into(),
+            bad: vec![Range {
+                from_h: 19,
+                to_h: 21,
+            }],
             verdict: Verdict {
                 kind: Kind::You,
                 you_ratio: Some(2.0),
@@ -208,7 +243,11 @@ mod tests {
                 tool_error_ratio: Some(1.0),
                 text: "Evenings: 2.0x more corrections (20). Mostly you.".into(),
             },
-            now: Now { in_bad: true, since_break_min: Some(35), hint: None },
+            now: Now {
+                in_bad: true,
+                since_break_min: Some(35),
+                hint: None,
+            },
             agents: vec![],
         }
     }
@@ -217,14 +256,30 @@ mod tests {
     fn the_report_reads_top_to_bottom() {
         let t = text(&report(), 4);
         let lines: Vec<&str> = t.lines().collect();
-        assert_eq!(lines[0], "Steering clock: the last 4 weeks, 2026-11-03 to 2026-12-01");
-        assert_eq!(lines[1], "2000 prompts, 210 corrections (10.5 per 100), 12 not judged yet");
+        assert_eq!(
+            lines[0],
+            "Steering clock: the last 4 weeks, 2026-11-03 to 2026-12-01"
+        );
+        assert_eq!(
+            lines[1],
+            "2000 prompts, 210 corrections (10.5 per 100), 12 not judged yet"
+        );
         // hours under 20 prompts are dots, the busiest strip is the tallest block
-        assert!(lines[4].starts_with("▅▅▅▅") && lines[4].ends_with("██········"), "{}", lines[4]);
+        assert!(
+            lines[4].starts_with("▅▅▅▅") && lines[4].ends_with("██········"),
+            "{}",
+            lines[4]
+        );
         assert!(lines[5].starts_with("0     3     6 "));
         assert_eq!(lines[6], "Worse hours: 19:00-21:00");
-        assert!(t.contains("  <1h   █████████                  7.0 per 100  (1000 prompts)"), "{t}");
-        assert!(t.contains("  2-4h                             0.0 per 100  (0 prompts)"), "{t}");
+        assert!(
+            t.contains("  <1h   █████████                  7.0 per 100  (1000 prompts)"),
+            "{t}"
+        );
+        assert!(
+            t.contains("  2-4h                             0.0 per 100  (0 prompts)"),
+            "{t}"
+        );
         assert!(t.contains("Now: 35 min since your last break, in one of the worse hours."));
     }
 

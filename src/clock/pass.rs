@@ -58,7 +58,10 @@ pub fn run(
         })
     };
     if !ClockCfg::llm_on(cfg) {
-        return stop("judging corrections is off ([clock] llm or [summary] enabled)", db);
+        return stop(
+            "judging corrections is off ([clock] llm or [summary] enabled)",
+            db,
+        );
     }
     let Some(ask) = agents.summary_agent(cfg).cloned() else {
         return stop("no agent is enabled to judge corrections", db);
@@ -209,7 +212,11 @@ fn store(
     now: i64,
 ) -> Result<()> {
     let (verdict, what, model) = match judged {
-        Some((j, m)) => (if j.correction { "yes" } else { "no" }, j.what.as_str(), Some(m)),
+        Some((j, m)) => (
+            if j.correction { "yes" } else { "no" },
+            j.what.as_str(),
+            Some(m),
+        ),
         None => ("no", "", None),
     };
     conn.execute(

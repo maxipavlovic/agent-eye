@@ -80,7 +80,11 @@ pub fn build(
     } else {
         Data::default()
     };
-    let pending = if llm { signals::pending(conn, from_ms)? } else { 0 };
+    let pending = if llm {
+        signals::pending(conn, from_ms)?
+    } else {
+        0
+    };
     let hours = bands::hours(&data, off);
     let break_ms = i64::from(c.break_minutes) * MIN_MS;
     let idle = if c.idle {
@@ -98,12 +102,10 @@ pub fn build(
     let you = bands::passes_gate((bad_c, bad_p), (corrections - bad_c, prompts - bad_p))
         .map(|ratio| (ratio, bad_c));
     let cand_ranges = bands::ranges(&cand);
-    let band = cand.iter().any(|b| *b).then(|| {
-        (
-            &cand_ranges[..],
-            verdict::model_side(&data, off, &cand),
-        )
-    });
+    let band = cand
+        .iter()
+        .any(|b| *b)
+        .then(|| (&cand_ranges[..], verdict::model_side(&data, off, &cand)));
     let verdict = verdict::decide(&Findings {
         prompts,
         corrections,
@@ -133,7 +135,14 @@ pub fn build(
     let break_effect = bands::passes_gate(later, (first.corrections, first.prompts));
     let hint = c
         .hints
-        .then(|| hint(hour, in_bad.then_some(you).flatten(), since_break_min, break_effect))
+        .then(|| {
+            hint(
+                hour,
+                in_bad.then_some(you).flatten(),
+                since_break_min,
+                break_effect,
+            )
+        })
         .flatten();
     let now_state = Now {
         in_bad,
@@ -191,7 +200,10 @@ fn hint(
             part_of_day(hour)
         ));
     }
-    match (since_break_min.filter(|m| *m >= HINT_AFTER_MIN), break_effect) {
+    match (
+        since_break_min.filter(|m| *m >= HINT_AFTER_MIN),
+        break_effect,
+    ) {
         (Some(_), Some(r)) => Some(format!(
             "An hour or more since a break: your corrections usually run {r:.1}x now. {OFFER}"
         )),

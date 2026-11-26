@@ -76,6 +76,10 @@ pub fn doctor(g: &Global) -> Result<()> {
     let o = Opts::resolve(&paths, None, None)?;
     let mut res = install::doctor(&o, &paths, &cfg, &agents);
     res.extend(crate::backup::checks(&paths, &cfg, crate::util::now_ms()));
+    res.extend(crate::clock::idle::checks(
+        &cfg,
+        &crate::platform::idle::RealSys,
+    ));
     let warn = res.iter().filter(|c| !c.ok).count();
     for c in &res {
         println!("{}  {}", if c.ok { "OK  " } else { "WARN" }, c.msg);

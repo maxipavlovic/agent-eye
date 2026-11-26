@@ -141,7 +141,10 @@ mod tests {
             .map(|p| (p.ts, p.agent.as_str(), p.correction))
             .collect();
         assert_eq!(p, [(10, "claude", false), (30, "codex", true)]);
-        assert_eq!((d.tools.len(), d.tool_errors.len(), d.interrupts.len()), (1, 1, 1));
+        assert_eq!(
+            (d.tools.len(), d.tool_errors.len(), d.interrupts.len()),
+            (1, 1, 1)
+        );
         assert_eq!((d.thinks[0].agent.as_str(), d.thinks[0].n), ("codex", 900));
         assert!(load(&db.conn, 99).unwrap().prompts.is_empty());
     }
@@ -173,10 +176,16 @@ mod tests {
         let db = Db::open_memory().unwrap();
         for (s, e) in [(0, 1_000), (5_000, 9_000), (20_000, 30_000)] {
             db.conn
-                .execute("INSERT INTO idle_span(start_ms, end_ms) VALUES(?1,?2)", [s, e])
+                .execute(
+                    "INSERT INTO idle_span(start_ms, end_ms) VALUES(?1,?2)",
+                    [s, e],
+                )
                 .unwrap();
         }
-        assert_eq!(idle_break_ends(&db.conn, 0, 3_000).unwrap(), [9_000, 30_000]);
+        assert_eq!(
+            idle_break_ends(&db.conn, 0, 3_000).unwrap(),
+            [9_000, 30_000]
+        );
         assert_eq!(idle_break_ends(&db.conn, 10_000, 3_000).unwrap(), [30_000]);
     }
 }

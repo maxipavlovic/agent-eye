@@ -8,10 +8,10 @@ pub mod archive;
 pub mod backup;
 /// The command line.
 pub mod cli;
-/// Which board column a session is in.
-pub mod columns;
 /// The steering clock: which hours you steer worse, and whether it was you or the model.
 pub mod clock;
+/// Which board column a session is in.
+pub mod columns;
 /// The settings in `config.toml`.
 pub mod config;
 /// `[clock]` in `config.toml`: the steering clock's settings.
