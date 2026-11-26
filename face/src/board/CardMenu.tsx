@@ -4,6 +4,7 @@ import type { Store } from '../store';
 import type { Card, ColumnId, MoveTarget } from '../api/types';
 import { copy } from './copy';
 import { startButton } from './folder';
+import { tonightWhy } from './hint';
 import { ideaForm } from './IdeaForm';
 import { openForget } from './Forget';
 import { tonightOpen } from './Night';
@@ -79,7 +80,7 @@ export function placeMenu(x: number, y: number, w: number, h: number, vw: number
   return { left: Math.max(pad, left), top: Math.max(pad, top) };
 }
 
-export type Row = { hr: true } | { head: string } | { label: string; run: () => void; sub?: boolean };
+export type Row = { hr: true } | { head: string } | { note: string } | { label: string; run: () => void; sub?: boolean };
 
 const MOVE_TO: Array<{ to: ColumnId; label: string }> = [
   { to: 'needs_you', label: 'NEEDS YOU' },
@@ -102,6 +103,10 @@ export function remindRows(c: Card, store: Store, go: (fn: () => void) => () => 
   return out;
 }
 
+function tonight(c: Card, store: Store, go: (fn: () => void) => () => void): Row {
+  return { label: 'CONTINUE TONIGHT…', run: go(() => { tonightOpen.value = c.id; store.open(c.id); }) };
+}
+
 function rows(c: Card, store: Store): Row[] {
   const go = (fn: () => void) => () => { close(); fn(); };
   const open: Row = { label: 'OPEN DETAILS', run: go(() => store.open(c.id)) };
@@ -111,6 +116,9 @@ function rows(c: Card, store: Store): Row[] {
     return [...(start.blocked ? [] : [{ label: start.label, run: go(() => { void store.startIdea(c, false); }) }]), edit, { hr: true }, ...remindRows(c, store, go), { hr: true }, open];
   }
   const out: Row[] = [];
+  // While the clock says your corrections usually rise, handing the card to the night shift comes first
+  const why = tonightWhy(c, store.clockHint.value, store.night.value !== null);
+  if (why) out.push(tonight(c, store, go), { note: why }, { hr: true });
   if (c.column !== 'done') {
     // Undo puts it back where it was: a hand-placed column, or back to the rules.
     const back: MoveTarget = c.manual ? (c.column as MoveTarget) : 'auto';
@@ -144,7 +152,7 @@ function rows(c: Card, store: Store): Row[] {
   out.push({ label: 'FORGET…', run: go(() => openForget(c)) });
   if (c.resume_cmd) out.push({ label: 'COPY RESUME COMMAND', run: go(() => copy(c.resume_cmd!, store)) });
   if (c.resume_cmd) out.push({ label: 'FORK', run: go(() => { void store.resume(c.id, true); }) });
-  if (c.resumable && store.night.value !== null) out.push({ label: 'CONTINUE TONIGHT…', run: go(() => { tonightOpen.value = c.id; store.open(c.id); }) });
+  if (!why && c.resumable && store.night.value !== null) out.push(tonight(c, store, go));
   out.push(open);
   return out;
 }
@@ -226,6 +234,7 @@ export function CardMenu({ store }: { store: Store }) {
         {rows(m.card, store).map((r, i) =>
           'hr' in r ? <hr key={i} />
             : 'head' in r ? <p class="gl" key={i} role="presentation">{r.head}</p>
+              : 'note' in r ? <p class="gn" key={i} role="presentation">{r.note}</p>
               : (
                 <button key={i} role="menuitem" class={r.sub ? 'sub' : ''} onClick={r.run} onPointerMove={(e) => { if (e.pointerType === 'mouse') e.currentTarget.focus({ preventScroll: true }); }}>{r.label}</button>
               ))}

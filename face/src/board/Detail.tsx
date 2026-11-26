@@ -14,6 +14,7 @@ import { keyHelp } from './KeyHelp';
 import { hideSession, Keyed, MoveMenu, QuickMove } from './Move';
 import { Next } from './Card';
 import { Leftovers } from './Loose';
+import { tonightWhy } from './hint';
 import { canContinueTonight, ContinueTonight, NightRunLine, NightRunSection, TonightButton, TonightIdea, TonightIdeaButton, tonightOpen } from './Night';
 import { openRemind, RemindPanel, RemindRow } from './Remind';
 import { originChip, RemoteMark, Sigil } from './pieces';
@@ -90,13 +91,17 @@ function Receipt({ d }: { d: CardDetail }) {
 function Actions({ d, store }: { d: CardDetail; store: Store }) {
   // an idea has START, EDIT and ARCHIVE in its own row
   if (d.kind === 'idea') return null;
+  // While the clock says your corrections usually rise, continuing tonight comes first, with the reason
+  const why = tonightWhy(d, store.clockHint.value, store.night.value !== null);
   return (
     <div class="acts end">
+      {why && <p class="why">{why}</p>}
+      {why && <TonightButton d={d} store={store} />}
       {d.resumable && <button class="btn big" aria-keyshortcuts="R" title="Resume (R)" onClick={() => void store.resume(d.id)}>RESUME</button>}
       {d.resumable && d.resume_cmd && <button class="btn" aria-keyshortcuts="F" title="Resume as a new session branched from this one (F)" onClick={() => void store.resume(d.id, true)}><Keyed label="FORK" k="f" /></button>}
       {d.resume_cmd && <button class="btn" aria-keyshortcuts="C" title="Copy the resume command (C)" onClick={() => copy(d.resume_cmd!, store)}><Keyed label="COPY" k="c" /></button>}
       <a class="btn" aria-keyshortcuts="E" href={`/api/sessions/${encodeURIComponent(d.id)}/export?format=html`} download title="Save this session as one readable page; secrets are masked (E)"><Keyed label="EXPORT" k="e" /></a>
-      <TonightButton d={d} store={store} />
+      {!why && <TonightButton d={d} store={store} />}
       <button class="btn ghost" aria-keyshortcuts="H" title="Hide this session from the board (H)" onClick={() => hideSession(store, d.id)}><Keyed label="HIDE" k="h" /></button>
       <button class="btn ghost" aria-keyshortcuts="X" title="Remove this session from eye, and optionally from its agent (X)" onClick={() => openForget(d)}>FORGET…</button>
       <MoveMenu d={d} store={store} />
@@ -115,17 +120,20 @@ export function exportSession(id: string) {
 }
 
 /** One action in MORE, with the key that does the same. */
-interface MoreItem { label: string; key?: string; title: string; run: () => void }
+interface MoreItem { label: string; key?: string; title: string; run: () => void; /** One plain line under the item, saying why it is first. */ why?: string }
 
 /** What a card can do besides its main buttons, each with its key: MORE opens them in the top bar. An idea has REMIND ME and ARCHIVE. */
 function moreItems(d: CardDetail, store: Store): MoreItem[] {
   const archive: MoreItem = { label: 'ARCHIVE', title: 'Out of the lanes, into the archive', run: () => { void store.move(d.id, 'archive').then(() => store.close()); } };
   if (d.kind === 'idea') return [{ label: 'REMIND ME…', key: 'M', title: 'Pick when eye moves it to Needs you', run: () => openRemind(d.id) }, archive];
   const out: MoreItem[] = [];
+  const tonight: MoreItem = { label: 'CONTINUE TONIGHT…', key: 'T', title: 'Fork this session tonight, in its own worktree, with a prompt you write now', run: () => { tonightOpen.value = d.id; } };
+  const why = tonightWhy(d, store.clockHint.value, store.night.value !== null);
+  if (why) out.push({ ...tonight, why });
   if (d.resumable && d.resume_cmd) out.push({ label: 'FORK', key: 'F', title: 'Resume as a new session branched from this one', run: () => void store.resume(d.id, true) });
   if (d.resume_cmd) out.push({ label: 'COPY RESUME COMMAND', key: 'C', title: 'Copy the command that resumes it', run: () => copy(d.resume_cmd!, store) });
   out.push({ label: 'EXPORT', key: 'E', title: 'Save this session as one readable page; secrets are masked', run: () => exportSession(d.id) });
-  if (canContinueTonight(d, store)) out.push({ label: 'CONTINUE TONIGHT…', key: 'T', title: 'Fork this session tonight, in its own worktree, with a prompt you write now', run: () => { tonightOpen.value = d.id; } });
+  if (!why && canContinueTonight(d, store)) out.push(tonight);
   out.push({ label: 'REMIND ME…', key: 'M', title: 'Pick when eye moves it to Needs you', run: () => openRemind(d.id) });
   out.push({ label: 'HIDE', key: 'H', title: 'Hide this session from the board', run: () => hideSession(store, d.id) });
   out.push({ label: 'FORGET…', key: 'X', title: 'Remove this session from eye, and optionally from its agent', run: () => openForget(d) });
@@ -158,6 +166,7 @@ function More({ d, store }: { d: CardDetail; store: Store }) {
               <button role="menuitem" title={m.title} onClick={() => { open.value = false; m.run(); }}>
                 <span>{m.label}</span>{m.key && <kbd>{m.key}</kbd>}
               </button>
+              {m.why && <p class="why">{m.why}</p>}
             </li>
           ))}
         </ul>

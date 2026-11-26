@@ -411,6 +411,9 @@ mark { background: var(--ink); color: var(--paper); padding: 0 3px; }
 .ctx { position: fixed; z-index: 90; min-width: 264px; max-width: min(340px, calc(100vw - 16px)); max-height: calc(100vh - 16px); max-height: calc(100dvh - 16px); overflow-y: auto; background: var(--paper); color: var(--ink); border: 2px solid var(--ink); box-shadow: 4px 4px 0 var(--ink); }
 .ctx .ct { margin: 0; padding: 10px 14px 9px; border-bottom: 2px solid var(--ink); font: 600 15px/1.35 var(--f-body); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
 .ctx .gl { margin: 0; padding: 8px 14px 2px; font: 600 13px/1.2 var(--f-body); letter-spacing: .08em; color: var(--mute); }
+.ctx .gn { margin: 0; padding: 2px 14px 8px; font: 400 14px/1.4 var(--f-body); color: var(--ink); max-width: 30ch; }
+.acts .why, .menu .why { flex: 1 0 100%; margin: 0; font: 400 15px/1.45 var(--f-body); color: var(--ink); }
+.menu .why { padding: 0 14px 8px; max-width: 30ch; }
 .ctx hr { border: 0; border-top: 2px solid var(--ink); margin: 4px 0; }
 .ctx button { white-space: nowrap; display: block; width: 100%; text-align: left; background: none; border: 0; font: 400 16px/1 var(--f-label); padding: 11px 14px 10px; }
 .ctx button.sub { padding-left: 26px; }
