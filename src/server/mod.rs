@@ -14,6 +14,7 @@ mod prefs;
 mod remind_routes;
 mod remind_settings;
 mod run;
+mod settings_routes;
 #[cfg(test)]
 mod test_support;
 mod usage_routes;
@@ -100,6 +101,10 @@ pub fn router(state: Shared) -> Router {
             "/api/remind/settings",
             get(remind_settings::api_remind_settings)
                 .post(remind_settings::api_remind_settings_set),
+        )
+        .route(
+            "/api/settings",
+            get(settings_routes::api_settings).post(settings_routes::api_settings_set),
         )
         .route("/api/cards/{id}/resume", post(cards::api_resume))
         .route("/api/cards/{id}/conversation", get(cards::api_conversation))

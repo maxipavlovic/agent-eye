@@ -671,15 +671,15 @@ pub fn set_remind_notify(text: &str, on: bool) -> String {
     set_key(text, "[remind]", "notify", &on.to_string())
 }
 
+/// A list of agent ids as TOML: `["claude", "codex"]`.
+pub fn agents_list(ids: &[String]) -> String {
+    let list: Vec<String> = ids.iter().map(|i| format!("{i:?}")).collect();
+    format!("[{}]", list.join(", "))
+}
+
 /// Set `enabled` in the `[agents]` section of a config.toml text to these agent ids.
 pub fn set_agents_enabled(text: &str, ids: &[String]) -> String {
-    let list: Vec<String> = ids.iter().map(|i| format!("{i:?}")).collect();
-    set_key(
-        text,
-        "[agents]",
-        "enabled",
-        &format!("[{}]", list.join(", ")),
-    )
+    set_key(text, "[agents]", "enabled", &agents_list(ids))
 }
 
 /// Write one `[night]` key into the config file (created from the defaults when missing).
@@ -695,6 +695,15 @@ pub fn write_board_enabled(path: &Path, on: bool) -> Result<()> {
 /// Write `[remind] notify` into the config file (created from the defaults when missing).
 pub fn write_remind_notify(path: &Path, on: bool) -> Result<()> {
     crate::config_edit::rewrite(path, |t| set_remind_notify(t, on))
+}
+
+/// Write several keys (`(header, key, value)`, a value already in TOML form) in one go, under one
+/// lock, so the board's settings panel never leaves a half-saved file.
+pub fn write_keys(path: &Path, keys: &[(&str, &str, String)]) -> Result<()> {
+    crate::config_edit::rewrite(path, |t| {
+        keys.iter()
+            .fold(t.to_string(), |t, (h, k, v)| set_key(&t, h, k, v))
+    })
 }
 
 /// Write `[agents] enabled` into the config file (created from the defaults when missing).
