@@ -125,14 +125,14 @@ pub fn part_of_day(h: usize) -> &'static str {
 fn label(ranges: &[Range]) -> String {
     match ranges {
         [r] => format!("{}s", part_of_day(r.from_h)),
-        _ => format!(
-            "Hours {}",
-            ranges
+        _ => {
+            let spans: Vec<String> = ranges
                 .iter()
                 .map(|r| format!("{:02}:00-{:02}:00", r.from_h, r.to_h))
-                .collect::<Vec<_>>()
-                .join(" and ")
-        ),
+                .collect();
+            let (last, first) = spans.split_last().expect("several runs");
+            format!("Hours {} and {last}", first.join(", "))
+        }
     }
 }
 
