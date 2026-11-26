@@ -755,7 +755,8 @@ mark { background: var(--ink); color: var(--paper); padding: 0 3px; }
 .settings .nset { margin-top: 14px; }
 .settings .more { margin-top: 44px; }
 
-:root { --c-label: var(--f-disp); --c-num: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; }
+:root { --c-label: var(--f-disp); --c-num: var(--f-body); }
+.clab, .cval { font-variant-numeric: tabular-nums slashed-zero; }
 .cstrip, .cband-label, .ctoggle { text-transform: uppercase; letter-spacing: .06em; }
 .ctip { box-shadow: var(--sheet); }
 .ctoggle { border-color: var(--rule); }
