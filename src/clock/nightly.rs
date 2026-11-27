@@ -271,6 +271,26 @@ mod tests {
     }
 
     #[test]
+    fn an_agent_still_at_work_means_you_are_busy_after_your_prompt_is_old() {
+        // a prompt 25 minutes ago, and the agent's last tool call 3 minutes ago
+        let now = 100 * 60_000;
+        let db = db_with_prompt_at(now - 25 * 60_000);
+        assert!(!user_busy(&db.conn, now, None));
+        for (ts, kind) in [(now - 3 * 60_000, "tool"), (now - 60_000, "end")] {
+            db.conn
+                .execute(
+                    "INSERT INTO turn(session_id, ts, kind, n) VALUES('s',?1,?2,0)",
+                    rusqlite::params![ts, kind],
+                )
+                .unwrap();
+            assert!(user_busy(&db.conn, now, None), "{kind}");
+            db.conn
+                .execute("DELETE FROM turn WHERE kind=?1", [kind])
+                .unwrap();
+        }
+    }
+
+    #[test]
     fn a_recent_prompt_or_recent_input_means_you_are_at_work() {
         let now = 100 * 60_000;
         let db = db_with_prompt_at(now - 9 * 60_000);

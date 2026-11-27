@@ -189,6 +189,33 @@ mod tests {
     }
 
     #[test]
+    fn scripted_and_night_shift_sessions_are_not_your_steering() {
+        let db = db_with(&[
+            ("a", 10, "end", 5),
+            ("a", 20, "prompt", 20),
+            ("b", 30, "end", 5),
+            ("b", 40, "prompt", 20),
+        ]);
+        for origin in ["headless", "night"] {
+            db.conn
+                .execute("UPDATE session SET origin=?1 WHERE id='b'", [origin])
+                .unwrap();
+            let d = load(&db.conn, 0).unwrap();
+            assert_eq!(d.prompts.iter().map(|p| p.ts).collect::<Vec<_>>(), [20]);
+            // and a model is not asked about them
+            assert_eq!(pending(&db.conn, 0).unwrap(), 1, "{origin}");
+        }
+        // a session of unknown origin, or one started in a terminal, counts
+        for origin in [None, Some("terminal")] {
+            db.conn
+                .execute("UPDATE session SET origin=?1 WHERE id='b'", [origin])
+                .unwrap();
+            assert_eq!(load(&db.conn, 0).unwrap().prompts.len(), 2);
+            assert_eq!(pending(&db.conn, 0).unwrap(), 2);
+        }
+    }
+
+    #[test]
     fn idle_breaks_are_the_spans_that_are_long_enough() {
         let db = Db::open_memory().unwrap();
         for (s, e) in [(0, 1_000), (5_000, 9_000), (20_000, 30_000)] {

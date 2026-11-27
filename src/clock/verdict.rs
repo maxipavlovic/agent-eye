@@ -646,6 +646,27 @@ mod tests {
     }
 
     #[test]
+    fn too_few_names_the_real_reason_judging_is_off() {
+        let text = |why: Option<&str>| {
+            decide(&Findings {
+                prompts: 900,
+                corrections: 0,
+                not_judged: why,
+                you: None,
+                band: None,
+            })
+            .text
+        };
+        assert_eq!(
+            text(Some("[summary] enabled is off, and corrections follow it")),
+            "Corrections are not being judged: [summary] enabled is off, and corrections follow it, so there is nothing to compare."
+        );
+        // never blamed on `[clock] llm` when something else is the reason
+        assert!(!text(Some("the steering clock is off ([clock] enabled)")).contains("llm"));
+        assert!(text(None).starts_with("Too few to tell yet"));
+    }
+
+    #[test]
     fn hours_are_named_by_one_rule() {
         let names: Vec<_> = [0, 4, 5, 11, 12, 16, 17, 21, 22, 23]
             .map(part_of_day)

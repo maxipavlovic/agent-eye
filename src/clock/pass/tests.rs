@@ -217,6 +217,24 @@ fn judging_off_asks_nobody() {
 }
 
 #[test]
+fn an_agent_whose_judging_run_is_unproven_is_never_asked() {
+    let mut e = Env::new();
+    e.session("s1", &say(&["fix it", "no, wrong"]));
+    let agents = Agents::from_vec(vec![Arc::new(crate::agents::opencode::OpenCode::new(
+        e.tmp.path().join("opencode"),
+    ))]);
+    let out = run(&e.db, &e.paths, &e.cfg, &agents, NOW, &mut |_| {}).unwrap();
+    assert!(out
+        .stopped
+        .unwrap()
+        .contains("OpenCode is not used for judging"));
+    assert_eq!(
+        (out.sent, out.pending, e.calls(), e.rows("s1").len()),
+        (0, 1, 0, 0)
+    );
+}
+
+#[test]
 fn a_session_in_an_excluded_folder_is_never_sent() {
     let mut e = Env::new();
     e.session("s1", &say(&["fix it", "no, wrong"]));

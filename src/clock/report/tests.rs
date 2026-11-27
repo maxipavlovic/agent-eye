@@ -531,3 +531,82 @@ fn the_report_says_why_corrections_are_not_judged() {
     assert_eq!(none.judging, Judging::Unavailable);
     assert!(none.judging_reason.unwrap().contains("no enabled agent"));
 }
+
+#[test]
+fn every_window_gets_the_hint_of_the_same_four_weeks() {
+    let mut w = World::new();
+    w.steady_days_worse_evenings(1000);
+    let agents = Agents::default();
+    let cfg = Config::parse("[clock]\nhints = true").unwrap();
+    let hint = |weeks| {
+        build(&w.db.conn, &cfg, &agents, NOW, weeks, &utc)
+            .unwrap()
+            .now
+            .hint
+    };
+    let four = hint(HINT_WEEKS).expect("the evening hint");
+    for weeks in [1, 2, 8, MAX_WEEKS] {
+        assert_eq!(hint(weeks), Some(four.clone()), "{weeks} weeks");
+    }
+    // with hints off no window has one
+    let off = Config::default();
+    assert!(build(&w.db.conn, &off, &agents, NOW, 1, &utc)
+        .unwrap()
+        .now
+        .hint
+        .is_none());
+}
+
+#[test]
+fn the_tool_error_strip_is_one_agents_so_it_matches_the_verdict() {
+    let mut w = World::new();
+    w.steady_days_worse_evenings(1000);
+    let alone = w.report("");
+    // codex fails 1 call in 2 in the evening only; the strip must not show it
+    w.db.conn
+        .execute("INSERT INTO session(id, agent) VALUES('x','codex')", [])
+        .unwrap();
+    for i in 0..60 {
+        let ts = D0 + 19 * H + i * 1000;
+        w.db.conn
+            .execute(
+                "INSERT INTO turn(session_id, ts, kind, n) VALUES('x',?1,?2,0)",
+                rusqlite::params![ts, if i % 2 == 0 { "tool" } else { "tool_error" }],
+            )
+            .unwrap();
+    }
+    let both = w.report("");
+    assert_eq!(both.tool_agent.as_deref(), Some("claude"));
+    assert_eq!(both.hours[19].tool_calls, alone.hours[19].tool_calls);
+    assert_eq!(both.hours[19].tool_errors, alone.hours[19].tool_errors);
+    assert_eq!(alone.tool_agent.as_deref(), Some("claude"));
+    assert_eq!(World::new().report("").tool_agent, None);
+}
+
+#[test]
+fn a_scripted_session_does_not_move_the_hours() {
+    let mut w = World::new();
+    w.steady_days_worse_evenings(1000);
+    let before = w.report("");
+    w.db.conn
+        .execute("UPDATE session SET origin='headless' WHERE id='s'", [])
+        .unwrap();
+    let after = w.report("");
+    assert_eq!((before.prompts, after.prompts), (1300, 0));
+}
+
+#[test]
+fn judging_says_opencode_is_not_used_and_the_verdict_does_not_blame_llm() {
+    let w = World::new();
+    let agents = Agents::from_vec(vec![Arc::new(crate::agents::opencode::OpenCode::new(
+        "/nonexistent".into(),
+    ))]);
+    let r = build(&w.db.conn, &Config::default(), &agents, NOW, 4, &utc).unwrap();
+    assert_eq!(r.judging, Judging::Unavailable);
+    let why = r.judging_reason.unwrap();
+    assert!(why.contains("OpenCode"), "{why}");
+    assert!(r.verdict.text.contains(&why) && !r.verdict.text.contains("llm"));
+    let off = w.report("[summary]\nenabled = false");
+    assert!(off.verdict.text.contains("[summary] enabled is off"));
+    assert!(!off.verdict.text.contains("[clock] llm"));
+}
