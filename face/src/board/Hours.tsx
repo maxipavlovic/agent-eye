@@ -33,7 +33,7 @@ function AgentTable({ c, store }: { c: ClockReport; store: Store }) {
 /** The plain facts under the verdict, as the engine words them: something to go on when no hour stands out. */
 function Facts({ c }: { c: ClockReport }) {
   if (c.facts.length === 0) return null;
-  return <ul class="facts">{c.facts.map((f) => <li key={f}>{f}</li>)}</ul>;
+  return <ul class="cfacts">{c.facts.map((f) => <li key={f}>{f}</li>)}</ul>;
 }
 
 /** The panel body for a clock that has something to say: the verdict, the facts, the diagram, the break chart, each agent. */

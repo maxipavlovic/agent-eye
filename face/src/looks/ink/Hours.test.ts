@@ -50,7 +50,7 @@ describe('the HOURS panel', () => {
     expect(clock).toHaveBeenLastCalledWith(4);
     expect(root.querySelector('.hours .verdict')!.textContent).toContain('Mostly you.');
     // the engine's facts, word for word, right under the verdict
-    expect([...root.querySelectorAll('.hours .verdict + .facts li')].map((li) => li.textContent)).toEqual(demoClock(4).facts);
+    expect([...root.querySelectorAll('.hours .verdict + .cfacts li')].map((li) => li.textContent)).toEqual(demoClock(4).facts);
     expect(hoursText(root)).toContain('12 prompts not judged yet');
     const svg = root.querySelector('.cdiagram')!;
     for (const t of ['YOU', 'THE MODEL', 'TOOL ERRORS', 'your evening']) expect(svg.textContent).toContain(t);
@@ -179,7 +179,7 @@ describe('the HOURS panel', () => {
     await vi.waitFor(() => expect(root.querySelector('.hours .state')).not.toBeNull());
     expect(hoursText(root)).toContain('Not enough data yet: 120 prompts, 6 corrections.');
     // too few for a verdict can still be enough for the average
-    expect(root.querySelector('.hours .state + .facts li')!.textContent).toBe('You correct about 1 in 20 prompts: 5 per 100 (6 of 120).');
+    expect(root.querySelector('.hours .state + .cfacts li')!.textContent).toBe('You correct about 1 in 20 prompts: 5 per 100 (6 of 120).');
     expect(root.querySelector('.cdiagram')).toBeNull();
   });
 
@@ -197,7 +197,7 @@ describe('the HOURS panel', () => {
     await vi.waitFor(() => expect(hoursText(root)).toContain('The steering clock is off'));
     // the panel says how to switch it on, since the switch is not in Settings
     expect(hoursText(root)).toContain('then run eye restart');
-    expect(root.querySelector('.hours .facts')).toBeNull();
+    expect(root.querySelector('.hours .cfacts')).toBeNull();
   });
 
   it('is calm when the engine has no clock: not available in this version', async () => {
