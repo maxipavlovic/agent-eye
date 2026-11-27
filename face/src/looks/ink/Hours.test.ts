@@ -200,6 +200,13 @@ describe('the HOURS panel', () => {
     expect(root.querySelector('.cdiagram')).toBeNull();
   });
 
+  it('names the agent whose calls the tool strip shows', async () => {
+    const { root, header } = await mount({ clock: async () => demoClock(4) });
+    header('HOURS').click();
+    await vi.waitFor(() => expect(root.querySelector('.hours .cdiagram')).not.toBeNull());
+    expect(root.querySelector('.hours .cdiagram')!.textContent).toMatch(/TOOL ERRORS · \S+'s failed calls per 100/);
+  });
+
   it('says what went wrong when the clock fails for any other reason', async () => {
     const { root, header } = await mount({ clock: async () => { throw new ApiError('database is locked', 500); } });
     header('HOURS').click();

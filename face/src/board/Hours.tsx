@@ -40,7 +40,7 @@ function Body({ c, store }: { c: ClockReport; store: Store }) {
       {pending && <p class="umeta">{pending}</p>}
       <Sec t="BY HOUR OF THE DAY">
         <ChartFrame title={`${c.from} to ${c.to}`} table={table.value} onTable={(t) => { table.value = t; }}>
-          {table.value ? <HoursTable clock={c} /> : <HoursDiagram clock={c} />}
+          {table.value ? <HoursTable clock={c} /> : <HoursDiagram clock={c} toolAgent={c.agents.length > 1 && c.tool_agent ? store.agents.value.find((a) => a.id === c.tool_agent)?.short ?? c.tool_agent : undefined} />}
         </ChartFrame>
       </Sec>
       {!table.value && c.since_break.length > 0 && (

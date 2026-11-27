@@ -67,7 +67,8 @@ export function bandNames(clock: ClockReport, narrow: boolean) {
   });
 }
 
-export function HoursDiagram({ clock }: { clock: ClockReport }) {
+/** `toolAgent` is the name of the agent whose calls the tool strip shows (`tool_agent`), when more than one agent reports. */
+export function HoursDiagram({ clock, toolAgent }: { clock: ClockReport; toolAgent?: string }) {
   const narrow = useNarrow();
   const names = bandNames(clock, narrow);
   const g = layout(narrow, Math.max(1, ...names.map((n) => n.row + 1)));
@@ -150,7 +151,7 @@ export function HoursDiagram({ clock }: { clock: ClockReport }) {
         })}
         <line class="cbase" x1={X0} x2={R} y1={modelMid} y2={modelMid} />
 
-        <text class="cstrip" x={X0} y={tool.y + 14}>{narrow ? 'TOOL ERRORS · per 100 calls' : 'TOOL ERRORS · failed calls per 100'}</text>
+        <text class="cstrip" x={X0} y={tool.y + 14}>{narrow ? `TOOL ERRORS${toolAgent ? ` · ${toolAgent}` : ' · per 100 calls'}` : `TOOL ERRORS${toolAgent ? ` · ${toolAgent}'s` : ' ·'} failed calls per 100`}</text>
         <Ticks g={g} y={tool.y} h={tool.h} max={toolMax} />
         {clock.hours.map((h) => {
           const r = per100(h.tool_errors, h.tool_calls);
