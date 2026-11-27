@@ -103,7 +103,7 @@ export function breakLine(b: ClockBand): string {
 export function clockNote(c: ClockReport): string | null {
   if (!c.enabled) return 'The steering clock is off. Switch it on in Settings, under HOURS.';
   if (c.prompts === 0) return 'Nothing recorded yet. eye notes when you prompt and when the agent finishes, as your sessions run.';
-  if (c.verdict.kind === 'too_few') return c.judging === 'on' ? `Not enough data yet: ${count(c.prompts, 'prompt')}, ${count(c.corrections, 'correction')}.` : `${judgingNote(c)} ${c.verdict.text}`;
+  if (c.verdict.kind === 'too_few') return c.judging === 'on' ? `Not enough data yet: ${count(c.prompts, 'prompt')}, ${count(c.corrections, 'correction')}.` : judgingNote(c);
   return null;
 }
 

@@ -91,7 +91,7 @@ export function AgentSettings({ store, state, save }: { store: Store; state: Set
         </Row>
       </Sec>
       <Sec t="HOURS">
-        <Row label="Steering clock" help="Notes when you prompt and when the agent finishes, to show which hours you steer well and which badly. Timings and sizes only, never text.">
+        <Row label="Steering clock" help={`Notes when you prompt and when the agent finishes, to show which hours you steer well and which badly. Timings and sizes only, never text.${when(s['clock.enabled'].restart)}`}>
           <Switch label="Steering clock" on={s['clock.enabled'].value} disabled={sample} onPick={(on) => void save({ 'clock.enabled': on })} />
         </Row>
         <Row label="Judge corrections" help="Let your own summary agent tell which prompts were corrections, once a night. This sends the prompt and the reply before it to that agent, as summaries do. Off: corrections stay at zero, and HOURS shows only timing and tool errors.">

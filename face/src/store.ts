@@ -1,12 +1,15 @@
 import { ACCENTS, parseAccent, type AccentId } from './accents';
 import { remindWhen } from './format';
 import { pushPref } from './prefs';
+import { ApiError } from './data/live';
 import { signal, computed, effect, batch, type Signal, type ReadonlySignal } from '@preact/signals';
 import type {
   Agent, ArchivePage, Board, Card, CardDetail, ColumnId, Connection, ConversationPage, IdeaInput, MoveTarget,
   ClockHint, ClockReport, FolderCheck, LooseAct, NightPlanInput, NightState, RemindInput, RemindSettings, ResumePlan, SearchHit, SettingsInput, SettingsState, Source, StartPlan, UsageReport,
 } from './api/types';
 
+/** The weeks the hint is worked out over: the window HOURS and the picker use by default. */
+const CLOCK_HINT_WEEKS = 4;
 /** How often the board asks the clock for its hint while hints are on. */
 const CLOCK_HINT_EVERY_MS = 5 * 60_000;
 
@@ -61,7 +64,7 @@ export interface Store {
   resume(id: string, fork?: boolean): Promise<ResumePlan | null>;
   /** Usage over the last `days` days; null (quietly) when the engine cannot say. */
   usage(days: number, series?: 'project' | 'model'): Promise<UsageReport | null>;
-  /** The steering clock over `weeks` weeks; null (quietly) when the engine has no clock. */
+  /** The steering clock over `weeks` weeks; null (quietly) when the engine has no clock (a 404); any other failure is thrown. */
   clock(weeks: number): Promise<ClockReport | null>;
   /** The config keys the board may change; null (quietly) when the engine has no settings. */
   settings(): Promise<SettingsState | null>;
@@ -167,6 +170,12 @@ export function createStore(src: Source, { defaultTheme = 'auto' }: { defaultThe
   const mq = typeof matchMedia === 'function' ? matchMedia('(prefers-color-scheme: dark)') : null;
   const systemDark = signal(mq?.matches ?? false);
   mq?.addEventListener('change', (e) => { systemDark.value = e.matches; });
+  // another page of this origin (the site's own theme switch, around the embedded demo board) changed the saved theme
+  if (typeof addEventListener === 'function') {
+    addEventListener('storage', (e) => {
+      if (e.key === THEME_KEY && (e.newValue === 'light' || e.newValue === 'dark' || e.newValue === 'auto')) themePref.value = e.newValue;
+    });
+  }
   const theme = computed<Theme>(() =>
     themePref.value === 'auto' ? (systemDark.value ? 'dark' : 'light') : themePref.value);
   effect(() => { document.documentElement.dataset.theme = theme.value; });
@@ -320,8 +329,9 @@ export function createStore(src: Source, { defaultTheme = 'auto' }: { defaultThe
   async function clock(weeks: number) {
     try {
       return await src.clock(weeks);
-    } catch {
-      return null;
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 404) return null;
+      throw e;
     }
   }
 
@@ -481,7 +491,7 @@ export function createStore(src: Source, { defaultTheme = 'auto' }: { defaultThe
   let hintTimer: ReturnType<typeof setTimeout> | undefined;
   function loadClockHint() {
     clearTimeout(hintTimer);
-    src.clock(1).then((c) => {
+    src.clock(CLOCK_HINT_WEEKS).then((c) => {
       clockHint.value = c.enabled && c.hints ? c.now.hint ?? null : null;
       // nobody needs the question again until hints are switched on, and the settings panel asks then
       if (c.enabled && c.hints) hintTimer = setTimeout(loadClockHint, CLOCK_HINT_EVERY_MS);

@@ -13,30 +13,30 @@ function accentOf(css: string, id: string, dark: boolean): string {
 }
 
 describe('the chart colours', () => {
-  it('keep the first four colours well away from every accent of both looks, in both themes, and the fifth too bar one case', () => {
-    let filled = 0;
+  it('keep every chart colour well away from every accent of both looks, in both themes, bar a fifth that is only just under', () => {
     for (const look of ['ink', 'iris']) {
       for (const dark of [false, true]) {
         for (const a of ACCENTS) {
           const accent = accentOf(tokens(look), a.id, dark);
           const got = chartColours(accent, dark);
           expect(got, `${look} ${a.id} ${dark}`).toHaveLength(SLOTS);
-          got.forEach((c, i) => {
-            if (distance(c, accent) >= NEAR) return;
-            // only the fifth colour may be a fill-in, and only where the accent sits in the middle of three hues
-            expect(i, `${look} ${a.id} ${dark} ${c}`).toBe(4);
-            filled++;
-          });
+          // a green accent leaves three of the seven too near, so the fifth colour may be the farthest of them (never under 13)
+          got.forEach((c, i) => expect(distance(c, accent), `${look} ${a.id} ${dark} ${c}`).toBeGreaterThanOrEqual(i < 4 ? NEAR : 13));
         }
       }
     }
-    expect(filled).toBe(1);
+  });
+
+  it('keeps every pair of colours apart, whichever two keys end up side by side in a stack', () => {
+    for (const set of [PALETTE.light, PALETTE.dark]) {
+      set.forEach((a, i) => set.slice(i + 1).forEach((b) => expect(distance(a, b), `${a} ${b}`).toBeGreaterThanOrEqual(NEAR)));
+    }
   });
 
   it('skips only the slots near the accent and keeps the order of the rest', () => {
-    const got = chartColours('#3a73b8', false);
-    expect(got).not.toContain(PALETTE.light[0]);
-    expect(got.slice(0, 2)).toEqual([PALETTE.light[1], PALETTE.light[2]]);
+    const got = chartColours(PALETTE.light[1], false);
+    expect(got).not.toContain(PALETTE.light[1]);
+    expect(got.slice(0, 2)).toEqual([PALETTE.light[0], PALETTE.light[2]]);
     expect(chartColours('#3a3a3a', false)).toEqual(PALETTE.light.slice(0, SLOTS));
   });
 

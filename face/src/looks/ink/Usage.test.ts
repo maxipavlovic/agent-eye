@@ -107,7 +107,8 @@ describe('the daily cost chart in USAGE', () => {
     const { root, usage } = await open();
     expect(usage).toHaveBeenCalledWith(7, 'project');
     expect(root.querySelector('.usage')!.textContent).toContain('DAILY COST, LAST 7 DAYS');
-    expect(root.querySelectorAll('.usage .cdiagram .chit')).toHaveLength(7);
+    expect(root.querySelector('.usage [role=slider]')!.getAttribute('aria-valuemax')).toBe('6');
+    expect(root.querySelectorAll('.usage .cdiagram .chit')).toHaveLength(0);
     const legend = [...root.querySelectorAll('.usage .clegend li')].map((l) => l.textContent);
     expect(legend).toContain('billing');
     expect(legend.at(-1)).toBe('other');
@@ -124,7 +125,7 @@ describe('the daily cost chart in USAGE', () => {
     const billing = fill('billing');
     ([...root.querySelectorAll('.usage .acts button')].find((b) => b.textContent === 'MONTH') as HTMLButtonElement).click();
     await vi.waitFor(() => expect(root.querySelector('.usage')!.textContent).toContain('LAST 30 DAYS'));
-    expect(root.querySelectorAll('.usage .cdiagram .chit')).toHaveLength(30);
+    expect(root.querySelector('.usage [role=slider]')!.getAttribute('aria-valuemax')).toBe('29');
     expect(fill('billing')).toBe(billing);
   });
 
@@ -137,9 +138,13 @@ describe('the daily cost chart in USAGE', () => {
 
   it('shows a column and its total in a tooltip, and a table with the same numbers', async () => {
     const { root } = await open();
-    const hit = root.querySelector<SVGElement>('.usage .cdiagram .chit')!;
-    hit.dispatchEvent(new FocusEvent('focus'));
+    const slider = root.querySelector<HTMLElement>('.usage [role=slider]')!;
+    slider.dispatchEvent(new FocusEvent('focus'));
     await vi.waitFor(() => expect(root.querySelector('.usage .ctip')).not.toBeNull());
+    const first = root.querySelector('.usage .ctip b')!.textContent;
+    slider.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    await vi.waitFor(() => expect(root.querySelector('.usage .ctip b')!.textContent).not.toBe(first));
+    expect(slider.getAttribute('aria-valuenow')).toBe('1');
     expect(root.querySelector('.usage .ctip b')!.textContent).toMatch(/^[A-Z][a-z]{2} \d+ [A-Z][a-z]{2} · \$\d/);
     expect(root.querySelectorAll('.usage .ctip p').length).toBeGreaterThan(1);
     (root.querySelector('.usage .ctoggle') as HTMLButtonElement).click();

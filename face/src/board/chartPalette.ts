@@ -1,19 +1,20 @@
-// The categorical colours of the stacked charts. Seven hues chosen for these looks (blue, magenta, gold, green,
-// orange, violet, teal), in an order that keeps neighbours apart under the common colour-vision differences, for the
-// light and for the dark paper (checked with the dataviz palette validator, every accent included). The accent is the signal colour ("needs you"), so no chart colour may sit near it: the
+// The categorical colours of the stacked charts. Seven hues chosen for these looks, checked with the dataviz palette
+// validator on every pair (a stack puts any two keys side by side, and the legend has to tell all of them apart) on
+// the paper of both looks, light and dark: every pair is at least 15 apart for full colour vision and at least 7 under
+// protan or deutan simulation. The accent is the signal colour ("needs you"), so no chart colour may sit near it: the
 // slots too close to the accent are skipped at render and the next ones take their place.
 
-/** Light and dark steps of the same seven hues, in slot order. */
+/** Light and dark steps of the palette, in slot order. */
 export const PALETTE = {
-  light: ['#3772bb', '#a5538c', '#907904', '#1c6402', '#b66028', '#755db1', '#078968'],
-  dark: ['#5894e0', '#c670ab', '#a9912b', '#297613', '#d07843', '#9881d9', '#15ab83'],
+  light: ['#3e6102', '#6471e9', '#0d9298', '#8c197c', '#c93a5f', '#918112', '#2151a1'],
+  dark: ['#e25273', '#9e6033', '#9670ec', '#a33391', '#2062ce', '#57a314', '#15959b'],
 } as const;
 
 /** How many series colours a chart can show at once. */
 export const SLOTS = 5;
 
 /** The distance (OKLab, times 100) under which two colours read as the same family. */
-export const NEAR = 12;
+export const NEAR = 15;
 
 const lin = (c: number) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
 
@@ -36,7 +37,7 @@ export function distance(a: string, b: string): number {
 
 /**
  * The colours the chart may use under this accent: the palette without the slots near the accent, in order. When the
- * accent leaves fewer than five, the nearest ones fill in from the farthest down, so a chart never runs out.
+ * accent leaves fewer than five (none of the eight does), the nearest ones fill in from the farthest down, so a chart never runs out.
  */
 export function chartColours(accent: string, dark: boolean): string[] {
   const all = [...PALETTE[dark ? 'dark' : 'light']];

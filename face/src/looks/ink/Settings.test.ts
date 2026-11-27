@@ -177,6 +177,14 @@ describe('the agent settings', () => {
     expect($('.settings .more')!.textContent).toContain('docs/config.md');
   });
 
+  it('says the steering clock switch takes effect when the service restarts', async () => {
+    const { $, open } = await mount(engine().source);
+    await open();
+    await vi.waitFor(() => expect($('.settings [aria-label=Agents]')).not.toBeNull());
+    const row = [...document.querySelectorAll('.settings .srow')].find((r) => r.textContent?.includes('Notes when you prompt'));
+    expect(row?.textContent).toContain('Takes effect when the background service restarts');
+  });
+
   it('saves a switch at once and says Saved', async () => {
     const { saveSettings, source } = engine();
     const { $, open, press } = await mount(source);

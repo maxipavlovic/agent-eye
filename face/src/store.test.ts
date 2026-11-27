@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createStore } from './store';
 import { fixtureSource } from './data/fixture';
 import type { Board, Card, ClockReport, Column, ColumnId, Source } from './api/types';
+import { ApiError } from './data/live';
 import { demoClock } from './data/clockSample';
 import { hintClock } from './data/clockStates';
 
@@ -32,7 +33,7 @@ function source(over: Partial<Source> = {}): Source {
     ideas: async () => ({ ideas: [] }),
     agents: async () => ({ agents: [{ id: 'claude', name: 'Claude Code', short: 'Claude', default: true }] }),
     usage: async () => { throw new Error('no usage'); },
-    clock: async () => { throw new Error('no clock'); },
+    clock: async () => { throw new ApiError('not found', 404); },
     move: async (id) => card(id, 'done'),
     setHidden: async (id) => card(id, 'paused'),
     forget: async () => {},
@@ -280,6 +281,8 @@ describe('the clock', () => {
     const s = createStore(source());
     await tick();
     expect(await s.clock(4)).toBeNull();
+    const broken = createStore(source({ clock: async () => { throw new ApiError('boom', 500); } }));
+    await expect(broken.clock(4)).rejects.toThrow('boom');
     expect(s.clockHint.value).toBeNull();
     expect(s.toasts.value).toHaveLength(0);
   });

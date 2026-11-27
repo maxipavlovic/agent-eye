@@ -60,16 +60,20 @@ export function HoursHost({ store }: { store: Store }) {
   const open = hoursPanel.value;
   const weeks = useSignal(4);
   const data = useSignal<ClockReport | null>(null);
-  const failed = useSignal(false);
+  const missing = useSignal(false);
+  const broken = useSignal('');
   useEffect(() => {
     if (!open) return;
     let live = true;
-    failed.value = false;
+    missing.value = false;
+    broken.value = '';
     // a new range keeps the chart on screen until the answer comes; a new opening starts clean
-    void store.clock(weeks.value).then((r) => {
+    store.clock(weeks.value).then((r) => {
       if (!live) return;
       data.value = r;
-      failed.value = r === null;
+      missing.value = r === null;
+    }, (e: unknown) => {
+      if (live) broken.value = e instanceof Error ? e.message : 'unknown error';
     });
     return () => { live = false; };
   }, [open, weeks.value]);
@@ -91,8 +95,9 @@ export function HoursHost({ store }: { store: Store }) {
               <button key={w.weeks} class={`btn sm${weeks.value === w.weeks ? '' : ' ghost'}`} aria-pressed={weeks.value === w.weeks} onClick={() => { weeks.value = w.weeks; }}>{w.label}</button>
             ))}
           </div>
-          {!c && !failed.value && <p class="state">Loading…<i class="dots" /></p>}
-          {failed.value && <p class="state">Not available in this version. Update eye, then reload.</p>}
+          {!c && !missing.value && !broken.value && <p class="state">Loading…<i class="dots" /></p>}
+          {missing.value && <p class="state">Not available in this version. Update eye, then reload.</p>}
+          {broken.value && <p class="state">Could not load the hours: {broken.value}</p>}
           {c && note && <p class="state">{note}</p>}
           {c && !note && <Body c={c} store={store} />}
         </div>

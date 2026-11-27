@@ -21,18 +21,16 @@ function applyTheme(pref: ThemePref) {
   const theme = pref === 'auto' ? (system.matches ? 'dark' : 'light') : pref;
   document.documentElement.dataset.theme = theme;
   for (const b of document.querySelectorAll<HTMLElement>('[data-theme-set]')) b.setAttribute('aria-pressed', String(b.dataset.themeSet === pref));
-  // The demo board is on the same origin: keep it in step.
-  try { document.querySelector('iframe')?.contentDocument?.documentElement.setAttribute('data-theme', theme); } catch { /* not loaded yet */ }
 }
 
 let pref = savedTheme();
 applyTheme(pref);
 system.addEventListener('change', () => applyTheme(pref));
-document.querySelector('iframe')?.addEventListener('load', () => { applyTheme(pref); });
 
 for (const b of document.querySelectorAll<HTMLElement>('[data-theme-set]')) {
   b.addEventListener('click', () => {
     pref = b.dataset.themeSet as ThemePref;
+    // the demo board is on the same origin and hears this write (a storage event), so its own setting follows
     try { localStorage.setItem(THEME_KEY, pref); } catch { /* storage blocked */ }
     applyTheme(pref);
   });

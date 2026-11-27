@@ -79,7 +79,7 @@ describe('the clock model', () => {
     const off = { ...tooFewClock(), judging: 'off' as const, judging_reason: '[clock] llm is off' };
     expect(judgingNote(off)).toBe('Corrections are not being judged: [clock] llm is off.');
     expect(clockNote(off)).toContain('Corrections are not being judged: [clock] llm is off.');
-    expect(clockNote(off)).toContain(off.verdict.text);
+    expect(clockNote(off)).toBe('Corrections are not being judged: [clock] llm is off.');
     expect(judgingNote({ ...off, judging: 'unavailable', judging_reason: null })).toBe('Corrections are not being judged: no agent can judge them.');
     expect(judgingNote(demoClock(4))).toBeNull();
   });

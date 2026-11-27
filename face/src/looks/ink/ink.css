@@ -59,10 +59,9 @@ a:hover { background: var(--ink); color: var(--paper); text-decoration: none; }
 @keyframes blink { 50% { opacity: .15; } }
 
 .theme { display: flex; border: 2px solid var(--ink); }
-.theme button { width: 36px; height: 36px; display: grid; place-items: center; background: var(--paper); color: var(--ink); border: 0; padding: 0; }
+.theme button { display: grid; place-items: center; background: var(--paper); color: var(--ink); border: 0; padding: 0; }
 .theme button + button { border-left: 2px solid var(--ink); }
 .theme button.on { background: var(--ink); color: var(--paper); }
-.theme button.on svg [fill='var(--paper)'] { fill: var(--ink); }
 /* the settings gear, and the eight accent swatches in the panel */
 .btn.gear { height: 40px; padding: 0 12px; display: inline-flex; align-items: center; }
 .btn.gear svg { stroke-width: 2; stroke-linejoin: miter; }
@@ -543,7 +542,6 @@ a.mk:hover { background: var(--ink); color: var(--paper); }
 
 /* ───────── tablets and touch ───────── */
 @media (max-width: 1200px), (pointer: coarse) {
-  .theme button { width: 40px; height: 40px; }
   .theme.seg button { height: 40px; }
   .acc { width: 32px; height: 32px; }
   .pbar button { min-height: 40px; }

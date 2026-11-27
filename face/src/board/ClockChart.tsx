@@ -10,16 +10,18 @@ import {
 // the drawing is 320 wide instead of 720, so its words keep their size when it shrinks to the screen.
 
 const TITLE = 22;
-/** The row above the strips that names the bad stretches. */
+/** The row above the strips that names the bad stretches, and one more row when two names would run into each other. */
 const BANDS = 22;
+const BAND_ROW = 18;
 
-/** Where everything sits, for the wide drawing and the phone one. */
-function layout(narrow: boolean) {
+/** Where everything sits, for the wide drawing and the phone one; `rows` is how many rows of band names there are. */
+function layout(narrow: boolean, rows: number) {
+  const BANDS_H = BANDS + (rows - 1) * BAND_ROW;
   const W = narrow ? 320 : 720;
   const X0 = narrow ? 40 : 48;
   const SLOT = (W - X0 - (narrow ? 4 : 8)) / 24;
-  const strips = { you: { y: BANDS, h: 120 }, model: { y: BANDS + 160, h: 96 }, tool: { y: BANDS + 296, h: 44 } };
-  return { W, X0, SLOT, BAR: Math.min(20, SLOT - (narrow ? 4 : 6)), R: W - (narrow ? 4 : 8), strips, H: BANDS + 372, hx: (h: number) => X0 + h * SLOT };
+  const strips = { you: { y: BANDS_H, h: 120 }, model: { y: BANDS_H + 160, h: 96 }, tool: { y: BANDS_H + 296, h: 44 } };
+  return { W, X0, SLOT, BAR: Math.min(20, SLOT - (narrow ? 4 : 6)), R: W - (narrow ? 4 : 8), strips, H: BANDS_H + 372, top: BANDS_H, hx: (h: number) => X0 + h * SLOT };
 }
 
 /** The tooltip of an hour: what you did, what the model did, what the tools did. */
@@ -42,9 +44,33 @@ function Ticks({ g, y, h, max }: { g: ReturnType<typeof layout>; y: number; h: n
   );
 }
 
+/** The width of a band name in the drawing, near enough to tell whether two names touch (about 8 units a letter). */
+const nameWidth = (t: string) => t.length * 8 + 6;
+
+/** Where each bad stretch's name goes: its x, which way it reads, and its row (a name that would touch the one before goes a row down). */
+export function bandNames(clock: ClockReport, narrow: boolean) {
+  const W = narrow ? 320 : 720, X0 = narrow ? 40 : 48, SLOT = (W - X0 - (narrow ? 4 : 8)) / 24, R = W - (narrow ? 4 : 8);
+  const hx = (h: number) => X0 + h * SLOT;
+  const ends: number[] = [];
+  return clock.bad.flatMap((b) => {
+    const first = bandSpans(b)[0];
+    if (!first) return [];
+    const text = bandLabel(b), w = nameWidth(text);
+    // a label sits at its band's start, or ends at the band's end when it would run off the right edge
+    const right = hx(first.from) + w > W;
+    const x = right ? Math.min(hx(first.to), R) : hx(first.from);
+    const from = right ? x - w : x;
+    let row = 0;
+    while (ends[row] !== undefined && ends[row]! > from) row++;
+    ends[row] = right ? x : x + w;
+    return [{ key: `${b.from_h}-${b.to_h}`, text, x, right, row }];
+  });
+}
+
 export function HoursDiagram({ clock }: { clock: ClockReport }) {
   const narrow = useNarrow();
-  const g = layout(narrow);
+  const names = bandNames(clock, narrow);
+  const g = layout(narrow, Math.max(1, ...names.map((n) => n.row + 1)));
   const { W, X0, SLOT, BAR, R, hx } = g;
   const { tip, show, hide } = useTip();
   const active = useSignal<number | null>(null);
@@ -78,19 +104,13 @@ export function HoursDiagram({ clock }: { clock: ClockReport }) {
   const colX = (h: number) => hx(h) + (SLOT - BAR) / 2;
   return (
     <div class="cwrap cfocus" role="slider" tabIndex={0} aria-label="Your hours, one column per hour of the day. Use the arrow keys to read each hour." aria-orientation="horizontal" aria-valuemin={0} aria-valuemax={23} aria-valuenow={active.value ?? 0} aria-valuetext={active.value === null ? undefined : hourRange(active.value)} onFocus={() => { if (active.value === null) set(0); }} onBlur={() => set(null)} onKeyDown={onKey}>
-      <svg class="cdiagram" viewBox={`0 0 ${W} ${g.H}`} aria-hidden="true" onPointerMove={(e) => set(hourAt(e))} onPointerLeave={(e) => { if (document.activeElement !== e.currentTarget.parentElement) set(null); }}>
+      <svg class="cdiagram" viewBox={`0 0 ${W} ${g.H}`} aria-hidden="true" onPointerMove={(e) => set(hourAt(e))} onPointerDown={(e) => set(hourAt(e))} onPointerLeave={(e) => { if (document.activeElement !== e.currentTarget.parentElement) set(null); }}>
         {bands.map((b, i) => (
           [you, model, tool].map((s) => <rect key={`${i}-${s.y}`} class="cband" x={hx(b.from)} width={(b.to - b.from) * SLOT} y={yTop(s)} height={s.h - TITLE} />)
         ))}
-        {active.value !== null && <rect class="cact" x={hx(active.value)} width={SLOT} y={BANDS + TITLE} height={tool.y + tool.h - BANDS - TITLE} />}
+        {active.value !== null && <rect class="cact" x={hx(active.value)} width={SLOT} y={g.top + TITLE} height={tool.y + tool.h - g.top - TITLE} />}
 
-        {clock.bad.map((b) => {
-          const first = bandSpans(b)[0];
-          if (!first) return null;
-          // a label sits at its band's start, or ends at the band's end when it would run off the right edge
-          const right = hx(first.from) + (narrow ? 120 : 160) > W;
-          return <text key={`${b.from_h}-${b.to_h}`} class="cband-label" x={right ? Math.min(hx(first.to), R) : hx(first.from)} y={14} text-anchor={right ? 'end' : 'start'}>{bandLabel(b)}</text>;
-        })}
+        {names.map((n) => <text key={n.key} class="cband-label" x={n.x} y={14 + n.row * BAND_ROW} text-anchor={n.right ? 'end' : 'start'}>{n.text}</text>)}
 
         <text class="cstrip" x={X0} y={you.y + 14}>{narrow ? 'YOU · corrections per 100' : 'YOU · corrections per 100 prompts'}</text>
         <Ticks g={g} y={you.y} h={you.h} max={youMax} />

@@ -80,7 +80,7 @@ a:hover { background: var(--ink); color: var(--paper); text-decoration: none; }
 .conn.offline i { background: var(--accent); }
 @keyframes blink { 50% { opacity: .15; } }
 .theme { display: flex; gap: 2px; }
-.theme button { width: 34px; height: 34px; display: grid; place-items: center; color: var(--mute); border: var(--hair) solid transparent; }
+.theme button { display: grid; place-items: center; color: var(--mute); border: var(--hair) solid transparent; }
 .theme button.on { color: var(--ink); border-color: var(--rule); }
 .theme button:not(.on):hover { color: var(--ink); background: var(--lit); }
 .ico.accent { color: var(--accent-ink); }
@@ -682,7 +682,6 @@ mark { background: var(--ink); color: var(--paper); padding: 0 3px; }
   .brand { padding: 0 12px; }
 }
 @media (max-width: 1200px), (pointer: coarse) {
-  .theme button { width: 40px; height: 40px; }
   .acc { width: 30px; height: 30px; }
   .btn.sm { min-height: 40px; }
   .qmove button, .page .x { min-height: 40px; }

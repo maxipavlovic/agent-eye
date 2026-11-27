@@ -223,7 +223,7 @@ const SETTINGS: SettingsState = {
     'night.parallel': { type: 'int', min: 1, max: 8, value: 2 },
     'night.isolation': { type: 'choice', choices: ['worktree', 'copy'], value: 'worktree' },
     'remind.notify': { type: 'bool', value: false },
-    'clock.enabled': { type: 'bool', value: true },
+    'clock.enabled': { type: 'bool', value: true, restart: true },
     'clock.llm': { type: 'bool', value: true },
     'clock.hints': { type: 'bool', value: false },
     'clock.break_minutes': { type: 'int', min: 10, max: 240, value: 45 },

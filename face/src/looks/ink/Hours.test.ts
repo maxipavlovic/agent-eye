@@ -9,6 +9,7 @@ import { keepPrefsLocal } from '../../prefs';
 import { createStore } from '../../store';
 import { Root } from './Root';
 import { hoursPanel } from '../../board/Hours';
+import { ApiError } from '../../data/live';
 
 let mounted: HTMLElement | null = null;
 
@@ -193,10 +194,17 @@ describe('the HOURS panel', () => {
   });
 
   it('is calm when the engine has no clock: not available in this version', async () => {
-    const { root, header } = await mount({ clock: async () => { throw new Error('404'); } });
+    const { root, header } = await mount({ clock: async () => { throw new ApiError('not found', 404); } });
     header('HOURS').click();
     await vi.waitFor(() => expect(hoursText(root)).toContain('Not available in this version'));
     expect(root.querySelector('.cdiagram')).toBeNull();
+  });
+
+  it('says what went wrong when the clock fails for any other reason', async () => {
+    const { root, header } = await mount({ clock: async () => { throw new ApiError('database is locked', 500); } });
+    header('HOURS').click();
+    await vi.waitFor(() => expect(hoursText(root)).toContain('Could not load the hours: database is locked'));
+    expect(hoursText(root)).not.toContain('Not available in this version');
   });
 
   it('closes on Esc without closing what is under it', async () => {

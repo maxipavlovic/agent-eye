@@ -3,7 +3,7 @@ import type { Project } from '../../board/model';
 import { ConnState, HeaderEnd, NeedsButton, SearchField } from '../../board/HeaderParts';
 import { Eye } from './Eye';
 
-/** Brand, search, the Needs you button, connection state, the night, USAGE, the settings gear and + IDEA. */
+/** Brand, search, the Needs you button, connection state, the night, USAGE, HOURS (with its hint), the settings gear and + IDEA. */
 export function Header({ store }: HeaderProps) {
   return (
     <header class="hd">
