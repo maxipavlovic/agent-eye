@@ -41,14 +41,17 @@ is still a break. The first prompt of the window starts the first stretch.
 - The model's side is measured in the same hours, **per agent, never pooled** (agents fail at
   different rates, so a week that mixes them would compare the agents, not the hours):
   - Failed tool calls per call: each agent's rate in the hours against its own rate elsewhere. It
-    moved when the ratio is outside 0.8 to 1.25 **and** the same two-proportion test (under one in
-    ten, at least 10 failed calls in the higher group) says chance does not explain it.
+    moved when the ratio is outside 0.8 to 1.25, there are at least 10 failed calls in the higher
+    group, **and** a shuffle test over whole turns (below) says chance does not explain it.
   - Thinking: each agent's median in the hours against its own median elsewhere, only with at least
     30 thoughts inside the hours and 30 outside, the agents' values pooled. It moved when the ratio
     is outside 0.9 to 1.1 **and** the shuffle test below says luck rarely does as well. A ratio
     outside the range that luck explains reads "not clearly different".
   - A signal with too little data is not measured. When nothing on the model's side was measured,
-    the sentence says "no model-side data" and never "flat".
+    the sentence says "no model-side data" and never "flat". Every gate still takes its place in the
+    family below, with a p of 1 when it cannot be told, so how many tests share the false-alarm rate
+    never depends on how the data looks. The size floors (0.8 to 1.25, 0.9 to 1.1, 10 corrections)
+    are a second condition for passing, not a reason to be left out of the family.
 - `you`: your side passes the test and the model's side was measured and did not move. `model`: the
   model's side moved and yours is not clearly different. `both`: both moved. `unmeasured`: your side
   passes but nothing on the model's side was measured, so it cannot be said whose it was. `none`:
@@ -76,19 +79,40 @@ So the test repeats the whole procedure on data where there is no pattern by con
 3. Run the same procedure on the dealt data: pick the hours at 1.5 times the median, and measure how
    much worse they are (a two-proportion z, 0 when nothing is picked).
 4. Do this 1,000 times. The p-value is the share of dealings (counting your real data as one) that
-   did as well as your real data. Your side counts when it is under 0.1.
+   did as well as your real data. Your side counts when that survives the Holm rule below (at most 0.1, less when several tests share it).
 
 Thinking is handled the same way: the thoughts inside and outside the hours are dealt out again at
 random 300 times, and the medians compared each time. The seed is fixed, so two looks at the same
 data give the same answer. A year of prompts takes about 4 ms and a year of thinking about 20 ms
 (release build).
 
+Failed tool calls come in bursts: a command that is broken fails again and again inside one turn.
+Over 1,727 real turns the number of failures per turn varied 1.46 times more than independent
+calls would, and tested call by call that made "mostly the model" come two to four times as often
+on noise. So each agent's failed calls are tested by shuffling **whole turns** between the hours
+(each turn keeps its calls and its failures together, and the number of turns in the hours is kept),
+1,000 times; a burst of twenty failures counts as one turn that failed.
+
 Your corrections, the thinking and each agent's failed calls are tested together, not each at 0.1 on its own: with all of them in play, 0.1 each would name a pattern in about one week of five on pure noise, so a gate passes only when its p survives the Holm-Bonferroni rule (the smallest p must be under 0.1 divided by the number of tests, the next under 0.1 divided by one less, and so on), which keeps the chance of any false alarm at 0.1.
 
 What it assumes: each prompt (and each thought) counts as independent. Prompts in one sitting are
-related, so the test errs a little towards finding a pattern. In a seeded simulation of weeks with
-no pattern (`clock::permute`'s tests) hours were named in about 9% of them; with a real 2x effect in
-three evening hours of 3,600 prompts they were found in nearly all.
+related, so the test errs a little towards finding a pattern.
+
+### How often it is wrong
+
+Measured on seeded weeks built from what real transcripts hold (counts only: 6 tool calls in a turn
+at the median and a few over a hundred, failures in bursts at about 1.5 times the spread of
+independent calls, thoughts with a log-normal spread of 0.8), with two agents:
+
+- **No pattern:** the verdict names hours in under one week in ten, at 960 prompts and at 2,160
+  (6% and 2.5% of 200 weeks each). Test:
+  `pure_noise_gets_a_verdict_in_at_most_one_world_in_ten`.
+- **A doubled correction rate in three evening hours:** found in about nine weeks of ten with 2,160
+  prompts (about four weeks of two agents in steady use), in about two of three with 1,440, and in
+  about one in two with 960. Tests:
+  `a_doubled_rate_in_the_evenings_is_seen_in_nine_worlds_in_ten_from_2000_prompts` and
+  `a_doubled_rate_over_1000_prompts_is_seen_about_half_the_time`. Below about 1,000 prompts a
+  real effect is more often missed than found; the report prefers that to a false alarm.
 
 The thinking measure is only a proxy (for Claude Code it is the length of the thinking signature),
 and corrections are a model's judgement, wrong about one time in ten. Read the verdict as a hint

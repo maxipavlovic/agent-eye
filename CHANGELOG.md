@@ -37,9 +37,9 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 - A settings write that fails on disk is a 500, not a 400, and HOURS says what failed unless the engine simply has no clock.
 - The Steering clock switch in the gear says it takes effect when the service restarts, as the docs do.
 - `eye usage --by-day` follows `--by project|model` and refuses the other groupings; `eye clock --help` reads as two sentences and describes `--json`; an empty break band says "no prompts".
-- The steering clock names a pattern on pure noise in under one week of ten, not about one in five: your corrections, the model's thinking and each agent's failed calls share one false-alarm rate (Holm-Bonferroni at 0.1). A real doubled rate is still found.
+- The steering clock names a pattern on pure noise in under one week of ten (6% of 200 seeded weeks at 960 prompts, 2.5% at 2,160, with real call, failure-burst and thinking shapes): your corrections, the model's thinking and each agent's failed calls share one false-alarm rate (Holm-Bonferroni at 0.1), every gate always in that family. Failed tool calls are tested by shuffling whole turns, so a burst of failures counts once. A doubled correction rate over three hours is found about nine times in ten with 2,000 prompts and about once in two with 1,000.
 - With no worse hours, an agent's line in `eye clock` and in HOURS says "no worse hours to compare" instead of a dash, which now means only that the agent has no such signal. `/api/clock` agents get `think_note` and `tool_error_note`.
-- Claude's `prompt_count` no longer counts a bare `/clear`, so a session with only that and one real prompt is no longer counted as two (it can change which sessions get summaries).
+- Claude's `prompt_count` is the number of prompts the turn reader finds: it no longer counts a bare `/clear`, and it now counts prompts queued while the agent worked and comments typed on a refused tool call (it can change which sessions get summaries).
 - A preference saved from the board finishes even when the page reloads at that moment.
 - An agent is asked to judge corrections only when its adapter says its run is locked down (the default is no); Claude Code, Codex CLI and agy say so. Summaries keep working for the four agents that wrote them before this release (`docs/security.md`).
 

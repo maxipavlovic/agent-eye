@@ -106,8 +106,9 @@ pub trait Agent: Send + Sync + std::fmt::Debug {
     fn turn_kinds(&self) -> &'static [TurnKind] {
         &[]
     }
-    /// Is this agent's headless run proven to be locked down (no tools, no files, no network, no
-    /// session kept), with a test of its runner? The corrections pass sends it prompt text with
+    /// Is this agent's headless run proven to be locked down (nothing it can change or run, no
+    /// network, no session kept; Codex and agy can still read files, see `docs/security.md`), with a
+    /// test of its runner? The corrections pass sends it prompt text with
     /// planted instructions in it only when it is, and a new agent gets summaries only then too
     /// (`may_summarize`). The default says no: an agent opts in when its lock-down is tested.
     fn judging_locked_down(&self) -> bool {

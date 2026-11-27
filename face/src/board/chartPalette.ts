@@ -44,7 +44,7 @@ export function distance(a: string, b: string): number {
 
 /**
  * The colours the chart may use under this accent: the palette without the slots near the accent, in order. When the
- * accent leaves fewer than five (none of the eight does), the nearest ones fill in from the farthest down, so a chart never runs out.
+ * accent leaves fewer than five (a green one does), the nearest ones fill in from the farthest down, so a chart never runs out.
  */
 export function chartColours(accent: string, dark: boolean): string[] {
   const all = [...PALETTE[dark ? 'dark' : 'light']];

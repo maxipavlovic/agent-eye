@@ -111,14 +111,13 @@ pub fn agent_sides(data: &Data, off: OffsetFn, mask: &[bool]) -> Vec<AgentSide> 
         .collect()
 }
 
+/// What each prompt turn holds: its `(failed calls, calls)`.
+type Turns = Vec<(i64, i64)>;
+
 /// An agent's calls by prompt turn, as `(failed calls, calls)`: those of the turns that began inside
 /// the hours and of the rest (a turn begins at its first call). In turn order, so a shuffle with a
 /// fixed seed is the same every time.
-fn call_turns(
-    data: &Data,
-    agent: &str,
-    inside: &dyn Fn(i64) -> bool,
-) -> (Vec<(i64, i64)>, Vec<(i64, i64)>) {
+fn call_turns(data: &Data, agent: &str, inside: &dyn Fn(i64) -> bool) -> (Turns, Turns) {
     // turn -> (first call, failed calls, calls)
     let mut turns: BTreeMap<i64, (i64, i64, i64)> = BTreeMap::new();
     let mut add = |c: &Call, failed: i64, calls: i64| {
