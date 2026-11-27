@@ -18,6 +18,8 @@ pub mod config;
 pub mod config_clock;
 /// Rewriting `config.toml` under one lock, refusing a result that does not parse.
 pub mod config_edit;
+/// Reading `config.toml` again in a long-running part, keeping the last settings that parsed.
+pub mod config_fresh;
 /// A session's conversation as messages, from its transcript or archive copy.
 pub mod conversation;
 /// The background process: hook events, scans, summaries, archive, board.

@@ -598,8 +598,8 @@ export interface WindowSetting { type: 'window'; value: string; restart?: boolea
 export interface AgentsSetting { type: 'agents'; choices: Array<{ id: string; name: string }>; value: string[]; restart?: boolean }
 /**
  * A program origin found on this machine: `name` is the word a card shows (App, Headless), `about` what started its
- * sessions, `sessions` how many it has (not hidden, not archived by hand), `needs_you` how many are in Needs you now as if
- * nothing were quiet: what turning it on would clear.
+ * sessions, `sessions` how many it has (not hidden, not archived by hand), `needs_you` how many quiet takes out of
+ * Needs you (a due reminder or a move by hand keeps one there), whether it is on now or not.
  */
 export interface OriginChoice { id: string; name: string; about: string; sessions: number; needs_you: number }
 /**

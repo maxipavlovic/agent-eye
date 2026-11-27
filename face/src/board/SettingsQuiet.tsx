@@ -14,14 +14,14 @@ export function quietSum(q: OriginsSetting): string {
 }
 
 /**
- * The line under an origin's switch: its sessions and what quiet clears ("5 sessions started by an app through an
- * agent's SDK, 2 in Needs you now"). The engine counts Needs you as if nothing were quiet, so while it is on the line
- * says how many it keeps out.
+ * The line under an origin's switch: its sessions and how many quiet takes out of Needs you ("5 sessions started by
+ * an app through an agent's SDK; quiet would take 2 out of Needs you"). The engine counts the same number whether it
+ * is on or not, so while it is on the line says how many it keeps out.
  */
 export function originLine(c: OriginChoice, quiet: boolean): string {
   if (c.sessions === 0) return `No sessions ${c.about} left.`;
-  const asks = c.needs_you === 0 ? 'none' : String(c.needs_you);
-  return `${count(c.sessions)} ${c.about}, ${asks} ${quiet ? 'kept out of Needs you' : 'in Needs you now'}.`;
+  const n = c.needs_you === 0 ? 'none' : String(c.needs_you);
+  return `${count(c.sessions)} ${c.about}; ${quiet ? `${n} kept out of Needs you` : `quiet would take ${n} out of Needs you`}.`;
 }
 
 /** The list with `id` switched on or off, in the order of the choices. */
