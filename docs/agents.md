@@ -188,7 +188,7 @@ What works for each (a dash is "not offered"):
 | Tokens and usage by model | yes | yes | yes (model from the database) | yes |
 | Live status | status files | writer lock + hooks | presence lock + summaries row + database (busy, idle, waiting) | turn times on the session row + plugin (running, idle, waiting on a permission) |
 | Hooks installed | yes | yes | yes: a plugin of eye's (`SessionStart`, `Stop`) | yes: a plugin in `~/.config/opencode/plugins/` |
-| Summaries (`ask`) | `claude -p` | `codex exec` | `agy -p --output-format json --json-schema` | `opencode run --format json --archived` with a JSON-only prompt, validated, one retry |
+| Summaries (`ask`) | `claude -p` | `codex exec` | `agy -p --output-format json --json-schema` | `opencode run --format json --archived --agent eye-ask` with a JSON-only prompt, validated, one retry |
 | Archive | one file | one file | folder: database snapshot + summaries row + the conversation's folder; a restore is resumable | one file with eye's reading and `opencode session export`; restored with `opencode session import` |
 | Sub-agents | child streams | child streams | child streams (`parent_conversation_id`) | left out |
 | `/eye` skill | yes | yes | yes (`~/.gemini/config/skills/eye`) | yes, as a command (`~/.config/opencode/commands/eye.md`) |
@@ -240,12 +240,17 @@ out. The older table and JSON layouts are tested on synthetic data only. What is
   OpenCode does, never waits for eye and fails silently. OpenCode loads it at its next start (`opencode reload`). A file
   named `agent-eye.js` that is not eye's is never overwritten or removed, and OpenCode's other plugins, commands and
   `opencode.json` are never touched.
-- **Summaries** (`headless.rs`). `opencode run --format json` cannot answer with a schema, so the prompt asks for one
-  JSON object, the last message's text is validated against the summary schema, and an invalid answer is asked again
-  once. The run is `--standalone` (a private server: eye never starts OpenCode's background service), `--archived`
-  (out of its lists) and its session is deleted afterwards, so nothing shows in eye or OpenCode. The default model
-  (`default_summary_model`) is `free`: the small `-free` model that `opencode models` lists (their names change);
-  `[summary] model` names another.
+- **Summaries and judging** (`headless.rs`, `lockdown.rs`). `opencode run --format json` cannot answer with a schema,
+  so the prompt asks for one JSON object, the last message's text is validated against the summary schema, and an
+  invalid answer is asked again once. The run is `--archived` (out of its lists) and its session is deleted afterwards,
+  also after an invalid answer or a timeout, so nothing shows in eye or OpenCode. It runs as an agent of its own
+  (`--agent eye-ask`, defined only in the run's inline config) with every permission denied and every tool off, and the
+  MCP servers your config declares (their names come from `opencode debug config`) switched off. Every `opencode`
+  command eye runs (`run`, `run --help`, `models`, `debug config`, `session`, `--version`) is `--standalone` (a private
+  server: eye never starts or uses OpenCode's background service) and carries the same config with `autoupdate: false`
+  and `OPENCODE_DISABLE_AUTOUPDATE`, so eye never updates OpenCode. Checked on a real OpenCode 2.3.2; the corrections
+  pass asks OpenCode too (`security.md`). The default model (`default_summary_model`) is `free`: the small `-free`
+  model that `opencode models` lists (their names change); `[summary] model` names another.
 - **`/eye`.** `eye install` writes `<config>/commands/eye.md` (the skill, adapted, with the `/eye`-alone overview);
   OpenCode's terminal UI and API expand it (`opencode run "/eye"` does not: it sends the text as a message). The
   command is read at OpenCode's next start. Checked through the API: it ran `eye ls ...` and answered.
@@ -262,8 +267,9 @@ out. The older table and JSON layouts are tested on synthetic data only. What is
   `run`, server, web).
 - **Night shift.** `opencode run --standalone --auto` in the run's folder, with a permission config for that run only
   (`OPENCODE_CONFIG_CONTENT`, which only a private server reads): `bash` allowed except `git push`, `git remote`,
-  `gh`, `ssh`, `scp` and the publish commands, edits allowed, `external_directory` denied. These rules match the text
-  of a call; a shell command can still write anywhere, so a run is refused (in the plan, with the reason) unless `[night]
+  `gh`, `ssh`, `scp` and the publish commands, edits allowed, `external_directory` denied, no update. These rules match
+  the text of a call, and permissions you give an agent in your own config (`agent.build.permission`) come after them
+  and win; a shell command can still write anywhere, so a run is refused (in the plan, with the reason) unless `[night]
   allow_unsandboxed = true`. `[night] opencode_model` picks a model. "Continue tonight" needs a fork, which OpenCode does
   not offer from its terminal UI, so only ideas run.
 - **Fork: not possible** in the terminal UI (`opencode --session <id> --fork` is "Unrecognized flag"). `opencode run

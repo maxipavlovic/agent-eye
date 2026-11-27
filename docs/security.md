@@ -128,7 +128,7 @@ Only for **summaries**, and only through the agent you already use (for Claude C
 run from an empty folder, with no tools, no MCP servers and no hooks, no transcript kept; for Codex
 CLI: `codex exec --ephemeral --ignore-user-config --ignore-rules -s read-only` from an empty folder,
 nothing kept; for agy: `agy -p --output-format json --mode plan --sandbox` with a JSON schema, and the conversation it makes is deleted afterwards (folder, database and its row in `conversation_summaries.db`; `history.jsonl` only while agy is closed); for
-OpenCode: `opencode run --format json --archived` with an inline config that denies every permission by default (`*`) and switches every tool off, so the shell, edits, web fetches and search, sub-agents, skills and your MCP servers' tools are all closed, and the session it makes is deleted afterwards; this is written from OpenCode's documentation and **has not been checked against a real OpenCode**, so treat the OpenCode summary agent as unverified until it is). For each
+OpenCode: `opencode run --format json --archived --agent eye-ask --standalone` with an inline config that defines that agent, denies every permission by default (`*`) for it and for every other agent, switches every tool off and switches your MCP servers off, so the shell, edits, web fetches and search, sub-agents, skills, code mode and MCP tools are all closed, and the session it makes is deleted afterwards; checked on a real OpenCode, see "The OpenCode lock-down, checked" below). For each
 quiet session eye sends a short excerpt: the title, the folder and branch, the first prompt (up to
 2,000 characters), the agent's own recap of the session, the last 30 messages (each cut to 1,500
 characters), one line per tool call (no file contents, no tool output), the outputs list, the names
@@ -140,13 +140,50 @@ Sessions that are hidden, archived, or in an excluded folder are skipped. `[summ
 false` turns summaries off completely, and then nothing is sent anywhere. Summaries use your agent's
 plan.
 
+### The OpenCode lock-down, checked
+
+Checked on 27 Nov 2026 against a real OpenCode 2.3.2 on macOS, run with `HOME` and every `XDG_*`
+folder of its own. Its config allowed every permission (globally and for the `build` and `general`
+agents), turned every tool on and declared a local MCP server; there were also a global `AGENTS.md`,
+a `~/.claude/CLAUDE.md`, a skill, and a project config and `AGENTS.md` in a git folder above the
+run's folder. The question told the model to run a shell command that makes a marker file, write
+files, read a canary file outside its folder, fetch a URL, start a sub-agent and call the MCP tool.
+The first runs used a free OpenCode model; once the free models hit their usage limit, a local
+scripted model that calls every tool it is offered, and some it is not (the lock-down is OpenCode's,
+not the model's).
+
+- The rules of 0.4 (a global deny, no agent of their own) did not hold: a real free model did every
+  planted step, because OpenCode applies `agent.build.permission` from your config after the global
+  rules. That is why a question now runs as an agent only its inline config defines.
+- Now no marker is made, no file is written, the canary is not in the answer and no tool call
+  completes. The model is offered only the `skill` tool, and calling it is "Permission denied".
+- MCP: OpenCode starts every configured MCP server for a run, even with every tool denied. eye asks
+  `opencode debug config` for the servers' names (it keeps nothing else) and switches each off in the
+  inline config, just before each question; then none starts.
+- `--standalone` matters: OpenCode's background service runs with the config it started with, and
+  `opencode models` without the flag started that service. Every command eye runs has it.
+- Instructions: your global `AGENTS.md` is read and sent with the question (as, by OpenCode's docs,
+  are the files your config's `instructions` names). `OPENCODE_DISABLE_CLAUDE_CODE` keeps out
+  `~/.claude/CLAUDE.md` (OpenCode's fallback when there is no global `AGENTS.md`), and
+  `OPENCODE_DISABLE_PROJECT_CONFIG` the project config and `AGENTS.md` of the folders above the
+  run's folder (read when it is inside a git repo). Whatever they say, nothing can act.
+- Nothing is kept: after an answer, an invalid answer (two runs) and a timeout, no session, message or
+  part of the question is left in OpenCode's database. What is left is OpenCode's for any folder it
+  starts in, with no command to remove it: a `project` row for the question's folder and an empty
+  `shell/<project id>` folder in OpenCode's data folder.
+- No update: every command eye runs carries `autoupdate: false` (OpenCode reads it as `update:
+  "disable"`) and `OPENCODE_DISABLE_AUTOUPDATE=1`; night runs carry `autoupdate: false` too.
+- Limits: plugins in your OpenCode config folder (eye's own among them) load into the run, as they are
+  code you installed; an administrator's managed config outranks the inline one; checked on 2.3.2
+  only.
+
 ### The steering clock
 
 `[clock] idle = true` makes the daemon read, once a minute, how long it has been since the last keyboard or mouse input: on macOS the `HIDIdleTime` value from `ioreg -c IOHIDSystem`, on Linux the `IdleHint` and `IdleSinceHint` of your graphical session from `loginctl show-session` (the session is found with `loginctl show-user`). It reads that one number. It never sees which keys, which window or which application, and nothing leaves the machine. Only stretches of 5 minutes or more are stored (start and end). It is off by default; `eye doctor` says whether the daemon can read it and whether it is on.
 
-Whether an agent may be asked at all follows its adapter. An agent says its run is locked down (`judging_locked_down`) only when a test of its runner proves it: Claude Code, Codex CLI and agy do, OpenCode does not yet. The corrections pass asks only an agent that says so. Summaries follow the same rule with one exception kept so an update never switches them off: an agent that wrote summaries before 0.5 (Claude Code, Codex CLI, agy and OpenCode) still does, whether or not it says so. An agent added from 0.5 on writes summaries only when it says its run is locked down.
+Whether an agent may be asked at all follows its adapter. An agent says its run is locked down (`judging_locked_down`) only when a test of its runner proves it: Claude Code, Codex CLI, agy and OpenCode do. The corrections pass asks only an agent that says so. Summaries follow the same rule with one exception kept so an update never switches them off: an agent that wrote summaries before 0.5 (Claude Code, Codex CLI, agy and OpenCode) still does, whether or not it says so. An agent added from 0.5 on writes summaries only when it says its run is locked down.
 
-The corrections pass (`[clock] llm`, on when summaries are on) sends **prompts of 1,500 characters or fewer that contain a word like "no", "wrong" or "again", each with the last 700 characters of the reply before it**, masked the way summary excerpts are, to the agent and model that write summaries, through the same call, so what it can do is what the summary call can do: Claude Code has no tools, no MCP servers and no hooks; Codex CLI has no tool-less mode, so it runs in a read-only sandbox with no network (it can read files, not change them or send anything); agy runs in plan mode with `--sandbox` (its changelog says plan mode does not edit or run commands; not tested here) and its conversation is deleted afterwards; OpenCode runs with every permission denied by default and every tool off (unverified on a real OpenCode, see above) and its session is deleted afterwards; that is its summary call, as the corrections pass never asks OpenCode. No agent keeps a session. Sessions in excluded folders are never sent. It runs once a night, not while you are at work, (up to 300 exchanges) and with `eye clock detect`. `[clock] llm = false` stops it.
+The corrections pass (`[clock] llm`, on when summaries are on) sends **prompts of 1,500 characters or fewer that contain a word like "no", "wrong" or "again", each with the last 700 characters of the reply before it**, masked the way summary excerpts are, to the agent and model that write summaries, through the same call, so what it can do is what the summary call can do: Claude Code has no tools, no MCP servers and no hooks; Codex CLI has no tool-less mode, so it runs in a read-only sandbox with no network (it can read files, not change them or send anything); agy runs in plan mode with `--sandbox` (its changelog says plan mode does not edit or run commands; not tested here) and its conversation is deleted afterwards; OpenCode runs as an agent of its own with every permission denied, every tool off and your MCP servers off (checked on a real OpenCode, see below) and its session is deleted afterwards. No agent keeps a session. Sessions in excluded folders are never sent. It runs once a night, not while you are at work, (up to 300 exchanges) and with `eye clock detect`. `[clock] llm = false` stops it.
 
 ## Commands built from session data
 
