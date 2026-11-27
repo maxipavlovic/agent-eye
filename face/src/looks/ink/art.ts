@@ -118,6 +118,11 @@ export const CRESCENT: Rows = ['..###..', '.##....', '##.....', '##.....', '##..
 export const SUNSET: Rows = ['...#...', '#.###.#', '..###..', '.#####.', '#######', '.......', '.#####.'];
 /** Remote Control is on: a dot with a signal going out each side. */
 export const SIGNAL: Rows = ['#.....#', '#.#.#.#', '#.#.#.#', '#..#..#', '#.....#'];
+/** Light, dark and follow the system. The board's theme switch moved into SETTINGS; the site's own
+ *  theme switch still draws these. */
+export const SUN: Rows = ['....#....', '.#..#..#.', '..#####..', '..#ooo#..', '###ooo###', '..#ooo#..', '..#####..', '.#..#..#.', '....#....'];
+export const MOON: Rows = ['..####...', '.##ooo#..', '##oo##...', '#oo#.....', '#oo#.....', '##oo#..##', '.##ooo##.', '..#####..', '.........'];
+export const AUTO: Rows = ['#########', '#####oooo#', '#####oooo#', '#####oooo#', '#####oooo#', '#####oooo#', '#####oooo#', '#####oooo#', '#########'];
 export const CHECK: Rows = ['.....#', '....#.', '#..#..', '.##...'];
 export const CROSS: Rows = ['#...#', '.#.#.', '..#..', '.#.#.', '#...#'];
 /** The time stepper's arrows. */
