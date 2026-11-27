@@ -3,6 +3,7 @@
 
 use anyhow::Result;
 use rusqlite::{params, Connection};
+use std::collections::HashMap;
 
 /// Prompts this long or shorter, that came after an agent turn, may be corrections. A longer one
 /// is a pasted document or a task, not pushback.
@@ -20,6 +21,9 @@ pub struct Prompt {
 pub struct Call {
     pub ts: i64,
     pub agent: String,
+    /// The prompt turn it belongs to (calls and failed calls of one turn share it): failed calls
+    /// come in bursts within a turn, so the tests deal with whole turns, never single calls.
+    pub turn: i64,
 }
 
 pub struct Think {
@@ -43,8 +47,11 @@ pub struct Data {
 /// Every event from `from_ms` on.
 pub fn load(conn: &Connection, from_ms: i64) -> Result<Data> {
     let mut data = Data::default();
+    // the turn each session is in: a prompt starts a new one
+    let mut open: HashMap<String, i64> = HashMap::new();
+    let mut turns = 0;
     let mut st = conn.prepare(
-        "SELECT t.ts, t.kind, t.n, s.agent, c.verdict IS 'yes'
+        "SELECT t.ts, t.kind, t.n, s.agent, c.verdict IS 'yes', t.session_id
          FROM turn t JOIN session s ON s.id=t.session_id
          LEFT JOIN correction c ON c.session_id=t.session_id AND c.prompt_ts=t.ts AND t.kind='prompt'
          WHERE t.ts>=?1 AND t.kind IN ('prompt','interrupt','tool','tool_error','think')
@@ -53,7 +60,16 @@ pub fn load(conn: &Connection, from_ms: i64) -> Result<Data> {
     )?;
     let mut rows = st.query(params![from_ms])?;
     while let Some(r) = rows.next()? {
+        let mut turn = 0;
         let (ts, kind): (i64, String) = (r.get(0)?, r.get(1)?);
+        if matches!(kind.as_str(), "prompt" | "tool" | "tool_error") {
+            let session: String = r.get(5)?;
+            if kind == "prompt" || !open.contains_key(&session) {
+                turns += 1;
+                open.insert(session.clone(), turns);
+            }
+            turn = open[&session];
+        }
         match kind.as_str() {
             "prompt" => data.prompts.push(Prompt {
                 ts,
@@ -64,10 +80,12 @@ pub fn load(conn: &Connection, from_ms: i64) -> Result<Data> {
             "tool" => data.tools.push(Call {
                 ts,
                 agent: r.get(3)?,
+                turn,
             }),
             "tool_error" => data.tool_errors.push(Call {
                 ts,
                 agent: r.get(3)?,
+                turn,
             }),
             _ => data.thinks.push(Think {
                 ts,

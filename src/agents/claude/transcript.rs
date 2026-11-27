@@ -9,9 +9,9 @@ use super::super::outputs::{
 use super::super::{Delta, ParseOpts, PROMPTS_CAP, REPLIES_CAP};
 use super::signals::Tracker;
 use super::turns::Turns;
-use crate::turns::TurnKind;
 use super::work::work_event;
 use crate::model::Tokens;
+use crate::turns::TurnKind;
 use crate::usage::UsageMsg;
 use crate::util::{head_chars, iso_to_ms, tail_chars, trim_front_bytes};
 use anyhow::{Context, Result};

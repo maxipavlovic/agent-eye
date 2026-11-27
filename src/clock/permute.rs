@@ -7,7 +7,9 @@
 //! same data.
 //!
 //! Each prompt (and each thought) is treated as independent, which clusters of related prompts in
-//! one sitting are not quite: the test errs a little towards finding a pattern.
+//! one sitting are not quite: the test errs a little towards finding a pattern. Failed tool calls
+//! are different: they come in bursts inside a turn (a broken command fails a dozen times), so the
+//! test of those deals out whole turns, never single calls.
 
 use super::bands::{self, Hour};
 
@@ -157,6 +159,37 @@ pub fn median_shift_p(inside: &[f64], outside: &[f64], seed: u64) -> Option<f64>
         }
     }
     Some((as_good + 1) as f64 / (THINK_PERMUTATIONS + 1) as f64)
+}
+
+/// The chance that the calls of the turns in the hours (`inside`) fail this much more or less often
+/// than the calls of the other turns, when the hours do not matter: the turns, each with its
+/// `(failed calls, calls)`, are dealt out again at random and the rates compared. A burst of failures
+/// stays in one turn, so it counts once however long it is. `None` when the rates cannot be
+/// compared (a side has no calls, or no call failed or all did). Returns 1 early once p can no
+/// longer be under `MAX_P`.
+pub fn errors_p(inside: &[(i64, i64)], outside: &[(i64, i64)], seed: u64) -> Option<f64> {
+    let sum = |turns: &[(i64, i64)]| turns.iter().fold((0, 0), |a, t| (a.0 + t.0, a.1 + t.1));
+    let (a, b) = (sum(inside), sum(outside));
+    let observed = bands::proportion_z(a, b)?.abs();
+    let total = (a.0 + b.0, a.1 + b.1);
+    let mut pool = [inside, outside].concat();
+    let mut rng = Rng::new(seed);
+    let mut as_good = 0;
+    for _ in 0..PERMUTATIONS {
+        for i in 0..inside.len() {
+            let j = i + rng.below(pool.len() - i);
+            pool.swap(i, j);
+        }
+        let dealt = sum(&pool[..inside.len()]);
+        let rest = (total.0 - dealt.0, total.1 - dealt.1);
+        if bands::proportion_z(dealt, rest).is_some_and(|z| z.abs() >= observed - 1e-9) {
+            as_good += 1;
+            if too_common(as_good, PERMUTATIONS) {
+                return Some(1.0);
+            }
+        }
+    }
+    Some((as_good + 1) as f64 / (PERMUTATIONS + 1) as f64)
 }
 
 /// How far apart the medians of `pool[..n_in]` and `pool[n_in..]` are, as the size of the log of

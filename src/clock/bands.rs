@@ -319,6 +319,7 @@ mod tests {
         Call {
             ts,
             agent: "claude".into(),
+            turn: ts,
         }
     }
     fn hour(h: usize, prompts: i64, corrections: i64) -> Hour {

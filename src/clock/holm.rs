@@ -6,8 +6,10 @@
 
 use super::bands::MAX_P;
 
-/// Which tests survive. `ps` holds each test's p, None for a test that could not be run (it does
-/// not count towards the family). The smallest p must beat `MAX_P` over the family's size, the
+/// Which tests survive. `ps` holds each test's p, None only where there is no such test at all (an
+/// agent that makes no tool calls has no test of its failed calls): a test that exists but cannot
+/// be told is given a p of 1 by its caller, so the family does not depend on how the data looks.
+/// The smallest p must beat `MAX_P` over the family's size, the
 /// next `MAX_P` over one less, and so on, stopping at the first that fails.
 pub fn survivors(ps: &[Option<f64>]) -> Vec<bool> {
     let mut order: Vec<(usize, f64)> = ps

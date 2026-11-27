@@ -50,10 +50,12 @@ fn think(h: i64, agent: &str, n: i64) -> Think {
     }
 }
 
-fn call(h: i64, agent: &str) -> Call {
+/// A call in hour `h`, of turn `turn`.
+fn call(h: i64, agent: &str, turn: i64) -> Call {
     Call {
         ts: h * H,
         agent: agent.into(),
+        turn,
     }
 }
 
@@ -66,10 +68,13 @@ fn thoughts(h: i64, agent: &str, value: i64, n: usize) -> Vec<Think> {
     (0..n).map(|_| think(h, agent, value)).collect()
 }
 
-/// `calls` tool calls of `agent` in hour `h`, `errors` of them failed.
+/// `calls` tool calls of `agent` in hour `h`, `errors` of them failed, each in a turn of its own.
 fn tools(data: &mut Data, h: i64, agent: &str, calls: usize, errors: usize) {
-    data.tools.extend((0..calls).map(|_| call(h, agent)));
-    data.tool_errors.extend((0..errors).map(|_| call(h, agent)));
+    let first = data.tools.len() as i64;
+    data.tools
+        .extend((0..calls as i64).map(|i| call(h, agent, first + i)));
+    data.tool_errors
+        .extend((0..errors as i64).map(|i| call(h, agent, first + i)));
 }
 
 #[test]
@@ -365,4 +370,29 @@ fn several_runs_are_named_by_their_hours() {
         "Afternoons"
     );
     assert_eq!(label(&[Range { from_h: 1, to_h: 5 }]), "Nights");
+}
+
+/// Thinking that is the same in and out of the hours, `n` thoughts each.
+fn flat_thinking(d: &mut Data, n: usize) {
+    d.thinks.extend(thoughts(19, "claude", 1000, n));
+    d.thinks.extend(thoughts(10, "claude", 1000, n));
+}
+
+#[test]
+fn every_gate_that_exists_is_in_the_family_whatever_the_data_shows() {
+    // your p of 0.06 beats 0.1 alone, but not 0.1 over two gates (yours and the thinking, which
+    // is flat: counted with a p of 1, not left out)
+    let mut d = Data::default();
+    flat_thinking(&mut d, 60);
+    assert!(!test_band(&d, &utc, &evening(), Some(0.06)).you);
+    assert!(test_band(&d, &utc, &evening(), Some(0.04)).you);
+    // the same with no thoughts at all: the gate is still there, with a p of 1
+    assert!(!test_band(&Data::default(), &utc, &evening(), Some(0.06)).you);
+    // an agent that makes tool calls adds its own gate, flat or not: 0.04 needs 0.1 / 3
+    tools(&mut d, 19, "claude", 40, 2);
+    tools(&mut d, 10, "claude", 400, 20);
+    assert!(!test_band(&d, &utc, &evening(), Some(0.04)).you);
+    assert!(test_band(&d, &utc, &evening(), Some(0.03)).you);
+    // a band that was not tested for your corrections has no p: it counts as 1, not as absent
+    assert!(!test_band(&d, &utc, &evening(), None).you);
 }

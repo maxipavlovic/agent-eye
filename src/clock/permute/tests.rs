@@ -123,3 +123,34 @@ fn thinking_that_moved_a_third_is_found() {
     assert_eq!(median_shift_p(&[], &b, SEED), None);
     assert_eq!(median_shift_p(&a, &[0.0; 4], SEED), None);
 }
+
+#[test]
+fn failures_in_bursts_are_dealt_out_by_the_turn_not_the_call() {
+    // 10 calls a turn; one turn in six fails all ten in the hours, one in ten elsewhere. Counted
+    // call by call that is 17% against 10% on 240 and 4,000 calls: a pattern. As turns it is 4 of
+    // 24 against 40 of 400, which chance deals out all the time.
+    let burst = (10, 10);
+    let fine = (0, 10);
+    let inside: Vec<_> = (0..24).map(|i| if i < 4 { burst } else { fine }).collect();
+    let outside: Vec<_> = (0..400)
+        .map(|i| if i < 40 { burst } else { fine })
+        .collect();
+    let sum = |t: &[(i64, i64)]| t.iter().fold((0, 0), |a, x| (a.0 + x.0, a.1 + x.1));
+    let by_call = bands::proportion_p(sum(&inside), sum(&outside)).unwrap();
+    assert!(by_call < 0.01, "{by_call}");
+    assert_eq!(errors_p(&inside, &outside, SEED), Some(1.0));
+}
+
+#[test]
+fn a_higher_failure_rate_in_every_turn_of_the_hours_is_a_pattern() {
+    let inside = vec![(3, 10); 40];
+    let outside = vec![(1, 10); 400];
+    let p = errors_p(&inside, &outside, SEED).unwrap();
+    assert!(p < 0.01, "{p}");
+}
+
+#[test]
+fn failure_rates_that_cannot_be_compared_give_no_p() {
+    assert_eq!(errors_p(&[(0, 10)], &[(0, 10)], SEED), None);
+    assert_eq!(errors_p(&[], &[(1, 10)], SEED), None);
+}

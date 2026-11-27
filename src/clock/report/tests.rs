@@ -56,8 +56,12 @@ impl World {
                     )
                     .unwrap();
             }
+            // every call is a `tool`, and a failed one a `tool_error` as well
             for k in 0..20 {
-                self.turn(ts + 10 + k, if k < 2 { "tool_error" } else { "tool" }, 0);
+                self.turn(ts + 10 + k, "tool", 0);
+                if k < 2 {
+                    self.turn(ts + 10 + k, "tool_error", 0);
+                }
             }
             self.turn(ts + 40, "think", think);
         }
@@ -171,18 +175,43 @@ fn no_hour_standing_out_is_no_pattern() {
 struct Noise(u64);
 
 impl Noise {
-    fn chance(&mut self, p: f64) -> bool {
+    fn next(&mut self) -> u64 {
         self.0 ^= self.0 << 13;
         self.0 ^= self.0 >> 7;
         self.0 ^= self.0 << 17;
-        (self.0 % 10_000) as f64 / 10_000.0 < p
+        self.0
+    }
+
+    fn chance(&mut self, p: f64) -> bool {
+        (self.next() % 10_000) as f64 / 10_000.0 < p
+    }
+
+    /// A standard normal number (Box-Muller).
+    fn normal(&mut self) -> f64 {
+        let unit = |n: &mut Noise| ((n.next() >> 11) as f64 + 0.5) / (1u64 << 53) as f64;
+        let (u, v) = (unit(self), unit(self));
+        (-2.0 * u.ln()).sqrt() * (std::f64::consts::TAU * v).cos()
     }
 }
 
-/// Twelve hours of random steering for two agents (90 prompts an hour each), the same 8% of
-/// prompts corrected and 10% of tool calls failed in every hour; `worse` lifts the corrections of
-/// three evening hours to `worse`.
-fn seeded_world(seed: u64, worse: f64) -> World {
+/// What real Claude transcripts show, counted read-only on 1,447 turns with tool calls and 17,279
+/// thoughts: a turn has 6 calls at the median and a few have over a hundred; a failed call comes
+/// with the turn it is in, so failures vary between turns 1.2 to 1.5 times more than independent
+/// calls would (a turn is either going fine or stuck failing again and again); the length of a
+/// thought varies with a log-normal spread of 0.8 around 1,740.
+const CALLS_MEDIAN: f64 = 6.0;
+const CALLS_SPREAD: f64 = 1.25;
+/// The share of turns that are stuck, and how often a call fails in a stuck turn and in the others.
+const STUCK: f64 = 0.02;
+const FAILS_STUCK: f64 = 0.3;
+const FAILS_OTHERWISE: f64 = 0.02;
+const THINK_MEDIAN: f64 = 1740.0;
+const THINK_SPREAD: f64 = 0.79;
+
+/// Twelve hours of random steering for two agents (`per_hour` prompts an hour each), the same 8% of
+/// prompts corrected in every hour, the real shape of calls and thoughts above; `worse` lifts the
+/// corrections of three evening hours to `worse`.
+fn seeded_world(seed: u64, worse: f64, per_hour: i64) -> World {
     let mut w = World::new();
     w.db.conn
         .execute("INSERT INTO session(id, agent) VALUES('o','codex')", [])
@@ -191,45 +220,52 @@ fn seeded_world(seed: u64, worse: f64) -> World {
     for _ in 0..10 {
         noise.chance(0.5);
     }
+    w.db.conn.execute_batch("BEGIN").unwrap();
+    let mut put =
+        w.db.conn
+            .prepare("INSERT INTO turn(session_id, ts, kind, n) VALUES(?1,?2,?3,?4)")
+            .unwrap();
+    let mut correct = w
+        .db
+        .conn
+        .prepare("INSERT INTO correction(session_id, prompt_ts, verdict, model) VALUES(?1,?2,'yes','haiku')")
+        .unwrap();
     for (session, day_shift) in [("s", 0), ("o", 1)] {
         for h in 9..21 {
             let p = if (18..21).contains(&h) { worse } else { 0.08 };
-            for i in 0..90 {
+            for i in 0..per_hour {
                 w.n += 1;
                 let ts = D0 + ((w.n + day_shift) % 20) * DAY + h * H + i * 1000;
-                let put = |ts: i64, kind: &str, n: i64| {
-                    w.db.conn
-                        .execute(
-                            "INSERT INTO turn(session_id, ts, kind, n) VALUES(?1,?2,?3,?4)",
-                            rusqlite::params![session, ts, kind, n],
-                        )
-                        .unwrap();
+                put.execute(rusqlite::params![session, ts - 500, "end", 5])
+                    .unwrap();
+                put.execute(rusqlite::params![session, ts, "prompt", 30])
+                    .unwrap();
+                let calls = (CALLS_MEDIAN * (CALLS_SPREAD * noise.normal()).exp()).ceil() as i64;
+                let fails = if noise.chance(STUCK) {
+                    FAILS_STUCK
+                } else {
+                    FAILS_OTHERWISE
                 };
-                put(ts - 500, "end", 5);
-                put(ts, "prompt", 30);
-                for k in 0..10 {
-                    put(
-                        ts + 10 + k,
-                        if noise.chance(0.1) {
-                            "tool_error"
-                        } else {
-                            "tool"
-                        },
-                        0,
-                    );
-                }
-                put(ts + 40, "think", 800 + (noise.0 % 400) as i64);
-                if noise.chance(p) {
-                    w.db.conn
-                        .execute(
-                            "INSERT INTO correction(session_id, prompt_ts, verdict, model) VALUES(?1,?2,'yes','haiku')",
-                            rusqlite::params![session, ts],
-                        )
+                for k in 0..calls.min(150) {
+                    // every call is a `tool`, and a failed one a `tool_error` as well
+                    put.execute(rusqlite::params![session, ts + 10 + k, "tool", 0])
                         .unwrap();
+                    if noise.chance(fails) {
+                        put.execute(rusqlite::params![session, ts + 10 + k, "tool_error", 0])
+                            .unwrap();
+                    }
+                }
+                let think = THINK_MEDIAN * (THINK_SPREAD * noise.normal()).exp();
+                put.execute(rusqlite::params![session, ts + 200, "think", think as i64])
+                    .unwrap();
+                if noise.chance(p) {
+                    correct.execute(rusqlite::params![session, ts]).unwrap();
                 }
             }
         }
     }
+    drop((put, correct));
+    w.db.conn.execute_batch("COMMIT").unwrap();
     w
 }
 
@@ -240,35 +276,69 @@ fn two_agents() -> Agents {
     ])
 }
 
-/// In how many of `seeds` random worlds (`worse` is the correction rate of the three evening hours)
-/// does the whole report name hours?
-fn worlds_with_a_verdict(seeds: std::ops::RangeInclusive<u64>, worse: f64) -> usize {
+/// The whole report of each of `seeds` random worlds (`worse` is the correction rate of the three
+/// evening hours, `per_hour` the prompts an hour for each agent).
+fn reports(seeds: std::ops::RangeInclusive<u64>, worse: f64, per_hour: i64) -> Vec<Report> {
     let agents = two_agents();
     seeds
-        .filter(|seed| {
-            let w = seeded_world(*seed, worse);
+        .map(|seed| {
+            let w = seeded_world(seed, worse, per_hour);
             let cfg = Config::parse("").unwrap();
-            let r = build(&w.db.conn, &cfg, &agents, NOW, 4, &utc).unwrap();
-            r.verdict.kind.names_hours()
+            build(&w.db.conn, &cfg, &agents, NOW, 4, &utc).unwrap()
+        })
+        .collect()
+}
+
+/// How many reports name the three evening hours as yours (alone or with the model).
+fn found_the_evenings(reports: &[Report]) -> usize {
+    reports
+        .iter()
+        .filter(|r| {
+            matches!(r.verdict.kind, Kind::You | Kind::Both)
+                && !r.bad.is_empty()
+                && r.bad
+                    .iter()
+                    .all(|b| (18..21).contains(&b.from_h) && b.to_h <= 21)
         })
         .count()
 }
 
-/// A doubled correction rate in three evening hours is found by the whole report, for both agents,
-/// in at least four random worlds in five.
+/// The report's power, measured on worlds built from what real transcripts look like (see
+/// `CALLS_MEDIAN`): a doubled correction rate in three evening hours, 2,160 prompts in all (about
+/// four weeks of two agents in steady use), is found in nine worlds in ten. The bar is four in five.
 #[test]
-fn a_doubled_rate_in_the_evenings_is_found_through_random_noise() {
-    let found = worlds_with_a_verdict(1..=30, 0.16);
+fn a_doubled_rate_in_the_evenings_is_seen_in_nine_worlds_in_ten_from_2000_prompts() {
+    let found = found_the_evenings(&reports(1..=30, 0.16, 90));
     assert!(found >= 24, "{found} of 30 doubled rates are found");
 }
 
-/// With nothing going on (the same 8% corrected and 10% of tool calls failing in every hour, for
-/// two agents), the report names a pattern in at most one world in ten: the spec's rate for a
-/// false alarm over every test the verdict uses (`holm`).
+/// ...and with half the prompts it is found in about two worlds in three, with 960 in about one
+/// in two: a verdict on a light month is a coin toss that never gives a false alarm.
+#[test]
+fn a_doubled_rate_over_1000_prompts_is_seen_about_half_the_time() {
+    let found = found_the_evenings(&reports(1..=40, 0.16, 40));
+    assert!(
+        (16..=30).contains(&found),
+        "{found} of 40 doubled rates are found"
+    );
+}
+
+/// With nothing going on (the same 8% corrected in every hour; real shapes of calls, failures in
+/// bursts and thoughts), the report names a pattern in at most one world in ten, at every size
+/// from a light month to a heavy one: the spec's rate for a false alarm over every test the
+/// verdict uses (`holm`).
 #[test]
 fn pure_noise_gets_a_verdict_in_at_most_one_world_in_ten() {
-    let named = worlds_with_a_verdict(1..=200, 0.08);
-    assert!(named <= 20, "{named} of 200 noise worlds name a pattern");
+    for per_hour in [40, 90] {
+        let named = reports(1..=200, 0.08, per_hour)
+            .iter()
+            .filter(|r| r.verdict.kind.names_hours())
+            .count();
+        assert!(
+            named <= 20,
+            "{named} of 200 noise worlds with {per_hour} prompts an hour name a pattern"
+        );
+    }
 }
 
 #[test]

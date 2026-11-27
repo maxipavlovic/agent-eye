@@ -7,6 +7,7 @@ use super::permute;
 use super::signals::{Call, Data};
 use crate::night::clock::OffsetFn;
 use serde::Serialize;
+use std::collections::BTreeMap;
 
 /// The window needs this many prompts and corrections before it is judged.
 pub const MIN_PROMPTS: i64 = 300;
@@ -82,18 +83,19 @@ pub fn agent_sides(data: &Data, off: OffsetFn, mask: &[bool]) -> Vec<AgentSide> 
     agents
         .into_iter()
         .map(|agent| {
-            let calls = |list: &[Call]| {
-                let n = list.iter().filter(|c| c.agent == agent);
-                let inn = n.clone().filter(|c| inside(c.ts)).count() as i64;
-                (inn, n.count() as i64 - inn)
-            };
-            let (calls_in, calls_out) = calls(&data.tools);
-            let (err_in, err_out) = calls(&data.tool_errors);
+            let (turns_in, turns_out) = call_turns(data, agent, &inside);
+            let sum =
+                |turns: &[(i64, i64)]| turns.iter().fold((0, 0), |a, t| (a.0 + t.0, a.1 + t.1));
+            let (errs_in, errs_out) = (sum(&turns_in), sum(&turns_out));
+            let ((err_in, calls_in), (err_out, calls_out)) = (errs_in, errs_out);
             let tool_error_ratio = (calls_in > 0 && calls_out > 0 && err_out > 0)
                 .then(|| (err_in as f64 / calls_in as f64) / (err_out as f64 / calls_out as f64));
-            let (errs_in, errs_out) = ((err_in, calls_in), (err_out, calls_out));
+            // an agent that makes tool calls always has this test; one that cannot be told apart
+            // counts with a p of 1
             let tool_error_p =
-                tool_error_ratio.and_then(|_| bands::proportion_p(errs_in, errs_out));
+                data.tools.iter().any(|c| c.agent == agent).then(|| {
+                    permute::errors_p(&turns_in, &turns_out, permute::SEED).unwrap_or(1.0)
+                });
             let tool_errors_moved = tool_error_ratio
                 .is_some_and(|r| r < ERRORS_FLAT.0 || r > ERRORS_FLAT.1)
                 && enough_errors(errs_in, errs_out);
@@ -107,6 +109,42 @@ pub fn agent_sides(data: &Data, off: OffsetFn, mask: &[bool]) -> Vec<AgentSide> 
             }
         })
         .collect()
+}
+
+/// An agent's calls by prompt turn, as `(failed calls, calls)`: those of the turns that began inside
+/// the hours and of the rest (a turn begins at its first call). In turn order, so a shuffle with a
+/// fixed seed is the same every time.
+fn call_turns(
+    data: &Data,
+    agent: &str,
+    inside: &dyn Fn(i64) -> bool,
+) -> (Vec<(i64, i64)>, Vec<(i64, i64)>) {
+    // turn -> (first call, failed calls, calls)
+    let mut turns: BTreeMap<i64, (i64, i64, i64)> = BTreeMap::new();
+    let mut add = |c: &Call, failed: i64, calls: i64| {
+        let t = turns.entry(c.turn).or_insert((c.ts, 0, 0));
+        t.0 = t.0.min(c.ts);
+        t.1 += failed;
+        t.2 += calls;
+    };
+    data.tools
+        .iter()
+        .filter(|c| c.agent == agent)
+        .for_each(|c| add(c, 0, 1));
+    data.tool_errors
+        .iter()
+        .filter(|c| c.agent == agent)
+        .for_each(|c| add(c, 1, 0));
+    let (mut here, mut elsewhere) = (vec![], vec![]);
+    for (ts, failed, calls) in turns.into_values() {
+        let side = if inside(ts) {
+            &mut here
+        } else {
+            &mut elsewhere
+        };
+        side.push((failed, calls));
+    }
+    (here, elsewhere)
 }
 
 /// Is the difference between two groups of calls (`(errors, calls)` each) built on enough errors?
@@ -163,8 +201,10 @@ pub struct Tested {
 
 /// Every test of the band's hours (your corrections, given as `you_p`, the model's thinking over
 /// all agents, each agent's failed calls) held to one family-wise rate, so that random data names
-/// a pattern no more often than `bands::MAX_P` however many gates there are (`holm`). A gate whose
-/// effect is too small to matter is still counted, with a p of 1.
+/// a pattern no more often than `bands::MAX_P` however many gates there are (`holm`). The family
+/// never depends on how the data looks: a gate whose effect is small, or that cannot be told, is
+/// still in it with its own p (1 when there is none). The size of an effect is a second condition
+/// for a gate to pass, not a reason to leave it out of the family.
 pub fn test_band(data: &Data, off: OffsetFn, mask: &[bool], you_p: Option<f64>) -> Tested {
     let inside = |ts: i64| mask[local_hour(ts, off)];
     let (mut bad, mut rest) = (vec![], vec![]);
@@ -182,10 +222,10 @@ pub fn test_band(data: &Data, off: OffsetFn, mask: &[bool], you_p: Option<f64>) 
         _ => None,
     };
     let think_p = think_ratio
-        .filter(|r| *r < THINK_FLAT.0 || *r > THINK_FLAT.1)
-        .and_then(|_| permute::median_shift_p(&bad, &rest, permute::SEED));
+        .and_then(|_| permute::median_shift_p(&bad, &rest, permute::SEED))
+        .unwrap_or(1.0);
     let mut sides = agent_sides(data, off, mask);
-    let mut ps = vec![you_p, think_p];
+    let mut ps = vec![Some(you_p.unwrap_or(1.0)), Some(think_p)];
     ps.extend(sides.iter().map(|s| s.tool_error_p));
     let passed = holm::survivors(&ps);
     for (side, ok) in sides.iter_mut().zip(&passed[2..]) {
