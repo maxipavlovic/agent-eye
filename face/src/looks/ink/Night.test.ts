@@ -115,6 +115,8 @@ describe('the Tonight chip and list', () => {
     button(m.root, 'NIGHT SHIFT OFF')!.click();
     await vi.waitFor(() => expect(button(m.root, 'NIGHT SHIFT ON')).toBeDefined());
     expect(m.settings).toEqual([{ enabled: true }]);
+    // switching the night shift reloads the list, so its row comes back a moment later
+    await vi.waitFor(() => expect(button(m.root, 'CANCEL RUN')).toBeDefined());
     button(m.root, 'CANCEL RUN')!.click();
     await vi.waitFor(() => expect(m.$('.hd .tonight')).toBeNull());
     expect(text(m.$('.nlist, .page.night .dim'))).toContain('Nothing planned');
