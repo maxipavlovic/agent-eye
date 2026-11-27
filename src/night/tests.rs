@@ -1142,6 +1142,7 @@ fn the_opencode_command_carries_its_permission_rules_in_the_environment() {
         assert_eq!(bash[d], "deny", "{d}");
     }
     assert_eq!(rules["permission"]["external_directory"], "deny");
+    assert_eq!(rules["autoupdate"], false);
     // the allow-all rule comes first: the last matching rule wins in OpenCode
     assert_eq!(bash.as_object().unwrap().keys().next().unwrap(), "*");
     assert_eq!(c.args.last().unwrap(), &run_of("opencode", "idea").prompt);

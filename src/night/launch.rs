@@ -37,7 +37,7 @@ pub const DENY: [&str; 11] = [
 /// same commands, as OpenCode's patterns), and nothing outside the run's folder. `--auto` then
 /// approves whatever is not denied. The rules match the text of a tool call; they are not a
 /// sandbox (a shell command can still write anywhere), which is why the run needs
-/// `[night] allow_unsandboxed`.
+/// `[night] allow_unsandboxed`. A run never updates OpenCode.
 pub fn opencode_permissions() -> String {
     let mut bash = serde_json::Map::new();
     bash.insert("*".into(), "allow".into());
@@ -52,7 +52,7 @@ pub fn opencode_permissions() -> String {
         "bash": bash,
         "edit": "allow",
         "external_directory": "deny"
-    }})
+    }, "autoupdate": false})
     .to_string()
 }
 
