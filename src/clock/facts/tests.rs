@@ -35,6 +35,7 @@ fn facts_of(d: &Data, weeks: i64) -> Vec<String> {
         now: NOW,
         weeks,
         off: &utc,
+        on: &|_| true,
     })
 }
 
@@ -99,6 +100,20 @@ fn a_day_the_pass_left_half_done_is_left_out_whole() {
         starting(&facts_of(&d, 4), "You correct"),
         Some("You correct about 1 in 5 prompts: 20 per 100 (40 of 200).")
     );
+    // a prompt of an agent that is off waits for good: its day counts with what was judged
+    let off = facts(&Inputs {
+        data: &d,
+        judged: true,
+        breaks: &[],
+        now: NOW,
+        weeks: 4,
+        off: &utc,
+        on: &|a| a != "claude",
+    });
+    assert_eq!(
+        starting(&off, "You correct"),
+        Some("You correct about 1 in 7 prompts: 14 per 100 (40 of 280).")
+    );
 }
 
 #[test]
@@ -155,6 +170,7 @@ fn breaks_are_said_to_help_only_when_the_difference_is_more_than_chance() {
             now: NOW,
             weeks: 4,
             off: &utc,
+            on: &|_| true,
         })
     };
     assert_eq!(
@@ -183,6 +199,7 @@ fn with_corrections_not_judged_only_the_stops_are_given() {
         now: NOW,
         weeks: 4,
         off: &utc,
+        on: &|_| true,
     });
     assert_eq!(
         out,

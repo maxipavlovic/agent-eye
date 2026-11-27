@@ -135,8 +135,11 @@ the break hint uses puts the difference under 0.1; otherwise the sentence gives 
 says "not a clear change yet" (or "not a clear difference yet"). Each fact needs 100 prompts behind
 every number it gives. The ones about corrections leave out every day that still has a prompt
 waiting for the nightly pass: the pass marks the prompts its word filter drops before it asks about
-the rest, so a day it left half done would look better than it was. They are left out while
-corrections are not being judged.
+the rest, so a day it left half done would look better than it was. A prompt of an agent that is
+switched off does not hold its day open, since the pass cannot read it; one whose transcript was
+deleted before the pass read it does, so that day drops out of these facts until it leaves the
+window. They are left out while corrections are not being judged. Each fact is tested on its own,
+so on weeks with no real change about one window in five names a direction in one of the two.
 
 ## What is sent where
 

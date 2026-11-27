@@ -224,6 +224,7 @@ pub fn build(
         now,
         weeks,
         off,
+        on: &|a| agents.get(a).is_some(),
     });
     let sides = tested.map_or(vec![], |t| t.sides);
     let now_state = Now {

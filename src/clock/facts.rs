@@ -26,6 +26,9 @@ pub struct Inputs<'a> {
     pub now: i64,
     pub weeks: i64,
     pub off: OffsetFn<'a>,
+    /// Is this agent on, so the pass can still read its sessions? A prompt of an agent that is off
+    /// waits for good, and holding its day open would only hide the day.
+    pub on: &'a dyn Fn(&str) -> bool,
 }
 
 /// The facts, in the order a reader wants them; each is left out when it does not rest on enough.
@@ -35,14 +38,14 @@ pub fn facts(i: &Inputs) -> Vec<String> {
         .data
         .prompts
         .iter()
-        .filter(|p| p.pending)
+        .filter(|p| p.pending && (i.on)(&p.agent))
         .map(day)
         .collect();
     let judged: Vec<&Prompt> = i
         .data
         .prompts
         .iter()
-        .filter(|p| !open.contains(&day(p)))
+        .filter(|p| !p.pending && !open.contains(&day(p)))
         .collect();
     let mut out = vec![];
     if i.judged {
