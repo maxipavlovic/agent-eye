@@ -104,6 +104,34 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn hours_leave_out_a_quiet_origin_as_soon_as_the_gear_switches_it() {
+        let e = env();
+        let now = crate::util::now_ms();
+        for (id, origin) in [("mine", "terminal"), ("shop", "app")] {
+            add_session(&e.db, id, id, None, 1, 1);
+            e.db.conn
+                .execute(
+                    "UPDATE session SET origin=?2 WHERE id=?1",
+                    rusqlite::params![id, origin],
+                )
+                .unwrap();
+            e.db.conn
+                .execute(
+                    "INSERT INTO turn(session_id, ts, kind, n) VALUES(?1,?2,'prompt',0)",
+                    rusqlite::params![id, now - if id == "mine" { 1000 } else { 2000 }],
+                )
+                .unwrap();
+        }
+        let (_, v) = call(&e, req("GET", "/api/clock?weeks=1", None)).await;
+        assert_eq!(v["prompts"], 2);
+        let body = serde_json::json!({"board.quiet": ["app"]});
+        let (s, _) = call(&e, req("POST", "/api/settings", Some(body))).await;
+        assert_eq!(s, StatusCode::OK);
+        let (_, v) = call(&e, req("GET", "/api/clock?weeks=1", None)).await;
+        assert_eq!(v["prompts"], 1);
+    }
+
+    #[tokio::test]
     async fn a_bad_window_is_a_400() {
         let e = env();
         for q in ["weeks=0", "weeks=13"] {

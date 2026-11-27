@@ -225,7 +225,7 @@ const SETTINGS: SettingsState = {
       type: 'origins',
       choices: [
         { id: 'app', name: 'App', about: "started by an app through an agent's SDK", sessions: 5, needs_you: 2 },
-        { id: 'headless', name: 'Headless', about: 'started by a script (claude -p, codex exec)', sessions: 3, needs_you: 0 },
+        { id: 'headless', name: 'Headless', about: 'started by a script or a CI job', sessions: 3, needs_you: 0 },
       ],
       value: [],
     },

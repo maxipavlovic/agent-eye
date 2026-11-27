@@ -423,7 +423,7 @@ describe('the sessions started by programs', () => {
     const lines = [...section(T).querySelectorAll('.srow .umeta')].map((p) => p.textContent);
     expect(lines).toEqual([
       "5 sessions started by an app through an agent's SDK, 2 in Needs you now.",
-      '3 sessions started by a script (claude -p, codex exec), none in Needs you now.',
+      '3 sessions started by a script or a CI job, none in Needs you now.',
     ]);
     expect(section(T).textContent).toContain('A quiet session never moves to Needs you by itself, gets no summary and stays out of HOURS.');
   });
@@ -460,13 +460,13 @@ describe('the sessions started by programs', () => {
   });
 
   it('keeps the switch of an origin set to quiet when none of its sessions are left, so it can be turned off', async () => {
-    const q = { type: 'origins' as const, choices: [{ id: 'headless', name: 'Headless', about: 'started by a script (claude -p, codex exec)', sessions: 0, needs_you: 0 }], value: ['headless'] };
+    const q = { type: 'origins' as const, choices: [{ id: 'headless', name: 'Headless', about: 'started by a script or a CI job', sessions: 0, needs_you: 0 }], value: ['headless'] };
     const { heads, open, unfold } = await mount(withQuiet(q));
     await open();
     await vi.waitFor(() => expect(heads()[2]).toEqual([T, 'false', 'QUIET']));
     await unfold(T);
     expect(switches()).toEqual([['Quiet Headless', 'ON']]);
-    expect(section(T).querySelector('.srow .umeta')!.textContent).toBe('No sessions started by a script (claude -p, codex exec) left.');
+    expect(section(T).querySelector('.srow .umeta')!.textContent).toBe('No sessions started by a script or a CI job left.');
   });
 
   it('folds to NONE when nothing was found, and the sample board shows its switches without saving', async () => {

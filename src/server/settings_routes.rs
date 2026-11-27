@@ -538,15 +538,17 @@ mod tests {
         let e = env();
         let now = crate::util::now_ms();
         for (id, origin, ai) in [
-            ("a1", "app", "needs_you"),
-            ("a2", "app", "paused"),
-            ("t1", "terminal", "needs_you"),
+            ("app1", "app", "needs_you"),
+            ("app2", "app", "paused"),
+            ("term", "terminal", "needs_you"),
         ] {
             add_session(&e.db, id, id, Some(ai), 3, now - 60_000);
+            // a folder that is there, so the session can be resumed
+            let cwd = e._tmp.path().to_string_lossy().to_string();
             e.db.conn
                 .execute(
-                    "UPDATE session SET origin=?2 WHERE id=?1",
-                    rusqlite::params![id, origin],
+                    "UPDATE session SET origin=?2, cwd=?3 WHERE id=?1",
+                    rusqlite::params![id, origin, cwd],
                 )
                 .unwrap();
         }
@@ -561,7 +563,7 @@ mod tests {
         );
         let needs_you = |b: &Value| card_ids(b, "needs_you");
         let (_, b) = call(&e, req("GET", "/api/board", None)).await;
-        assert!(needs_you(&b).contains(&"a1".to_string()));
+        assert!(needs_you(&b).contains(&"app1".to_string()));
 
         let (st, v) = post(&e, json!({"board.quiet": ["app"]})).await;
         assert_eq!(st, StatusCode::OK, "{v}");
@@ -574,10 +576,15 @@ mod tests {
         assert!(text.contains("quiet = [\"app\"]"), "{text}");
         // the board and a card follow the file without a restart
         let (_, b) = call(&e, req("GET", "/api/board", None)).await;
-        assert_eq!(needs_you(&b), ["t1"]);
-        assert!(card_ids(&b, "paused").contains(&"a1".to_string()));
-        let (_, c) = call(&e, req("GET", "/api/cards/a1", None)).await;
+        assert_eq!(needs_you(&b), ["term"]);
+        assert!(card_ids(&b, "paused").contains(&"app1".to_string()));
+        let (_, c) = call(&e, req("GET", "/api/cards/app1", None)).await;
         assert_eq!(c["column"], "paused");
+        // still listed and resumable, with its origin shown
+        assert_eq!(
+            (&c["resumable"], &c["origin"]),
+            (&json!(true), &json!("app"))
+        );
 
         // an origin set to quiet with no sessions keeps its switch
         let (_, v) = post(&e, json!({"board.quiet": ["app", "headless"]})).await;
@@ -591,7 +598,7 @@ mod tests {
         assert_eq!(v["settings"]["board.quiet"]["choices"][1]["sessions"], 0);
         post(&e, json!({"board.quiet": []})).await;
         let (_, b) = call(&e, req("GET", "/api/board", None)).await;
-        assert!(needs_you(&b).contains(&"a1".to_string()));
+        assert!(needs_you(&b).contains(&"app1".to_string()));
     }
 
     #[tokio::test]

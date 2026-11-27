@@ -136,7 +136,7 @@ pub fn phrase(origin: &str, raw: Option<&str>) -> String {
 pub fn started_by(origin: &str) -> Option<&'static str> {
     Some(match origin {
         "app" => "started by an app through an agent's SDK",
-        "headless" => "started by a script (claude -p, codex exec)",
+        "headless" => "started by a script or a CI job",
         _ => return None,
     })
 }
