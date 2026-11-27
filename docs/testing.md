@@ -71,3 +71,44 @@ lines at device scale (`scale: 'device'`) when one seems to be missing.
   for a different machine; a baseline made outside the container is wrong by definition.
 - Selectors use roles and visible text, so a restyle does not break a flow. A screenshot of a view
   that scrolls sideways is taken with the target fully in view, so the click does not move the page.
+
+## Rules
+
+Each comes from a bug that came back more than once; every one is cheap to follow.
+
+1. **Thresholds come from the spec**, not from what the code happens to reach: the validator's
+   floors, a p-value, a pixel size. A test never builds in a miss it knows about.
+2. **Fixtures copy real shapes.** Count the shape in local agent files first (read-only), sanitise
+   it, and say in the test where it was seen. Never invent a record shape.
+3. **A "nothing to find" test needs noise:** random data from a fixed seed, never identical hours.
+4. **A screenshot proves layout, not size or fit.** Measure what you claim, and name each shot after
+   what it shows.
+5. **Every promise names its test.** A sentence in the docs, the CHANGELOG or `--help` that says
+   what happens ("off stops X", "no tools") has a test that fails when it stops being true.
+6. **One fact, one source.** The server works out a window, label, unit, range or reason once and
+   sends it; the face and the CLI never recompute it or read English.
+7. **Anything new that touches sessions goes through every gate:** exclude, temp, hidden, automated
+   origin, the `[clock]` switch, `forget` and the pack. `tests/filters.rs` sweeps every table with
+   a `session_id` for the sessions eye leaves out.
+8. **Long-running parts read settings fresh on every tick.** A key that truly needs a restart says
+   `restart: true`, and the settings panel writes the note from that flag.
+9. **Safe by default.** A new agent's headless run is used for judging or summaries only once a
+   lock-down test exists.
+10. **A reader that carries state between reads** gets the every-split test
+    (`assert_every_split_matches_whole` in `src/turns/testing.rs`) before it merges.
+
+## Checks
+
+Before a push, everything CI runs:
+
+```
+cargo fmt --all --check
+cargo clippy --locked --all-targets -- -D warnings
+cargo test --locked
+typos
+cd face && npm run typecheck && npm test && npm run build && npm run site:build
+scripts/e2e.sh        # when the board or the fixture changed
+```
+
+CI also type-checks the site (`npm --prefix ../site run typecheck`). The site imports from
+`face/src`, so a face change can break it without breaking the face.
