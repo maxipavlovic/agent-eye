@@ -234,6 +234,7 @@ impl Agent for Agy {
         log::turn_events(&files::log_of(path))
     }
 
+    /// agy writes no step for a stopped turn or a compaction (`docs/agents.md`).
     fn turn_kinds(&self) -> &'static [TurnKind] {
         &[
             TurnKind::Prompt,

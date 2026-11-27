@@ -9,7 +9,6 @@ use crate::config::{self, Config, PARALLEL_RANGE};
 use crate::config_clock::BREAK_RANGE;
 use crate::night::clock;
 use crate::platform::idle;
-use anyhow::Context;
 use axum::extract::State;
 use axum::Json;
 use serde_json::{json, Map, Value};

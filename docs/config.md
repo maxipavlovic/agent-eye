@@ -83,11 +83,13 @@ the text, in eye's database (the `turn` table, see `architecture.md`).
 
 | Key | Default | Meaning |
 |---|---|---|
-| `enabled` | `true` | Record turn timing and show the clock. `false` stops recording; what is stored stays. |
+| `enabled` | `true` | Record turn timing and show the clock. `false` stops the report and the nightly pass at once and recording at the daemon's next start; what is stored stays. |
 | `llm` | not set | Let a model judge which prompts were corrections, once a night and with `eye clock detect`, through the agent and model that write summaries (`[summary] agent` and `model`). Not set: follows `[summary] enabled`, because both send prompt text to the same agent. `true` or `false` decides on its own. |
-| `hints` | `false` | Fill `now.hint` of `/api/clock` while you are in an hour that has gone badly for you, or an hour past a break that has been shown to matter. |
-| `break_minutes` | `45` | A gap this long between prompts is a break. From 10 to 240; a value outside is brought into that range. |
-| `idle` | `false` | Take breaks from the machine's idle time instead of from gaps between prompts. The daemon reads the system's idle counter once a minute and stores the stretches of 5 minutes or more (start and end, nothing else). macOS and Linux desktops with logind; where the system cannot say, `eye doctor` says so and breaks stay on prompt gaps. See `clock.md`. |
+| `hints` | `false` | Fill `now.hint` of `/api/clock` (`{text, offer}`) while you are in an hour that has gone badly for you, or an hour past a break that has been shown to matter. |
+| `break_minutes` | `45` | A gap this long between prompts is a break, and so is an idle stretch this long when `idle` is on. From 10 to 240; a value outside is brought into that range. |
+| `idle` | `false` | Also take breaks from the machine's idle time, not only from gaps between prompts. The daemon reads the system's idle counter once a minute and stores the stretches of 5 minutes or more (start and end, nothing else). macOS and Linux desktops with logind (the graphical session is found through `loginctl`, not an environment variable); where the daemon cannot read it, `eye doctor` says so and breaks stay on prompt gaps. See `clock.md`. |
+
+Changes to this section made in the gear or in the file count without a restart, except that recording turns follows the daemon's start (`enabled`).
 
 ## `[hide]`
 

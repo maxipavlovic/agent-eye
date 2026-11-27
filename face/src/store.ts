@@ -482,7 +482,7 @@ export function createStore(src: Source, { defaultTheme = 'auto' }: { defaultThe
   function loadClockHint() {
     clearTimeout(hintTimer);
     src.clock(1).then((c) => {
-      clockHint.value = c.enabled && c.hints ? c.now.hint : null;
+      clockHint.value = c.enabled && c.hints ? c.now.hint?.text ?? null : null;
       // nobody needs the question again until hints are switched on, and the settings panel asks then
       if (c.enabled && c.hints) hintTimer = setTimeout(loadClockHint, CLOCK_HINT_EVERY_MS);
     }, () => { clockHint.value = null; });

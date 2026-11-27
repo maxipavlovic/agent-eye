@@ -22,6 +22,11 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ### Changed
 
+- The steering clock's verdict gates the model's side as strictly as yours: failed tool calls are tested per agent against that agent's own rate (never pooled across agents), thinking needs 30 thoughts inside and outside the hours, and a signal with too little data says "no model-side data" instead of "flat". The hours the sentence names are always the hours of the chart, each named by one rule (morning, afternoon, evening, night). `/api/clock` is additive: `judging` and `judging_reason` (why corrections are zero), `think_agent`, `bad[].label`, per-agent `think_unit`, `think_ratio`, `tool_error_ratio` and `signals`, the verdict kind `unmeasured`, and `now.hint` as `{text, offer}`. `eye clock` prints a line per agent.
+- A break is an idle stretch or a gap between prompts, so a night with no idle sample is still a break. On Linux the idle sensor finds your graphical session through `loginctl`, and `eye doctor` reports what the daemon itself can read.
+- The clock reads its settings again: changes made in the gear count without a restart (recording turns follows the daemon's start). The nightly corrections pass waits while you are at work.
+- The call that judges corrections is locked down for OpenCode (the shell, edits and web fetches are denied) and cleans up after agy (its conversation is deleted). `docs/clock.md` and `docs/security.md` say what each agent's call can and cannot do.
+- A settings write that fails on disk is a 500, not a 400.
 - The header no longer carries the Lanes / Grid, theme, look and colour buttons: they are in the settings panel, and their keys and saved settings are unchanged.
 
 ## 0.4.1 - 2026-11-25

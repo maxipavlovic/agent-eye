@@ -16,5 +16,5 @@ export function tooFewClock(): ClockReport {
 
 /** The demo week, but it is evening and hints are on: the header and the card you work in carry a quiet mark. */
 export function hintClock(): ClockReport {
-  return { ...demoClock(4), hints: true, now: { in_bad: true, since_break_min: 130, hint: 'Your corrections usually rise now' } };
+  return { ...demoClock(4), hints: true, now: { in_bad: true, since_break_min: 130, hint: { text: 'Your corrections usually rise now', offer: true } } };
 }

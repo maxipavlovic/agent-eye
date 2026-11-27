@@ -299,13 +299,49 @@ export interface ClockRange {
   to_h: number;
 }
 
-export type ClockVerdictKind = 'you' | 'model' | 'both' | 'none' | 'too_few';
+/** A bad stretch with its part of the day, named by the server (morning 05-11, afternoon 12-16, evening 17-21, night 22-04, by its first hour). */
+export interface ClockBad extends ClockRange {
+  label: 'morning' | 'afternoon' | 'evening' | 'night';
+}
+
+/** `unmeasured`: your side is clear but nothing on the model's side was measured, so it cannot be said whose it was. */
+export type ClockVerdictKind = 'you' | 'model' | 'both' | 'unmeasured' | 'none' | 'too_few';
+
+/** The turn events an agent can report at all; one it lacks is no signal, not zero. */
+export type ClockSignal = 'prompt' | 'end' | 'interrupt' | 'tool' | 'tool_error' | 'refusal' | 'think' | 'compact';
+
+/** One agent's part of the clock: its own model side in the bad hours against its own other hours. */
+export interface ClockAgent {
+  agent: string;
+  prompts: number;
+  corrections: number;
+  /** The unit of the agent's thinking measure, null when no thinking of it is in the window. */
+  think: string | null;
+  /** The unit of the agent's thinking measure, null when it reports none at all. */
+  think_unit: string | null;
+  /** Its thinking in the bad hours over its own elsewhere; null without that signal, enough data or bad hours. */
+  think_ratio: number | null;
+  tool_error_ratio: number | null;
+  signals: ClockSignal[];
+}
+
+/** Why corrections are not judged, when they are not: switched off, or on with no enabled agent that can judge. */
+export type ClockJudging = 'on' | 'off' | 'unavailable';
+
+/** The quiet line for this moment; `offer` is true when the night shift is on, for a surface that can hand the work to it. */
+export interface ClockHint {
+  text: string;
+  offer: boolean;
+}
 
 /** GET /api/clock?weeks=N: whether a bad stretch was you or the model. */
 export interface ClockReport {
   enabled: boolean;
   /** Corrections are judged by a model. */
   llm: boolean;
+  judging: ClockJudging;
+  /** One short sentence when `judging` is not `on`, else null. */
+  judging_reason: string | null;
   hints: boolean;
   /** Breaks come from real idle time. */
   idle: boolean;
@@ -318,8 +354,10 @@ export interface ClockReport {
   /** Always 24 rows, in local time. */
   hours: ClockHour[];
   since_break: ClockBand[];
-  /** The hours that run clearly worse than the rest; empty when chance cannot be ruled out. */
-  bad: ClockRange[];
+  /** The hours the verdict names (the sentence and the chart agree); empty for `none` and `too_few`. */
+  bad: ClockBad[];
+  /** The agent the hours' `think` values belong to; null when none thought. */
+  think_agent: string | null;
   verdict: {
     kind: ClockVerdictKind;
     /** How much more the bad hours are corrected. */
@@ -330,8 +368,8 @@ export interface ClockReport {
     tool_error_ratio: number | null;
     text: string;
   };
-  now: { in_bad: boolean; since_break_min: number | null; hint: string | null };
-  agents: { agent: string; prompts: number; corrections: number; think: string | null }[];
+  now: { in_bad: boolean; since_break_min: number | null; hint: ClockHint | null };
+  agents: ClockAgent[];
 }
 
 /** A session's usage over its whole life (detail cards); null while it is not counted. */
