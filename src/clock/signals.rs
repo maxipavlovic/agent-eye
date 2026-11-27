@@ -210,6 +210,15 @@ mod tests {
             .unwrap();
         assert_eq!(pending(&db.conn, 0).unwrap(), 1);
         assert_eq!(pending(&db.conn, 60).unwrap(), 0);
+        // the prompts load marks as waiting are exactly the ones counted here
+        let marked: Vec<i64> = load(&db.conn, 0)
+            .unwrap()
+            .prompts
+            .iter()
+            .filter(|p| p.pending)
+            .map(|p| p.ts)
+            .collect();
+        assert_eq!(marked, [50]);
     }
 
     #[test]

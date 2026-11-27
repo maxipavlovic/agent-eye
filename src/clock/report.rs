@@ -223,6 +223,7 @@ pub fn build(
         breaks: &breaks,
         now,
         weeks,
+        off,
     });
     let sides = tested.map_or(vec![], |t| t.sides);
     let now_state = Now {

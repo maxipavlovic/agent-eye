@@ -126,15 +126,17 @@ HOURS state a few plain numbers that hold whatever it says (`facts` in `/api/clo
 - how often you correct: "You correct about 1 in 6 prompts: 17 per 100 (189 of 1084).";
 - the later half of the window against the earlier one: "Last 2 weeks: 15 per 100, down from 19
   in the 2 weeks before." (none for a one-week window);
-- an hour or more after a break against the first hour after one, the same two groups and the same
-  test as the break hint: "Breaks help" only when that test passes, otherwise "not a clear
-  difference yet";
+- an hour or more after a break against the first hour after one, the split of the break hint:
+  "Breaks help" when it is higher later, "fewer than" when it is lower;
 - how often you stopped the agent mid-answer.
 
-Each needs 100 prompts behind every number it gives. The ones about corrections count only prompts
-a model has judged, so prompts still waiting for the nightly pass do not make the latest days look
-better, and they are left out while corrections are not being judged. They describe your numbers;
-only the verdict and "Breaks help" claim more than chance.
+"Down from", "up from", "Breaks help" and "fewer than" are said only when the two-proportion test
+the break hint uses puts the difference under 0.1; otherwise the sentence gives both numbers and
+says "not a clear change yet" (or "not a clear difference yet"). Each fact needs 100 prompts behind
+every number it gives. The ones about corrections leave out every day that still has a prompt
+waiting for the nightly pass: the pass marks the prompts its word filter drops before it asks about
+the rest, so a day it left half done would look better than it was. They are left out while
+corrections are not being judged.
 
 ## What is sent where
 

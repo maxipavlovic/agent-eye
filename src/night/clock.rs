@@ -90,7 +90,7 @@ fn minute_of_day(ts: i64, off: OffsetFn) -> i64 {
     (ts + off(ts)).div_euclid(MIN_MS).rem_euclid(DAY_MIN)
 }
 
-fn day_number(ts: i64, off: OffsetFn) -> i64 {
+pub(crate) fn day_number(ts: i64, off: OffsetFn) -> i64 {
     (ts + off(ts)).div_euclid(DAY_MS)
 }
 

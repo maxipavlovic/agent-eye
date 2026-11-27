@@ -23,6 +23,10 @@ fn data(ps: Vec<Vec<Prompt>>) -> Data {
     }
 }
 
+fn utc(_: i64) -> i64 {
+    0
+}
+
 fn facts_of(d: &Data, weeks: i64) -> Vec<String> {
     facts(&Inputs {
         data: d,
@@ -30,6 +34,7 @@ fn facts_of(d: &Data, weeks: i64) -> Vec<String> {
         breaks: &[],
         now: NOW,
         weeks,
+        off: &utc,
     })
 }
 
@@ -81,6 +86,22 @@ fn prompts_waiting_for_the_pass_are_left_out_of_every_rate() {
 }
 
 #[test]
+fn a_day_the_pass_left_half_done_is_left_out_whole() {
+    // the pass marks what its word filter drops as no correction before it asks about the rest; when
+    // the asking fails, the day holds 80 such prompts and 20 possible corrections still waiting
+    let d = data(vec![
+        prompts(NOW - 20 * DAY, 100, 20, false),
+        prompts(NOW - 5 * DAY, 100, 20, false),
+        prompts(NOW - DAY, 80, 0, false),
+        prompts(NOW - DAY + 1_000, 20, 0, true),
+    ]);
+    assert_eq!(
+        starting(&facts_of(&d, 4), "You correct"),
+        Some("You correct about 1 in 5 prompts: 20 per 100 (40 of 200).")
+    );
+}
+
+#[test]
 fn the_later_half_of_the_window_is_set_against_the_earlier_half() {
     let at = |recent: usize| {
         data(vec![
@@ -102,6 +123,15 @@ fn the_later_half_of_the_window_is_set_against_the_earlier_half() {
         Some("Last week: 10 per 100, down from 20 in the 2 weeks before.")
     );
     assert_eq!(starting(&facts_of(&at(20), 1), "Last"), None);
+    // a gap that chance makes often is not called a change: 9 against 14 in 100 each
+    let noise = data(vec![
+        prompts(NOW - 20 * DAY, 100, 14, false),
+        prompts(NOW - 3 * DAY, 100, 9, false),
+    ]);
+    assert_eq!(
+        starting(&facts_of(&noise, 4), "Last"),
+        Some("Last 2 weeks: 9 per 100, against 14 in the 2 weeks before: not a clear change yet.")
+    );
     // a half under a hundred prompts says nothing
     let thin = data(vec![
         prompts(NOW - 20 * DAY, 99, 20, false),
@@ -124,6 +154,7 @@ fn breaks_are_said_to_help_only_when_the_difference_is_more_than_chance() {
             breaks: &[brk],
             now: NOW,
             weeks: 4,
+            off: &utc,
         })
     };
     assert_eq!(
@@ -133,6 +164,11 @@ fn breaks_are_said_to_help_only_when_the_difference_is_more_than_chance() {
     assert_eq!(
         starting(&with(24), "An hour"),
         Some("An hour or more after a break you correct 12 per 100, against 10 in the first hour: not a clear difference yet.")
+    );
+    // a clear fall after the first hour is said as one, not as no difference
+    assert_eq!(
+        starting(&with(2), "An hour"),
+        Some("An hour or more after a break you correct 1 per 100, fewer than the 10 of the first hour after one.")
     );
 }
 
@@ -146,6 +182,7 @@ fn with_corrections_not_judged_only_the_stops_are_given() {
         breaks: &[],
         now: NOW,
         weeks: 4,
+        off: &utc,
     });
     assert_eq!(
         out,
