@@ -292,7 +292,7 @@ mod tests {
     }
 
     #[test]
-    fn sessions_kept_quiet_are_left_out_like_a_script_s() {
+    fn sessions_kept_quiet_are_left_out_as_a_script_is() {
         let db = db_with(&[
             ("a", 10, "end", 5),
             ("a", 20, "prompt", 20),
