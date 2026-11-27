@@ -36,6 +36,7 @@ export function emptyClock(weeks: number): ClockReport {
     since_break: ['<1h', '1-2h', '2-4h', '4h+'].map((band) => ({ band, prompts: 0, corrections: 0 })),
     bad: [],
     think_agent: null,
+    tool_agent: null,
     verdict: { kind: 'too_few', you_ratio: null, you_n: null, think_ratio: null, tool_error_ratio: null, text: 'Too few to tell yet: 0 prompts and 0 corrections (it needs 300 and 30).' },
     now: { in_bad: false, since_break_min: null, hint: null },
     agents: [],
@@ -56,6 +57,7 @@ export function demoClock(weeks: number): ClockReport {
     since_break: [band('<1h', 700, 48), band('1-2h', 330, 31), band('2-4h', 190, 22), band('4h+', 100, 18)],
     bad: [{ from_h: 18, to_h: 0, label: 'evening' }],
     think_agent: 'claude',
+    tool_agent: 'claude',
     verdict: {
       kind: 'you', you_ratio: 1.9, you_n: 53, think_ratio: 0.93, tool_error_ratio: 0.95,
       text: 'Evenings: 1.9x more corrections (53). Model thinking −7%. Tool errors flat. Mostly you.',

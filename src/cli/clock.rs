@@ -191,7 +191,12 @@ fn text(r: &Report, weeks: i64) -> String {
     if let Some(h) = &r.now.hint {
         let _ = writeln!(o, "{}", h.text);
     }
-    if let Some(why) = &r.judging_reason {
+    // a too-few verdict already gives the reason; say it once
+    if let Some(why) = r
+        .judging_reason
+        .as_ref()
+        .filter(|_| r.verdict.kind != verdict::Kind::TooFew)
+    {
         let _ = writeln!(o, "Corrections are not being judged: {why}.");
     }
     o
@@ -382,5 +387,9 @@ mod tests {
         assert!(text(&r, 4).ends_with(
             "Corrections are not being judged: no enabled agent can judge corrections.\n"
         ));
+        // a verdict that already says why is not followed by the same reason
+        r.verdict.kind = Kind::TooFew;
+        r.verdict.text = "Corrections are not being judged: no enabled agent can judge corrections, so there is nothing to compare.".into();
+        assert_eq!(text(&r, 4).matches("not being judged").count(), 1);
     }
 }

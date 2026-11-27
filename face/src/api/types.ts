@@ -358,6 +358,8 @@ export interface ClockReport {
   bad: ClockBad[];
   /** The agent the hours' `think` values belong to; null when none thought. */
   think_agent: string | null;
+  /** The agent the hours' `tool_calls` and `tool_errors` belong to (the one with the most tool calls); null when none called a tool. The verdict compares each agent with itself, so the strip shows one agent's. */
+  tool_agent: string | null;
   verdict: {
     kind: ClockVerdictKind;
     /** How much more the bad hours are corrected. */
