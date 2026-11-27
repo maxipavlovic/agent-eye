@@ -159,7 +159,9 @@ not the model's).
   completes. The model is offered only the `skill` tool, and calling it is "Permission denied".
 - MCP: OpenCode starts every configured MCP server for a run, even with every tool denied. eye asks
   `opencode debug config` for the servers' names (it keeps nothing else) and switches each off in the
-  inline config, just before each question; then none starts.
+  inline config, just before each question; then none starts. When eye cannot read the names
+  (`debug config` fails or prints no config), the question is not asked: the `*` rule would still
+  deny the servers' tools, but the servers would start. A night run does not start then either.
 - `--standalone` matters: OpenCode's background service runs with the config it started with, and
   `opencode models` without the flag started that service. Every command eye runs has it.
 - Instructions: your global `AGENTS.md` is read and sent with the question (as, by OpenCode's docs,

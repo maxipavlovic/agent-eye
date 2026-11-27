@@ -124,7 +124,8 @@ applies an agent's own permissions after the global ones, so a run as your defau
 config beat the rules, and a sub-agent runs as another agent your config may open up: on a real OpenCode 2.3.2 with such a
 config, both pushed. Now `git push` is "Permission denied" and nothing is pushed. The MCP servers your config and the project's
 declare (named by `opencode debug config`, run in the folder first) are switched off: their tools are not commands the rules can
-match, and one could push or open a pull request. The run keeps the project's `opencode.json` and `AGENTS.md` and
+match, and one could push or open a pull request. When OpenCode cannot say which servers those are (`debug config` fails or
+prints no config), the run does not start: it is marked failed with that reason. The run keeps the project's `opencode.json` and `AGENTS.md` and
 `~/.claude/CLAUDE.md`: the work needs the project's instructions and tools, and none of them can loosen the rules, which come
 last.
 

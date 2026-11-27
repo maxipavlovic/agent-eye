@@ -247,7 +247,8 @@ out. The older table and JSON layouts are tested on synthetic data only. What is
   (`opencode-ask` in eye's work folder, so OpenCode keeps one project for all of them) with a session title of its own
   (`eye-ask-<uuid>`), which is how a timed-out run is found without touching another question's. It runs as an agent of its own
   (`--agent eye-ask`, defined only in the run's inline config) with every permission denied and every tool off, and the
-  MCP servers your config declares (their names come from `opencode debug config`) switched off. Every `opencode`
+  MCP servers your config declares (their names come from `opencode debug config`; when it cannot say, nothing is
+  asked) switched off. A run that answers without naming its session is found by its title too. Every `opencode`
   command eye runs (`run`, `run --help`, `models`, `debug config`, `session`, `--version`) is `--standalone` (a private
   server: eye never starts or uses OpenCode's background service) and carries the same config with `autoupdate: false`
   and `OPENCODE_DISABLE_AUTOUPDATE`, so eye never updates OpenCode. Checked on a real OpenCode 2.3.2; the corrections
