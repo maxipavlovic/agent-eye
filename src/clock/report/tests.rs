@@ -530,6 +530,23 @@ fn the_json_has_the_documented_fields() {
         keys(&j["since_break"][0]),
         ["band", "corrections", "prompts"]
     );
+    // every field is documented for readers of the API and typed for the face
+    let docs = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/docs/api.md"));
+    let types = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/face/src/api/types.ts"
+    ));
+    let word = |text: &str, key: &str| {
+        let is_word = |c: Option<char>| c.is_some_and(|c| c.is_alphanumeric() || c == '_');
+        text.match_indices(key).any(|(i, _)| {
+            !is_word(text[..i].chars().next_back())
+                && !is_word(text[i + key.len()..].chars().next())
+        })
+    };
+    for key in keys(&j).into_iter().chain(keys(&j["hours"][0])) {
+        assert!(word(docs, &key), "{key} is not in docs/api.md");
+        assert!(word(types, &key), "{key} is not in types.ts");
+    }
 }
 
 #[test]
