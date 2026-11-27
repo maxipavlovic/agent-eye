@@ -2132,3 +2132,32 @@ fn an_agy_run_is_refused_unless_unsandboxed_runs_are_allowed_and_the_plan_says_w
     .unwrap();
     assert_eq!(r.agent, "agy");
 }
+
+#[test]
+fn a_session_kept_quiet_does_not_count_as_you_at_work() {
+    let now = 10_000_000;
+    let night = Path::new("/home/x/.agent-eye/night");
+    let live = |entrypoint: &str| crate::agents::LiveSession {
+        pid: 1,
+        session_id: "s".into(),
+        cwd: Some("/work/p".into()),
+        status: Some("busy".into()),
+        updated_at: Some(now),
+        entrypoint: Some(entrypoint.into()),
+        alive: true,
+        waiting_for: None,
+        remote_url: None,
+        loops: vec![],
+    };
+    let mut cfg = Config::default();
+    let work = |e: &str, cfg: &Config| {
+        let quiet = crate::quiet::Quiet::of(cfg);
+        sched::is_your_work("claude", &live(e), night, quiet, now, 60_000)
+    };
+    // the terminal and an app count while nothing is quiet; a script never does
+    assert!(work("cli", &cfg) && work("sdk-py", &cfg));
+    assert!(!work("sdk-cli", &cfg));
+    cfg.board.quiet = vec!["app".into()];
+    assert!(!work("sdk-py", &cfg) && !work("sdk-ts", &cfg));
+    assert!(work("cli", &cfg), "your own session still counts");
+}

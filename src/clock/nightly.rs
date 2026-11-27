@@ -15,6 +15,7 @@ use crate::db::{meta_set, Db};
 use crate::night::clock::{in_window, local_date, night_of, OffsetFn, Window};
 use crate::paths::Paths;
 use crate::platform::idle::{idle_ms, RealSys};
+use crate::quiet::Quiet;
 use crate::util::now_ms;
 use rusqlite::Connection;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -48,16 +49,20 @@ pub fn due(cfg: &Config, now: i64, done: Option<&str>, off: OffsetFn) -> Option<
 }
 
 /// Is the user at work: any turn event (a prompt, an agent's reply or tool call) in the last ten
-/// minutes, or (`idle` is how long the machine has been idle, when the sensor is on) input in the
-/// last two.
-pub fn user_busy(conn: &Connection, now: i64, idle: Option<i64>) -> bool {
+/// minutes, but for those of a session `[board] quiet` keeps quiet (a program's), or (`idle` is how
+/// long the machine has been idle, when the sensor is on) input in the last two.
+pub fn user_busy(conn: &Connection, cfg: &Config, now: i64, idle: Option<i64>) -> bool {
+    let quiet = Quiet::of(cfg);
     let working = conn
-        .query_row(
-            "SELECT EXISTS(SELECT 1 FROM turn WHERE ts>=?1)",
-            [now - BUSY_TURN_MS],
-            |r| r.get(0),
+        .prepare(
+            "SELECT DISTINCT s.origin FROM turn t LEFT JOIN session s ON s.id=t.session_id
+             WHERE t.ts>=?1",
         )
-        .unwrap_or(false);
+        .and_then(|mut st| {
+            st.query_map([now - BUSY_TURN_MS], |r| r.get::<_, Option<String>>(0))?
+                .collect::<rusqlite::Result<Vec<_>>>()
+        })
+        .is_ok_and(|origins| origins.iter().any(|o| !quiet.holds(o.as_deref())));
     working || idle.is_some_and(|ms| ms < BUSY_IDLE_MS)
 }
 
@@ -144,7 +149,7 @@ impl Clock {
         let idle = self
             .reading
             .map(|(at, ms)| ms + at.elapsed().as_millis() as i64);
-        if user_busy(&db.conn, now, idle) {
+        if user_busy(&db.conn, cfg, now, idle) {
             return;
         }
         if self.busy.swap(true, Ordering::SeqCst) {
@@ -290,7 +295,7 @@ mod tests {
         // a prompt 25 minutes ago, and the agent's last tool call 3 minutes ago
         let now = 100 * 60_000;
         let db = db_with_prompt_at(now - 25 * 60_000);
-        assert!(!user_busy(&db.conn, now, None));
+        assert!(!user_busy(&db.conn, &Config::default(), now, None));
         for (ts, kind) in [(now - 3 * 60_000, "tool"), (now - 60_000, "end")] {
             db.conn
                 .execute(
@@ -298,7 +303,7 @@ mod tests {
                     rusqlite::params![ts, kind],
                 )
                 .unwrap();
-            assert!(user_busy(&db.conn, now, None), "{kind}");
+            assert!(user_busy(&db.conn, &Config::default(), now, None), "{kind}");
             db.conn
                 .execute("DELETE FROM turn WHERE kind=?1", [kind])
                 .unwrap();
@@ -306,16 +311,45 @@ mod tests {
     }
 
     #[test]
+    fn a_session_kept_quiet_does_not_count_as_you_at_work() {
+        let now = 100 * 60_000;
+        let db = db_with_prompt_at(now - 60_000);
+        db.conn
+            .execute("UPDATE session SET origin='app' WHERE id='s'", [])
+            .unwrap();
+        let mut cfg = Config::default();
+        assert!(user_busy(&db.conn, &cfg, now, None));
+        cfg.board.quiet = vec!["app".into()];
+        assert!(!user_busy(&db.conn, &cfg, now, None));
+        // your own turn beside it still counts
+        db.conn
+            .execute("INSERT INTO session(id, agent) VALUES('mine','claude')", [])
+            .unwrap();
+        db.conn
+            .execute(
+                "INSERT INTO turn(session_id, ts, kind, n) VALUES('mine',?1,'prompt',5)",
+                [now - 60_000],
+            )
+            .unwrap();
+        assert!(user_busy(&db.conn, &cfg, now, None));
+    }
+
+    #[test]
     fn a_recent_prompt_or_recent_input_means_you_are_at_work() {
         let now = 100 * 60_000;
         let db = db_with_prompt_at(now - 9 * 60_000);
-        assert!(user_busy(&db.conn, now, None));
+        assert!(user_busy(&db.conn, &Config::default(), now, None));
         let old = db_with_prompt_at(now - 11 * 60_000);
-        assert!(!user_busy(&old.conn, now, None));
+        assert!(!user_busy(&old.conn, &Config::default(), now, None));
         // the idle sensor: input a minute ago is work, ten minutes of quiet is not
-        assert!(user_busy(&old.conn, now, Some(60_000)));
-        assert!(!user_busy(&old.conn, now, Some(10 * 60_000)));
+        assert!(user_busy(&old.conn, &Config::default(), now, Some(60_000)));
+        assert!(!user_busy(
+            &old.conn,
+            &Config::default(),
+            now,
+            Some(10 * 60_000)
+        ));
         let empty = crate::db::Db::open_memory().unwrap();
-        assert!(!user_busy(&empty.conn, now, None));
+        assert!(!user_busy(&empty.conn, &Config::default(), now, None));
     }
 }

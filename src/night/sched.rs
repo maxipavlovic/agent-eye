@@ -5,14 +5,16 @@
 
 use super::clock::{self, Window};
 use super::{launch, Limit, Run, DONE, FAILED, LOST, PLANNED, RUNNING, STARTING, STOPPED};
-use crate::agents::Agents;
+use crate::agents::{origin, Agents, LiveSession};
 use crate::config::Config;
 use crate::db::Db;
 use crate::loose::System;
 use crate::paths::Paths;
+use crate::quiet::Quiet;
 use crate::util::{head_chars, now_ms};
 use anyhow::{Context, Result};
 use rusqlite::params;
+use std::path::Path;
 
 /// What finishing a run found out (the part that needs the machine).
 #[derive(Debug, Clone, Default)]
@@ -414,6 +416,28 @@ pub fn start_run(db: &Db, sys: &dyn Sys, mut run: Run, allow_switch: bool) -> Re
     }
 }
 
+/// Does a live session of `agent` mean you are at work? Not when it is gone, a script's (`sdk-cli`),
+/// a night run's, or of an origin `[board] quiet` keeps quiet; otherwise while it is busy or was
+/// touched within `quiet_ms`.
+pub(crate) fn is_your_work(
+    agent: &str,
+    s: &LiveSession,
+    night: &Path,
+    quiet: Quiet,
+    now: i64,
+    quiet_ms: i64,
+) -> bool {
+    let origin = s
+        .entrypoint
+        .as_deref()
+        .and_then(|e| origin::classify(agent, e));
+    s.alive
+        && s.entrypoint.as_deref() != Some("sdk-cli")
+        && !quiet.holds(origin)
+        && !super::is_night_folder(Some(night), s.cwd.as_deref())
+        && (s.status.as_deref() == Some("busy") || s.updated_at.is_some_and(|u| now - u < quiet_ms))
+}
+
 /// The machine for real.
 pub struct RealSys<'a> {
     pub paths: &'a Paths,
@@ -449,12 +473,11 @@ impl Sys for RealSys<'_> {
     fn interactive_busy(&self, quiet_ms: i64) -> bool {
         let now = now_ms();
         let night = self.night_dir();
-        self.agents.iter().flat_map(|a| a.live_sessions()).any(|s| {
-            s.alive
-                && s.entrypoint.as_deref() != Some("sdk-cli")
-                && !super::is_night_folder(Some(&night), s.cwd.as_deref())
-                && (s.status.as_deref() == Some("busy")
-                    || s.updated_at.is_some_and(|u| now - u < quiet_ms))
+        let quiet = Quiet::of(self.cfg);
+        self.agents.iter().any(|a| {
+            a.live_sessions()
+                .iter()
+                .any(|s| is_your_work(a.id(), s, &night, quiet, now, quiet_ms))
         })
     }
 
