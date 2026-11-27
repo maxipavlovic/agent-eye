@@ -14,6 +14,9 @@ pub struct Prompt {
     pub agent: String,
     /// A model judged it to be pushback on something the agent did wrong.
     pub correction: bool,
+    /// A model could still be asked about it and has not been (`UNJUDGED`): it is no correction
+    /// yet, but not known to be none either.
+    pub pending: bool,
 }
 
 /// A tool call, with the agent that made it (agents fail at different rates, so errors are only
@@ -51,14 +54,16 @@ pub fn load(conn: &Connection, from_ms: i64) -> Result<Data> {
     let mut open: HashMap<String, i64> = HashMap::new();
     let mut turns = 0;
     let mut st = conn.prepare(
-        "SELECT t.ts, t.kind, t.n, s.agent, c.verdict IS 'yes', t.session_id
-         FROM turn t JOIN session s ON s.id=t.session_id
-         LEFT JOIN correction c ON c.session_id=t.session_id AND c.prompt_ts=t.ts AND t.kind='prompt'
-         WHERE t.ts>=?1 AND t.kind IN ('prompt','interrupt','tool','tool_error','think')
-           AND COALESCE(s.origin,'') NOT IN ('headless','night')
-         ORDER BY t.ts",
+        &format!(
+            "SELECT t.ts, t.kind, t.n, s.agent, c.verdict IS 'yes', t.session_id, {UNJUDGED}
+             FROM turn t JOIN session s ON s.id=t.session_id
+             LEFT JOIN correction c ON c.session_id=t.session_id AND c.prompt_ts=t.ts AND t.kind='prompt'
+             WHERE t.ts>=?1 AND t.kind IN ('prompt','interrupt','tool','tool_error','think')
+               AND COALESCE(s.origin,'') NOT IN ('headless','night')
+             ORDER BY t.ts"
+        ),
     )?;
-    let mut rows = st.query(params![from_ms])?;
+    let mut rows = st.query(params![from_ms, MAX_PROMPT_CHARS])?;
     while let Some(r) = rows.next()? {
         let mut turn = 0;
         let (ts, kind): (i64, String) = (r.get(0)?, r.get(1)?);
@@ -75,6 +80,7 @@ pub fn load(conn: &Connection, from_ms: i64) -> Result<Data> {
                 ts,
                 agent: r.get(3)?,
                 correction: r.get(4)?,
+                pending: r.get(6)?,
             }),
             "interrupt" => data.interrupts.push(ts),
             "tool" => data.tools.push(Call {

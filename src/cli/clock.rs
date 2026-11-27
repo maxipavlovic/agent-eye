@@ -180,6 +180,9 @@ fn text(r: &Report, weeks: i64) -> String {
         );
     }
     let _ = writeln!(o, "\n{}", r.verdict.text);
+    for f in &r.facts {
+        let _ = writeln!(o, "  {f}");
+    }
     if !r.agents.is_empty() {
         let _ = writeln!(
             o,
@@ -301,6 +304,7 @@ mod tests {
                 tool_error_ratio: Some(1.0),
                 text: "Evenings: 2.0x more corrections (20). Mostly you.".into(),
             },
+            facts: vec![],
             now: Now {
                 in_bad: true,
                 since_break_min: Some(35),
@@ -351,6 +355,20 @@ mod tests {
         );
         assert!(t.contains("  2-4h ") && t.contains(" no prompts\n"), "{t}");
         assert!(t.contains("Now: 35 min since your last break, in one of the worse hours."));
+    }
+
+    #[test]
+    fn the_facts_follow_the_verdict_one_to_a_line() {
+        let mut r = report();
+        r.facts = vec![
+            "You correct about 1 in 10 prompts: 11 per 100 (210 of 2000).".into(),
+            "Last 2 weeks: 9 per 100, down from 12 in the 2 weeks before.".into(),
+        ];
+        let t = text(&r, 4);
+        assert!(
+            t.contains("Mostly you.\n  You correct about 1 in 10 prompts: 11 per 100 (210 of 2000).\n  Last 2 weeks: 9 per 100, down from 12 in the 2 weeks before.\n"),
+            "{t}"
+        );
     }
 
     #[test]

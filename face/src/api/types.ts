@@ -373,6 +373,8 @@ export interface ClockReport {
     tool_error_ratio: number | null;
     text: string;
   };
+  /** Plain sentences that hold whatever the verdict says (your average, the trend, breaks, stops), each only when it rests on enough. */
+  facts: string[];
   now: { in_bad: boolean; since_break_min: number | null; hint: ClockHint | null };
   agents: ClockAgent[];
 }

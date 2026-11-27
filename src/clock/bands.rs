@@ -156,7 +156,7 @@ fn band_of(min: i64) -> usize {
 
 /// Prompts and corrections by time since the last break. Prompts before the first known break
 /// (idle data starting mid-window) are left out.
-pub fn since_break(prompts: &[Prompt], breaks: &[i64]) -> Vec<Band> {
+pub fn since_break<'a>(prompts: impl IntoIterator<Item = &'a Prompt>, breaks: &[i64]) -> Vec<Band> {
     let mut bands: Vec<Band> = BAND_NAMES
         .iter()
         .map(|b| Band {
@@ -313,6 +313,7 @@ mod tests {
             ts,
             agent: "claude".into(),
             correction,
+            pending: false,
         }
     }
     fn call(ts: i64) -> Call {

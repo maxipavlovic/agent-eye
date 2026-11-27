@@ -11,6 +11,7 @@ export function tooFewClock(): ClockReport {
     hours: Array.from({ length: 24 }, (_, h) => (h >= 9 && h < 17 ? { ...zero(h), prompts: 15, corrections: h === 10 ? 6 : 0, tool_calls: 120, tool_errors: 2 } : zero(h))),
     since_break: [], bad: [],
     verdict: { kind: 'too_few', you_ratio: null, you_n: 6, think_ratio: null, tool_error_ratio: null, text: 'Too few to tell yet.' },
+    facts: ['You correct about 1 in 20 prompts: 5 per 100 (6 of 120).'],
   };
 }
 

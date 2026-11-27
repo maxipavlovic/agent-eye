@@ -26,6 +26,19 @@ function hours(weeks: number): ClockHour[] {
   });
 }
 
+const weeksText = (w: number) => (w === 1 ? 'week' : `${w} weeks`);
+
+/** The facts the engine would state for the demo window (the 12 prompts still waiting are left out of the rates). */
+function demoFacts(weeks: number, judged: number, corrections: number, stops: number, prompts: number): string[] {
+  const half = Math.floor(weeks / 2);
+  return [
+    `You correct about 1 in ${Math.round(judged / corrections)} prompts: ${Math.round((corrections / judged) * 100)} per 100 (${corrections} of ${judged}).`,
+    ...(half > 0 ? [`Last ${weeksText(half)}: 8 per 100, down from 10 in the ${weeksText(weeks - half)} before.`] : []),
+    'Breaks help: an hour or more after one, you correct 11 per 100, against 7 in the first hour.',
+    `You stopped the agent mid-answer ${stops} times, about once every ${Math.round(prompts / stops)} prompts.`,
+  ];
+}
+
 /** A new install: nothing counted yet, so no verdict. */
 export function emptyClock(weeks: number): ClockReport {
   const zero = (h: number): ClockHour => ({ h, prompts: 0, corrections: 0, interrupts: 0, tool_calls: 0, tool_errors: 0, think: null, think_n: 0 });
@@ -38,6 +51,7 @@ export function emptyClock(weeks: number): ClockReport {
     think_agent: null,
     tool_agent: null,
     verdict: { kind: 'too_few', you_ratio: null, you_n: null, think_ratio: null, tool_error_ratio: null, text: 'Too few to tell yet: 0 prompts and 0 corrections (it needs 300 and 30).' },
+    facts: [],
     now: { in_bad: false, since_break_min: null, hint: null },
     agents: [],
   };
@@ -62,6 +76,7 @@ export function demoClock(weeks: number): ClockReport {
       kind: 'you', you_ratio: 1.9, you_n: 53, think_ratio: 0.93, tool_error_ratio: 0.95,
       text: 'Evenings: 1.9x more corrections (53). Model thinking −7%. Tool errors flat. Mostly you.',
     },
+    facts: demoFacts(weeks, prompts - 12, corrections, hs.reduce((n, h) => n + h.interrupts, 0), prompts),
     now: { in_bad: false, since_break_min: 35, hint: null },
     agents: [
       { agent: 'claude', prompts: Math.round(prompts * 0.94), corrections: Math.round(corrections * 0.95), think: 'signature', think_unit: 'signature', think_ratio: 0.93, tool_error_ratio: 0.95, think_note: null, tool_error_note: null, signals: [...SIGNALS] },

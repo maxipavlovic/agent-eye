@@ -30,13 +30,20 @@ function AgentTable({ c, store }: { c: ClockReport; store: Store }) {
   );
 }
 
-/** The panel body for a clock that has something to say: the verdict, the diagram, the break chart, each agent. */
+/** The plain facts under the verdict, as the engine words them: something to go on when no hour stands out. */
+function Facts({ c }: { c: ClockReport }) {
+  if (c.facts.length === 0) return null;
+  return <ul class="facts">{c.facts.map((f) => <li key={f}>{f}</li>)}</ul>;
+}
+
+/** The panel body for a clock that has something to say: the verdict, the facts, the diagram, the break chart, each agent. */
 function Body({ c, store }: { c: ClockReport; store: Store }) {
   const table = useSignal(false);
   const pending = judgingNote(c) ?? pendingNote(c);
   return (
     <>
       <p class="verdict">{c.verdict.text}</p>
+      <Facts c={c} />
       {pending && <p class="umeta">{pending}</p>}
       <Sec t="BY HOUR OF THE DAY">
         <ChartFrame title={`${c.from} to ${c.to}`} table={table.value} onTable={(t) => { table.value = t; }}>
@@ -98,7 +105,7 @@ export function HoursHost({ store }: { store: Store }) {
           {!c && !missing.value && !broken.value && <p class="state">Loading…<i class="dots" /></p>}
           {missing.value && <p class="state">Not available in this version. Update eye, then reload.</p>}
           {broken.value && <p class="state">Could not load the hours: {broken.value}</p>}
-          {c && note && <p class="state">{note}</p>}
+          {c && note && <><p class="state">{note}</p><Facts c={c} /></>}
           {c && !note && <Body c={c} store={store} />}
         </div>
         <div class="dis" />

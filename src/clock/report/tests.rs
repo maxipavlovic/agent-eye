@@ -39,23 +39,22 @@ impl World {
             .unwrap();
     }
 
-    /// `prompts` prompts in local hour `h`, of which `corrections` were corrections, each with an
-    /// agent turn before it, 20 tool calls (2 failed) and one thought of `think`.
+    /// `prompts` prompts in local hour `h`, all judged, of which `corrections` were corrections,
+    /// each with an agent turn before it, 20 tool calls (2 failed) and one thought of `think`.
     fn hour(&mut self, h: i64, prompts: i64, corrections: i64, think: i64) {
         for i in 0..prompts {
             self.n += 1;
             let ts = D0 + (self.n % 20) * DAY + h * H + i * 1000;
             self.turn(ts - 500, "end", 5);
             self.turn(ts, "prompt", 30);
-            if i < corrections {
-                self.db
-                    .conn
-                    .execute(
-                        "INSERT INTO correction(session_id, prompt_ts, verdict, model) VALUES('s',?1,'yes','haiku')",
-                        [ts],
-                    )
-                    .unwrap();
-            }
+            // the pass stores a verdict for every prompt it judged, `no` as well as `yes`
+            self.db
+                .conn
+                .execute(
+                    "INSERT INTO correction(session_id, prompt_ts, verdict, model) VALUES('s',?1,?2,'haiku')",
+                    rusqlite::params![ts, if i < corrections { "yes" } else { "no" }],
+                )
+                .unwrap();
             // every call is a `tool`, and a failed one a `tool_error` as well
             for k in 0..20 {
                 self.turn(ts + 10 + k, "tool", 0);
@@ -382,8 +381,11 @@ fn a_switched_off_clock_reports_nothing() {
 fn with_judging_off_nothing_is_pending_and_nothing_is_corrected() {
     let mut w = World::new();
     w.steady_days_worse_evenings(1000);
+    // a prompt after an agent turn that the pass has not judged yet
+    w.turn(NOW - H, "end", 5);
+    w.turn(NOW - H + 500, "prompt", 30);
     let on = w.report("");
-    assert!(on.llm && on.pending > 0);
+    assert!(on.llm && on.pending == 1);
     let off = w.report("[clock]\nllm = false");
     assert!(!off.llm);
     assert_eq!(off.pending, 0);
@@ -543,6 +545,14 @@ fn the_json_has_the_documented_fields() {
     let mut w = World::new();
     w.steady_days_worse_evenings(1000);
     let j = w.report("").json();
+    // the facts are sentences, the first one the average over the whole window
+    assert!(
+        j["facts"][0]
+            .as_str()
+            .is_some_and(|f| f.starts_with("You correct about 1 in ")),
+        "{}",
+        j["facts"]
+    );
     let keys = |v: &serde_json::Value| {
         let mut k: Vec<String> = v.as_object().unwrap().keys().cloned().collect();
         k.sort();
@@ -555,6 +565,7 @@ fn the_json_has_the_documented_fields() {
             "bad",
             "corrections",
             "enabled",
+            "facts",
             "from",
             "hints",
             "hours",

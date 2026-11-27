@@ -63,6 +63,9 @@
 .ctable tr.faint td { color: var(--mute); }
 
 .verdict { font: 500 19px/1.45 var(--f-body); color: var(--ink); max-width: 62ch; margin: 18px 0 0; }
+.facts { list-style: none; margin: 10px 0 0; padding: 0; max-width: 62ch; font: 400 16px/1.5 var(--f-body); color: var(--ink); }
+.facts li { padding: 2px 0 2px 14px; position: relative; }
+.facts li::before { content: ''; position: absolute; left: 0; top: 0.75em; width: 6px; height: 1px; background: var(--ink); }
 .hourhint { display: inline-flex; align-items: center; gap: 8px; max-width: 28ch; white-space: nowrap; background: none; border: 0; padding: 4px 6px; font: 400 14px/1.2 var(--f-body); color: var(--ink); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
 .hd .hourhint { flex: 0 1 auto; min-width: 34px; }
 .hourhint span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }

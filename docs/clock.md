@@ -118,6 +118,24 @@ The thinking measure is only a proxy (for Claude Code it is the length of the th
 and corrections are a model's judgement, wrong about one time in ten. Read the verdict as a hint
 about your own habits, not a score.
 
+## Facts under the verdict
+
+Most weeks no hour stands out, and that alone says little. So under the verdict, `eye clock` and
+HOURS state a few plain numbers that hold whatever it says (`facts` in `/api/clock`):
+
+- how often you correct: "You correct about 1 in 6 prompts: 17 per 100 (189 of 1084).";
+- the later half of the window against the earlier one: "Last 2 weeks: 15 per 100, down from 19
+  in the 2 weeks before." (none for a one-week window);
+- an hour or more after a break against the first hour after one, the same two groups and the same
+  test as the break hint: "Breaks help" only when that test passes, otherwise "not a clear
+  difference yet";
+- how often you stopped the agent mid-answer.
+
+Each needs 100 prompts behind every number it gives. The ones about corrections count only prompts
+a model has judged, so prompts still waiting for the nightly pass do not make the latest days look
+better, and they are left out while corrections are not being judged. They describe your numbers;
+only the verdict and "Breaks help" claim more than chance.
+
 ## What is sent where
 
 Judging corrections is the only step that sends anything, and it goes through the agent you already

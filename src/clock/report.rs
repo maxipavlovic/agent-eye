@@ -3,6 +3,7 @@
 //! `GET /api/clock` and `eye clock` show.
 
 use super::bands::{self, Band, Hour, Range};
+use super::facts;
 use super::judging;
 pub use super::judging::Judging;
 use super::permute;
@@ -104,6 +105,9 @@ pub struct Report {
     /// itself, so the strip shows one agent's.
     pub tool_agent: Option<String>,
     pub verdict: Verdict,
+    /// Plain sentences that hold whatever the verdict says: how often you correct, how that moved,
+    /// what a break does, how often you stop the agent (`facts`). Each only when it rests on enough.
+    pub facts: Vec<String>,
     pub now: Now,
     pub agents: Vec<AgentRow>,
 }
@@ -213,6 +217,13 @@ pub fn build(
         text,
         offer: cfg.night.enabled,
     });
+    let facts = facts::facts(&facts::Inputs {
+        data: &data,
+        judged: judging == Judging::On,
+        breaks: &breaks,
+        now,
+        weeks,
+    });
     let sides = tested.map_or(vec![], |t| t.sides);
     let now_state = Now {
         in_bad: current.is_some(),
@@ -244,6 +255,7 @@ pub fn build(
         think_agent: bands::main_think_agent(&data),
         tool_agent: bands::main_tool_agent(&data),
         verdict,
+        facts,
         now: now_state,
         agents: agent_rows(&data, cfg, &sides, named.is_empty()),
     })

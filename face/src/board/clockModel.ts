@@ -101,7 +101,7 @@ export function breakLine(b: ClockBand): string {
 
 /** What the panel says instead of the diagram, or null when there is a diagram to draw. */
 export function clockNote(c: ClockReport): string | null {
-  if (!c.enabled) return 'The steering clock is off. Switch it on in Settings, under HOURS.';
+  if (!c.enabled) return 'The steering clock is off. To switch it on, set enabled = true under [clock] in ~/.agent-eye/config.toml, then run eye restart.';
   if (c.prompts === 0) return 'Nothing recorded yet. eye notes when you prompt and when the agent finishes, as your sessions run.';
   if (c.verdict.kind === 'too_few') return c.judging === 'on' ? `Not enough data yet: ${count(c.prompts, 'prompt')}, ${count(c.corrections, 'correction')}.` : judgingNote(c);
   return null;
