@@ -196,7 +196,7 @@ fn seeded_world(seed: u64, worse: f64) -> World {
             for i in 0..60 {
                 w.n += 1;
                 let ts = D0 + ((w.n + day_shift) % 20) * DAY + h * H + i * 1000;
-                let mut put = |ts: i64, kind: &str, n: i64| {
+                let put = |ts: i64, kind: &str, n: i64| {
                     w.db.conn
                         .execute(
                             "INSERT INTO turn(session_id, ts, kind, n) VALUES(?1,?2,?3,?4)",
