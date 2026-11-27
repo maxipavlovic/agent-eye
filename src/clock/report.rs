@@ -228,7 +228,7 @@ pub fn build(
         think_agent: bands::main_think_agent(&data),
         verdict,
         now: now_state,
-        agents: agent_rows(&data, agents, &sides),
+        agents: agent_rows(&data, cfg, &sides),
     })
 }
 
@@ -316,13 +316,17 @@ fn hint(
     }
 }
 
-fn agent_rows(data: &Data, agents: &Agents, sides: &[AgentSide]) -> Vec<AgentRow> {
+/// One row per agent with prompts in the window. What an agent can report is a fact about the agent,
+/// so it is looked up among every agent eye knows, enabled or not (history may hold sessions of one
+/// that is off now).
+fn agent_rows(data: &Data, cfg: &Config, sides: &[AgentSide]) -> Vec<AgentRow> {
+    let known = crate::agents::known(cfg);
     let mut rows: Vec<AgentRow> = vec![];
     for p in &data.prompts {
         let i = match rows.iter().position(|r| r.agent == p.agent) {
             Some(i) => i,
             None => {
-                let agent = agents.get(&p.agent);
+                let agent = known.iter().find(|a| a.id() == p.agent);
                 let think_unit = agent.and_then(|a| a.think_unit());
                 let side = sides.iter().find(|s| s.agent == p.agent);
                 rows.push(AgentRow {
