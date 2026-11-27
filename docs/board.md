@@ -80,7 +80,7 @@ Every hour has a tooltip (hover, a tap, or the arrow keys: the chart is one cont
 
 ## The usage chart
 
-USAGE draws the cost of every day as stacked columns, by project or by model (the top five keep their names, the rest are "other"), with a legend, a tooltip for each day and a TABLE view. A name keeps its colour while the panel is open. The columns are one control read with the arrow keys (or a hover or a tap), and on a phone the chart is laid out again at 320 wide with fewer day labels, as HOURS is. Every pair of the seven colours is told apart apart from every other, and they skip whichever ones sit near your accent colour, because the accent means "needs you"; change the accent and the chart is drawn again without them.
+USAGE draws the cost of every day as stacked columns, by project or by model (the top five keep their names, the rest are "other"), with a legend, a tooltip for each day and a TABLE view. A name keeps its colour while the panel is open. The columns are one control read with the arrow keys (or a hover or a tap), and on a phone the chart is laid out again at 320 wide with fewer day labels, as HOURS is. Every pair of the seven colours is told apart apart from every other, and they skip whichever ones sit near your accent colour, because the accent means "needs you"; change the accent and the chart is drawn again without them. A green accent leaves too few, so then the fifth colour may be one that is only a little nearer to the accent (never under 13, where 15 is "near"). Every pair is at least 15 apart for full colour vision and at least 6 apart under protan or deutan simulation, the floor for charts that also have a legend, a tooltip and a table.
 
 ## Settings
 

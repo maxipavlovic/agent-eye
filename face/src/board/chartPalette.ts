@@ -16,6 +16,13 @@ export const SLOTS = 5;
 /** The distance (OKLab, times 100) under which two colours read as the same family. */
 export const NEAR = 15;
 
+/**
+ * The least distance a chart colour kept in the fifth slot may have from the accent when the accent leaves fewer than
+ * five colours that are `NEAR` enough away (a green accent leaves three of the seven too near). It is a choice: the
+ * farthest of the near ones fills in, and none of the eight accents lets it fall under this.
+ */
+export const FILL_IN_MIN = 13;
+
 const lin = (c: number) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
 
 /** A `#rrggbb` colour in OKLab, or null when it is anything else. */
