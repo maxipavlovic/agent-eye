@@ -344,7 +344,7 @@ test.describe('settings', () => {
     await panel.getByRole('button', { name: /^SUMMARIES/ }).click();
     const model = panel.getByRole('combobox', { name: 'MODEL FOR SUMMARIES' });
     await expect(model.locator('option')).toHaveText(['Default: haiku', 'sonnet', 'opus', 'Other…']);
-    await expect(panel).toContainText('The model Claude Code writes summaries (and judges corrections) with.');
+    await expect(panel).toContainText('The model Claude Code writes summaries with, and judges corrections with from the next nightly pass.');
     await model.selectOption('sonnet');
     await expect(panel.getByRole('status')).toHaveText('Saved');
     expect((await eye.api('/api/settings')).settings['summary.model'].value).toBe('sonnet');

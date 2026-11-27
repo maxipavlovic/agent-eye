@@ -61,7 +61,7 @@ export function ModelPick({ m, sample, save }: { m: ModelSetting; sample: boolea
           <button class="btn sm" type="submit" disabled={sample}>SET</button>
         </>
       )}
-      <span class="hint">The model {m.agent ?? 'your agent'} writes summaries (and judges corrections) with. Small is fine: a summary is short.{restartNote(m.restart)}</span>
+      <span class="hint">The model {m.agent ?? 'your agent'} writes summaries with, and judges corrections with from the next nightly pass. Small is fine: a summary is short.{restartNote(m.restart, 'Summaries')}</span>
     </form>
   );
 }

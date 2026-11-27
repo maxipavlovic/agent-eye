@@ -6,8 +6,11 @@ import { FoldSec } from './Sections';
 /** Where the settings live, as the panel names the file. */
 export const CONFIG_FILE = '~/.agent-eye/config.toml';
 
-/** The sentence a setting gets when the engine marks its key `restart: true`: written here once, never by hand per row. */
-export const restartNote = (restart?: boolean) => (restart ? ' Takes effect when the background service restarts.' : '');
+/**
+ * The sentence a setting gets when the engine marks its key `restart: true`: written here once, never by hand per row.
+ * `who` names what waits for the restart when another part takes the setting at once (summaries, while judging does not).
+ */
+export const restartNote = (restart?: boolean, who?: string) => (restart ? ` ${who ? `${who} take it` : 'Takes effect'} when the background service restarts.` : '');
 
 /** One setting: its name, the control, and one plain line on what it does, with the restart sentence when `restart` is set. */
 export function Row({ label, help, restart, children }: { label: string; help: string; restart?: boolean; children: ComponentChildren }) {

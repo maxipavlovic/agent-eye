@@ -73,7 +73,7 @@ async function mount(src: Source = fixtureSource()) {
 const AGENT_PARTS = ['SUMMARIES', 'NIGHT SHIFT', 'REMINDERS', 'HOURS', 'AGENTS'];
 /** A section of the open panel, by its title. */
 const section = (t: string) => [...document.querySelectorAll('.settings .sec')].find((sec) => sec.querySelector('.fhead')?.firstChild?.textContent === t)!;
-const RESTART = /Takes effect when the background service restarts|then run eye restart/g;
+const RESTART = /when the background service restarts|then run eye restart/g;
 
 const key = (k: string) => document.body.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true }));
 
@@ -418,7 +418,7 @@ describe('the model for summaries', () => {
     await unfold('SUMMARIES');
     expect(options()).toEqual(['Default: haiku', 'sonnet', 'opus', 'Other…']);
     expect($<HTMLSelectElement>('.settings select')!.value).toBe('');
-    expect($('.settings form.nset .hint')!.textContent).toBe('The model Claude Code writes summaries (and judges corrections) with. Small is fine: a summary is short. Takes effect when the background service restarts.');
+    expect($('.settings form.nset .hint')!.textContent).toBe('The model Claude Code writes summaries with, and judges corrections with from the next nightly pass. Small is fine: a summary is short. Summaries take it when the background service restarts.');
     expect($('.settings input')).toBeNull();
     pickModel('sonnet');
     await vi.waitFor(() => expect(saveSettings).toHaveBeenCalledWith({ 'summary.model': 'sonnet' }));
