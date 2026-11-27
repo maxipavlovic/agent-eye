@@ -2,6 +2,12 @@
 
 All notable changes are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Changed
+
+- A quiet session (`[board] quiet`) is a program's run, not your work: it is Running while it works and in the archive otherwise, instead of in Paused. It is still found and resumable, and a due reminder or a move by hand still puts it where you want it.
+
 ## 0.5.0-rc.2 - 2026-11-27
 
 ### Added

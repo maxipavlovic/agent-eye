@@ -56,10 +56,9 @@ impl<'a> Input<'a> {
     }
 }
 
-/// The column a session belongs in; the first matching rule wins. A quiet session that waits (a
-/// hook, a closing question, a prompt on screen, a summary that says it needs you) waits on the
-/// program that started it: it goes where the summary puts it, Paused for "needs you", and is not
-/// Running while it waits, whatever runs beside it. A due reminder and a move by hand still win.
+/// The column a session belongs in; the first matching rule wins. A quiet session is a program's
+/// run, not your work: it is Running while it works and in the archive otherwise, whatever it asks
+/// (what it asks is for its program). A due reminder and a move by hand still win.
 pub fn compute(i: &Input) -> Column {
     if i.archived {
         return Column::Archive;
@@ -73,6 +72,14 @@ pub fn compute(i: &Input) -> Column {
             return c;
         }
     }
+    if i.quiet {
+        let works = i.live_status == Some("busy") || (i.live_status.is_some() && i.has_background);
+        return if works {
+            Column::Running
+        } else {
+            Column::Archive
+        };
+    }
     if i.live_status == Some("busy") {
         return Column::Running;
     }
@@ -85,15 +92,15 @@ pub fn compute(i: &Input) -> Column {
         let live_waiting = ls == "waiting" && !dialog;
         let waits =
             i.hook_waiting || (ls == "idle" && asks) || (live_waiting && i.live_wait.is_some());
-        if waits && !i.quiet {
+        if waits {
             return Column::NeedsYou;
         }
-        if i.has_background && !asks && !live_waiting && !waits {
+        if i.has_background && !asks && !live_waiting {
             return Column::Running;
         }
     }
     match i.ai_status {
-        Some(AiStatus::NeedsYou) if !i.quiet && i.now_ms - i.last_activity_at <= SEVEN_DAYS_MS => {
+        Some(AiStatus::NeedsYou) if i.now_ms - i.last_activity_at <= SEVEN_DAYS_MS => {
             Column::NeedsYou
         }
         Some(AiStatus::WaitingOnOthers) => Column::Waiting,
@@ -322,29 +329,35 @@ mod tests {
     }
 
     #[test]
-    fn a_quiet_session_never_moves_itself_to_needs_you() {
+    fn a_quiet_session_never_moves_itself_to_needs_you_it_goes_to_the_archive() {
         for (how, mut i) in every_ask() {
             assert_eq!(compute(&i), Column::NeedsYou, "{how}, not quiet");
             i.quiet = true;
-            assert_eq!(compute(&i), Column::Paused, "{how}, quiet");
+            assert_eq!(compute(&i), Column::Archive, "{how}, quiet");
         }
     }
 
     #[test]
-    fn a_quiet_session_that_waits_goes_where_its_summary_puts_it_and_is_not_running() {
-        for (how, mut i) in every_ask().into_iter().filter(|(h, _)| *h != "summary") {
-            i.quiet = true;
-            i.ai_status = Some(AiStatus::WaitingOnOthers);
-            assert_eq!(compute(&i), Column::Waiting, "{how}");
-            i.ai_status = Some(AiStatus::Done);
-            assert_eq!(compute(&i), Column::Done, "{how}");
-            i.ai_status = None;
+    fn a_quiet_session_is_running_while_it_works_and_in_the_archive_otherwise() {
+        let mut i = base();
+        i.quiet = true;
+        for ai in [
+            None,
+            Some(AiStatus::Done),
+            Some(AiStatus::WaitingOnOthers),
+            Some(AiStatus::Paused),
+        ] {
+            i.ai_status = ai;
+            for live in [None, Some("idle"), Some("waiting")] {
+                i.live_status = live;
+                assert_eq!(compute(&i), Column::Archive, "{ai:?} {live:?}");
+            }
+            i.live_status = Some("busy");
+            assert_eq!(compute(&i), Column::Running, "{ai:?} busy");
+            i.live_status = Some("idle");
             i.has_background = true;
-            assert_eq!(
-                compute(&i),
-                Column::Paused,
-                "{how}: it waits on its program"
-            );
+            assert_eq!(compute(&i), Column::Running, "{ai:?} background");
+            i.has_background = false;
         }
     }
 
@@ -362,39 +375,6 @@ mod tests {
     }
 
     #[test]
-    fn quiet_changes_nothing_for_a_session_that_does_not_ask() {
-        let mut cases = vec![];
-        for (live, wait, background) in [
-            (Some("busy"), None, false),
-            (Some("idle"), None, true),
-            (Some("idle"), None, false),
-            (Some("waiting"), Some("dialog open"), true),
-            (Some("waiting"), None, false),
-            (None, None, false),
-        ] {
-            for ai in [
-                None,
-                Some(AiStatus::Done),
-                Some(AiStatus::WaitingOnOthers),
-                Some(AiStatus::Paused),
-            ] {
-                let mut i = base();
-                (i.live_status, i.live_wait, i.has_background, i.ai_status) =
-                    (live, wait, background, ai);
-                cases.push(i);
-            }
-        }
-        let mut trivial = base();
-        trivial.prompt_count = 1;
-        cases.push(trivial);
-        for mut i in cases {
-            let loud = compute(&i);
-            i.quiet = true;
-            assert_eq!(compute(&i), loud, "{i:?}");
-        }
-    }
-
-    #[test]
     fn the_origin_of_the_session_decides_whether_it_is_quiet() {
         let s = |origin: &str| Session {
             origin: Some(origin.into()),
@@ -406,7 +386,7 @@ mod tests {
         let mut cfg = crate::config::Config::default();
         cfg.board.quiet = vec!["app".into()];
         let col = |s: &Session, q| compute(&Input::from_session(s, false, 2_000, q));
-        assert_eq!(col(&s("app"), Quiet::of(&cfg)), Column::Paused);
+        assert_eq!(col(&s("app"), Quiet::of(&cfg)), Column::Archive);
         assert_eq!(col(&s("app"), Quiet::NONE), Column::NeedsYou);
         assert_eq!(col(&s("headless"), Quiet::of(&cfg)), Column::NeedsYou);
         assert_eq!(col(&s("terminal"), Quiet::of(&cfg)), Column::NeedsYou);

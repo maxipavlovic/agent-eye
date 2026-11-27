@@ -425,7 +425,7 @@ describe('the sessions started by programs', () => {
       "5 sessions started by an app through an agent's SDK; quiet would take 2 out of Needs you.",
       '3 sessions started by a script or a CI job; quiet would take none out of Needs you.',
     ]);
-    expect(section(T).textContent).toContain('A quiet session never moves to Needs you by itself, gets no summary and stays out of HOURS.');
+    expect(section(T).textContent).toContain('A quiet session is Running while it works and in the archive otherwise, never in Needs you by itself; it gets no summary and stays out of HOURS.');
   });
 
   it('saves the list at once, folds to which are quiet, and loads the board again', async () => {

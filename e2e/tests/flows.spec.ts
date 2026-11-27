@@ -384,9 +384,9 @@ test.describe('settings', () => {
     await expect(panel).toContainText("2 sessions started by an app through an agent's SDK; 1 kept out of Needs you.");
     expect((await eye.api('/api/settings')).settings['board.quiet'].value).toEqual(['app']);
     await board.keyboard.press('Escape');
-    // the board follows without a restart: Paused, where its summary puts it, and still found
+    // the board follows without a restart: a program's run is in the archive, out of the lanes, and still found
     await expect(needsYou.locator('[data-id]')).toHaveCount(4);
-    await expect(lane(board, /^paused/i).getByRole('button', { name: worst })).toBeVisible();
+    await expect(board.locator('main').getByRole('button', { name: worst })).toHaveCount(0);
     await board.getByPlaceholder('Search every session').fill('reconciliation export');
     await expect(board.locator('article[role=button]').first()).toContainText('Rework the customer billing reconciliation');
     // and off again, it is back

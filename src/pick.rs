@@ -603,7 +603,7 @@ mod tests {
         let mut cfg = Config::default();
         assert_eq!(column(&cfg), Column::NeedsYou);
         cfg.board.quiet = vec!["app".into()];
-        assert_eq!(column(&cfg), Column::Paused);
+        assert_eq!(column(&cfg), Column::Archive);
     }
 
     fn row(id: &str, title: &str, col: Column, last: i64) -> Row {
