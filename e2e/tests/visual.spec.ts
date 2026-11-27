@@ -1,5 +1,5 @@
 // Screenshots of the real page: the board in both layouts, the panel, an idea's panel, the menu, the idea form and
-// the usage and settings panels, light and dark, at two widths. Baselines are made by `scripts/e2e.sh --update`
+// the usage, hours and settings panels, light and dark, at two widths (and three panels at phone width). Baselines are made by `scripts/e2e.sh --update`
 // in the pinned Playwright container (see docs/testing.md). The server clock, the browser clock
 // and the time zone are fixed, so what the page says about time is the same on every run.
 import type { Page } from '@playwright/test';
@@ -76,6 +76,23 @@ for (const scheme of SCHEMES) {
       }
     });
   }
+}
+
+// The charts on a phone: 360 wide, where the drawings switch to their narrow layout so every word stays readable.
+for (const scheme of SCHEMES) {
+  test.describe(`${scheme} 360`, () => {
+    test.use({ colorScheme: scheme, viewport: { width: 360, height: 800 } });
+    for (const name of ['hours', 'usage', 'settings']) {
+      test(name, async ({ board }) => {
+        await VIEWS[name]!(board);
+        await board.waitForLoadState('networkidle');
+        await board.evaluate(() => document.fonts.ready);
+        await board.evaluate(() => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))));
+        await board.mouse.move(355, 795);
+        await expect(board).toHaveScreenshot(`${name}-${scheme}-360.png`, { mask: [board.locator('.brand'), board.locator('.conn')] });
+      });
+    }
+  });
 }
 
 // The card's frame holds whatever a card carries: the worst-case card (Needs you, a reminder, a night run,

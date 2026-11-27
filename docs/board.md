@@ -66,19 +66,34 @@ An idea's panel has START, IN BACKGROUND, TONIGHT and EDIT in one row, and REMIN
 
 ## The header
 
-Search (every session, archive included; the best match first), the Needs you count, the live connection, **Tonight: N** while night runs are planned (see `night.md`), USAGE (cost and plan limits, see `usage.md`), the **settings gear** and **+ IDEA**. The theme, look, accent, layout, folded lanes and the panel sections you keep open are shared by every browser on this machine (`ui.json`); each look keeps its own layout, folded lanes and open sections.
+Search (every session, archive included; the best match first), the Needs you count, the live connection, **Tonight: N** while night runs are planned (see `night.md`), USAGE (cost and plan limits, see `usage.md`), HOURS (the steering clock, see `clock.md`), the **settings gear** and **+ IDEA**. With `[clock] hints` on, a quiet mark beside HOURS says when your corrections usually rise; it opens HOURS. The theme, look, accent, layout, folded lanes and the panel sections you keep open are shared by every browser on this machine (`ui.json`); each look keeps its own layout, folded lanes and open sections.
+
+## Hours
+
+HOURS opens the steering clock (`clock.md`) with the verdict in one sentence first, then three strips on one 24-hour axis in local time, your bad hours shaded and named ("your evening", the engine's own name for them):
+
+- **You**: corrections per 100 prompts, hour by hour. An hour with fewer than 20 prompts is faint with a dotted cap.
+- **The model**: its thinking against its own usual (100% is the median hour). A tick at 100% marks an hour that was about usual, so it never looks empty; a swing past half is cut at the edge and marked.
+- **Tool errors**: failed calls per 100.
+
+Every hour has a tooltip (hover, or the arrow keys), and TABLE gives the same numbers as tables. A second chart shows corrections by time since your last break, and BY AGENT lists each agent's prompts, corrections, thinking and tool errors, with "—" where an agent does not report a signal. 2, 4 or 8 weeks. When corrections are not judged (`[clock] llm` off, or no agent can), the panel says why and corrections stay at zero. The charts are drawn in the look's ink, because one series needs no colour; colour is kept for the signal. On a phone the drawings are narrower so their words keep their size.
+
+## The usage chart
+
+USAGE draws the cost of every day as stacked columns, by project or by model (the top five keep their names, the rest are "other"), with a legend, a tooltip for each day and a TABLE view. A name keeps its colour while the panel is open. The colours skip whichever ones sit near your accent colour, because the accent means "needs you"; change the accent and the chart is drawn again without them.
 
 ## Settings
 
 The gear (or the `,` key) opens SETTINGS. Every change applies at once and the panel says **Saved**.
 
-- **Look**: INK or IRIS, the eight accent colours, Lanes or Grid, and light, dark or auto.
+- **Look**: the skin (INK or IRIS), the eight accent colours, Lanes or Grid, and light, dark or auto.
 - **Board**: which lanes are folded.
 - **Summaries**: on or off, and the model (`[summary] enabled`, `model`).
 - **Night shift**: on or off, the window, how many runs at once and where runs work (`[night] enabled`, `window`, `parallel`, `isolation`). The window is checked as `eye night window` checks it.
 - **Reminders**: the desktop notice (`[remind] notify`).
+- **Hours**: the steering clock on or off, judging corrections, the hint beside HOURS, how long a gap counts as a break, and idle time (`[clock] enabled`, `llm`, `hints`, `break_minutes`, `idle`; see `clock.md`). Only the clock itself needs the background service to restart.
 - **Agents**: which agents eye follows (`[agents] enabled`), in the order of the file; new ones are added at the end, and the first is the default.
 
-They are written into `config.toml` (comments and other keys stay), through `/api/settings` (see `api.md`). The background service reads the night shift and reminder keys again on each pass; summaries and agents count after it restarts, and the panel says so. Folders, prices, exclude lists and the night sandbox switches are not in the panel: they stay in `config.toml` (see `config.md`). On the sample board (the site's demo) the settings are shown, but nothing is saved.
+They are written into `config.toml` (comments and other keys stay), through `/api/settings` (see `api.md`). The background service reads the night shift and reminder keys again on each pass; summaries, agents and turning the clock on or off count after it restarts, and the panel says so. Folders, prices, exclude lists and the night sandbox switches are not in the panel: they stay in `config.toml` (see `config.md`). On the sample board (the site's demo) the settings are shown, but nothing is saved.
 
 **Looks.** Ink is pixel art on warm paper. Iris draws the board as a technical drawing in one-pixel lines: header cells, big condensed counts, and under each lane name one fact (how long the oldest ask has waited, who you are waiting on, how many are working) and a timeline with one tick per session, two weeks ago on the left, now on the right. A title block under the board counts what is on it. Its drawings move a little: the eye blinks, the bell rings while something waits on you, the hourglass turns over while you wait on others; with reduced motion set in your system, nothing moves on its own. Both have the same cards, panel, keys and colours. Switching looks loads the page again; `?look=iris` in the address shows one for that page only and saves nothing.

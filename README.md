@@ -59,7 +59,8 @@ Needs macOS 11+ or Linux (glibc 2.35+), and Claude Code, Codex CLI, Antigravity 
 eye                       # the picker: type to search, Enter resumes
 eval "$(eye init zsh)"    # in ~/.zshrc: Ctrl-G opens the picker from your prompt
 eye board on --open       # the board
-eye usage                 # tokens, cost and plan limits
+eye usage                 # tokens, cost and plan limits (--by-day: one row per day)
+eye clock                 # which hours you steer badly, and whether it is you or the model
 eye loose                 # leftovers: what sessions left running or unpushed
 eye night                 # work planned for tonight
 eye export                # one file with everything, to move or keep
@@ -78,7 +79,7 @@ Works with Claude Code, Codex CLI, Antigravity CLI (`agy`) and OpenCode. Unoffic
 
 ## Docs
 
-[Site](https://maxipavlovic.github.io/agent-eye/) · [Terminal](docs/terminal.md) · [Board](docs/board.md) · [Config](docs/config.md) · [Usage](docs/usage.md) · [Night shift](docs/night.md) · [Backups](docs/backups.md) · [Agents](docs/agents.md) · [API](docs/api.md) · [Testing](docs/testing.md) · [Changelog](CHANGELOG.md)
+[Site](https://maxipavlovic.github.io/agent-eye/) · [Terminal](docs/terminal.md) · [Board](docs/board.md) · [Config](docs/config.md) · [Usage](docs/usage.md) · [Steering clock](docs/clock.md) · [Night shift](docs/night.md) · [Backups](docs/backups.md) · [Agents](docs/agents.md) · [API](docs/api.md) · [Testing](docs/testing.md) · [Changelog](CHANGELOG.md)
 
 ## License
 
