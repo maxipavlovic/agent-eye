@@ -29,6 +29,8 @@ pub(super) struct Turns {
     stream: Stream,
     /// The thread's reasoning tokens at the last total.
     reasoning: i64,
+    /// When the last compaction was seen, which may have been in an earlier read.
+    compacted_at: Option<i64>,
 }
 
 impl Turns {
@@ -40,6 +42,9 @@ impl Turns {
                 .and_then(|c| c.get("reasoning"))
                 .and_then(Value::as_i64)
                 .unwrap_or(0),
+            compacted_at: carry
+                .and_then(|c| c.get("compacted_at"))
+                .and_then(Value::as_i64),
         }
     }
 
@@ -74,16 +79,23 @@ impl Turns {
             }
             Event::Total(_) => self.total(v, ts),
             Event::Compacted => {
-                let again = s.last().is_some_and(|e| {
-                    e.kind == TurnKind::Compact && ts - e.ts <= SAME_COMPACTION_MS
-                });
+                let again = self
+                    .compacted_at
+                    .is_some_and(|t| ts - t <= SAME_COMPACTION_MS);
                 if !again {
                     s.push(ts, TurnKind::Compact, 0);
+                    self.compacted_at = Some(ts);
                 }
             }
             Event::Meta { .. } | Event::Turn { .. } | Event::Other => match payload_type(v) {
                 Some("task_complete") => s.close_at(ts),
-                Some("turn_aborted") => s.push(ts, TurnKind::Interrupt, 0),
+                Some("turn_aborted") => {
+                    // a task that a newer one replaced, or that ran out of budget, is no one's interrupt
+                    if v.pointer("/payload/reason").and_then(Value::as_str) == Some("interrupted") {
+                        s.push(ts, TurnKind::Interrupt, 0);
+                        s.abandon();
+                    }
+                }
                 _ => {}
             },
         }
@@ -111,8 +123,9 @@ impl Turns {
     /// The events, and what to carry to the next read.
     pub(super) fn finish(self) -> (Vec<TurnEvent>, Option<Value>) {
         let reasoning = self.reasoning;
+        let compacted_at = self.compacted_at;
         let (events, open) = self.stream.finish();
-        let carry = json!({"turn": open, "reasoning": reasoning});
+        let carry = json!({"turn": open, "reasoning": reasoning, "compacted_at": compacted_at});
         (events, Some(carry))
     }
 }
@@ -148,7 +161,7 @@ pub(super) fn read_events(path: &Path) -> Result<Vec<TurnEvent>> {
 mod tests {
     use super::*;
     use crate::agents::codex::rollout::decode;
-    use crate::turns::testing::{end_times, kinds, read_in_two};
+    use crate::turns::testing::{assert_every_split_matches_whole, end_times, kinds, read_in_two};
 
     const FIXTURE: &str = include_str!("../../../tests/fixtures/codex-turns.jsonl");
 
@@ -198,15 +211,22 @@ mod tests {
                 (Prompt, 9),
                 (Compact, 0),
                 (End, 2),
+                // `/compact` is a task nobody typed: a compaction and no end
+                (Compact, 0),
+                (Prompt, 12),
+                // the total and the record that repeats it are one thought
+                (Think, 15),
+                // a turn the model failed to answer still ends, with no words
+                (End, 0),
             ]
         );
-        assert_eq!(carry.unwrap()["reasoning"], 40);
+        assert_eq!(carry.unwrap()["reasoning"], 55);
     }
 
     #[test]
     fn an_interrupted_turn_ends_with_its_last_reply_and_a_finished_one_at_task_complete() {
         let (events, _) = read(None, FIXTURE);
-        assert_eq!(end_times(&events), vec![at(0, 20), at(6, 2)]);
+        assert_eq!(end_times(&events), vec![at(0, 20), at(6, 2), at(8, 9)]);
     }
 
     #[test]
@@ -214,8 +234,7 @@ mod tests {
         // the first read stops after the second prompt, the second goes on from there
         let (a, b) = read_in_two(FIXTURE, 12, read);
         assert_eq!(end_times(&a), vec![at(0, 20)]);
-        assert_eq!(end_times(&b), vec![at(6, 2)]);
-        assert!(b.iter().all(|e| e.kind != TurnKind::Prompt));
+        assert_eq!(end_times(&b), vec![at(6, 2), at(8, 9)]);
     }
 
     #[test]
@@ -223,11 +242,76 @@ mod tests {
         // the first read has the last reply and not yet the task_complete line after it
         let (a, b) = read_in_two(FIXTURE, 15, read);
         assert_eq!(end_times(&a), vec![at(0, 20)]);
-        assert_eq!(end_times(&b), vec![at(6, 2)]);
+        assert_eq!(end_times(&b), vec![at(6, 2), at(8, 9)]);
         assert_eq!(
             b.iter().find(|e| e.kind == TurnKind::End).map(|e| e.n),
             Some(2)
         );
+    }
+
+    #[test]
+    fn every_split_point_gives_the_events_of_a_whole_read() {
+        assert_every_split_matches_whole(FIXTURE, read);
+    }
+
+    #[test]
+    fn a_task_nobody_prompted_adds_no_end_to_the_turn_before_it() {
+        let (events, _) = read(None, FIXTURE);
+        let ends = end_times(&events);
+        // the `/compact` task finishes at 09:07:03 and is not the end of any turn
+        assert!(!ends.contains(&at(7, 3)));
+        assert_eq!(ends.len(), 3);
+    }
+
+    #[test]
+    fn a_task_that_finishes_after_an_interrupt_does_not_end_the_interrupted_turn() {
+        let lines = [
+            json!({"timestamp": "2026-11-03T09:00:00.000Z", "type": "event_msg", "payload":
+                {"type": "item_completed", "item": {"type": "UserMessage", "id": "u", "content": [{"type": "text", "text": "go"}]}}}),
+            json!({"timestamp": "2026-11-03T09:00:05.000Z", "type": "event_msg", "payload":
+                {"type": "item_completed", "item": {"type": "AgentMessage", "id": "a", "content": [{"type": "text", "text": "one two"}]}}}),
+            json!({"timestamp": "2026-11-03T09:00:09.000Z", "type": "event_msg", "payload":
+                {"type": "turn_aborted", "reason": "interrupted"}}),
+            json!({"timestamp": "2026-11-03T09:05:00.000Z", "type": "event_msg", "payload":
+                {"type": "task_complete", "turn_id": "review"}}),
+        ];
+        let mut t = Turns::resume(None);
+        for v in &lines {
+            let ts = iso_to_ms(v["timestamp"].as_str().unwrap()).unwrap();
+            t.line(v, &decode(v), ts);
+        }
+        let (events, carry) = t.finish();
+        assert!(end_times(&events).is_empty());
+        // the turn stays open and ends with its last reply at the next prompt
+        assert_eq!(carry.unwrap()["turn"]["words"], 2);
+    }
+
+    #[test]
+    fn a_compaction_whose_two_lines_fall_in_two_reads_is_stored_once() {
+        let line = |ts: &str, ty: &str| match ty {
+            "compacted" => json!({"timestamp": ts, "type": "compacted", "payload": {"message": ""}}),
+            _ => json!({"timestamp": ts, "type": "event_msg", "payload": {"type": ty}}),
+        };
+        let first = line("2026-11-03T09:05:10.000Z", "compacted").to_string();
+        let second = line("2026-11-03T09:05:11.000Z", "context_compacted").to_string();
+        let (a, carry) = read(None, &first);
+        let (b, _) = read(carry.as_ref(), &second);
+        assert_eq!(kinds(&a), vec![(TurnKind::Compact, 0)]);
+        assert!(b.is_empty());
+    }
+
+    #[test]
+    fn only_the_user_interrupt_reason_of_turn_aborted_is_an_interrupt() {
+        let aborted = |reason: &str| {
+            json!({"timestamp": "2026-11-03T09:00:25.000Z", "type": "event_msg",
+                "payload": {"type": "turn_aborted", "reason": reason}})
+        };
+        let lines = [
+            aborted("interrupted"),
+            aborted("replaced"),
+            aborted("budget_limited"),
+        ];
+        assert_eq!(of(&lines), vec![TurnKind::Interrupt]);
     }
 
     #[test]

@@ -169,7 +169,9 @@ pub(super) fn read_events(path: &Path) -> Result<Vec<TurnEvent>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::turns::testing::{end_times, kinds, read_in_two, wrapped};
+    use crate::turns::testing::{
+        assert_every_split_matches_whole, end_times, kinds, read_in_two, wrapped,
+    };
 
     const FIXTURE: &str = include_str!("../../../tests/fixtures/claude-turns.jsonl");
     /// A prompt that follows the fixture's last reply.
@@ -230,6 +232,12 @@ mod tests {
     fn an_end_carries_the_time_of_the_last_reply_of_its_turn() {
         let (events, _) = read(None, &format!("{}\n{NEXT_PROMPT}", FIXTURE.trim_end()));
         assert_eq!(end_times(&events), vec![at(2, 10), at(7, 0)]);
+    }
+
+    #[test]
+    fn every_split_point_gives_the_events_of_a_whole_read() {
+        assert_every_split_matches_whole(FIXTURE, read);
+        assert_every_split_matches_whole(&format!("{}\n{NEXT_PROMPT}", FIXTURE.trim_end()), read);
     }
 
     #[test]

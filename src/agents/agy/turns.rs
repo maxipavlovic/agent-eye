@@ -72,7 +72,9 @@ impl Turns {
 mod tests {
     use super::*;
     use crate::agents::agy::log::decode;
-    use crate::turns::testing::{end_times, kinds, read_in_two, wrapped};
+    use crate::turns::testing::{
+        assert_every_split_matches_whole, end_times, kinds, read_in_two, wrapped,
+    };
     use crate::util::iso_to_ms;
 
     const FIXTURE: &str = include_str!("../../../tests/fixtures/agy-turns.jsonl");
@@ -137,6 +139,12 @@ mod tests {
     fn an_end_carries_the_time_of_the_last_reply_of_its_turn() {
         let (events, _) = read(None, &with_next_prompt());
         assert_eq!(end_times(&events), vec![at(0, 20), at(6, 0)]);
+    }
+
+    #[test]
+    fn every_split_point_gives_the_events_of_a_whole_read() {
+        assert_every_split_matches_whole(FIXTURE, read);
+        assert_every_split_matches_whole(&with_next_prompt(), read);
     }
 
     #[test]

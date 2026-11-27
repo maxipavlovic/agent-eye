@@ -120,12 +120,12 @@ fn agy_log(e: &Env) -> PathBuf {
 
 fn codex_counts() -> Vec<(String, i64)> {
     kinds(&[
-        ("compact", 1),
-        ("end", 2),
+        ("compact", 2),
+        ("end", 3),
         ("interrupt", 1),
-        ("prompt", 2),
+        ("prompt", 3),
         ("refusal", 1),
-        ("think", 1),
+        ("think", 2),
         ("tool", 3),
         ("tool_error", 1),
     ])
@@ -133,9 +133,16 @@ fn codex_counts() -> Vec<(String, i64)> {
 
 /// OpenCode says nothing when a turn is done, so the last turn has no end yet.
 fn opencode_counts() -> Vec<(String, i64)> {
-    let mut counts = codex_counts();
-    counts.iter_mut().find(|(k, _)| k == "end").unwrap().1 = 1;
-    counts
+    kinds(&[
+        ("compact", 1),
+        ("end", 1),
+        ("interrupt", 1),
+        ("prompt", 2),
+        ("refusal", 1),
+        ("think", 1),
+        ("tool", 3),
+        ("tool_error", 1),
+    ])
 }
 
 fn agy_counts() -> Vec<(String, i64)> {
@@ -185,7 +192,7 @@ fn a_rewritten_codex_rollout_replaces_its_turns() {
             .iter()
             .find(|(k, _)| k == "prompt")
             .map(|(_, n)| *n),
-        Some(3)
+        Some(4)
     );
     write(&path, CODEX);
     e.scan();

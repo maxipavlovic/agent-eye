@@ -36,3 +36,28 @@ pub fn read_in_two(
     let (second, _) = read(carry.as_ref(), &tail.join("\n"));
     (first, second)
 }
+
+/// A read that stops at any line, and goes on from there, reports what one read of the whole text
+/// does: the same events in the same order, whether the text is read in two goes at any of its
+/// line boundaries or one line at a time. This is the rule a growing transcript needs: no turn
+/// closed twice, none lost, no compaction counted again.
+pub fn assert_every_split_matches_whole(
+    text: &str,
+    read: impl Fn(Option<&Value>, &str) -> (Vec<TurnEvent>, Option<Value>),
+) {
+    let lines: Vec<&str> = text.lines().collect();
+    let (whole, _) = read(None, text);
+    for at in 1..lines.len() {
+        let (mut a, b) = read_in_two(text, at, &read);
+        a.extend(b);
+        assert_eq!(a, whole, "read in two goes, split after line {at}");
+    }
+    let mut each = vec![];
+    let mut carry: Option<Value> = None;
+    for line in &lines {
+        let (events, next) = read(carry.as_ref(), line);
+        each.extend(events);
+        carry = next;
+    }
+    assert_eq!(each, whole, "read one line at a time");
+}
