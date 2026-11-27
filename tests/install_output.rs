@@ -1,5 +1,6 @@
-//! What `agent-eye install`, `uninstall` and `board on|off` print: a line for each area, home
-//! paths as `~`, file diffs only when asked for, and the Codex trust step once, at the end.
+//! What `agent-eye install`, `uninstall`, `board on|off` and `restart` print: a line for each
+//! area, home paths as `~`, file diffs only when asked for, and the Codex trust step once, at the
+//! end.
 //! Everything runs against a temp HOME with `--no-service`; no service manager is run.
 
 use std::process::{Command, Stdio};
@@ -335,4 +336,17 @@ fn board_on_and_off_print_two_short_lines() {
         off.stdout,
         "agent-eye board off\n  board   off\n  daemon  not restarted (--no-service); restart the daemon to apply\n"
     );
+}
+
+#[test]
+fn restart_prints_the_daemon_line_board_on_and_off_end_with() {
+    let m = Machine::new(true, false);
+    let out = m.run(&["restart"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert_eq!(
+        out.stdout,
+        "agent-eye restart\n  daemon  not restarted (--no-service); restart the daemon to apply\n"
+    );
+    // it changes nothing on its own: no config is written
+    assert!(!m.home().join(".agent-eye").join("config.toml").exists());
 }

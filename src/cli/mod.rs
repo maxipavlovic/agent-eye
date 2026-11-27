@@ -246,6 +246,7 @@ pub fn run() -> Result<()> {
         Cmd::Install { a, board } => setup::install(&g, &a, board),
         Cmd::Uninstall { a, purge } => setup::uninstall(&g, &a, purge),
         Cmd::Doctor => setup::doctor(&g),
+        Cmd::Restart { no_service } => setup::restart(&g, no_service),
         Cmd::Forget {
             ids,
             folder,

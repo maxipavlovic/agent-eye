@@ -1,4 +1,4 @@
-//! Subcommands that set eye up or check it: daemon, install, uninstall, doctor.
+//! Subcommands that set eye up or check it: daemon, install, uninstall, restart, doctor.
 
 use super::args::SetupArgs;
 use super::Global;
@@ -66,6 +66,16 @@ pub fn uninstall(g: &Global, a: &SetupArgs, purge: bool) -> Result<()> {
     o.purge = purge;
     let report = install::uninstall(&o, &agents::known(&cfg))?;
     print_report(&o, "agent-eye uninstall", a.verbose, &report);
+    Ok(())
+}
+
+/// `restart`: the step `board on|off` ends with, on its own, for a key the daemon reads only when
+/// it starts.
+pub fn restart(g: &Global, no_service: bool) -> Result<()> {
+    let paths = g.paths()?;
+    let mut o = Opts::resolve(&paths, None, None)?;
+    o.no_service = no_service;
+    print_report(&o, "agent-eye restart", false, &install::restart_daemon(&o));
     Ok(())
 }
 

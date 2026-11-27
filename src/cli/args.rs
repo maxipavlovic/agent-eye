@@ -501,6 +501,12 @@ pub enum Cmd {
     },
     /// Check that everything works
     Doctor,
+    /// Restart the background service so a change to config.toml applies (starts it when it is not running)
+    Restart {
+        /// Do not restart the daemon through launchctl or systemctl
+        #[arg(long)]
+        no_service: bool,
+    },
     /// Take sessions out of eye: its index and its archive copy, and with --transcript the
     /// agent's own copy too. Cannot be undone (a snapshot is taken first)
     Forget {
@@ -622,6 +628,7 @@ mod tests {
         assert!(parses(&["uninstall", "--launch-agents-dir", "/tmp/x"]));
         assert!(parses(&["board", "on", "--no-launchctl"]));
         assert!(parses(&["board", "off", "--no-launchctl"]));
+        assert!(parses(&["restart", "--no-service"]));
         assert!(parses(&[
             "install",
             "--service-dir",
