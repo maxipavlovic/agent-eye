@@ -382,7 +382,10 @@ fn process_user(
     let Some(p) = clean_prompt(&texts.join("\n")) else {
         return;
     };
-    d.prompt_count += 1;
+    // a bare slash command is no prompt, here as in the turn reader
+    if super::prompt::display_prompt(&p).is_some() {
+        d.prompt_count += 1;
+    }
     for pre in scan_jira(d, seen, &p, ts) {
         d.jira_prompt_prefixes.insert(pre);
     }
