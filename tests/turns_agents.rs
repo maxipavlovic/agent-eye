@@ -331,7 +331,8 @@ impl Agent {
     fn remove(self, e: &Env) {
         let gone = match self {
             Agent::Codex => codex_rollout(e),
-            Agent::Agy => agy_log(e),
+            // the conversation is the folder that holds the log
+            Agent::Agy => e.dir.join(format!("brain/{AGY_ID}")),
             Agent::OpenCode => e.dir.join("storage"),
         };
         match gone.is_dir() {
@@ -427,4 +428,32 @@ fn an_empty_home_of_any_agent_has_nothing_to_backfill() {
             a.id()
         );
     }
+}
+
+#[test]
+fn a_session_whose_transcript_is_gone_gets_its_turns_from_eyes_archive_copy() {
+    for a in AGENTS {
+        let mut e = read_session(a);
+        let id: String =
+            e.db.conn
+                .query_row("SELECT id FROM session", [], |r| r.get(0))
+                .unwrap();
+        agent_eye::archive::archive_session(&e.db, &e.paths, &e.agents(), &id).unwrap();
+        e.forget_turns();
+        a.remove(&e);
+        e.scan();
+        assert_eq!(backfill::waiting(&e.db, &e.agents()).unwrap(), 1, "{}", a.id());
+        e.backfill();
+        assert_eq!(e.counts(), a.counts(), "{}", a.id());
+    }
+}
+
+#[test]
+fn an_opencode_session_that_grows_one_message_at_a_time_ends_with_the_turns_of_a_whole_read() {
+    let mut e = Env::new("opencode");
+    for upto in 1..=6 {
+        opencode_files(&e, upto);
+        e.scan();
+    }
+    assert_eq!(e.counts(), opencode_counts());
 }

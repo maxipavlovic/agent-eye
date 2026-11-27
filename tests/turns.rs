@@ -402,3 +402,20 @@ fn turns_of_sessions_outside_the_index_are_cleared_once_when_the_database_is_ope
         .unwrap();
     assert_eq!((ghosts, rows), (0, kept));
 }
+
+#[test]
+fn a_claude_session_whose_transcript_is_gone_gets_its_turns_from_eyes_archive_copy() {
+    let mut e = Env::new(FIXTURE);
+    e.scan();
+    let id: String =
+        e.db.conn
+            .query_row("SELECT id FROM session", [], |r| r.get(0))
+            .unwrap();
+    agent_eye::archive::archive_session(&e.db, &e.paths, &e.agents(), &id).unwrap();
+    e.forget_turns();
+    std::fs::remove_file(&e.transcript).unwrap();
+    e.scan();
+    assert_eq!(backfill::waiting(&e.db, &e.agents()).unwrap(), 1);
+    e.backfill();
+    assert_eq!(e.counts(), all_of_the_fixture());
+}
