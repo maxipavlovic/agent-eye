@@ -205,6 +205,21 @@ mod tests {
     }
 
     #[test]
+    fn a_tick_follows_the_file_and_not_the_config_the_daemon_started_with() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths {
+            home: tmp.path().to_path_buf(),
+        };
+        paths.ensure_home().unwrap();
+        std::fs::write(paths.config_path(), "[clock]\nenabled = false\n").unwrap();
+        let db = Db::open(&paths.db_path()).unwrap();
+        let started = cfg("[clock]\nenabled = true\nidle = true\n");
+        Clock::new().tick(&db, &paths, &started);
+        // switched off since: no idle reading, so nothing noted for `eye doctor`
+        assert_eq!(db.meta_get(SENSOR_KEY).unwrap(), None);
+    }
+
+    #[test]
     fn without_the_night_shift_it_is_due_from_four_in_the_morning_once_a_day() {
         let c = cfg("");
         assert_eq!(due(&c, at("2026-11-26", "03:59"), None, &plus2), None);

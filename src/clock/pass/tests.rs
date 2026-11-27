@@ -217,6 +217,23 @@ fn judging_off_asks_nobody() {
 }
 
 #[test]
+fn with_the_clock_off_nothing_is_recorded_judged_or_asked() {
+    let mut e = Env::new();
+    e.cfg.clock.enabled = false;
+    e.session("s1", &say(&["fix it", "no, wrong"]));
+    let out = e.run();
+    assert!(out.stopped.unwrap().contains("off"));
+    assert_eq!(e.calls(), 0);
+    for table in ["turn", "turn_state", "correction", "idle_span"] {
+        let n: i64 =
+            e.db.conn
+                .query_row(&format!("SELECT count(*) FROM {table}"), [], |r| r.get(0))
+                .unwrap();
+        assert_eq!(n, 0, "{table}");
+    }
+}
+
+#[test]
 fn an_agent_whose_judging_run_is_unproven_is_never_asked() {
     let mut e = Env::new();
     e.session("s1", &say(&["fix it", "no, wrong"]));
