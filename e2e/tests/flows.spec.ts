@@ -299,11 +299,12 @@ test.describe('settings', () => {
     const panel = board.getByRole('complementary', { name: 'Settings' });
     await board.getByRole('button', { name: 'Settings', exact: true }).click();
     const heads = panel.locator('h4 > button');
-    await expect(heads).toHaveCount(6);
+    await expect(heads).toHaveCount(7);
     const read = () => heads.evaluateAll((bs) => bs.map((b) => [b.firstChild?.textContent, b.getAttribute('aria-expanded'), b.querySelector('.fsum')?.textContent ?? null]));
     expect(await read()).toEqual([
       ['LOOK', 'true', null],
       ['SUMMARIES', 'false', 'OFF'],
+      ['STARTED BY PROGRAMS', 'false', '4 FOUND · OFF'],
       ['NIGHT SHIFT', 'false', 'OFF'],
       ['REMINDERS', 'false', 'OFF'],
       ['HOURS', 'false', 'ON'],
@@ -361,11 +362,44 @@ test.describe('settings', () => {
     await expect.poll(async () => (await eye.api('/api/settings')).settings['summary.model'].value).toBe('');
   });
 
+  test('quiet App, switched by keyboard, takes the app session out of Needs you at once and keeps it listed', async ({ board, eye }) => {
+    const needsYou = lane(board, /^needs you/i);
+    const worst = /Rework the customer billing reconciliation/;
+    await expect(needsYou.locator('[data-id]')).toHaveCount(5);
+    await expect(needsYou.getByRole('button', { name: worst })).toBeVisible();
+    const panel = board.getByRole('complementary', { name: 'Settings' });
+    await board.keyboard.press(',');
+    const head = panel.getByRole('button', { name: /^STARTED BY PROGRAMS/ });
+    await head.focus();
+    await board.keyboard.press('Enter');
+    await expect(head).toHaveAttribute('aria-expanded', 'true');
+    await expect(panel).toContainText("2 sessions started by an app through an agent's SDK, 1 in Needs you now.");
+    await expect(panel).toContainText('2 sessions started by a script or a CI job, none in Needs you now.');
+    const on = panel.getByRole('group', { name: 'Quiet App' }).getByRole('button', { name: 'ON' });
+    await board.keyboard.press('Tab');
+    await expect(on).toBeFocused();
+    await board.keyboard.press('Enter');
+    await expect(panel.getByRole('status')).toHaveText('Saved');
+    await expect(on).toHaveAttribute('aria-pressed', 'true');
+    await expect(panel).toContainText("2 sessions started by an app through an agent's SDK, 1 kept out of Needs you.");
+    expect((await eye.api('/api/settings')).settings['board.quiet'].value).toEqual(['app']);
+    await board.keyboard.press('Escape');
+    // the board follows without a restart: Paused, where its summary puts it, and still found
+    await expect(needsYou.locator('[data-id]')).toHaveCount(4);
+    await expect(lane(board, /^paused/i).getByRole('button', { name: worst })).toBeVisible();
+    await board.getByPlaceholder('Search every session').fill('reconciliation export');
+    await expect(board.locator('article[role=button]').first()).toContainText('Rework the customer billing reconciliation');
+    // and off again, it is back
+    await eye.api('/api/settings', { 'board.quiet': [] });
+    await board.reload();
+    await expect(needsYou.getByRole('button', { name: worst })).toBeVisible();
+  });
+
   test('on a phone, with every section open and Other… showing its field, nothing scrolls sideways', async ({ board }) => {
     await board.setViewportSize({ width: 360, height: 800 });
     const panel = board.getByRole('complementary', { name: 'Settings' });
     await board.getByRole('button', { name: 'Settings', exact: true }).click();
-    for (const t of ['SUMMARIES', 'NIGHT SHIFT', 'REMINDERS', 'HOURS', 'AGENTS']) await panel.getByRole('button', { name: new RegExp(`^${t}`) }).click();
+    for (const t of ['SUMMARIES', 'STARTED BY PROGRAMS', 'NIGHT SHIFT', 'REMINDERS', 'HOURS', 'AGENTS']) await panel.getByRole('button', { name: new RegExp(`^${t}`) }).click();
     await panel.getByRole('combobox', { name: 'MODEL FOR SUMMARIES' }).selectOption({ label: 'Other…' });
     await expect(panel.getByRole('textbox', { name: 'MODEL NAME' })).toBeVisible();
     const wide = await board.evaluate(() => {

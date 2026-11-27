@@ -1,6 +1,6 @@
 // Screenshots of the real page: the board in both layouts, the panel, an idea's panel, the menu, the idea form and
-// the usage, hours and settings panels (folded, the model choice, the rows left to the file), light and dark, at two
-// widths (and four panels at phone width). Baselines are made by `scripts/e2e.sh --update`
+// the usage, hours and settings panels (folded, the model choice, the quiet switches, the rows left to the file), light
+// and dark, at two widths (and five panels at phone width). Baselines are made by `scripts/e2e.sh --update`
 // in the pinned Playwright container (see docs/testing.md). The server clock, the browser clock
 // and the time zone are fixed, so what the page says about time is the same on every run.
 import type { Page } from '@playwright/test';
@@ -54,6 +54,14 @@ const VIEWS: Record<string, (p: Page) => Promise<void>> = {
     await panel.getByRole('combobox', { name: 'MODEL FOR SUMMARIES' }).selectOption({ label: 'Other…' });
     await expect(panel.getByRole('textbox', { name: 'MODEL NAME' })).toBeFocused();
   },
+  // STARTED BY PROGRAMS open: a quiet switch for each program origin the fixture has, with its counts
+  'settings-quiet': async (p) => {
+    const panel = p.getByRole('complementary', { name: 'Settings' });
+    await p.getByRole('button', { name: 'Settings', exact: true }).click();
+    await panel.getByRole('button', { name: /^LOOK/ }).click();
+    await panel.getByRole('button', { name: /^STARTED BY PROGRAMS/ }).click();
+    await expect(panel.getByRole('group', { name: 'Quiet Headless' })).toBeVisible();
+  },
   // HOURS and AGENTS open: the steering clock and the agents shown, with where to change them
   'settings-file': async (p) => {
     const panel = p.getByRole('complementary', { name: 'Settings' });
@@ -104,7 +112,7 @@ for (const scheme of SCHEMES) {
 for (const scheme of SCHEMES) {
   test.describe(`${scheme} 360`, () => {
     test.use({ colorScheme: scheme, viewport: { width: 360, height: 800 } });
-    for (const name of ['hours', 'usage', 'settings', 'settings-model']) {
+    for (const name of ['hours', 'usage', 'settings', 'settings-model', 'settings-quiet']) {
       test(name, async ({ board }) => {
         await VIEWS[name]!(board);
         await board.waitForLoadState('networkidle');
