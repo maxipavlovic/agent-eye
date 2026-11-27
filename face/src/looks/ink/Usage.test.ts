@@ -93,3 +93,64 @@ describe('the USAGE panel', () => {
     expect(usagePanel.value).toBe(false);
   });
 });
+
+describe('the daily cost chart in USAGE', () => {
+  const open = async (over: Partial<Source> = {}) => {
+    const usage = vi.fn(async (d: number, s?: 'project' | 'model') => demoUsage(d, s));
+    const root = await mount({ usage, ...over });
+    usageButton(root).click();
+    await vi.waitFor(() => expect(root.querySelector('.usage .cdiagram')).not.toBeNull());
+    return { root, usage };
+  };
+
+  it('draws a stacked column per day with a legend, split by project to begin with', async () => {
+    const { root, usage } = await open();
+    expect(usage).toHaveBeenCalledWith(7, 'project');
+    expect(root.querySelector('.usage')!.textContent).toContain('DAILY COST, LAST 7 DAYS');
+    expect(root.querySelectorAll('.usage .cdiagram .chit')).toHaveLength(7);
+    const legend = [...root.querySelectorAll('.usage .clegend li')].map((l) => l.textContent);
+    expect(legend).toContain('billing');
+    expect(legend.at(-1)).toBe('other');
+    // the existing content stays
+    for (const t of ['PLAN LIMITS', 'BY AGENT', 'TOP 10 SESSIONS', 'LAST 4 WEEKS']) expect(root.querySelector('.usage')!.textContent).toContain(t);
+  });
+
+  it('keeps a colour with its key when the split changes or the window grows', async () => {
+    const { root } = await open();
+    const fill = (name: string) => {
+      const i = [...root.querySelectorAll('.usage .clegend li')].findIndex((l) => l.textContent === name);
+      return (root.querySelectorAll<HTMLElement>('.usage .clegend .ckey')[i] as HTMLElement).style.background;
+    };
+    const billing = fill('billing');
+    ([...root.querySelectorAll('.usage .acts button')].find((b) => b.textContent === 'MONTH') as HTMLButtonElement).click();
+    await vi.waitFor(() => expect(root.querySelector('.usage')!.textContent).toContain('LAST 30 DAYS'));
+    expect(root.querySelectorAll('.usage .cdiagram .chit')).toHaveLength(30);
+    expect(fill('billing')).toBe(billing);
+  });
+
+  it('splits by model when asked', async () => {
+    const { root, usage } = await open();
+    ([...root.querySelectorAll('.usage .acts button')].find((b) => b.textContent === 'BY MODEL') as HTMLButtonElement).click();
+    await vi.waitFor(() => expect(usage).toHaveBeenLastCalledWith(7, 'model'));
+    await vi.waitFor(() => expect([...root.querySelectorAll('.usage .clegend li')].map((l) => l.textContent)).toContain('claude-opus-5-5'));
+  });
+
+  it('shows a column and its total in a tooltip, and a table with the same numbers', async () => {
+    const { root } = await open();
+    const hit = root.querySelector<SVGElement>('.usage .cdiagram .chit')!;
+    hit.dispatchEvent(new FocusEvent('focus'));
+    await vi.waitFor(() => expect(root.querySelector('.usage .ctip')).not.toBeNull());
+    expect(root.querySelector('.usage .ctip b')!.textContent).toMatch(/^[A-Z][a-z]{2} \d+ [A-Z][a-z]{2} · \$\d/);
+    expect(root.querySelectorAll('.usage .ctip p').length).toBeGreaterThan(1);
+    (root.querySelector('.usage .ctoggle') as HTMLButtonElement).click();
+    await vi.waitFor(() => expect(root.querySelector('.usage .ctable')).not.toBeNull());
+    expect(root.querySelectorAll('.usage .ctable tbody tr')).toHaveLength(7);
+  });
+
+  it('shows no chart when the engine has no series yet (an older engine)', async () => {
+    const root = await mount({ usage: async (d) => ({ ...demoUsage(d), series: undefined }) });
+    usageButton(root).click();
+    await vi.waitFor(() => expect(root.querySelector('.usage .ubars')).not.toBeNull());
+    expect(root.querySelector('.usage .cdiagram')).toBeNull();
+  });
+});

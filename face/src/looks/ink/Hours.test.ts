@@ -4,13 +4,11 @@ import { h, render } from 'preact';
 import type { Source } from '../../api/types';
 import { demoClock, emptyClock } from '../../data/clockSample';
 import { hintClock, tooFewClock } from '../../data/clockStates';
-import { demoUsage } from '../../data/usageSample';
 import { fixtureSource } from '../../data/fixture';
 import { keepPrefsLocal } from '../../prefs';
 import { createStore } from '../../store';
 import { Root } from './Root';
 import { hoursPanel } from '../../board/Hours';
-import { usagePanel } from '../../board/Usage';
 
 let mounted: HTMLElement | null = null;
 
@@ -23,7 +21,6 @@ beforeAll(() => {
 
 afterEach(() => {
   hoursPanel.value = false;
-  usagePanel.value = false;
   if (mounted) render(null, mounted);
   mounted?.remove();
   mounted = null;
@@ -43,7 +40,7 @@ async function mount(over: Partial<Source>) {
 const hoursText = (root: HTMLElement) => root.querySelector('.hours')!.textContent!;
 
 describe('the HOURS panel', () => {
-  it('opens from the button after USAGE, says the verdict and draws the three strips and the break chart', async () => {
+  it('opens from the button, says the verdict and draws the three strips and the break chart', async () => {
     const clock = vi.fn(async () => demoClock(4));
     const { root, header } = await mount({ clock });
     expect(root.querySelector('.hours')).toBeNull();
@@ -61,7 +58,8 @@ describe('the HOURS panel', () => {
     expect(svg.querySelectorAll('.cbar.faint').length).toBeGreaterThan(0);
     expect(svg.querySelectorAll('.ccap')).toHaveLength(svg.querySelectorAll('.cbar.faint').length);
     expect(root.querySelectorAll('.cbreak .chit')).toHaveLength(4);
-    expect(root.querySelector('.hours .ctable')).toBeNull();
+    // only the by-agent table: the hour and break tables are the table view
+    expect(root.querySelectorAll('.hours .ctable')).toHaveLength(1);
   });
 
   it('asks for another number of weeks', async () => {
@@ -103,10 +101,73 @@ describe('the HOURS panel', () => {
     await vi.waitFor(() => expect(root.querySelector('.hours .ctable')).not.toBeNull());
     expect(root.querySelector('.cdiagram')).toBeNull();
     const tables = root.querySelectorAll('.hours .ctable');
-    expect(tables).toHaveLength(2);
+    expect(tables).toHaveLength(3);
     expect(tables[0]!.querySelectorAll('tbody tr')).toHaveLength(24);
     expect(tables[1]!.querySelectorAll('tbody tr')).toHaveLength(4);
     expect(tables[0]!.querySelectorAll('tr.faint').length).toBeGreaterThan(0);
+  });
+
+  it('draws the usual line as a tick on every hour with thinking, and cuts a long swing at the edge with a mark', async () => {
+    const c = demoClock(4);
+    const hours = c.hours.map((x) => (x.h === 3 ? { ...x, think: 5_000, think_n: 100 } : x.h === 4 ? { ...x, think: 10, think_n: 100 } : x));
+    const { root, header } = await mount({ clock: async () => ({ ...c, hours }) });
+    header('HOURS').click();
+    await vi.waitFor(() => expect(root.querySelector('.hours .cdiagram')).not.toBeNull());
+    const svg = root.querySelector('.cdiagram')!;
+    expect(svg.querySelectorAll('.ctick').length).toBe(hours.filter((x) => x.think !== null).length);
+    expect(svg.querySelectorAll('.ccut')).toHaveLength(2);
+    expect(svg.textContent).toContain('≥150%');
+    expect(svg.textContent).toContain('≤50%');
+  });
+
+  it('names the bad stretch with the engine\'s part of the day, wherever it falls', async () => {
+    const c = { ...demoClock(4), bad: [{ from_h: 22, to_h: 4, label: 'night' as const }] };
+    const { root, header } = await mount({ clock: async () => c });
+    header('HOURS').click();
+    await vi.waitFor(() => expect(root.querySelector('.hours .cdiagram')).not.toBeNull());
+    const labels = [...root.querySelectorAll('.cband-label')];
+    expect(labels.map((l) => l.textContent)).toEqual(['your night']);
+    // a band that starts near midnight keeps its label inside the picture, ending where the first piece ends
+    expect(labels[0]!.getAttribute('text-anchor')).toBe('end');
+  });
+
+  it('lists each agent, with a dash where it has no such signal', async () => {
+    const { root, header } = await mount({ clock: async () => demoClock(4) });
+    header('HOURS').click();
+    await vi.waitFor(() => expect(root.querySelector('.hours .cdiagram')).not.toBeNull());
+    const rows = [...root.querySelectorAll('.hours .ctable tbody tr')].map((r) => [...r.children].map((c) => c.textContent));
+    expect(rows).toHaveLength(2);
+    expect(rows[0]![3]).toBe('−7%');
+    expect(rows[1]![0]).not.toBe('');
+    expect(rows[1]!.slice(3)).toEqual(['—', '—']);
+  });
+
+  it('keeps the chart on screen while another number of weeks loads', async () => {
+    let release: (c: ReturnType<typeof demoClock>) => void = () => {};
+    const clock = vi.fn((w: number) => (w === 8 ? new Promise<ReturnType<typeof demoClock>>((r) => { release = r; }) : Promise.resolve(demoClock(w))));
+    const { root, header } = await mount({ clock });
+    header('HOURS').click();
+    await vi.waitFor(() => expect(root.querySelector('.hours .cdiagram')).not.toBeNull());
+    ([...root.querySelectorAll('.hours .acts button')].find((b) => b.textContent === '8 WEEKS') as HTMLButtonElement).click();
+    await vi.waitFor(() => expect(clock).toHaveBeenLastCalledWith(8));
+    expect(root.querySelector('.hours .cdiagram')).not.toBeNull();
+    expect(hoursText(root)).not.toContain('Loading');
+    release(demoClock(8));
+  });
+
+  it('says why corrections are zero when they are not judged', async () => {
+    const off = { ...tooFewClock(), judging: 'off' as const, judging_reason: '[clock] llm is off' };
+    const { root, header } = await mount({ clock: async () => off });
+    header('HOURS').click();
+    await vi.waitFor(() => expect(hoursText(root)).toContain('Corrections are not being judged: [clock] llm is off.'));
+  });
+
+  it('says it above the chart, and no longer counts prompts as waiting for the nightly pass, when old corrections remain', async () => {
+    const { root, header } = await mount({ clock: async () => ({ ...demoClock(4), judging: 'off' as const, judging_reason: '[clock] llm is off' }) });
+    header('HOURS').click();
+    await vi.waitFor(() => expect(root.querySelector('.hours .cdiagram')).not.toBeNull());
+    expect(hoursText(root)).toContain('Corrections are not being judged: [clock] llm is off.');
+    expect(hoursText(root)).not.toContain('not judged yet');
   });
 
   it('says plainly that there is not enough data, with the counts, and draws no chart', async () => {
@@ -165,66 +226,5 @@ describe('the hint beside HOURS', () => {
     const { root } = await mount({ clock: async () => demoClock(4) });
     await new Promise((r) => setTimeout(r, 20));
     expect(root.querySelector('.hourhint')).toBeNull();
-  });
-});
-
-describe('the daily cost chart in USAGE', () => {
-  const open = async (over: Partial<Source> = {}) => {
-    const usage = vi.fn(async (d: number, s?: 'project' | 'model') => demoUsage(d, s));
-    const m = await mount({ usage, ...over });
-    m.header('USAGE').click();
-    await vi.waitFor(() => expect(m.root.querySelector('.usage .cdiagram')).not.toBeNull());
-    return { ...m, usage };
-  };
-
-  it('draws a stacked column per day with a legend, split by project to begin with', async () => {
-    const { root, usage } = await open();
-    expect(usage).toHaveBeenCalledWith(7, 'project');
-    expect(root.querySelector('.usage')!.textContent).toContain('DAILY COST, LAST 7 DAYS');
-    expect(root.querySelectorAll('.usage .cdiagram .chit')).toHaveLength(7);
-    const legend = [...root.querySelectorAll('.usage .clegend li')].map((l) => l.textContent);
-    expect(legend).toContain('billing');
-    expect(legend.at(-1)).toBe('other');
-    // the existing content stays
-    for (const t of ['PLAN LIMITS', 'BY AGENT', 'TOP 10 SESSIONS', 'LAST 4 WEEKS']) expect(root.querySelector('.usage')!.textContent).toContain(t);
-  });
-
-  it('keeps a colour with its key when the split changes or the window grows', async () => {
-    const { root } = await open();
-    const fill = (name: string) => {
-      const i = [...root.querySelectorAll('.usage .clegend li')].findIndex((l) => l.textContent === name);
-      return (root.querySelectorAll<HTMLElement>('.usage .clegend .ckey')[i] as HTMLElement).style.background;
-    };
-    const billing = fill('billing');
-    ([...root.querySelectorAll('.usage .acts button')].find((b) => b.textContent === 'MONTH') as HTMLButtonElement).click();
-    await vi.waitFor(() => expect(root.querySelector('.usage')!.textContent).toContain('LAST 30 DAYS'));
-    expect(root.querySelectorAll('.usage .cdiagram .chit')).toHaveLength(30);
-    expect(fill('billing')).toBe(billing);
-  });
-
-  it('splits by model when asked', async () => {
-    const { root, usage } = await open();
-    ([...root.querySelectorAll('.usage .acts button')].find((b) => b.textContent === 'BY MODEL') as HTMLButtonElement).click();
-    await vi.waitFor(() => expect(usage).toHaveBeenLastCalledWith(7, 'model'));
-    await vi.waitFor(() => expect([...root.querySelectorAll('.usage .clegend li')].map((l) => l.textContent)).toContain('claude-opus-5-5'));
-  });
-
-  it('shows a column and its total in a tooltip, and a table with the same numbers', async () => {
-    const { root } = await open();
-    const hit = root.querySelector<SVGElement>('.usage .cdiagram .chit')!;
-    hit.dispatchEvent(new FocusEvent('focus'));
-    await vi.waitFor(() => expect(root.querySelector('.usage .ctip')).not.toBeNull());
-    expect(root.querySelector('.usage .ctip b')!.textContent).toMatch(/^[A-Z][a-z]{2} \d+ [A-Z][a-z]{2} · \$\d/);
-    expect(root.querySelectorAll('.usage .ctip p').length).toBeGreaterThan(1);
-    (root.querySelector('.usage .ctoggle') as HTMLButtonElement).click();
-    await vi.waitFor(() => expect(root.querySelector('.usage .ctable')).not.toBeNull());
-    expect(root.querySelectorAll('.usage .ctable tbody tr')).toHaveLength(7);
-  });
-
-  it('shows no chart when the engine has no series yet (an older engine)', async () => {
-    const { root } = await mount({ usage: async (d) => ({ ...demoUsage(d), series: undefined }) });
-    [...root.querySelectorAll('header.hd button')].find((b) => b.textContent === 'USAGE')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    await vi.waitFor(() => expect(root.querySelector('.usage .ubars')).not.toBeNull());
-    expect(root.querySelector('.usage .cdiagram')).toBeNull();
   });
 });

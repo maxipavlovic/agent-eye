@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef } from 'preact/hooks';
+import { useEffect, useRef } from 'preact/hooks';
 import { signal, useSignal } from '@preact/signals';
 import type { Store } from '../store';
 import type { CardDetail, NightIsolation, NightRun } from '../api/types';
@@ -6,6 +6,7 @@ import { ago } from '../format';
 import { useLook } from './look';
 import { Sec, Fold, openFold } from './Sections';
 import { tokensText } from './usageText';
+import { usePanelEsc } from './panelEsc';
 
 /** Is the Tonight list open? The header chip sets it. */
 export const nightPanel = signal(false);
@@ -310,17 +311,7 @@ export function NightHost({ store }: { store: Store }) {
   const open = nightPanel.value;
   const win = useSignal('');
   useEffect(() => { if (open) { store.loadNight(); win.value = store.night.value?.window ?? ''; } }, [open]);
-  // Esc listens from before the paint, so the first one closes this and not the panel under it
-  useLayoutEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
-      e.stopImmediatePropagation();
-      nightPanel.value = false;
-    };
-    addEventListener('keydown', onKey, true);
-    return () => removeEventListener('keydown', onKey, true);
-  }, [open]);
+  usePanelEsc(nightPanel);
   const n = store.night.value;
   if (!open || !n) return null;
   const close = () => { nightPanel.value = false; };

@@ -1,4 +1,4 @@
-import type { ClockReport, ClockRange, ClockBand, ClockHour } from '../api/types';
+import type { ClockAgent, ClockBad, ClockRange, ClockReport, ClockBand, ClockHour } from '../api/types';
 
 /** An hour with fewer prompts than this says too little about the rate: it is drawn faint and the tooltip says so. */
 export const FAINT_BELOW = 20;
@@ -18,30 +18,17 @@ export function per100(n: number, of: number): number | null {
   return of > 0 ? (n / of) * 100 : null;
 }
 
-/** The part of the day a stretch of hours starts in, as the label of a bad band ("your evening"). */
-export function partOfDay(h: number): 'morning' | 'afternoon' | 'evening' | 'night' {
-  if (h >= 5 && h < 12) return 'morning';
-  if (h >= 12 && h < 17) return 'afternoon';
-  if (h >= 17) return 'evening';
-  return 'night';
-}
-
-/** Is hour `h` inside the band? A band that ends before it starts crosses midnight; `to_h` is exclusive. */
-export function inBand(h: number, b: ClockRange): boolean {
-  if (b.from_h === b.to_h) return false;
-  return b.from_h < b.to_h ? h >= b.from_h && h < b.to_h : h >= b.from_h || h < b.to_h;
-}
-
 /** The pieces of a band as drawn on a 0-24 axis: a band that crosses midnight is two (the evening and the small hours). */
-export function bandSpans(b: ClockRange): Array<{ from: number; to: number; label: boolean }> {
+export function bandSpans(b: ClockRange): Array<{ from: number; to: number }> {
   if (b.from_h === b.to_h) return [];
-  if (b.from_h < b.to_h) return [{ from: b.from_h, to: b.to_h, label: true }];
-  const spans = [{ from: b.from_h, to: 24, label: true }];
-  if (b.to_h > 0) spans.push({ from: 0, to: b.to_h, label: false });
+  if (b.from_h < b.to_h) return [{ from: b.from_h, to: b.to_h }];
+  const spans = [{ from: b.from_h, to: 24 }];
+  if (b.to_h > 0) spans.push({ from: 0, to: b.to_h });
   return spans;
 }
 
-export const bandLabel = (b: ClockRange) => `your ${partOfDay(b.from_h)}`;
+/** The band's name as the engine gives it, so the sentence, the hint and the chart say the same ("your evening"). */
+export const bandLabel = (b: ClockBad) => `your ${b.label}`;
 
 /** The thinking measure the model strip is drawn against: the median of the hours that have one. */
 export function thinkBaseline(hours: ClockHour[]): number | null {
@@ -56,10 +43,13 @@ export function thinkPercent(h: ClockHour, base: number | null): number | null {
   return h.think === null || base === null || base <= 0 ? null : (h.think / base) * 100;
 }
 
-/** The half-height of the model strip: at least 25 points around 100, then the biggest swing rounded up to 25. */
+/** The most the model strip shows either side of 100; a bigger swing is cut at the edge and marked. */
+export const THINK_CAP = 50;
+
+/** The half-height of the model strip: at least 25 points around 100, then the biggest swing rounded up to 25, never past the cap. */
 export function thinkSpan(hours: ClockHour[], base: number | null): number {
   const swings = hours.map((h) => thinkPercent(h, base)).flatMap((p) => (p === null ? [] : [Math.abs(p - 100)]));
-  return Math.max(25, Math.ceil(Math.max(0, ...swings) / 25) * 25);
+  return Math.min(THINK_CAP, Math.max(25, Math.ceil(Math.max(0, ...swings) / 25) * 25));
 }
 
 /** The scale top of a rate strip: the biggest rate rounded up to a clean number (5, 10, 20, 25, 50, 100). */
@@ -83,11 +73,17 @@ export function youLine(h: ClockHour): string {
   return h.prompts < FAINT_BELOW ? `${line}, too few prompts to read much into (under ${FAINT_BELOW})` : line;
 }
 
+/** The unit of the agent whose thinking the hours carry (`think_agent`), or null. */
+export function clockUnit(c: ClockReport): string | null {
+  return c.agents.find((a) => a.agent === c.think_agent)?.think_unit ?? null;
+}
+
 /** The tooltip line about the model: "thinking 92% of usual (thinking signature length, median of 800)". */
 export function modelLine(h: ClockHour, base: number | null, unit: string | null): string {
   const p = thinkPercent(h, base);
   if (p === null) return 'thinking: no data this hour';
-  return `thinking ${Math.round(p)}% of usual (${thinkUnit(unit)}, median of ${h.think_n})`;
+  const line = `thinking ${Math.round(p)}% of usual (${thinkUnit(unit)}, median of ${h.think_n})`;
+  return h.think_n < FAINT_BELOW ? `${line}, too few to read much into (under ${FAINT_BELOW})` : line;
 }
 
 /** The tooltip line about failed tool calls: "20 failed in 900 calls (2.2 per 100)". */
@@ -107,11 +103,35 @@ export function breakLine(b: ClockBand): string {
 export function clockNote(c: ClockReport): string | null {
   if (!c.enabled) return 'The steering clock is off. Switch it on in Settings, under HOURS.';
   if (c.prompts === 0) return 'Nothing recorded yet. eye notes when you prompt and when the agent finishes, as your sessions run.';
-  if (c.verdict.kind === 'too_few') return `Not enough data yet: ${count(c.prompts, 'prompt')}, ${count(c.corrections, 'correction')}.`;
+  if (c.verdict.kind === 'too_few') return c.judging === 'on' ? `Not enough data yet: ${count(c.prompts, 'prompt')}, ${count(c.corrections, 'correction')}.` : `${judgingNote(c)} ${c.verdict.text}`;
   return null;
 }
 
-/** The sentence for prompts the nightly pass has not judged yet, or null. */
+/** Why corrections stay at zero when they are not judged (the engine's reason), or null when they are. */
+export function judgingNote(c: ClockReport): string | null {
+  if (c.judging === 'on') return null;
+  return `Corrections are not being judged: ${c.judging_reason ?? 'no agent can judge them'}.`;
+}
+
+/** The sentence for prompts the nightly pass has not judged yet, or null (also when nothing is judged at all). */
 export function pendingNote(c: ClockReport): string | null {
-  return c.pending > 0 ? `${count(c.pending, 'prompt')} not judged yet: the nightly pass counts them.` : null;
+  return c.judging === 'on' && c.pending > 0 ? `${count(c.pending, 'prompt')} not judged yet: the nightly pass counts them.` : null;
+}
+
+/** A ratio against the rest as a change ("+12%", "−7%", "flat"), or "—" when the agent has no such signal. */
+export function ratioText(r: number | null): string {
+  if (r === null) return '—';
+  const pct = Math.round((r - 1) * 100);
+  return Math.abs(pct) < 5 ? 'flat' : `${pct > 0 ? '+' : '−'}${Math.abs(pct)}%`;
+}
+
+/** One agent's row of the by-agent table; a signal the agent cannot report reads "—", never zero. */
+export function agentRow(a: ClockAgent): { prompts: string; corrections: string; thinking: string; toolErrors: string } {
+  const has = (s: ClockAgent['signals'][number]) => a.signals.includes(s);
+  return {
+    prompts: has('prompt') ? String(a.prompts) : '—',
+    corrections: has('prompt') ? String(a.corrections) : '—',
+    thinking: has('think') ? ratioText(a.think_ratio) : '—',
+    toolErrors: has('tool_error') ? ratioText(a.tool_error_ratio) : '—',
+  };
 }

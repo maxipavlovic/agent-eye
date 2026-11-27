@@ -51,11 +51,11 @@ export function AgentSettings({ store, state, save }: { store: Store; state: Set
     <>
       {sample && <p class="umeta">This is the sample board: these settings are shown, but nothing is saved.</p>}
       <Sec t="SUMMARIES">
-        <Row label="Summaries" help={`Write the state and next step of quiet sessions with an agent, so the card says where you stopped.${when(s['summary.enabled'].restart)}`}>
+        <Row label="Write summaries" help={`Write the state and next step of quiet sessions with an agent, so the card says where you stopped.${when(s['summary.enabled'].restart)}`}>
           <Switch label="Summaries" on={s['summary.enabled'].value} disabled={sample} onPick={(on) => void save({ 'summary.enabled': on })} />
         </Row>
         <form class="nset" onSubmit={saveModel}>
-          <label>MODEL
+          <label>MODEL FOR SUMMARIES
             <input value={model.value} maxLength={s['summary.model'].max} disabled={sample} onInput={(e) => { model.value = e.currentTarget.value; }} placeholder="the agent's own cheap model" autocomplete="off" spellcheck={false} />
           </label>
           <button class="btn sm" type="submit" disabled={sample}>SET MODEL</button>
@@ -63,7 +63,7 @@ export function AgentSettings({ store, state, save }: { store: Store; state: Set
         </form>
       </Sec>
       <Sec t="NIGHT SHIFT">
-        <Row label="Night shift" help="Planned runs start by themselves inside the window, when nothing you work in is live.">
+        <Row label="Start by themselves" help="Planned runs start by themselves inside the window, when nothing you work in is live.">
           <Switch label="Night shift" on={s['night.enabled'].value} disabled={sample} onPick={(on) => void save({ 'night.enabled': on })} />
         </Row>
         <form class="nset" onSubmit={saveWindow}>
@@ -94,7 +94,7 @@ export function AgentSettings({ store, state, save }: { store: Store; state: Set
         <Row label="Steering clock" help="Notes when you prompt and when the agent finishes, to show which hours you steer well and which badly. Timings and sizes only, never text.">
           <Switch label="Steering clock" on={s['clock.enabled'].value} disabled={sample} onPick={(on) => void save({ 'clock.enabled': on })} />
         </Row>
-        <Row label="Judge corrections" help="Let your own summary agent tell which prompts were corrections, once a night. This sends the prompt and the reply before it to that agent, as summaries do. Off: only interrupts and refused tool calls count.">
+        <Row label="Judge corrections" help="Let your own summary agent tell which prompts were corrections, once a night. This sends the prompt and the reply before it to that agent, as summaries do. Off: corrections stay at zero, and HOURS shows only timing and tool errors.">
           <Switch label="Judge corrections" on={s['clock.llm'].value} disabled={sample || clockOff} onPick={(on) => void save({ 'clock.llm': on })} />
         </Row>
         <Row label="Hint" help="A quiet mark beside HOURS while you are in an hour where your corrections usually rise. It never pops up.">
@@ -112,7 +112,7 @@ export function AgentSettings({ store, state, save }: { store: Store; state: Set
         </Row>
       </Sec>
       <Sec t="AGENTS">
-        <Row label="Agents" help={`The agents eye follows; the first one is the default for new ideas and summaries. A switched-off agent's sessions stay and come back when it is on again.${when(agents.restart)}`}>
+        <Row label="Follow" help={`The agents eye follows; the first one is the default for new ideas and summaries. A switched-off agent's sessions stay and come back when it is on again.${when(agents.restart)}`}>
           <div class="fchips" role="group" aria-label="Agents">
             {agents.choices.map((a) => {
               const on = agents.value.includes(a.id);

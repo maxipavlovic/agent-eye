@@ -1,5 +1,6 @@
 import type { ComponentChildren } from 'preact';
-import { useSignal } from '@preact/signals';
+import { signal, useSignal } from '@preact/signals';
+import { SLOTS } from './chartPalette';
 
 // What every chart shares, in both looks: the column path, the tooltip and the colours. The looks only set the
 // tokens in `charts.css`; no chart library, inline SVG like the rest of the face.
@@ -17,8 +18,7 @@ export function colPath(x: number, w: number, base: number, end: number, r = 4):
     : `M${x},${base}V${end - k}Q${x},${end} ${x + k},${end}H${x1 - k}Q${x1},${end} ${x1},${end - k}V${base}Z`;
 }
 
-/** The categorical slots in a fixed order (validated light and dark in `charts.css`); "other" is always the neutral one. */
-export const SLOTS = 5;
+// The categorical slots come from `chartPalette.ts`; "other" is always the neutral one.
 
 /** A key keeps its colour for as long as the page lives: it takes the lowest slot the keys on screen do not use. */
 const slots = new Map<string, number>();
@@ -34,13 +34,22 @@ export function slotOf(key: string, onScreen: readonly string[]): number | 'x' {
   return s;
 }
 
-/** The colour token of a slot. */
-export const slotVar = (s: number | 'x') => `var(--c${s === 'x' ? 'x' : s + 1})`;
+/** The colour of a slot among the `colours` this accent leaves (`liveColours`); "other" is the neutral token. */
+export const slotColour = (s: number | 'x', colours: readonly string[]) => (s === 'x' ? 'var(--cx)' : colours[s] ?? 'var(--cx)');
 
 /** Resets the memory of key colours (tests). */
 export function forgetSlots(): void {
   slots.clear();
 }
+
+/** Is the screen phone-narrow (the media query the charts' own CSS uses)? The charts draw a narrower picture then, so their words stay readable. */
+const narrow = signal(false);
+if (typeof matchMedia === 'function') {
+  const q = matchMedia('(max-width: 640px)');
+  narrow.value = q.matches;
+  q.addEventListener('change', (e) => { narrow.value = e.matches; });
+}
+export const useNarrow = () => narrow.value;
 
 export interface TipState { left: number; lines: Array<{ key?: string; text: string; strong?: string }>; title: string }
 
@@ -64,13 +73,13 @@ export function Tip({ tip }: { tip: TipState | null }) {
   );
 }
 
-/** A chart's frame: the title row with the chart/table switch, and the tooltip over the drawing. */
-export function ChartFrame({ title, table, onTable, hint, children }: { title: string; table: boolean; onTable: (t: boolean) => void; hint?: string; children: ComponentChildren }) {
+/** A chart's frame: the title row with the chart/table switch (when the chart has a table), and the drawing. */
+export function ChartFrame({ title, table = false, onTable, hint, children }: { title: string; table?: boolean; onTable?: (t: boolean) => void; hint?: string; children: ComponentChildren }) {
   return (
     <div class="chart">
       <div class="chead">
         <span class="ctitle">{title}</span>
-        <button type="button" class="ctoggle" aria-pressed={table} onClick={() => onTable(!table)}>{table ? 'CHART' : 'TABLE'}</button>
+        {onTable && <button type="button" class="ctoggle" aria-pressed={table} onClick={() => onTable(!table)}>{table ? 'CHART' : 'TABLE'}</button>}
       </div>
       {hint && <p class="chint">{hint}</p>}
       {children}

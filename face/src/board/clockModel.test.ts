@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { demoClock, emptyClock } from '../data/clockSample';
 import { tooFewClock } from '../data/clockStates';
-import { bandLabel, bandSpans, breakLine, clockNote, FAINT_BELOW, hourRange, inBand, modelLine, niceMax, partOfDay, pendingNote, thinkBaseline, thinkPercent, thinkSpan, toolLine, youLine } from './clockModel';
+import { agentRow, bandLabel, bandSpans, breakLine, clockNote, clockUnit, FAINT_BELOW, hourRange, judgingNote, modelLine, niceMax, pendingNote, ratioText, thinkBaseline, thinkPercent, thinkSpan, THINK_CAP, toolLine, youLine } from './clockModel';
 
 const hour = (over: Partial<ReturnType<typeof demoClock>['hours'][0]> = {}) => ({ h: 21, prompts: 108, corrections: 14, interrupts: 0, tool_calls: 900, tool_errors: 20, think: 1590, think_n: 800, ...over });
 
@@ -12,24 +12,16 @@ describe('the clock model', () => {
     expect(hourRange(5)).toBe('05:00–06:00');
   });
 
-  it('knows which hours a band holds, also across midnight', () => {
-    const b = { from_h: 18, to_h: 6 };
-    expect([17, 18, 23, 0, 5, 6, 12].map((h) => inBand(h, b))).toEqual([false, true, true, true, true, false, false]);
-    expect(inBand(9, { from_h: 9, to_h: 12 })).toBe(true);
-    expect(inBand(12, { from_h: 9, to_h: 12 })).toBe(false);
-    expect(inBand(3, { from_h: 4, to_h: 4 })).toBe(false);
-  });
-
-  it('draws a band across midnight as two pieces and labels the first', () => {
-    expect(bandSpans({ from_h: 18, to_h: 6 })).toEqual([{ from: 18, to: 24, label: true }, { from: 0, to: 6, label: false }]);
-    expect(bandSpans({ from_h: 20, to_h: 0 })).toEqual([{ from: 20, to: 24, label: true }]);
-    expect(bandSpans({ from_h: 9, to_h: 12 })).toEqual([{ from: 9, to: 12, label: true }]);
+  it('draws a band across midnight as two pieces', () => {
+    expect(bandSpans({ from_h: 18, to_h: 6 })).toEqual([{ from: 18, to: 24 }, { from: 0, to: 6 }]);
+    expect(bandSpans({ from_h: 20, to_h: 0 })).toEqual([{ from: 20, to: 24 }]);
+    expect(bandSpans({ from_h: 9, to_h: 12 })).toEqual([{ from: 9, to: 12 }]);
     expect(bandSpans({ from_h: 5, to_h: 5 })).toEqual([]);
   });
 
-  it('labels a band by the part of the day it starts in', () => {
-    expect([6, 13, 18, 2].map(partOfDay)).toEqual(['morning', 'afternoon', 'evening', 'night']);
-    expect(bandLabel({ from_h: 18, to_h: 6 })).toBe('your evening');
+  it('labels a band with the name the engine gave it', () => {
+    expect(bandLabel({ from_h: 18, to_h: 6, label: 'evening' })).toBe('your evening');
+    expect(bandLabel({ from_h: 22, to_h: 4, label: 'night' })).toBe('your night');
   });
 
   it('reads a busy hour as corrections per 100 prompts, and says when an hour is too thin', () => {
@@ -47,10 +39,19 @@ describe('the clock model', () => {
     expect(thinkPercent(hours[2]!, base)).toBe(80);
     expect(thinkPercent(hours[3]!, base)).toBeNull();
     expect(thinkSpan(hours, base)).toBe(25);
-    expect(thinkSpan([hour({ think: 300 }), hour({ think: 100 })], 100)).toBe(200);
+    expect(thinkSpan([hour({ think: 140 }), hour({ think: 100 })], 100)).toBe(50);
+    expect(thinkSpan([hour({ think: 300 }), hour({ think: 100 })], 100)).toBe(THINK_CAP);
     expect(thinkBaseline([hour({ think: null })])).toBeNull();
     expect(modelLine(hours[2]!, base, 'signature')).toBe('thinking 80% of usual (thinking signature length, median of 800)');
     expect(modelLine(hours[3]!, base, null)).toBe('thinking: no data this hour');
+    expect(modelLine(hour({ think: 90, think_n: FAINT_BELOW - 1 }), 100, 'reasoning_tokens')).toContain('too few to read much into');
+  });
+
+  it('takes the thinking unit from the agent the hours belong to, not the busiest one', () => {
+    const c = demoClock(4);
+    expect(clockUnit(c)).toBe('signature');
+    expect(clockUnit({ ...c, think_agent: 'codex' })).toBe('reasoning_tokens');
+    expect(clockUnit({ ...c, think_agent: null })).toBeNull();
   });
 
   it('reads tool errors per 100 calls', () => {
@@ -74,9 +75,28 @@ describe('the clock model', () => {
     expect(clockNote({ ...demoClock(4), enabled: false })).toContain('is off');
   });
 
+  it('says why corrections are zero when nothing judges them, with the engine\'s reason', () => {
+    const off = { ...tooFewClock(), judging: 'off' as const, judging_reason: '[clock] llm is off' };
+    expect(judgingNote(off)).toBe('Corrections are not being judged: [clock] llm is off.');
+    expect(clockNote(off)).toContain('Corrections are not being judged: [clock] llm is off.');
+    expect(clockNote(off)).toContain(off.verdict.text);
+    expect(judgingNote({ ...off, judging: 'unavailable', judging_reason: null })).toBe('Corrections are not being judged: no agent can judge them.');
+    expect(judgingNote(demoClock(4))).toBeNull();
+  });
+
   it('mentions prompts not judged yet only when there are some', () => {
     expect(pendingNote(demoClock(4))).toBe('12 prompts not judged yet: the nightly pass counts them.');
     expect(pendingNote({ ...demoClock(4), pending: 1 })).toBe('1 prompt not judged yet: the nightly pass counts them.');
     expect(pendingNote({ ...demoClock(4), pending: 0 })).toBeNull();
+    expect(pendingNote({ ...demoClock(4), judging: 'off' })).toBeNull();
+  });
+
+  it('shows a change against the rest, flat when small, and a dash when there is no signal', () => {
+    expect([0.93, 1.12, 1.02, 0.5, null].map(ratioText)).toEqual(['−7%', '+12%', 'flat', '−50%', '—']);
+    const claude = demoClock(4).agents[0]!;
+    expect(agentRow(claude)).toEqual({ prompts: String(claude.prompts), corrections: String(claude.corrections), thinking: '−7%', toolErrors: '−5%' });
+    expect(agentRow({ ...claude, signals: ['prompt'] })).toMatchObject({ thinking: '—', toolErrors: '—' });
+    expect(agentRow({ ...claude, signals: [] })).toMatchObject({ prompts: '—', corrections: '—' });
+    expect(agentRow({ ...claude, think_ratio: null })).toMatchObject({ thinking: '—' });
   });
 });

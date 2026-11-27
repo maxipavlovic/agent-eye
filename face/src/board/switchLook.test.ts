@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Store } from '../store';
-import { switchLook } from './AccentPicker';
+import { switchLook } from './switchLook';
 
 describe('switching the look', () => {
   beforeEach(() => localStorage.clear());

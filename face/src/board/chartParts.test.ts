@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { colPath, forgetSlots, slotOf, slotVar } from './chartParts';
+import { colPath, forgetSlots, slotColour, slotOf } from './chartParts';
 
 describe('chart parts', () => {
   beforeEach(forgetSlots);
@@ -21,8 +21,8 @@ describe('chart parts', () => {
     // docs now ranks first and billing is gone: nothing is repainted
     expect(slotOf('docs', ['docs', 'site'])).toBe(second);
     expect(slotOf('other', ['docs', 'other'])).toBe('x');
-    expect(slotVar('x')).toBe('var(--cx)');
-    expect(slotVar(0)).toBe('var(--c1)');
+    expect(slotColour('x', ['#111111'])).toBe('var(--cx)');
+    expect(slotColour(0, ['#111111'])).toBe('#111111');
   });
 
   it('gives a new key a slot the others on screen do not use', () => {

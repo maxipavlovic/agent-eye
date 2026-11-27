@@ -28,7 +28,17 @@ function applyTheme(pref: ThemePref) {
 let pref = savedTheme();
 applyTheme(pref);
 system.addEventListener('change', () => applyTheme(pref));
-document.querySelector('iframe')?.addEventListener('load', () => { applyTheme(pref); markEmbedded(!document.fullscreenElement); });
+document.querySelector('iframe')?.addEventListener('load', () => { applyTheme(pref); });
+
+for (const b of document.querySelectorAll<HTMLElement>('[data-theme-set]')) b.setAttribute('aria-pressed', String(b.dataset.themeSet === pref));
+  // The demo board is on the same origin: keep it in step.
+  try { document.querySelector('iframe')?.contentDocument?.documentElement.setAttribute('data-theme', theme); } catch { /* not loaded yet */ }
+}
+
+let pref = savedTheme();
+applyTheme(pref);
+system.addEventListener('change', () => applyTheme(pref));
+document.querySelector('iframe')?.addEventListener('load', () => { applyTheme(pref); });
 
 /** The demo board in the page (not full screen) leaves its theme switch to the site's, so + IDEA fits. */
 function markEmbedded(on: boolean) {
@@ -62,7 +72,6 @@ if (frame && full && document.fullscreenEnabled) {
     const on = document.fullscreenElement === frame;
     full.textContent = on ? 'EXIT FULL SCREEN (ESC)' : 'FULL SCREEN';
     full.setAttribute('aria-pressed', String(on));
-    markEmbedded(!on);
     if (on) frame.querySelector('iframe')?.focus();
   });
 }

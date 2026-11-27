@@ -411,9 +411,6 @@ mark { background: var(--ink); color: var(--paper); padding: 0 3px; }
 .ctx { position: fixed; z-index: 90; min-width: 264px; max-width: min(340px, calc(100vw - 16px)); max-height: calc(100vh - 16px); max-height: calc(100dvh - 16px); overflow-y: auto; background: var(--paper); color: var(--ink); border: 2px solid var(--ink); box-shadow: 4px 4px 0 var(--ink); }
 .ctx .ct { margin: 0; padding: 10px 14px 9px; border-bottom: 2px solid var(--ink); font: 600 15px/1.35 var(--f-body); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
 .ctx .gl { margin: 0; padding: 8px 14px 2px; font: 600 13px/1.2 var(--f-body); letter-spacing: .08em; color: var(--mute); }
-.ctx .gn { margin: 0; padding: 2px 14px 8px; font: 400 14px/1.4 var(--f-body); color: var(--ink); max-width: 30ch; }
-.acts .why, .menu .why { flex: 1 0 100%; margin: 0; font: 400 15px/1.45 var(--f-body); color: var(--ink); }
-.menu .why { padding: 0 14px 8px; max-width: 30ch; }
 .ctx hr { border: 0; border-top: 2px solid var(--ink); margin: 4px 0; }
 .ctx button { white-space: nowrap; display: block; width: 100%; text-align: left; background: none; border: 0; font: 400 16px/1 var(--f-label); padding: 11px 14px 10px; }
 .ctx button.sub { padding-left: 26px; }
@@ -674,7 +671,7 @@ a.mk:hover { background: var(--ink); color: var(--paper); }
 .nplan .hint, .nset .hint { display: block; margin-top: 6px; font: 400 16px/1.45 var(--f-body); color: var(--ink); }
 .nplan > .hint { margin: 0 0 16px; }
 .nplan .acts { margin-top: 8px; }
-.nset label { display: flex; flex-direction: column; gap: 4px; font: 600 16px/1.3 var(--f-body); }
+.nset label { display: flex; flex-direction: column; gap: 4px; font: 400 16px/1.3 var(--f-label); }
 .nset input, .nset select, .nlim input { font: 400 17px/1.4 var(--f-body); color: var(--ink); background: var(--paper); border: 2px solid var(--ink); padding: 6px 8px; }
 .nset { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: flex-end; margin: 0 0 12px; }
 .nrun { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 0 0 12px; font: 400 17px/1.4 var(--f-body); }
@@ -751,15 +748,3 @@ a.mk:hover { background: var(--ink); color: var(--paper); }
 .details .fsec { margin-top: 16px; }
 .details .fsec.open { margin-top: 30px; }
 
-/* the board embedded in the site's page (not full screen): the site's own switch sets the theme, so the header keeps room for + IDEA */
-:root[data-embed] .hd .theme[aria-label='Theme'] { display: none; }
-
-/* SETTINGS: one row per setting, the name and the control on a line and one plain line under it */
-.srow { margin: 0 0 20px; }
-.srow .umeta { margin-top: 8px; }
-.settings .nrow { flex-wrap: wrap; row-gap: 10px; }
-.settings .nrow > span { min-width: 10em; }
-.settings .nset { margin-top: 14px; }
-.settings .more { margin-top: 44px; }
-
-:root { --c-label: var(--f-body); --c-num: var(--f-body); }

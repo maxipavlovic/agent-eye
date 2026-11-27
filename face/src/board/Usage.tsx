@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect } from 'preact/hooks';
+import { useEffect } from 'preact/hooks';
 import { signal, useSignal } from '@preact/signals';
 import type { Store } from '../store';
 import type { UsageLimits, UsageReport, UsageRow, UsageSum } from '../api/types';
@@ -7,6 +7,7 @@ import { Sec } from './Sections';
 import { UsageDaysChart, UsageDaysTable, UsageLegend } from './CostChart';
 import { noCost } from './dailyCost';
 import { barPercents, costText, limitHot, percentText, resetText, seenText, tokensText } from './usageText';
+import { usePanelEsc } from './panelEsc';
 
 /** Is the USAGE panel open? The header button sets it. */
 export const usagePanel = signal(false);
@@ -69,6 +70,9 @@ const SPLITS = [{ by: 'project', label: 'BY PROJECT' }, { by: 'model', label: 'B
 /** The USAGE panel: limits, the cost of each day, this week by project and by agent, the top 10 sessions, four weeks. */
 export function UsageHost({ store }: { store: Store }) {
   const open = usagePanel.value;
+  // the daily chart's colours follow the accent and the theme
+  store.accent.value;
+  store.theme.value;
   const days = useSignal(7);
   const data = useSignal<UsageReport | null>(null);
   const failed = useSignal(false);
@@ -87,17 +91,7 @@ export function UsageHost({ store }: { store: Store }) {
     return () => { live = false; };
   }, [open, days.value, split.value]);
   useEffect(() => { data.value = null; }, [open, days.value]);
-  // Esc listens from before the paint, so the first one closes this and not the panel under it
-  useLayoutEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
-      e.stopImmediatePropagation();
-      usagePanel.value = false;
-    };
-    addEventListener('keydown', onKey, true);
-    return () => removeEventListener('keydown', onKey, true);
-  }, [open]);
+  usePanelEsc(usagePanel);
   if (!open) return null;
   const close = () => { usagePanel.value = false; };
   const r = data.value;

@@ -27,7 +27,7 @@ a:hover { background: var(--ink); color: var(--paper); text-decoration: none; }
 /* the type roles */
 .btn, .lnk, .fact, .qmove button, .menu button, .tag, .ot, .chip, .ageh span, .chead h2, .rail .vl,
 .minitile, .needbtn > span, .modal label, .modal .pick legend, .nplan label, .nplan .pick legend, .sec h4, .page .x,
-.empty, .loading, .welcome h2, .tact, .dphead span, .dpgrid th, .nrow, .theme.seg button, .nline b, .receipt .rt {
+.empty, .loading, .welcome h2, .tact, .dphead span, .dpgrid th, .nrow, .nset label, .theme.seg button, .nline b, .receipt .rt {
   font-family: var(--f-disp); font-stretch: 125%; font-weight: 600; text-transform: uppercase; letter-spacing: .08em;
 }
 .code, kbd { font-family: var(--f-disp); font-stretch: 125%; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; }
@@ -80,7 +80,6 @@ a:hover { background: var(--ink); color: var(--paper); text-decoration: none; }
 .conn.offline i { background: var(--accent); }
 @keyframes blink { 50% { opacity: .15; } }
 .theme { display: flex; gap: 2px; }
-.hd > .theme { gap: 2px; padding: 0 10px; }
 .theme button { width: 34px; height: 34px; display: grid; place-items: center; color: var(--mute); border: var(--hair) solid transparent; }
 .theme button.on { color: var(--ink); border-color: var(--rule); }
 .theme button:not(.on):hover { color: var(--ink); background: var(--lit); }
@@ -553,6 +552,7 @@ mark { background: var(--ink); color: var(--paper); padding: 0 3px; }
 .notice { margin: 0 0 18px; }
 .page .notice { margin: 22px 0 0; }
 .nrow { display: flex; align-items: center; gap: 14px; font-size: 12.5px; }
+.nset label { font-size: 12.5px; }
 .theme.seg button { width: auto; height: 32px; padding: 0 12px; font-size: 12.5px; border: var(--hair) solid var(--rule); color: var(--ink); }
 .theme.seg button + button { margin-left: calc(-1 * var(--hair)); }
 .theme.seg button.on, .theme.seg button[aria-pressed='true'] { background: var(--ink); color: var(--paper); }
@@ -587,7 +587,7 @@ mark { background: var(--ink); color: var(--paper); padding: 0 3px; }
 .nplan { margin: 12px 0 0; max-width: 600px; }
 .nplan .acts { margin-top: 8px; }
 .nset { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: flex-end; margin: 0 0 12px; }
-.nset label { display: flex; flex-direction: column; gap: 4px; font: 600 16px/1.3 var(--f-body); }
+.nset label { display: flex; flex-direction: column; gap: 4px; line-height: 1.3; }
 .nset input, .nset select, .nlim input { font: 400 17px/1.4 var(--f-body); background: var(--paper); border: var(--hair) solid var(--rule); padding: 6px 8px; }
 .nrun { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 0 0 12px; font: 400 17px/1.4 var(--f-body); }
 .nrun dt { font-weight: 600; }
@@ -615,9 +615,6 @@ mark { background: var(--ink); color: var(--paper); padding: 0 3px; }
 .ctx { position: fixed; z-index: 90; min-width: 264px; max-width: min(340px, calc(100vw - 16px)); max-height: calc(100vh - 16px); max-height: calc(100dvh - 16px); overflow-y: auto; background: var(--paper); color: var(--ink); border: var(--hair) solid var(--rule); padding-bottom: 4px; box-shadow: var(--sheet); }
 .ctx .ct { margin: 0; padding: 11px 14px 10px; border-bottom: var(--hair) solid var(--rule); font: 600 15px/1.35 var(--f-body); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
 .ctx .gl { margin: 0; padding: 10px 14px 4px; font: 600 12px/1.2 var(--f-disp); font-stretch: 125%; letter-spacing: .1em; text-transform: uppercase; color: var(--mute); }
-.ctx .gn { margin: 0; padding: 2px 14px 8px; font: 400 14px/1.4 var(--f-body); color: var(--ink); max-width: 30ch; }
-.acts .why, .menu .why { flex: 1 0 100%; margin: 0; font: 400 15px/1.45 var(--f-body); color: var(--ink); }
-.menu .why { padding: 0 14px 8px; max-width: 30ch; }
 .ctx hr { border: 0; border-top: var(--hair) solid var(--rule-2); margin: 4px 0; }
 .ctx button { white-space: nowrap; display: block; width: 100%; text-align: left; font: 400 15.5px/1 var(--f-body); padding: 10px 14px; }
 .ctx button.sub { padding-left: 26px; }
@@ -747,16 +744,6 @@ mark { background: var(--ink); color: var(--paper); padding: 0 3px; }
   .chip.now { text-decoration: underline var(--hair) var(--accent); text-underline-offset: 3px; }
 }
 
-/* the board embedded in the site's page: the site's own switch sets the theme */
-:root[data-embed] .hd .theme[aria-label='Theme'] { display: none; }
-
-/* SETTINGS: one row per setting, the name and the control on a line and one plain line under it */
-.srow { margin: 0 0 20px; }
-.srow .umeta { margin-top: 8px; }
-.settings .nrow { flex-wrap: wrap; row-gap: 10px; }
-.settings .nrow > span { min-width: 10em; }
-.settings .nset { margin-top: 14px; }
-.settings .more { margin-top: 44px; }
 
 :root { --c-label: var(--f-disp); --c-num: var(--f-body); }
 .clab, .cval { font-variant-numeric: tabular-nums slashed-zero; }

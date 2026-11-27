@@ -1,21 +1,39 @@
-import { useEffect, useLayoutEffect } from 'preact/hooks';
+import { useEffect } from 'preact/hooks';
 import { signal, useSignal } from '@preact/signals';
 import type { ClockReport } from '../api/types';
 import type { Store } from '../store';
 import { BreakChart, HoursDiagram, HoursTable } from './ClockChart';
 import { ChartFrame } from './chartParts';
-import { clockNote, pendingNote } from './clockModel';
+import { agentRow, clockNote, judgingNote, pendingNote } from './clockModel';
 import { Sec } from './Sections';
+import { usePanelEsc } from './panelEsc';
 
 /** Is the HOURS panel open? The header button sets it (and the hint beside it). */
 export const hoursPanel = signal(false);
 
 const WEEKS = [{ weeks: 2, label: '2 WEEKS' }, { weeks: 4, label: '4 WEEKS' }, { weeks: 8, label: '8 WEEKS' }];
 
-/** The panel body for a clock that has something to say: the verdict, the diagram, the break chart. */
-function Body({ c }: { c: ClockReport }) {
+/** What each agent says on its own: its prompts and corrections, and its model's thinking and tool errors in the bad hours; "—" where it has no such signal. */
+function AgentTable({ c, store }: { c: ClockReport; store: Store }) {
+  const name = (id: string) => store.agents.value.find((a) => a.id === id)?.name ?? id;
+  return (
+    <table class="ctable">
+      <caption>Thinking and tool errors are against the same agent's other hours; "—" means it does not report that.</caption>
+      <thead><tr><th>Agent</th><th>Prompts</th><th>Corrections</th><th>Thinking</th><th>Tool errors</th></tr></thead>
+      <tbody>
+        {c.agents.map((a) => {
+          const r = agentRow(a);
+          return <tr key={a.agent}><th scope="row">{name(a.agent)}</th><td>{r.prompts}</td><td>{r.corrections}</td><td>{r.thinking}</td><td>{r.toolErrors}</td></tr>;
+        })}
+      </tbody>
+    </table>
+  );
+}
+
+/** The panel body for a clock that has something to say: the verdict, the diagram, the break chart, each agent. */
+function Body({ c, store }: { c: ClockReport; store: Store }) {
   const table = useSignal(false);
-  const pending = pendingNote(c);
+  const pending = judgingNote(c) ?? pendingNote(c);
   return (
     <>
       <p class="verdict">{c.verdict.text}</p>
@@ -27,11 +45,12 @@ function Body({ c }: { c: ClockReport }) {
       </Sec>
       {!table.value && c.since_break.length > 0 && (
         <Sec t="SINCE YOUR LAST BREAK">
-          <ChartFrame title="corrections per 100 prompts" table={false} onTable={() => { table.value = true; }}>
+          <ChartFrame title="corrections per 100 prompts">
             <BreakChart rows={c.since_break} />
           </ChartFrame>
         </Sec>
       )}
+      {c.agents.length > 0 && <Sec t="BY AGENT"><AgentTable c={c} store={store} /></Sec>}
     </>
   );
 }
@@ -45,8 +64,8 @@ export function HoursHost({ store }: { store: Store }) {
   useEffect(() => {
     if (!open) return;
     let live = true;
-    data.value = null;
     failed.value = false;
+    // a new range keeps the chart on screen until the answer comes; a new opening starts clean
     void store.clock(weeks.value).then((r) => {
       if (!live) return;
       data.value = r;
@@ -54,17 +73,8 @@ export function HoursHost({ store }: { store: Store }) {
     });
     return () => { live = false; };
   }, [open, weeks.value]);
-  // Esc listens from before the paint, so the first one closes this and not the panel under it
-  useLayoutEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
-      e.stopImmediatePropagation();
-      hoursPanel.value = false;
-    };
-    addEventListener('keydown', onKey, true);
-    return () => removeEventListener('keydown', onKey, true);
-  }, [open]);
+  useEffect(() => { data.value = null; }, [open]);
+  usePanelEsc(hoursPanel);
   if (!open) return null;
   const close = () => { hoursPanel.value = false; };
   const c = data.value;
@@ -84,7 +94,7 @@ export function HoursHost({ store }: { store: Store }) {
           {!c && !failed.value && <p class="state">Loading…<i class="dots" /></p>}
           {failed.value && <p class="state">Not available in this version. Update eye, then reload.</p>}
           {c && note && <p class="state">{note}</p>}
-          {c && !note && <Body c={c} />}
+          {c && !note && <Body c={c} store={store} />}
         </div>
         <div class="dis" />
       </aside>

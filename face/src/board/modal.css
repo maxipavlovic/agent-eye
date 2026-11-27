@@ -9,3 +9,16 @@
 .modal h2 { flex: none; margin: 0; }
 .modal .mbody { flex: 1 1 auto; min-height: 0; overflow-y: auto; scroll-padding-block: 12px; scrollbar-width: thin; }
 .modal .acts { flex: none; display: flex; justify-content: flex-end; margin: 0; }
+
+/* The menus and the card actions: why Continue tonight comes first, and a menu's quiet note */
+.ctx .gn { margin: 0; padding: 2px 14px 8px; font: 400 14px/1.4 var(--f-body); color: var(--ink); max-width: 30ch; }
+.acts .why, .menu .why { flex: 1 0 100%; margin: 0; font: 400 15px/1.45 var(--f-body); color: var(--ink); }
+.menu .why { padding: 0 14px 8px; max-width: 30ch; }
+
+/* SETTINGS: one row per setting, the name and the control on a line and one plain line under it */
+.srow { margin: 0 0 20px; }
+.srow .umeta { margin-top: 8px; }
+.settings .nrow { flex-wrap: wrap; row-gap: 10px; }
+.settings .nrow > span { min-width: 10em; }
+.settings .nset { margin-top: 14px; }
+.settings .more { margin-top: 44px; }

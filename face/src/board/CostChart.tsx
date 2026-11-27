@@ -1,6 +1,7 @@
 import { useSignal } from '@preact/signals';
 import type { UsageSeries } from '../api/types';
-import { colPath, slotOf, slotVar, Tip, useTip } from './chartParts';
+import { colPath, slotColour, slotOf, Tip, useTip } from './chartParts';
+import { liveColours } from './chartPalette';
 import { costMax, dayCost, dayLabel, dayTotal, dollars, keyCostText } from './dailyCost';
 
 // The daily cost of the window as stacked columns, by project or by model. A key keeps its colour whatever its rank.
@@ -18,7 +19,8 @@ export function UsageDaysChart({ series }: { series: UsageSeries }) {
   const n = series.days.length;
   const slot = (W - X0 - 8) / n;
   const bw = Math.min(24, slot - GAP * 2);
-  const colour = (k: string) => slotVar(slotOf(k, series.keys));
+  const colours = liveColours();
+  const colour = (k: string) => slotColour(slotOf(k, series.keys), colours);
   const y = (v: number) => BOTTOM - (v / max) * (BOTTOM - TOP);
   const tipOf = (i: number) => {
     const d = series.days[i]!;
@@ -75,9 +77,10 @@ export function UsageDaysChart({ series }: { series: UsageSeries }) {
 /** The legend: a swatch and the key in text colour, always shown for two or more keys. */
 export function UsageLegend({ series }: { series: UsageSeries }) {
   if (series.keys.length < 2) return null;
+  const colours = liveColours();
   return (
     <ul class="clegend" aria-label="Colours">
-      {series.keys.map((k) => <li key={k}><i class="ckey sw" style={`background:${slotVar(slotOf(k, series.keys))}`} /><span title={k}>{k}</span></li>)}
+      {series.keys.map((k) => <li key={k}><i class="ckey sw" style={`background:${slotColour(slotOf(k, series.keys), colours)}`} /><span title={k}>{k}</span></li>)}
     </ul>
   );
 }

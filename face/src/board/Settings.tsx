@@ -1,15 +1,16 @@
-import { useEffect, useLayoutEffect } from 'preact/hooks';
+import { useEffect } from 'preact/hooks';
 import { signal, useSignal } from '@preact/signals';
 import type { ColumnId, SettingsInput, SettingsState } from '../api/types';
 import { ACCENTS } from '../accents';
 import { LOOK_LIST, lookNamed, type LookName } from '../looks/names';
 import type { Store, ThemePref } from '../store';
-import { switchLook } from './AccentPicker';
+import { switchLook } from './switchLook';
 import { FOLDABLE, LANE_LABEL, ORDER } from './columns';
 import type { Layout, SetFold } from './layout';
 import { Sec } from './Sections';
 import { AgentSettings } from './SettingsAgent';
 import { Row, Seg } from './SettingsParts';
+import { usePanelEsc } from './panelEsc';
 
 /** Is the SETTINGS panel open? The header's gear sets it (so does `,`). */
 export const settingsPanel = signal(false);
@@ -24,7 +25,7 @@ function LookSettings({ store, layout, setLayout }: { store: Store; layout: Layo
   return (
     <Sec t="LOOK">
       {look && (
-        <Row label="Look" help="Ink is pixel art on warm paper; Iris is a technical drawing in thin lines. The page reloads in the other one.">
+        <Row label="Skin" help="Ink is pixel art on warm paper; Iris is a technical drawing in thin lines. The page reloads in the other one.">
           <Seg<LookName> label="Look" value={look} options={LOOK_LIST.map((l) => [l.id, l.label] as const)} onPick={(id) => void switchLook(store, id)} />
         </Row>
       )}
@@ -80,17 +81,7 @@ export function SettingsHost({ store, layout, setLayout, folded, setFold }: { st
     });
     return () => { live = false; };
   }, [open]);
-  // Esc listens from before the paint, so the first one closes this and not the panel under it
-  useLayoutEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
-      e.stopImmediatePropagation();
-      settingsPanel.value = false;
-    };
-    addEventListener('keydown', onKey, true);
-    return () => removeEventListener('keydown', onKey, true);
-  }, [open]);
+  usePanelEsc(settingsPanel);
   if (!open) return null;
   const close = () => { settingsPanel.value = false; };
   const save = async (input: SettingsInput) => {
