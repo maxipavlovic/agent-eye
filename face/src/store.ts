@@ -4,7 +4,7 @@ import { pushPref } from './prefs';
 import { signal, computed, effect, batch, type Signal, type ReadonlySignal } from '@preact/signals';
 import type {
   Agent, ArchivePage, Board, Card, CardDetail, ColumnId, Connection, ConversationPage, IdeaInput, MoveTarget,
-  ClockReport, FolderCheck, LooseAct, NightPlanInput, NightState, RemindInput, RemindSettings, ResumePlan, SearchHit, SettingsInput, SettingsState, Source, StartPlan, UsageReport,
+  ClockHint, ClockReport, FolderCheck, LooseAct, NightPlanInput, NightState, RemindInput, RemindSettings, ResumePlan, SearchHit, SettingsInput, SettingsState, Source, StartPlan, UsageReport,
 } from './api/types';
 
 /** How often the board asks the clock for its hint while hints are on. */
@@ -46,7 +46,7 @@ export interface Store {
   /** Number of cards in Needs you. */
   needsYou: ReadonlySignal<number>;
   /** The quiet "your corrections usually rise now" line; null unless `[clock] hints` is on and it is that time. */
-  clockHint: ReadonlySignal<string | null>;
+  clockHint: ReadonlySignal<ClockHint | null>;
   error: ReadonlySignal<string | null>;
 
   open(id: string): void;
@@ -162,7 +162,7 @@ export function createStore(src: Source, { defaultTheme = 'auto' }: { defaultThe
   const agents = signal<Agent[]>([]);
   const notice = signal<RemindSettings | null>(null);
   const night = signal<NightState | null>(null);
-  const clockHint = signal<string | null>(null);
+  const clockHint = signal<ClockHint | null>(null);
 
   const mq = typeof matchMedia === 'function' ? matchMedia('(prefers-color-scheme: dark)') : null;
   const systemDark = signal(mq?.matches ?? false);
@@ -482,7 +482,7 @@ export function createStore(src: Source, { defaultTheme = 'auto' }: { defaultThe
   function loadClockHint() {
     clearTimeout(hintTimer);
     src.clock(1).then((c) => {
-      clockHint.value = c.enabled && c.hints ? c.now.hint?.text ?? null : null;
+      clockHint.value = c.enabled && c.hints ? c.now.hint ?? null : null;
       // nobody needs the question again until hints are switched on, and the settings panel asks then
       if (c.enabled && c.hints) hintTimer = setTimeout(loadClockHint, CLOCK_HINT_EVERY_MS);
     }, () => { clockHint.value = null; });

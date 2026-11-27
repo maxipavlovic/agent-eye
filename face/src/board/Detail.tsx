@@ -92,7 +92,7 @@ function Actions({ d, store }: { d: CardDetail; store: Store }) {
   // an idea has START, EDIT and ARCHIVE in its own row
   if (d.kind === 'idea') return null;
   // While the clock says your corrections usually rise, continuing tonight comes first, with the reason
-  const why = tonightWhy(d, store.clockHint.value, store.night.value !== null);
+  const why = tonightWhy(d, store.clockHint.value);
   return (
     <div class="acts end">
       {why && <p class="why">{why}</p>}
@@ -128,7 +128,7 @@ function moreItems(d: CardDetail, store: Store): MoreItem[] {
   if (d.kind === 'idea') return [{ label: 'REMIND ME…', key: 'M', title: 'Pick when eye moves it to Needs you', run: () => openRemind(d.id) }, archive];
   const out: MoreItem[] = [];
   const tonight: MoreItem = { label: 'CONTINUE TONIGHT…', key: 'T', title: 'Fork this session tonight, in its own worktree, with a prompt you write now', run: () => { tonightOpen.value = d.id; } };
-  const why = tonightWhy(d, store.clockHint.value, store.night.value !== null);
+  const why = tonightWhy(d, store.clockHint.value);
   if (why) out.push({ ...tonight, why });
   if (d.resumable && d.resume_cmd) out.push({ label: 'FORK', key: 'F', title: 'Resume as a new session branched from this one', run: () => void store.resume(d.id, true) });
   if (d.resume_cmd) out.push({ label: 'COPY RESUME COMMAND', key: 'C', title: 'Copy the command that resumes it', run: () => copy(d.resume_cmd!, store) });

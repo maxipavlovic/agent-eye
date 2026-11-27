@@ -1,16 +1,12 @@
-import type { Card } from '../api/types';
-
-/** The offer the engine adds to its hint; the menu and the panel have their own button for it. */
-const OFFER = /\s*Hand this to the night shift\? \(T\)$/;
+import type { Card, ClockHint } from '../api/types';
 
 /**
  * Why Continue tonight comes first on this card, in one plain line, or null: the hint applies to it (hintFor, as
- * the card you are working in) and it can be continued tonight.
+ * the card you are working in), the engine offers the night shift and the card can be continued tonight.
  */
-export function tonightWhy(c: Pick<Card, 'id' | 'kind' | 'column' | 'live_status' | 'resumable'>, hint: string | null, night: boolean): string | null {
-  if (!night || !c.resumable) return null;
-  const h = hintFor(c, c.id, hint);
-  return h ? h.replace(OFFER, '') : null;
+export function tonightWhy(c: Pick<Card, 'id' | 'kind' | 'column' | 'live_status' | 'resumable'>, hint: ClockHint | null): string | null {
+  if (!hint?.offer || !c.resumable) return null;
+  return hintFor(c, c.id, hint.text);
 }
 
 /**

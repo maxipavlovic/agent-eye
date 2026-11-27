@@ -50,9 +50,9 @@ export function HoursButton() {
 
 /** The quiet mark beside HOURS while the clock has a hint (`[clock] hints`): its words are the label and the tooltip, and it opens HOURS. */
 export function HoursHint({ store }: { store: Store }) {
-  const hint = store.clockHint.value;
+  const hint = store.clockHint.value?.text;
   if (!hint) return null;
-  return <button class="hourhint" title={hint} onClick={() => { hoursPanel.value = true; }}><i aria-hidden="true" />{hint}</button>;
+  return <button class="hourhint" title={hint} onClick={() => { hoursPanel.value = true; }}><i aria-hidden="true" /><span>{hint}</span></button>;
 }
 
 /** The gear: it opens SETTINGS (look, colour, layout, theme and the agent settings). */

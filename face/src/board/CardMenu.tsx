@@ -117,7 +117,7 @@ function rows(c: Card, store: Store): Row[] {
   }
   const out: Row[] = [];
   // While the clock says your corrections usually rise, handing the card to the night shift comes first
-  const why = tonightWhy(c, store.clockHint.value, store.night.value !== null);
+  const why = tonightWhy(c, store.clockHint.value);
   if (why) out.push(tonight(c, store, go), { note: why }, { hr: true });
   if (c.column !== 'done') {
     // Undo puts it back where it was: a hand-placed column, or back to the rules.

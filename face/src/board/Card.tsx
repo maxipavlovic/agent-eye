@@ -130,7 +130,7 @@ function When({ c, row }: { c: Card; row?: boolean }) {
 /** tag: the project key to show as a tag, or null when a project filter is active. */
 export function CardView({ c, store, i, kind, tag }: { c: Card; store: Store; i: number; kind: Kind; tag: string | null }) {
   const busy = isBusy(c);
-  const marks = kind === 'row' ? [] : cardMarks(c, kind === 'need', hintFor(c, store.selected.value, store.clockHint.value));
+  const marks = kind === 'row' ? [] : cardMarks(c, kind === 'need', hintFor(c, store.selected.value, store.clockHint.value?.text ?? null));
   const cls = `card ${kind}${busy ? ' busy' : ''}${c.remind_at ? ' clock' : ''}${asksYou(c) ? ' ask' : ''}${store.selected.value === c.id ? ' sel' : ''}`;
   const style = `--d:${Math.min(i, 12) * 28}ms;--tabw:${marksWidth(c, marks)}px`;
   const base = { class: cls, style, 'data-id': c.id, ...cardProps(c, store) };

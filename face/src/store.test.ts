@@ -287,7 +287,7 @@ describe('the clock', () => {
   it('shows the hint only while hints are on and it says one', async () => {
     const s = createStore(source({ clock: async () => hintClock() }));
     await tick();
-    expect(s.clockHint.value).toBe('Your corrections usually rise now');
+    expect(s.clockHint.value).toEqual({ text: 'Your corrections usually rise now', offer: true });
     const off = createStore(source({ clock: async (): Promise<ClockReport> => ({ ...hintClock(), hints: false }) }));
     await tick();
     expect(off.clockHint.value).toBeNull();
