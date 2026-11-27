@@ -99,4 +99,11 @@ describe('the clock model', () => {
     expect(agentRow({ ...claude, signals: [] })).toMatchObject({ prompts: '—', corrections: '—' });
     expect(agentRow({ ...claude, think_ratio: null })).toMatchObject({ thinking: '—' });
   });
+
+  it('says there are no worse hours instead of a dash, and keeps the dash for a signal the agent lacks', () => {
+    const claude = demoClock(4).agents[0]!;
+    const quiet = { ...claude, think_ratio: null, tool_error_ratio: null, think_note: 'no worse hours to compare', tool_error_note: 'no worse hours to compare' };
+    expect(agentRow(quiet)).toMatchObject({ thinking: 'no worse hours to compare', toolErrors: 'no worse hours to compare' });
+    expect(agentRow({ ...quiet, signals: ['prompt', 'tool_error'] })).toMatchObject({ thinking: '—', toolErrors: 'no worse hours to compare' });
+  });
 });

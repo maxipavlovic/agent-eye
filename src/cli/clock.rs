@@ -214,12 +214,18 @@ fn text(r: &Report, weeks: i64) -> String {
 }
 
 /// One line per agent: its prompts and corrections, and its model side in the worse hours against
-/// its own elsewhere. A signal the agent does not have (or has too little of) is a dash.
+/// its own elsewhere. A signal the agent does not have (or has too little of) is a dash; with no
+/// worse hours the report says so (`think_note`).
 fn agent_lines(r: &Report) -> String {
     use std::fmt::Write;
     let mut o = String::new();
     let width = r.agents.iter().map(|a| a.agent.len()).max().unwrap_or(0);
-    let change = |x: Option<f64>| x.map_or("\u{2014}".to_string(), verdict::change);
+    let change = |x: Option<f64>, note: Option<&str>| {
+        note.map_or_else(
+            || x.map_or("\u{2014}".to_string(), verdict::change),
+            String::from,
+        )
+    };
     for a in &r.agents {
         let _ = writeln!(
             o,
@@ -228,8 +234,8 @@ fn agent_lines(r: &Report) -> String {
             a.prompts,
             a.corrections,
             per_100(a.corrections, a.prompts),
-            change(a.think_ratio),
-            change(a.tool_error_ratio),
+            change(a.think_ratio, a.think_note),
+            change(a.tool_error_ratio, a.tool_error_note),
         );
     }
     o
@@ -313,6 +319,8 @@ mod tests {
             think_unit: None,
             think_ratio: think,
             tool_error_ratio: errors,
+            think_note: None,
+            tool_error_note: None,
             signals: vec![],
         }
     }
@@ -383,6 +391,29 @@ mod tests {
         );
         assert!(
             t.contains("  agy     1000 prompts, 100 corrections (10.0 per 100); thinking \u{2014}, tool errors \u{2014}\n"),
+            "{t}"
+        );
+    }
+
+    #[test]
+    fn with_no_worse_hours_the_line_says_so_and_a_dash_stays_for_a_missing_signal() {
+        let mut r = report();
+        r.bad.clear();
+        let mut claude = agent("claude", None, None);
+        claude.think_note = Some("no worse hours to compare");
+        claude.tool_error_note = Some("no worse hours to compare");
+        let mut agy = agent("agy", None, None);
+        agy.tool_error_note = Some("no worse hours to compare");
+        r.agents = vec![claude, agy];
+        let t = text(&r, 4);
+        assert!(
+            t.contains(
+                "thinking no worse hours to compare, tool errors no worse hours to compare\n"
+            ),
+            "{t}"
+        );
+        assert!(
+            t.contains("thinking \u{2014}, tool errors no worse hours to compare\n"),
             "{t}"
         );
     }

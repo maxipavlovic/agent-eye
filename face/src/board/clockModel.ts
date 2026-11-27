@@ -125,13 +125,13 @@ export function ratioText(r: number | null): string {
   return Math.abs(pct) < 5 ? 'flat' : `${pct > 0 ? '+' : '−'}${Math.abs(pct)}%`;
 }
 
-/** One agent's row of the by-agent table; a signal the agent cannot report reads "—", never zero. */
+/** One agent's row of the by-agent table; a signal the agent cannot report reads "—", never zero, and with no worse hours the server's note says so. */
 export function agentRow(a: ClockAgent): { prompts: string; corrections: string; thinking: string; toolErrors: string } {
   const has = (s: ClockAgent['signals'][number]) => a.signals.includes(s);
   return {
     prompts: has('prompt') ? String(a.prompts) : '—',
     corrections: has('prompt') ? String(a.corrections) : '—',
-    thinking: has('think') ? ratioText(a.think_ratio) : '—',
-    toolErrors: has('tool_error') ? ratioText(a.tool_error_ratio) : '—',
+    thinking: has('think') ? a.think_note ?? ratioText(a.think_ratio) : '—',
+    toolErrors: has('tool_error') ? a.tool_error_note ?? ratioText(a.tool_error_ratio) : '—',
   };
 }

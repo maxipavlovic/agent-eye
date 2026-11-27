@@ -451,6 +451,8 @@ fn agents_are_listed_with_their_thinking_unit() {
             think_unit: Some("signature"),
             think_ratio: None,
             tool_error_ratio: None,
+            think_note: Some("no worse hours to compare"),
+            tool_error_note: Some("no worse hours to compare"),
             signals: vec![
                 "prompt",
                 "end",
@@ -539,8 +541,10 @@ fn the_json_has_the_documented_fields() {
             "prompts",
             "signals",
             "think",
+            "think_note",
             "think_ratio",
             "think_unit",
+            "tool_error_note",
             "tool_error_ratio"
         ]
     );

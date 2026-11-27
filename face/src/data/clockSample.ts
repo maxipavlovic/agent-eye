@@ -64,8 +64,8 @@ export function demoClock(weeks: number): ClockReport {
     },
     now: { in_bad: false, since_break_min: 35, hint: null },
     agents: [
-      { agent: 'claude', prompts: Math.round(prompts * 0.94), corrections: Math.round(corrections * 0.95), think: 'signature', think_unit: 'signature', think_ratio: 0.93, tool_error_ratio: 0.95, signals: [...SIGNALS] },
-      { agent: 'codex', prompts: Math.round(prompts * 0.06), corrections: Math.round(corrections * 0.05), think: null, think_unit: 'reasoning_tokens', think_ratio: null, tool_error_ratio: null, signals: [...SIGNALS] },
+      { agent: 'claude', prompts: Math.round(prompts * 0.94), corrections: Math.round(corrections * 0.95), think: 'signature', think_unit: 'signature', think_ratio: 0.93, tool_error_ratio: 0.95, think_note: null, tool_error_note: null, signals: [...SIGNALS] },
+      { agent: 'codex', prompts: Math.round(prompts * 0.06), corrections: Math.round(corrections * 0.05), think: null, think_unit: 'reasoning_tokens', think_ratio: null, tool_error_ratio: null, think_note: null, tool_error_note: null, signals: [...SIGNALS] },
     ],
   };
 }

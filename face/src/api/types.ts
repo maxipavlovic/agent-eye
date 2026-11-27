@@ -322,6 +322,9 @@ export interface ClockAgent {
   /** Its thinking in the bad hours over its own elsewhere; null without that signal, enough data or bad hours. */
   think_ratio: number | null;
   tool_error_ratio: number | null;
+  /** Why `think_ratio` is null although the agent reports thinking: "no worse hours to compare". Null otherwise. */
+  think_note: string | null;
+  tool_error_note: string | null;
   signals: ClockSignal[];
 }
 

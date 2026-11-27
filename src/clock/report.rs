@@ -65,9 +65,17 @@ pub struct AgentRow {
     pub think_ratio: Option<f64>,
     /// Its failed tool calls per call in the bad hours over its own rate elsewhere; null likewise.
     pub tool_error_ratio: Option<f64>,
+    /// Why `think_ratio` is null although the agent reports thinking: there are no bad hours.
+    /// Null when the ratio is there or the agent reports no thinking (then it is no signal).
+    pub think_note: Option<&'static str>,
+    /// The same for `tool_error_ratio`.
+    pub tool_error_note: Option<&'static str>,
     /// The turn events the agent can report at all; one it lacks is "no signal", not zero.
     pub signals: Vec<&'static str>,
 }
+
+/// What a surface says for a ratio it cannot give because no hours were worse.
+const NO_WORSE_HOURS: &str = "no worse hours to compare";
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Report {
@@ -237,7 +245,7 @@ pub fn build(
         tool_agent: bands::main_tool_agent(&data),
         verdict,
         now: now_state,
-        agents: agent_rows(&data, cfg, &sides),
+        agents: agent_rows(&data, cfg, &sides, named.is_empty()),
     })
 }
 
@@ -303,7 +311,7 @@ fn hint(
 /// One row per agent with prompts in the window. What an agent can report is a fact about the agent,
 /// so it is looked up among every agent eye knows, enabled or not (history may hold sessions of one
 /// that is off now).
-fn agent_rows(data: &Data, cfg: &Config, sides: &[AgentSide]) -> Vec<AgentRow> {
+fn agent_rows(data: &Data, cfg: &Config, sides: &[AgentSide], no_bad: bool) -> Vec<AgentRow> {
     let known = crate::agents::known(cfg);
     let mut rows: Vec<AgentRow> = vec![];
     for p in &data.prompts {
@@ -313,17 +321,25 @@ fn agent_rows(data: &Data, cfg: &Config, sides: &[AgentSide]) -> Vec<AgentRow> {
                 let agent = known.iter().find(|a| a.id() == p.agent);
                 let think_unit = agent.and_then(|a| a.think_unit());
                 let side = sides.iter().find(|s| s.agent == p.agent);
+                let signals: Vec<&str> = agent.map_or(vec![], |a| {
+                    a.turn_kinds().iter().map(|k| k.as_str()).collect()
+                });
+                let think_ratio = side.and_then(|s| s.think_ratio);
+                let tool_error_ratio = side.and_then(|s| s.tool_error_ratio);
+                let note = |kind: &str, ratio: Option<f64>| {
+                    (no_bad && ratio.is_none() && signals.contains(&kind)).then_some(NO_WORSE_HOURS)
+                };
                 rows.push(AgentRow {
                     agent: p.agent.clone(),
                     prompts: 0,
                     corrections: 0,
                     think: think_unit.filter(|_| data.thinks.iter().any(|t| t.agent == p.agent)),
                     think_unit,
-                    think_ratio: side.and_then(|s| s.think_ratio),
-                    tool_error_ratio: side.and_then(|s| s.tool_error_ratio),
-                    signals: agent.map_or(vec![], |a| {
-                        a.turn_kinds().iter().map(|k| k.as_str()).collect()
-                    }),
+                    think_ratio,
+                    tool_error_ratio,
+                    think_note: note("think", think_ratio),
+                    tool_error_note: note("tool_error", tool_error_ratio),
+                    signals,
                 });
                 rows.len() - 1
             }
