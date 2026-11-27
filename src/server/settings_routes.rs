@@ -229,6 +229,24 @@ mod tests {
         call(e, req("POST", "/api/settings", Some(body))).await
     }
 
+    #[test]
+    fn every_setting_is_in_the_api_and_config_docs() {
+        let api = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/docs/api.md"));
+        let config = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/docs/config.md"));
+        for key in super::KEYS {
+            assert!(
+                api.contains(&format!("`{key}`")),
+                "{key} is not in docs/api.md"
+            );
+            // config.md names a key under its table: `[clock]` and then `break_minutes`
+            let (table, name) = key.split_once('.').unwrap();
+            assert!(
+                config.contains(&format!("[{table}]")) && config.contains(name),
+                "{key} is not in docs/config.md"
+            );
+        }
+    }
+
     #[tokio::test]
     async fn the_defaults_come_with_their_types_and_allowed_values() {
         let e = env();
