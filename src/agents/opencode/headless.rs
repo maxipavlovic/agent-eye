@@ -1,15 +1,13 @@
 //! Summaries through `opencode run --format json`. OpenCode cannot constrain an answer to a schema,
 //! so the prompt asks for strict JSON, the last text of the event stream is validated against the
 //! schema eye uses, and one invalid answer is asked again. The run is made `--archived` (out of
-//! OpenCode's lists) and its session is deleted afterwards, so it never shows up in eye or in
-//! OpenCode. The run gets a config of its own (`deny_all`, passed inline, never written to the
-//! user's config file) that denies every permission by default and switches every tool off, so
-//! text inside what it is asked about (a quoted web page, a tool's output) has nothing to drive: not
-//! the shell, edits, web fetches or search, sub-agents, skills, nor the tools of the user's MCP
-//! servers. That is written from OpenCode's documentation and not yet run against a real
-//! OpenCode (`docs/security.md`).
+//! OpenCode's lists) and its session is deleted afterwards, also when the answer is invalid or the
+//! run times out, so it never shows up in eye or in OpenCode. It runs as an agent of its own with
+//! every permission denied and every tool off, a private server and the user's MCP servers switched
+//! off (`lockdown.rs`), so text inside what it is asked about (a quoted web page, a tool's output)
+//! has nothing to drive. Checked on a real OpenCode 2.3.2 (`docs/security.md`).
 
-use super::OpenCode;
+use super::{lockdown, OpenCode};
 use crate::agents::{HeadlessReply, HeadlessRequest};
 use crate::util::{head_chars, new_uuid};
 use anyhow::{Context, Result};
@@ -27,49 +25,20 @@ pub const FREE: &str = "free";
 /// Words in a model name that mark a small, fast one; the first free model with one is taken.
 const SMALL: [&str; 6] = ["flash", "lightning", "small", "mini", "nano", "lite"];
 
-/// The config of a question: nothing that acts is allowed. OpenCode starts every agent from a rule
-/// that allows everything, so a list of denied tools would leave the rest open (web search,
-/// sub-agents, skills, any MCP server's tools); the `*` rule denies all of them, the named keys say
-/// it again for the ones OpenCode has always had, and `tools` switches every tool off as well. It
-/// is the run's inline config, which beats the user's own. The run is not given `--auto`, so
-/// nothing is approved on its behalf; what is left open is reading its own empty folder.
-fn deny_all() -> String {
-    let permission: serde_json::Map<String, Value> = [
-        "*",
-        "bash",
-        "edit",
-        "webfetch",
-        "websearch",
-        "external_directory",
-        "task",
-        "skill",
-    ]
-    .into_iter()
-    .map(|k| (k.to_string(), json!("deny")))
-    .collect();
-    json!({
-        "permission": permission,
-        "tools": {"*": false},
-        "share": "disabled",
-        "autoupdate": false,
-    })
-    .to_string()
-}
-
-/// The flags a summary run needs `opencode run` to have.
-const FLAGS: [&str; 3] = ["--format", "--archived", "--title"];
+/// The flags a summary run needs `opencode run` to have: without `--agent` the run would be the
+/// user's default agent, and without `--standalone` OpenCode's background service, neither of
+/// which keeps to the run's config.
+const FLAGS: [&str; 5] = [
+    "--format",
+    "--archived",
+    "--title",
+    "--agent",
+    "--standalone",
+];
 
 static CHECKED: LazyLock<Mutex<HashMap<String, Result<(), String>>>> =
     LazyLock::new(Mutex::default);
 static FREE_MODEL: LazyLock<Mutex<HashMap<String, Option<String>>>> = LazyLock::new(Mutex::default);
-
-fn command(c: &OpenCode) -> Command {
-    let mut cmd = Command::new(c.executable_path());
-    for (k, v) in c.env() {
-        cmd.env(k, v);
-    }
-    cmd
-}
 
 /// Does `opencode run` know the flags a summary needs? Asked once per program, with `--help`.
 pub fn flags_check(c: &OpenCode) -> Result<()> {
@@ -77,8 +46,8 @@ pub fn flags_check(c: &OpenCode) -> Result<()> {
     if let Some(r) = CHECKED.lock().unwrap_or_else(|e| e.into_inner()).get(&exe) {
         return r.clone().map_err(anyhow::Error::msg);
     }
-    let out = command(c)
-        .args(["run", "--help"])
+    let out = c
+        .command(&["run", "--help"])
         .stdin(Stdio::null())
         .output()
         .with_context(|| format!("starting `{exe}` (is it on PATH?)"))?;
@@ -127,11 +96,7 @@ fn free_model(c: &OpenCode) -> Option<String> {
     {
         return m.clone();
     }
-    let out = command(c)
-        .arg("models")
-        .stdin(Stdio::null())
-        .output()
-        .ok()?;
+    let out = c.command(&["models"]).stdin(Stdio::null()).output().ok()?;
     let m = pick_free(&String::from_utf8_lossy(&out.stdout));
     FREE_MODEL
         .lock()
@@ -318,19 +283,20 @@ fn prompt(req: &HeadlessRequest, problem: Option<&str>) -> String {
     p
 }
 
-/// The command of one question: `opencode run` in its own archived session, with the deny rules.
-fn ask_command(c: &OpenCode, model: &str) -> Command {
-    let mut cmd = command(c);
-    cmd.env("OPENCODE_CONFIG_CONTENT", deny_all());
-    cmd.args([
+/// The command of one question: `opencode run` in its own archived session, as the locked-down
+/// agent, with the MCP servers `mcp` names switched off.
+fn ask_command(c: &OpenCode, model: &str, mcp: &[String]) -> Command {
+    let mut cmd = c.command(&[
         "run",
-        "--standalone",
         "--format",
         "json",
         "--archived",
         "--title",
         "eye-ask",
+        "--agent",
+        lockdown::AGENT,
     ]);
+    cmd.env(lockdown::CONFIG_VAR, lockdown::config(mcp));
     if !model.is_empty() {
         cmd.args(["-m", model]);
     }
@@ -341,11 +307,12 @@ fn ask_command(c: &OpenCode, model: &str) -> Command {
 fn run_once(
     c: &OpenCode,
     model: &str,
+    mcp: &[String],
     prompt: String,
     dir: &Path,
     timeout: Duration,
 ) -> Result<String> {
-    let mut child = ask_command(c, model)
+    let mut child = ask_command(c, model, mcp)
         .current_dir(dir)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -394,12 +361,20 @@ pub fn ask(c: &OpenCode, req: &HeadlessRequest) -> Result<HeadlessReply> {
         m => m.to_string(),
     };
     let started = Instant::now();
+    let mcp = c.mcp_servers(&scratch.0);
     let mut cost = None::<f64>;
     let mut problem: Option<String> = None;
     let mut last_err = anyhow::anyhow!("no answer");
     for _ in 0..2 {
         let left = req.timeout.saturating_sub(started.elapsed());
-        let out = run_once(c, &model, prompt(req, problem.as_deref()), &scratch.0, left);
+        let out = run_once(
+            c,
+            &model,
+            &mcp,
+            prompt(req, problem.as_deref()),
+            &scratch.0,
+            left,
+        );
         let out = match out {
             Ok(o) => o,
             Err(e) => {
@@ -443,36 +418,48 @@ mod tests {
             .and_then(|(_, v)| v.map(|v| v.to_string_lossy().into_owned()))
     }
 
+    /// The whole lock-down of a question's command: a `*` deny rule globally and for its own agent,
+    /// every tool off, the user's MCP servers off, no user config named, a private server, no update.
     #[test]
-    fn a_question_runs_with_everything_denied_by_default_and_every_tool_off() {
+    fn a_question_runs_as_its_own_agent_with_everything_denied_and_the_mcp_servers_off() {
         let c = OpenCode::new(std::path::PathBuf::from("/nonexistent"));
-        let cmd = ask_command(&c, "provider/model");
+        let cmd = ask_command(&c, "provider/model", &["jira".into(), "docs".into()]);
         let rules: Value =
-            serde_json::from_str(&env_of(&cmd, "OPENCODE_CONFIG_CONTENT").unwrap()).unwrap();
-        // the default rule, so what the list below leaves out (an MCP tool) is denied too
-        assert_eq!(rules["permission"]["*"], "deny");
-        for tool in [
-            "bash",
-            "edit",
-            "webfetch",
-            "websearch",
-            "external_directory",
-            "task",
-            "skill",
-        ] {
-            assert_eq!(rules["permission"][tool], "deny", "{tool}");
+            serde_json::from_str(&env_of(&cmd, lockdown::CONFIG_VAR).unwrap()).unwrap();
+        // the default rule, so what the list below leaves out (an MCP tool, code mode) is denied
+        // too; the agent's own rules say it again, as OpenCode applies them after the global ones
+        let agent = &rules["agent"][lockdown::AGENT];
+        for at in [&rules["permission"], &agent["permission"]] {
+            assert_eq!(at["*"], "deny");
+            for tool in [
+                "bash",
+                "edit",
+                "webfetch",
+                "websearch",
+                "external_directory",
+                "task",
+                "skill",
+            ] {
+                assert_eq!(at[tool], "deny", "{tool}");
+            }
+            assert!(at.as_object().unwrap().values().all(|v| v == "deny"));
         }
         assert_eq!(rules["tools"]["*"], false);
+        assert_eq!(agent["tools"]["*"], false);
+        assert_eq!(agent["mode"], "primary");
+        for server in ["jira", "docs"] {
+            assert_eq!(rules["mcp"][server]["enabled"], false, "{server}");
+        }
+        assert_eq!(rules["autoupdate"], false);
+        assert_eq!(rules["share"], "disabled");
         // nothing in the config allows or asks anything, and the run is not told to approve what it asks
-        assert!(rules["permission"]
-            .as_object()
-            .unwrap()
-            .values()
-            .all(|v| v == "deny"));
         assert!(!rules.to_string().contains("allow"));
         assert!(!rules.to_string().contains("\"ask\""));
         // inline only: the user's own config file is not named, written or read
         assert!(cmd.get_envs().all(|(k, _)| k != "OPENCODE_CONFIG"));
+        for (k, v) in lockdown::ENV {
+            assert_eq!(env_of(&cmd, k).as_deref(), Some(v), "{k}");
+        }
         let args: Vec<String> = cmd
             .get_args()
             .map(|a| a.to_string_lossy().into_owned())
@@ -480,8 +467,10 @@ mod tests {
         assert!(!args
             .iter()
             .any(|a| a == "--auto" || a.contains("dangerously")));
+        assert!(args.windows(2).any(|w| w == ["--agent", lockdown::AGENT]));
         assert!(args.windows(2).any(|w| w == ["-m", "provider/model"]));
         assert!(args.contains(&"--archived".to_string()));
+        assert!(args.contains(&"--standalone".to_string()));
     }
 
     #[test]

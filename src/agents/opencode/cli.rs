@@ -1,7 +1,8 @@
 //! Things eye asks the `opencode` program to do: export, import and delete a session. OpenCode
-//! owns its database, so eye never writes it.
+//! owns its database, so eye never writes it. Every command is locked down the same way
+//! (`lockdown.rs`).
 
-use super::{store, OpenCode};
+use super::{lockdown, store, OpenCode};
 use anyhow::{Context, Result};
 use serde_json::Value;
 use std::path::Path;
@@ -28,16 +29,23 @@ impl OpenCode {
         v
     }
 
+    /// `opencode <args>` as eye runs every OpenCode command: with this adapter's folders, the
+    /// locked-down config and switches, and a private server (`--standalone`), so eye never starts
+    /// or uses OpenCode's background service.
+    pub(super) fn command(&self, args: &[&str]) -> Command {
+        let mut cmd = Command::new(self.executable_path());
+        cmd.args(args)
+            .arg("--standalone")
+            .envs(self.env())
+            .env(lockdown::CONFIG_VAR, lockdown::config(&[]))
+            .envs(lockdown::ENV);
+        cmd
+    }
+
     /// Run `opencode <args>` in `cwd`; its stdout. A run that takes more than a minute is stopped.
     pub(super) fn output(&self, args: &[&str], cwd: Option<&Path>) -> Result<String> {
-        let mut cmd = Command::new(self.executable_path());
-        cmd.args(args);
-        if args.first() == Some(&"session") {
-            // a private server for the call: eye never starts OpenCode's background service
-            cmd.arg("--standalone");
-        }
-        cmd.envs(self.env())
-            .stdin(Stdio::null())
+        let mut cmd = self.command(args);
+        cmd.stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
         if let Some(c) = cwd {
@@ -76,6 +84,14 @@ impl OpenCode {
             crate::util::head_chars(String::from_utf8_lossy(&err).trim(), 300)
         );
         Ok(String::from_utf8_lossy(&out).into_owned())
+    }
+
+    /// The names of the MCP servers OpenCode's config declares for a run in `dir`, read by OpenCode
+    /// itself (`opencode debug config`); none when it cannot say.
+    pub(super) fn mcp_servers(&self, dir: &Path) -> Vec<String> {
+        self.output(&["debug", "config"], Some(dir))
+            .map(|out| lockdown::mcp_names(&out))
+            .unwrap_or_default()
     }
 
     /// Delete a session through OpenCode; nothing is said when it cannot.

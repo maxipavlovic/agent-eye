@@ -259,7 +259,7 @@ const GOOD: &str = r#"{"status":"done","state":"All done.","next":"Nothing.","to
 
 /// A fake whose first `run` answers with `first` and the following ones with `then`.
 fn asking(first: &str, then: &str) -> World {
-    let body = "\"run --standalone\") cat > \"$(dirname \"$0\")/prompt-$$.txt\"; n=$(cat \"$(dirname \"$0\")/n\" 2>/dev/null || echo 0); echo $((n+1)) > \"$(dirname \"$0\")/n\"; if [ \"$n\" = 0 ]; then cat \"$(dirname \"$0\")/first.jsonl\"; else cat \"$(dirname \"$0\")/then.jsonl\"; fi;;\n\"run --help\") echo '--format --archived --title --standalone';;\n\"models \") printf 'anthropic/claude-sonnet-4-5\\nopencode/big-free\\nopencode/x-flash-free\\n';;\n*) ;;";
+    let body = "\"run --format\") cat > \"$(dirname \"$0\")/prompt-$$.txt\"; n=$(cat \"$(dirname \"$0\")/n\" 2>/dev/null || echo 0); echo $((n+1)) > \"$(dirname \"$0\")/n\"; if [ \"$n\" = 0 ]; then cat \"$(dirname \"$0\")/first.jsonl\"; else cat \"$(dirname \"$0\")/then.jsonl\"; fi;;\n\"run --help\") echo '--format --archived --title --agent --standalone';;\n\"models --standalone\") printf 'anthropic/claude-sonnet-4-5\\nopencode/big-free\\nopencode/x-flash-free\\n';;\n*) ;;";
     let w = World::new(body);
     std::fs::write(w.root.join("first.jsonl"), events("ses_ask1", first)).unwrap();
     std::fs::write(w.root.join("then.jsonl"), events("ses_ask2", then)).unwrap();

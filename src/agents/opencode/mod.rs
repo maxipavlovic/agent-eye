@@ -6,7 +6,8 @@
 //!
 //! - live status: `live.rs` reads the turn times OpenCode writes on the session's row; a permission
 //!   prompt is seen by the plugin eye installs (`plugin.js`, `hooks.rs`);
-//! - summaries: `headless.rs`, `opencode run --format json` with a JSON-only prompt, validated;
+//! - summaries and judging: `headless.rs`, `opencode run --format json` with a JSON-only prompt,
+//!   validated, locked down as every `opencode` command eye runs is (`lockdown.rs`);
 //! - archive and restore: the archive keeps `opencode session export`, restore is `session import`
 //!   (`cli.rs`); eye never writes OpenCode's database;
 //! - install: the plugin and the `/eye` command (`install.rs`).
@@ -17,6 +18,9 @@ mod headless;
 mod hooks;
 mod install;
 mod live;
+mod lockdown;
+#[cfg(test)]
+mod run_tests;
 mod store;
 mod turns;
 
