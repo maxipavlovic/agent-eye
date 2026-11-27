@@ -149,6 +149,16 @@ pub fn agy_settings() -> String {
     .to_string()
 }
 
+/// The inline config of an OpenCode run in `cwd`: its rules, with the MCP servers OpenCode would
+/// start there named and switched off. When OpenCode cannot say which, the run does not start: its
+/// rules have no `*` deny and `--auto` would approve those servers' tools unattended.
+pub fn opencode_guard(exe: &str, cwd: &Path) -> Result<String> {
+    let mcp = crate::agents::opencode::mcp_servers_for_run(exe, cwd).context(
+        "OpenCode's config could not be read (`opencode debug config`), so its MCP servers cannot be switched off and the run did not start",
+    )?;
+    Ok(opencode_permissions(&mcp))
+}
+
 /// The command of a run. `new_id` names the run's own session (Claude only); `guard` is what
 /// confines the run beyond its arguments: for Claude the `--settings` JSON of its barrier (see
 /// `barrier`), for OpenCode its inline config (`opencode_permissions`, with the MCP servers of the
@@ -416,8 +426,7 @@ pub fn start(
             stage_transcript(db, paths, agents, run, &iso.cwd)?;
         }
         let guard = if run.agent == "opencode" {
-            let mcp = crate::agents::opencode::mcp_servers_for_run(&agent.executable(), &iso.cwd);
-            Some(opencode_permissions(&mcp))
+            Some(opencode_guard(&agent.executable(), &iso.cwd)?)
         } else {
             (run.agent == LEGACY_ID).then(|| {
                 // what the run must not touch: the planned folder and where the session began

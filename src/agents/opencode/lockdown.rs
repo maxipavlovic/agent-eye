@@ -89,8 +89,9 @@ pub fn agent_config(agent: &str, rules: Value, mcp: &[String]) -> Value {
 }
 
 /// The names of the MCP servers in what `opencode debug config` prints: `mcp.servers.<name>` in
-/// each config source of OpenCode 2, `mcp.<name>` in the one merged config of 1.x.
-pub fn mcp_names(debug_config: &str) -> Vec<String> {
+/// each config source of OpenCode 2, `mcp.<name>` in the one merged config of 1.x. An error when it
+/// is not JSON: then eye cannot know which servers would start.
+pub fn mcp_names(debug_config: &str) -> anyhow::Result<Vec<String>> {
     fn walk(v: &Value, names: &mut BTreeSet<String>) {
         match v {
             Value::Object(m) => {
@@ -108,11 +109,15 @@ pub fn mcp_names(debug_config: &str) -> Vec<String> {
             _ => {}
         }
     }
+    let v: Value = serde_json::from_str(debug_config.trim()).map_err(|_| {
+        anyhow::anyhow!(
+            "`opencode debug config` did not print OpenCode's config: {}",
+            crate::util::head_chars(debug_config.trim(), 200)
+        )
+    })?;
     let mut names = BTreeSet::new();
-    if let Ok(v) = serde_json::from_str::<Value>(debug_config.trim()) {
-        walk(&v, &mut names);
-    }
-    names.into_iter().collect()
+    walk(&v, &mut names);
+    Ok(names.into_iter().collect())
 }
 
 #[cfg(test)]
@@ -126,12 +131,14 @@ mod tests {
             "servers":{"jira":{"type":"local","command":["j"],"disabled":false}}}}},
             {"type":"directory","path":"/x","info":{}},
             {"type":"document","info":{"mcp":{"servers":{"docs":{"type":"remote","url":"u"}}}}}]"#;
-        assert_eq!(mcp_names(v2), ["docs", "jira"]);
+        assert_eq!(mcp_names(v2).unwrap(), ["docs", "jira"]);
         // 1.x: the merged config, servers right under `mcp`
         let v1 = r#"{"mcp":{"probe":{"type":"local","command":["p"]}},"agent":{}}"#;
-        assert_eq!(mcp_names(v1), ["probe"]);
-        assert!(mcp_names("[]").is_empty());
-        assert!(mcp_names("Error: unknown command").is_empty());
+        assert_eq!(mcp_names(v1).unwrap(), ["probe"]);
+        assert!(mcp_names("[]").unwrap().is_empty());
+        // not a config: eye cannot say which servers would start
+        assert!(mcp_names("Error: unknown command").is_err());
+        assert!(mcp_names("").is_err());
     }
 
     #[test]

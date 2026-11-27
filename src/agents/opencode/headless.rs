@@ -376,9 +376,14 @@ pub fn ask(c: &OpenCode, req: &HeadlessRequest) -> Result<HeadlessReply> {
         m => m.to_string(),
     };
     let started = Instant::now();
+    // the servers are switched off by name: without the names they would start (their tools stay
+    // denied by `*`), so nothing is asked
+    let mcp = c.mcp_servers(&dir).context(
+        "could not read which MCP servers OpenCode would start, so they cannot be switched off; nothing was asked",
+    )?;
     let q = Question {
         title: format!("{ASK_TITLE}{}", new_uuid()?),
-        mcp: c.mcp_servers(&dir),
+        mcp,
     };
     let mut cost = None::<f64>;
     let mut problem: Option<String> = None;
@@ -394,8 +399,9 @@ pub fn ask(c: &OpenCode, req: &HeadlessRequest) -> Result<HeadlessReply> {
             }
         };
         let run = read_events(&out);
-        if let Some(id) = &run.session {
-            c.delete_session(id, &dir);
+        match &run.session {
+            Some(id) => c.delete_session(id, &dir),
+            None => c.delete_ask_sessions(&dir, &q.title),
         }
         cost = run.cost.or(cost);
         match json_in(&run.text).and_then(|v| match validate(req.schema, &v, "$") {

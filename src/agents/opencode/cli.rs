@@ -52,11 +52,9 @@ impl OpenCode {
     }
 
     /// The names of the MCP servers OpenCode's config declares for a run in `dir`, read by OpenCode
-    /// itself (`opencode debug config`); none when it cannot say.
-    pub(super) fn mcp_servers(&self, dir: &Path) -> Vec<String> {
-        self.output(&["debug", "config"], Some(dir))
-            .map(|out| lockdown::mcp_names(&out))
-            .unwrap_or_default()
+    /// itself (`opencode debug config`); an error when it cannot say.
+    pub(super) fn mcp_servers(&self, dir: &Path) -> Result<Vec<String>> {
+        lockdown::mcp_names(&self.output(&["debug", "config"], Some(dir))?)
     }
 
     /// Delete a session through OpenCode, asked in `dir` (OpenCode makes a project for the folder
@@ -72,13 +70,8 @@ impl OpenCode {
         let Ok(list) = self.output(&["session", "list"], Some(dir)) else {
             return;
         };
-        for line in list.lines() {
-            let mut f = line.split('\t');
-            if let (Some(id), Some(t)) = (f.next(), f.next()) {
-                if t.trim() == title {
-                    self.delete_session(id.trim(), dir);
-                }
-            }
+        for id in titled(&list, title) {
+            self.delete_session(id, dir);
         }
     }
 
@@ -112,6 +105,20 @@ impl OpenCode {
     pub(super) fn has_session(&self, dest: &Path) -> bool {
         store::exists(dest)
     }
+}
+
+/// The ids of the sessions titled `title` in what `opencode session list` prints: one line per
+/// session, `id<TAB>title<TAB>updated`, archived sessions included (seen on 2.3.2).
+pub(super) fn titled<'a>(list: &'a str, title: &str) -> Vec<&'a str> {
+    list.lines()
+        .filter_map(|line| {
+            let mut f = line.split('\t');
+            match (f.next(), f.next()) {
+                (Some(id), Some(t)) if t.trim() == title => Some(id.trim()),
+                _ => None,
+            }
+        })
+        .collect()
 }
 
 /// Run an `opencode <args>` command to its end; its stdout. One that takes more than a minute is
@@ -157,15 +164,13 @@ fn to_end(mut cmd: Command, exe: &str, args: &[&str]) -> Result<String> {
 
 /// The names of the MCP servers a run of `exe` in `dir` would start when it keeps the project's
 /// config and eye's own environment, as a night run does: read by OpenCode itself, with updates
-/// off; none when it cannot say.
-pub fn mcp_servers_for_run(exe: &str, dir: &Path) -> Vec<String> {
+/// off; an error when it cannot say.
+pub fn mcp_servers_for_run(exe: &str, dir: &Path) -> Result<Vec<String>> {
     let args = ["debug", "config", "--standalone"];
     let mut cmd = Command::new(exe);
     cmd.args(args)
         .current_dir(dir)
         .env(lockdown::CONFIG_VAR, lockdown::config(&[]))
         .envs([lockdown::NO_UPDATE]);
-    to_end(cmd, exe, &args)
-        .map(|out| lockdown::mcp_names(&out))
-        .unwrap_or_default()
+    lockdown::mcp_names(&to_end(cmd, exe, &args)?)
 }

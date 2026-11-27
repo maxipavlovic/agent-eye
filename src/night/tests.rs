@@ -1222,6 +1222,87 @@ fn a_started_opencode_run_reaches_the_program_with_its_rules() {
     assert!(rules.contains("\"git push*\":\"deny\""), "{rules}");
 }
 
+/// An OpenCode stand-in for `launch::start`: `debug config` does what the file `debug` says
+/// (`fail`, or print one server `jira`), and a run writes its arguments and inline config down.
+fn opencode_world(debug: &str) -> (tempfile::TempDir, Run, Paths, Config, Agents) {
+    let tmp = tempfile::tempdir().unwrap();
+    let orig = tmp.path().join("proj");
+    repo(&orig);
+    let bin = tmp.path().join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    std::fs::write(bin.join("debug"), debug).unwrap();
+    crate::platform::test_support::script(
+        &bin,
+        "opencode",
+        r#"d="$(dirname "$0")"
+case "$1 $(cat "$d/debug")" in
+"debug fail") echo "Error: config is broken" >&2; exit 1 ;;
+"debug "*) echo '[{"type":"document","info":{"mcp":{"servers":{"jira":{"type":"local","command":["j"]}}}}}]' ;;
+*) printf '%s\n' "$*" > "$d/ran"; printf '%s' "$OPENCODE_CONFIG_CONTENT" > "$d/config.json" ;;
+esac"#,
+    );
+    let paths = Paths {
+        home: tmp.path().join("eye"),
+    };
+    let cfg = Config::parse(
+        "[agents]\nenabled = [\"opencode\"]\n[night]\nenabled = true\nallow_unsandboxed = true\n",
+    )
+    .unwrap();
+    let exe = bin.join("opencode");
+    let agents = Agents::from_vec(vec![std::sync::Arc::new(
+        crate::agents::opencode::OpenCode::new(tmp.path().join("oc"))
+            .with_executable(exe.to_str().unwrap()),
+    )]);
+    let run = Run {
+        id: 9,
+        kind: "idea".into(),
+        agent: "opencode".into(),
+        prompt: "tidy up".into(),
+        folder: orig.to_string_lossy().into(),
+        night: "2026-11-21".into(),
+        ..Run::default()
+    };
+    (tmp, run, paths, cfg, agents)
+}
+
+/// Without the names of the folder's MCP servers eye cannot switch them off, and the run's rules
+/// (no `*` deny, `--auto`) would approve their tools unattended: the run does not start, says why
+/// and leaves no worktree.
+#[test]
+fn an_opencode_run_does_not_start_when_its_mcp_servers_cannot_be_read() {
+    let (tmp, run, paths, cfg, agents) = opencode_world("fail");
+    let db = Db::open_memory().unwrap();
+    let e = launch::start(&System::new(), &db, &paths, &cfg, &agents, &run).unwrap_err();
+    let why = format!("{e:#}");
+    assert!(
+        why.contains("did not start") && why.contains("config is broken"),
+        "{why}"
+    );
+    assert!(!tmp.path().join("bin/ran").exists());
+    assert!(!super::run_dir(&paths, 9).join("wt").exists());
+}
+
+#[test]
+fn a_started_opencode_run_has_its_folders_mcp_servers_switched_off() {
+    let (tmp, run, paths, cfg, agents) = opencode_world("ok");
+    let db = Db::open_memory().unwrap();
+    launch::start(&System::new(), &db, &paths, &cfg, &agents, &run).unwrap();
+    let ran = tmp.path().join("bin/ran");
+    for _ in 0..100 {
+        if ran.exists() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    assert!(std::fs::read_to_string(&ran)
+        .unwrap()
+        .contains(&format!("--agent {}", launch::OPENCODE_AGENT)));
+    let config: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(tmp.path().join("bin/config.json")).unwrap())
+            .unwrap();
+    assert_eq!(config["mcp"]["jira"]["enabled"], false);
+}
+
 #[test]
 fn the_claude_project_folder_name_replaces_every_odd_character() {
     let tmp = tempfile::tempdir().unwrap();
