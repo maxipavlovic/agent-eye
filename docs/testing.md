@@ -20,7 +20,7 @@ scripts/e2e.sh -g usage        # anything else goes to `playwright test`
 scripts/e2e.sh --update        # make the screenshot baselines again
 ```
 
-Needs docker (and node when `face/dist` is missing). The script runs two containers and removes both:
+Needs docker and node (the board is built from `face/` on every run, so a `face/dist` left from another commit is never tested). The script runs two containers and removes both:
 a Rust one builds the Linux binary with `--features fixed-clock`, and the pinned Playwright image
 (the version in `e2e/package.json`) runs the tests. Fonts and rendering are the same on every
 machine because every baseline is made in that image. On an Apple-silicon Mac that is arm64 Linux, so

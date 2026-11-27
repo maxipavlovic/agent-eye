@@ -6,7 +6,7 @@
 #   scripts/e2e.sh --update         make the screenshot baselines again (see docs/testing.md)
 #   scripts/e2e.sh -g "usage"       anything else goes to `playwright test`
 #
-# Needs docker, and node for the board's build when face/dist is missing. Two containers are
+# Needs docker, and node for the board's build. Two containers are
 # started and both are removed when they stop: a Rust one builds the Linux binary (with the
 # fixed-clock feature the tests need), a Playwright one runs the tests. Nothing touches your
 # real ~/.claude, ~/.codex, ~/.gemini or ~/.agent-eye: every test uses temporary homes.
@@ -29,10 +29,9 @@ done
 cleanup() { docker rm -f eye-e2e-build eye-e2e-run >/dev/null 2>&1 || true; }
 trap cleanup EXIT
 
-# The board is embedded in the binary, so it is built first (it does not depend on the platform).
-if [ ! -f face/dist/index.html ]; then
-  (cd face && npm ci --ignore-scripts && npm run build)
-fi
+# The board is embedded in the binary, so it is built first (it does not depend on the platform),
+# every time: a face/dist left from another commit would test, and photograph, the old board.
+(cd face && { [ -d node_modules ] || npm ci --ignore-scripts; } && npm run build)
 
 user=$(id -u):$(id -g)
 mkdir -p target/e2e-cargo
