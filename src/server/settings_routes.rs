@@ -579,9 +579,9 @@ mod tests {
         // the board and a card follow the file without a restart
         let (_, b) = call(&e, req("GET", "/api/board", None)).await;
         assert_eq!(needs_you(&b), ["term"]);
-        assert!(card_ids(&b, "paused").contains(&"app1".to_string()));
+        assert!(!card_ids(&b, "paused").contains(&"app1".to_string()));
         let (_, c) = call(&e, req("GET", "/api/cards/app1", None)).await;
-        assert_eq!(c["column"], "paused");
+        assert_eq!(c["column"], "archive");
         // still listed and resumable, with its origin shown
         assert_eq!(
             (&c["resumable"], &c["origin"]),
