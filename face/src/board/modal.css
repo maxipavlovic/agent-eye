@@ -22,3 +22,6 @@
 .settings .nrow > span { min-width: 10em; }
 .settings .nset { margin-top: 14px; }
 .settings .more { margin-top: 44px; }
+/* a setting shown but left to the file: its value in plain words, and the agents it does not follow quieter */
+.settings .sval { font: 600 17px/1.4 var(--f-body); text-transform: none; letter-spacing: 0; color: var(--ink); }
+.settings .umeta.soff { color: var(--mute); }

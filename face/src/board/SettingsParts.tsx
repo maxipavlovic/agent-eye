@@ -1,6 +1,10 @@
 import type { ComponentChildren } from 'preact';
+import { FoldSec } from './Sections';
 
-// The two controls every setting is built from, in the panel's look-neutral markup.
+// The parts every setting is built from, in the panel's look-neutral markup.
+
+/** Where the settings live, as the panel names the file. */
+export const CONFIG_FILE = '~/.agent-eye/config.toml';
 
 /** The sentence a setting gets when the engine marks its key `restart: true`: written here once, never by hand per row. */
 export const restartNote = (restart?: boolean) => (restart ? ' Takes effect when the background service restarts.' : '');
@@ -11,6 +15,22 @@ export function Row({ label, help, restart, children }: { label: string; help: s
     <div class="srow">
       <div class="nrow"><span>{label.toUpperCase()}</span>{children}</div>
       <p class="umeta">{help}{restartNote(restart)}</p>
+    </div>
+  );
+}
+
+/**
+ * A setting the panel shows but leaves to the file: its name and value, one plain line on what it does, and where to
+ * change it, with `eye restart` when the engine marks the key `restart: true`. `children` go between the two lines.
+ */
+export function Shown({ label, value, help, file, restart, children }: {
+  label: string; value: string; help: string; file: string; restart?: boolean; children?: ComponentChildren;
+}) {
+  return (
+    <div class="srow">
+      <div class="nrow"><span>{label.toUpperCase()}</span><b class="sval">{value}</b></div>
+      {children}
+      <p class="umeta">{help} To change it, set <code>{file}</code> in <code>{CONFIG_FILE}</code>{restart && <>, then run <code>eye restart</code></>}.</p>
     </div>
   );
 }
@@ -27,3 +47,15 @@ export function Seg<T extends string>({ label, value, options, onPick, disabled 
     </div>
   );
 }
+
+/** The panel's open sections, by title, and the switch for one. */
+export interface Folds { open: ReadonlySet<string>; toggle: (t: string) => void }
+
+/** A section of the panel: its heading opens and folds it, and folded it shows `sum`, a short status of what is inside. */
+export function Part({ t, sum, folds, children }: { t: string; sum: string; folds: Folds; children: ComponentChildren }) {
+  const open = folds.open.has(t);
+  return <FoldSec t={t} sum={open ? undefined : sum} open={open} toggle={() => folds.toggle(t)}>{children}</FoldSec>;
+}
+
+/** ON or OFF, as a folded heading says it. */
+export const onOff = (on: boolean) => (on ? 'ON' : 'OFF');

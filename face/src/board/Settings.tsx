@@ -1,15 +1,13 @@
 import { useEffect } from 'preact/hooks';
 import { signal, useSignal } from '@preact/signals';
-import type { ColumnId, SettingsInput, SettingsState } from '../api/types';
+import type { SettingsInput, SettingsState } from '../api/types';
 import { ACCENTS } from '../accents';
 import { LOOK_LIST, lookNamed, type LookName } from '../looks/names';
 import type { Store, ThemePref } from '../store';
 import { switchLook } from './switchLook';
-import { FOLDABLE, LANE_LABEL, ORDER } from './columns';
-import type { Layout, SetFold } from './layout';
-import { Sec } from './Sections';
+import type { Layout } from './layout';
 import { AgentSettings } from './SettingsAgent';
-import { Row, Seg } from './SettingsParts';
+import { CONFIG_FILE, Part, Row, Seg, type Folds } from './SettingsParts';
 import { usePanelEsc } from './panelEsc';
 
 /** Is the SETTINGS panel open? The header's gear sets it (so does `,`). */
@@ -18,12 +16,17 @@ export const settingsPanel = signal(false);
 const LAYOUTS: ReadonlyArray<readonly [Layout, string]> = [['lanes', 'LANES'], ['grid', 'GRID']];
 const THEMES: ReadonlyArray<readonly [ThemePref, string]> = [['light', 'LIGHT'], ['dark', 'DARK'], ['auto', 'AUTO']];
 
+/** The sections open when the panel opens: only how the board looks. */
+const FIRST_OPEN: ReadonlySet<string> = new Set(['LOOK']);
+
 /** How the board looks: the look, the accent colour, the layout and the theme. They apply at once and live in the browser and the engine. */
-function LookSettings({ store, layout, setLayout }: { store: Store; layout: Layout; setLayout: (l: Layout) => void }) {
+function LookSettings({ store, layout, setLayout, folds }: { store: Store; layout: Layout; setLayout: (l: Layout) => void; folds: Folds }) {
   const look = lookNamed(document.documentElement.dataset.look);
   const accent = store.accent.value;
+  const label = <T,>(list: ReadonlyArray<readonly [T, string]>, v: T) => list.find(([k]) => k === v)?.[1];
+  const sum = [LOOK_LIST.find((l) => l.id === look)?.label, label(LAYOUTS, layout), label(THEMES, store.themePref.value)].filter(Boolean).join(' · ');
   return (
-    <Sec t="LOOK">
+    <Part t="LOOK" sum={sum} folds={folds}>
       {look && (
         <Row label="Skin" help="Ink is pixel art on warm paper; Iris is a technical drawing in thin lines. The page reloads in the other one.">
           <Seg<LookName> label="Look" value={look} options={LOOK_LIST.map((l) => [l.id, l.label] as const)} onPick={(id) => void switchLook(store, id)} />
@@ -42,37 +45,27 @@ function LookSettings({ store, layout, setLayout }: { store: Store; layout: Layo
       <Row label="Theme" help="Auto follows your system.">
         <Seg label="Theme" value={store.themePref.value} options={THEMES} onPick={(t) => store.setTheme(t)} />
       </Row>
-    </Sec>
+    </Part>
   );
 }
 
-/** What the board remembers about its own screen: which lanes are folded. */
-function BoardSettings({ folded, setFold }: { folded: ReadonlySet<ColumnId>; setFold: SetFold }) {
-  return (
-    <Sec t="BOARD">
-      <Row label="Folded lanes" help="A folded lane shows only its name and count. Needs you never folds.">
-        <div class="fchips" role="group" aria-label="Folded lanes">
-          {ORDER.filter((id) => FOLDABLE.has(id)).map((id) => (
-            <button key={id} type="button" aria-pressed={folded.has(id)} onClick={() => setFold(id, !folded.has(id))}>{LANE_LABEL[id].name}</button>
-          ))}
-        </div>
-      </Row>
-    </Sec>
-  );
-}
-
-/** The SETTINGS panel: how the board looks, what it remembers, and the agent settings that used to live only in `config.toml`. */
-export function SettingsHost({ store, layout, setLayout, folded, setFold }: { store: Store; layout: Layout; setLayout: (l: Layout) => void; folded: ReadonlySet<ColumnId>; setFold: SetFold }) {
+/**
+ * The SETTINGS panel: how the board looks, and the agent settings that used to live only in `config.toml`. Each section
+ * folds; only LOOK is open when the panel opens, and a folded heading says what is inside.
+ */
+export function SettingsHost({ store, layout, setLayout }: { store: Store; layout: Layout; setLayout: (l: Layout) => void }) {
   const open = settingsPanel.value;
   const state = useSignal<SettingsState | null>(null);
   const loaded = useSignal(false);
   const saved = useSignal('');
+  const opened = useSignal(FIRST_OPEN);
   useEffect(() => {
     if (!open) return;
     let live = true;
     state.value = null;
     loaded.value = false;
     saved.value = '';
+    opened.value = FIRST_OPEN;
     store.loadNotice();
     void store.settings().then((s) => {
       if (!live) return;
@@ -84,6 +77,14 @@ export function SettingsHost({ store, layout, setLayout, folded, setFold }: { st
   usePanelEsc(settingsPanel);
   if (!open) return null;
   const close = () => { settingsPanel.value = false; };
+  const folds: Folds = {
+    open: opened.value,
+    toggle: (t) => {
+      const next = new Set(opened.value);
+      if (!next.delete(t)) next.add(t);
+      opened.value = next;
+    },
+  };
   const save = async (input: SettingsInput) => {
     saved.value = '';
     const s = await store.saveSettings(input);
@@ -101,12 +102,11 @@ export function SettingsHost({ store, layout, setLayout, folded, setFold }: { st
         <div class="page settings">
           <button class="x" onClick={close} aria-label="Close (Esc)">ESC ✕</button>
           <header class="dh"><div><h2>Settings</h2><p class="umeta" role="status">{saved.value || 'Changes apply at once.'}</p></div></header>
-          <LookSettings store={store} layout={layout} setLayout={setLayout} />
-          <BoardSettings folded={folded} setFold={setFold} />
+          <LookSettings store={store} layout={layout} setLayout={setLayout} folds={folds} />
           {!loaded.value && <p class="state">Loading…<i class="dots" /></p>}
           {loaded.value && !state.value && <p class="state">This engine has no agent settings. Update eye, then reload.</p>}
-          {state.value && <AgentSettings store={store} state={state.value} save={save} />}
-          <p class="umeta more">More in <code>~/.agent-eye/config.toml</code>: folders, prices, exclude lists and the night sandbox. See <code>docs/config.md</code>.</p>
+          {state.value && <AgentSettings store={store} state={state.value} save={save} folds={folds} />}
+          <p class="umeta more">More in <code>{CONFIG_FILE}</code>: folders, prices, exclude lists and the night sandbox. See <code>docs/config.md</code>.</p>
         </div>
         <div class="dis" />
       </aside>

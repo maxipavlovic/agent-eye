@@ -112,7 +112,7 @@ export function Board({ store }: { store: Store }) {
       <ForgetHost store={store} />
       <UsageHost store={store} />
       <HoursHost store={store} />
-      <SettingsHost store={store} layout={layout} setLayout={setLayout} folded={folded} setFold={setFold} />
+      <SettingsHost store={store} layout={layout} setLayout={setLayout} />
       <NightHost store={store} />
       <KeyHelpHost store={store} />
       <CardMenu store={store} />
