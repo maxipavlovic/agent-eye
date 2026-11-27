@@ -55,7 +55,8 @@ pub fn check(list: &[String]) -> Result<(), String> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Found {
     pub origin: &'static str,
-    /// Its sessions eye lists: not hidden and not archived.
+    /// Its sessions, but for hidden ones and ones archived by hand: what quiet covers. A throw-away
+    /// one the rules file in the archive counts, since its summary and its prompts are quiet too.
     pub sessions: usize,
     /// Those in Needs you now, as if nothing were quiet: what turning quiet on would clear.
     pub needs_you: usize,
@@ -81,15 +82,12 @@ pub fn found(db: &Db, cfg: &Config, now: i64) -> Result<Vec<Found>> {
         else {
             continue;
         };
-        if hidden.contains(&s.id) {
+        if s.archived || hidden.contains(&s.id) {
             continue;
         }
         let input = Input::from_session(&s, outputs.contains(&s.id), now, Quiet::NONE);
-        let column = columns::compute(&input);
-        if column != Column::Archive {
-            f.sessions += 1;
-            f.needs_you += usize::from(column == Column::NeedsYou);
-        }
+        f.sessions += 1;
+        f.needs_you += usize::from(columns::compute(&input) == Column::NeedsYou);
     }
     let set = Quiet::of(cfg);
     out.retain(|f| f.sessions > 0 || set.holds(Some(f.origin)));
@@ -157,28 +155,29 @@ mod tests {
     }
 
     #[test]
-    fn the_panel_counts_listed_sessions_and_needs_you_as_if_nothing_were_quiet() {
+    fn the_panel_counts_sessions_and_needs_you_as_if_nothing_were_quiet() {
         let db = Db::open_memory().unwrap();
         add(&db, "a1", Some("app"), Some("needs_you"));
         add(&db, "a2", Some("app"), Some("needs_you"));
         add(&db, "a3", Some("app"), Some("paused"));
-        // left out: hidden by hand, archived, and a throw-away one the rules archive
-        add(&db, "a4", Some("app"), Some("needs_you"));
-        db.set_hidden("a4", Some(true)).unwrap();
-        add(&db, "a5", Some("app"), Some("needs_you"));
+        // a one-shot run the rules file in the archive still counts: quiet covers it too
+        add(&db, "a4", Some("app"), None);
         db.conn
-            .execute("UPDATE session SET archived=1 WHERE id='a5'", [])
+            .execute("UPDATE session SET prompt_count=1 WHERE id='a4'", [])
             .unwrap();
-        add(&db, "a6", Some("app"), None);
+        // left out: hidden, and archived by hand
+        add(&db, "a5", Some("app"), Some("needs_you"));
+        db.set_hidden("a5", Some(true)).unwrap();
+        add(&db, "a6", Some("app"), Some("needs_you"));
         db.conn
-            .execute("UPDATE session SET prompt_count=1 WHERE id='a6'", [])
+            .execute("UPDATE session SET archived=1 WHERE id='a6'", [])
             .unwrap();
         // not a program's
         add(&db, "t1", Some("terminal"), Some("needs_you"));
         add(&db, "u1", None, Some("needs_you"));
         let want = vec![Found {
             origin: "app",
-            sessions: 3,
+            sessions: 4,
             needs_you: 2,
         }];
         assert_eq!(found(&db, &Config::default(), NOW).unwrap(), want);
