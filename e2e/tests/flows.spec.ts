@@ -376,8 +376,6 @@ test.describe('looks', () => {
     await expect(board.locator('html')).toHaveAttribute('data-look', other);
     await expect(board.getByRole('region', { name: /^needs you/i })).toBeVisible();
     expect((await eye.api('/api/prefs'))['eye.look']).toBe(other);
-    // the page just loaded may still be saving a setting of its own; leaving now would cancel that request
-    await board.waitForLoadState('networkidle');
     // a new page without ?look= opens in the saved look: the engine's, with this browser's copy gone
     await board.evaluate(() => localStorage.clear());
     await board.goto(eye.base + '/');

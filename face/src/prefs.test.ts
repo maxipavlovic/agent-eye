@@ -36,4 +36,10 @@ describe('board settings', () => {
     // the browser's copy is written either way
     expect(localStorage.getItem('eye.look')).toBe('ink');
   });
+
+  it('saves with keepalive, so leaving the page right after does not cancel the request', async () => {
+    const f = vi.spyOn(globalThis, 'fetch').mockImplementation(() => answer(200));
+    await savePref('eye.theme', 'dark');
+    expect(f.mock.calls[0]![1]).toMatchObject({ method: 'POST', keepalive: true });
+  });
 });

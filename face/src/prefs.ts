@@ -55,6 +55,8 @@ export async function savePref(key: PrefKey, value: string, timeoutMs = 3000): P
       credentials: 'same-origin',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ [key]: value }),
+      // a page that goes away right after (a reload, a link) must not cancel the save
+      keepalive: true,
       signal: ctl.signal,
     });
     return res.ok;
