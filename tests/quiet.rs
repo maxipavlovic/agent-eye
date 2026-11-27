@@ -112,10 +112,14 @@ fn a_quiet_session_gets_no_summary_from_the_daemon_or_a_bulk_run_and_stays_out_o
     assert!(summary_of(&db, 1).is_some() && summary_of(&db, 2).is_none());
 
     // nor does a bulk run, which says why
+    std::fs::remove_file(bin.join("calls.log")).unwrap();
     let mut all = options(vec![]);
     all.all = true;
     let out = summarize(&db, &paths, &quiet, &all).unwrap();
-    assert!(log("mark-own"), "the bulk run summarized the user's own");
+    assert!(
+        log("mark-own"),
+        "the bulk run did not summarize the user's own"
+    );
     assert!(!log("mark-app"), "the bulk run summarized a quiet session");
     let app = out.iter().find(|o| o.id == id(2)).unwrap();
     assert_eq!(app.result, "skipped: quiet");
