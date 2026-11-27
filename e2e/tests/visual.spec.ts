@@ -118,7 +118,7 @@ for (const scheme of SCHEMES) {
 
 // The clock's hint: the header mark and the working card's top-edge mark, then the menu with Continue tonight
 // first (the board with the card's panel open). Light, 1440 wide, in each look.
-const HINT = 'Evening: your corrections usually run 1.8x now. Hand this to the night shift? (T)';
+const HINT = { text: 'Evening: your corrections usually run 1.8x now.', offer: true };
 test.describe('the clock hint light 1440', () => {
   test.use({ colorScheme: 'light', viewport: { width: 1440, height: 900 } });
   for (const view of ['board', 'menu'] as const) {
