@@ -59,6 +59,8 @@ export async function savePref(key: PrefKey, value: string, timeoutMs = 3000): P
       keepalive: true,
       signal: ctl.signal,
     });
+    // read the answer to its end: a page that reloads with the body half read has the request reported as cancelled
+    await res.text();
     return res.ok;
   } catch {
     return true;
