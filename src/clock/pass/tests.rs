@@ -175,7 +175,7 @@ fn nothing_is_judged_twice() {
 }
 
 #[test]
-fn a_forked_session_reuses_the_verdicts_of_its_parent() {
+fn a_forked_session_is_judged_once_for_the_history_it_copied() {
     let mut e = Env::new();
     let history = say(&["fix it", "no, that is wrong"]);
     e.session("parent", &history);
@@ -183,7 +183,9 @@ fn a_forked_session_reuses_the_verdicts_of_its_parent() {
     let out = e.run();
     assert_eq!(out.sent, 1);
     assert_eq!(e.calls(), 1);
-    assert_eq!(e.rows("fork")[0].1, "yes");
+    // the fork's copy of the prompts is not stored again, so there is nothing of it to judge
+    assert_eq!(e.rows("parent")[0].1, "yes");
+    assert!(e.rows("fork").is_empty());
     assert_eq!(out.pending, 0);
 }
 

@@ -419,8 +419,12 @@ fn merging_adds_new_sessions_takes_newer_rows_and_adds_only_new_ideas() {
             &format!("SELECT COUNT(*) FROM turn WHERE session_id='{id}'"),
         )
     };
-    assert_eq!(turns(S2), 2, "a prompt and the end of its turn");
-    assert_eq!(turns(S1), 2, "not added to the local turns of the old row");
+    assert_eq!(
+        turns(S2),
+        1,
+        "a prompt; its turn has no end until another prompt follows"
+    );
+    assert_eq!(turns(S1), 1, "not added to the local turns of the old row");
     assert_eq!(
         count(
             &db,
