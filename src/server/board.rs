@@ -9,6 +9,7 @@ use crate::db::Db;
 use crate::hide;
 use crate::ideas;
 use crate::model::{Column, Output, Stream};
+use crate::quiet::Quiet;
 use crate::util::now_ms;
 use anyhow::Result;
 use axum::extract::{Query, State};
@@ -52,6 +53,7 @@ pub fn board_json(db: &Db, cfg: &Config, agents: &Agents, now: i64, all: bool) -
     let cx = CardCtx {
         user: &cfg.user,
         agents,
+        quiet: Quiet::of(cfg),
     };
     let streams = db.all_streams()?;
     let outputs = db.all_outputs()?;
@@ -129,7 +131,7 @@ pub(super) async fn api_board(State(st): State<Shared>, Query(q): Query<AllQ>) -
     let all = wants_all(&q.all);
     let board = blocking(move || {
         let db = open_db(&st)?;
-        Ok(board_json(&db, &st.cfg, &st.agents, now_ms(), all)?)
+        Ok(board_json(&db, &st.fresh_cfg(), &st.agents, now_ms(), all)?)
     })
     .await?;
     Ok(Json(board))
@@ -145,9 +147,11 @@ pub(super) struct ArchiveQ {
 pub(super) async fn api_archive(State(st): State<Shared>, Query(q): Query<ArchiveQ>) -> ApiResult {
     let db = open_db(&st)?;
     let now = now_ms();
+    let cfg = st.fresh_cfg();
+    let cx = st.card_ctx_with(&cfg);
     let streams = db.all_streams()?;
     let outputs = db.all_outputs()?;
-    let hidden = hidden_set(&db, &st.cfg, wants_all(&q.all))?;
+    let hidden = hidden_set(&db, &cfg, wants_all(&q.all))?;
     let mut rows: Vec<(i64, Value)> = db
         .all_sessions()?
         .iter()
@@ -159,13 +163,12 @@ pub(super) async fn api_archive(State(st): State<Shared>, Query(q): Query<Archiv
                 outputs.get(&s.id).map(Vec::as_slice).unwrap_or(&[]),
                 now,
                 false,
-                st.card_ctx(),
+                cx,
             );
             (s.last_activity_at.unwrap_or(0), c)
         })
         .filter(|(t, c)| {
-            c["column"] == "archive"
-                || aged_out(c["column"].as_str().unwrap_or(""), *t, now, &st.cfg)
+            c["column"] == "archive" || aged_out(c["column"].as_str().unwrap_or(""), *t, now, &cfg)
         })
         .collect();
     rows.sort_by_key(|(t, _)| std::cmp::Reverse(*t));

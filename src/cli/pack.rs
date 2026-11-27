@@ -96,7 +96,8 @@ pub fn export(
         return Ok(());
     };
     let format = if md { Format::Markdown } else { Format::Html };
-    let (name, text) = pack::export_session(&env.db, &env.paths, &env.agents, id, format)?;
+    let quiet = crate::quiet::Quiet::of(&env.cfg);
+    let (name, text) = pack::export_session(&env.db, &env.paths, &env.agents, id, quiet, format)?;
     if to.is_some_and(is_stdio) {
         let mut out = std::io::stdout().lock();
         out.write_all(text.as_bytes())?;

@@ -7,6 +7,7 @@ use crate::config::{Config, UserCfg};
 use crate::db::Db;
 use crate::folder::{self, FolderState};
 use crate::model::{Column, Idea, Output, Session, Stream};
+use crate::quiet::Quiet;
 use crate::remind;
 use crate::util::{head_chars, home_rel};
 use anyhow::Result;
@@ -91,6 +92,8 @@ pub(super) fn effective_manual(s: &Session) -> Option<Column> {
 pub struct CardCtx<'a> {
     pub user: &'a UserCfg,
     pub agents: &'a Agents,
+    /// The origins `[board] quiet` keeps quiet, as the file says now.
+    pub quiet: Quiet,
 }
 
 /// The background tasks of a session as the API shows them, each with its line of text.
@@ -125,7 +128,7 @@ pub fn card_json(
     cx: CardCtx,
 ) -> Value {
     let has_outputs = !outputs.is_empty();
-    let input = columns::Input::from_session(s, has_outputs, now);
+    let input = columns::Input::from_session(s, has_outputs, now, cx.quiet);
     let column = columns::compute(&input);
     let mut auto_in = input.clone();
     auto_in.column_manual = None;

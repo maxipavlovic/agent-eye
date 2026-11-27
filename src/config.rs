@@ -26,6 +26,7 @@ enabled = false    # the web board is optional: eye board on
 port = 7420
 resume = "{resume}"   # how Resume/Start open a session: "auto" (iTerm2 or Terminal on a Mac, your terminal on Linux, else copy), "iterm", "terminal", "copy"
 done_days = 7      # Done sessions older than this leave the board for the archive view; 0 = keep them
+quiet = []         # sessions a program starts, kept quiet: "app" (an app on an agent's SDK), "headless" (claude -p, codex exec); they never move to Needs you by themselves, get no summary and stay out of the steering clock
 
 [remind]
 notify = false    # a desktop notice when a "check on" reminder is due (osascript on macOS, notify-send on Linux); off until you ask: eye remind notify on
@@ -94,7 +95,10 @@ const KNOWN: &[(&str, &[&str])] = &[
         ],
     ),
     ("user", &["name"]),
-    ("board", &["enabled", "port", "resume", "done_days"]),
+    (
+        "board",
+        &["enabled", "port", "resume", "done_days", "quiet"],
+    ),
     ("remind", &["notify"]),
     ("exclude", &["paths", "temp"]),
     ("outputs", &["jira_projects", "jira_url"]),
@@ -402,6 +406,8 @@ pub struct BoardCfg {
     pub resume: String,
     /// Done sessions idle for longer than this many days leave the board (0 = no limit).
     pub done_days: u32,
+    /// Origins whose sessions are quiet (see `quiet`): only `app` and `headless` are taken.
+    pub quiet: Vec<String>,
 }
 impl Default for BoardCfg {
     fn default() -> Self {
@@ -410,6 +416,7 @@ impl Default for BoardCfg {
             port: 7420,
             resume: crate::platform::default_resume().into(),
             done_days: 7,
+            quiet: vec![],
         }
     }
 }
@@ -537,6 +544,8 @@ impl Config {
             a.retain(|k, v| k == "enabled" || v.is_table());
         }
         let mut cfg = Config::deserialize(table).context("parsing config.toml")?;
+        crate::quiet::check(&cfg.board.quiet)
+            .map_err(|e| anyhow::anyhow!("parsing config.toml: [board] quiet: {e}"))?;
         cfg.clock = cfg.clock.normalized();
         unknown.sort();
         Ok((cfg, unknown))
@@ -695,15 +704,15 @@ pub fn set_remind_notify(text: &str, on: bool) -> String {
     set_key(text, "[remind]", "notify", &on.to_string())
 }
 
-/// A list of agent ids as TOML: `["claude", "codex"]`.
-pub fn agents_list(ids: &[String]) -> String {
+/// A list of words as TOML: `["claude", "codex"]`.
+pub fn toml_list(ids: &[String]) -> String {
     let list: Vec<String> = ids.iter().map(|i| format!("{i:?}")).collect();
     format!("[{}]", list.join(", "))
 }
 
 /// Set `enabled` in the `[agents]` section of a config.toml text to these agent ids.
 pub fn set_agents_enabled(text: &str, ids: &[String]) -> String {
-    set_key(text, "[agents]", "enabled", &agents_list(ids))
+    set_key(text, "[agents]", "enabled", &toml_list(ids))
 }
 
 /// Write one `[night]` key into the config file (created from the defaults when missing).

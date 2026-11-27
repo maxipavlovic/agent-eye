@@ -364,7 +364,8 @@ pub(super) async fn api_export(
         return Err(ApiError::bad("ideas have no conversation to export"));
     }
     let id = resolve(&db, &id)?;
-    let (name, text) = export_session(&db, &st.paths, &st.agents, &id, format)?;
+    let quiet = st.card_ctx().quiet;
+    let (name, text) = export_session(&db, &st.paths, &st.agents, &id, quiet, format)?;
     Ok((
         [
             (header::CONTENT_TYPE, mime.to_string()),
@@ -402,19 +403,22 @@ pub(super) async fn api_search(State(st): State<Shared>, Query(q): Query<SearchQ
         return Ok(Json(json!({"results": []})));
     }
     let now = now_ms();
-    let hidden = hidden_set(&db, &st.cfg, wants_all(&q.all))?;
+    let cfg = st.fresh_cfg();
+    let cx = st.card_ctx_with(&cfg);
+    let hidden = hidden_set(&db, &cfg, wants_all(&q.all))?;
     let hits = search::find_without(
         &db,
         &words,
         q.limit.unwrap_or(30).clamp(1, 100),
         true,
         &hidden,
+        cx.quiet,
         now,
     )?;
     let mut out = vec![];
     for h in &hits {
         out.push(json!({
-            "card": load_card(&db, &h.session, now, st.card_ctx())?,
+            "card": load_card(&db, &h.session, now, cx)?,
             "snippet": h.snippet,
             // `score` keeps 0.2's order (lower is better); `relevance` is the same number turned around
             "score": -h.score,

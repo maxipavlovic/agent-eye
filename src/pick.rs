@@ -10,6 +10,7 @@ use crate::hide;
 use crate::ideas;
 use crate::model::{Column, Idea, Output, Session, Stream};
 use crate::paths::Paths;
+use crate::quiet::Quiet;
 use crate::remind::{self, Remind};
 use crate::search::{self, Rank, Scored};
 use crate::util::{head_chars, printable, shell_quote, short_id};
@@ -115,10 +116,11 @@ impl Index {
         let outs = db.session_ids_with_outputs()?;
         let kids = db.session_ids_with_children()?;
         let enabled = cfg.enabled_agent_ids();
+        let quiet = Quiet::of(cfg);
         let mut rows = vec![];
         for s in db.all_sessions()? {
             let has_out = outs.contains(&s.id);
-            let column = columns::compute(&columns::Input::from_session(&s, has_out, now));
+            let column = columns::compute(&columns::Input::from_session(&s, has_out, now, quiet));
             let hidden = hide::agent_off(&enabled, &s)
                 || hide::is_hidden(&cfg.hide, &s, has_out, kids.contains(&s.id));
             let title = session_title(&s);

@@ -6,7 +6,7 @@
 use super::detect::{self, Exchange, Judged};
 use super::judging;
 use super::report::MAX_WEEKS;
-use super::signals::{self, MAX_PROMPT_CHARS, UNJUDGED};
+use super::signals::{self, MAX_PROMPT_CHARS};
 use crate::agents::Agents;
 use crate::config::Config;
 use crate::conversation;
@@ -52,7 +52,7 @@ pub fn run(
     let from = now - MAX_WEEKS * 7 * DAY_MS;
     let stop = |why: &str, db: &Db| -> Result<Outcome> {
         Ok(Outcome {
-            pending: signals::pending(&db.conn, from)?,
+            pending: signals::pending(&db.conn, cfg, from)?,
             stopped: Some(why.into()),
             ..Outcome::default()
         })
@@ -91,7 +91,7 @@ pub fn run(
             out.sent, out.corrections
         ));
     }
-    out.pending = signals::pending(&db.conn, from)?;
+    out.pending = signals::pending(&db.conn, cfg, from)?;
     Ok(out)
 }
 
@@ -116,7 +116,8 @@ fn collect(
 ) -> Result<Vec<Candidate>> {
     let mut by_session: Vec<(String, Vec<i64>)> = vec![];
     let mut st = db.conn.prepare(&format!(
-        "SELECT t.session_id, t.ts FROM turn t WHERE {UNJUDGED} AND t.ts>=?1 ORDER BY t.ts DESC"
+        "SELECT t.session_id, t.ts FROM turn t WHERE {} AND t.ts>=?1 ORDER BY t.ts DESC",
+        signals::unjudged(cfg)
     ))?;
     let mut rows = st.query(params![from, MAX_PROMPT_CHARS])?;
     while let Some(r) = rows.next()? {

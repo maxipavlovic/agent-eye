@@ -53,6 +53,8 @@ pub mod paths;
 pub mod pick;
 /// What differs between macOS and Linux: the background service, opening URLs, the clipboard.
 pub mod platform;
+/// Sessions a program started, kept out of Needs you, summaries and the steering clock.
+pub mod quiet;
 /// "Check on this" dates for sessions and ideas: the time parser, the rule and the notice.
 pub mod remind;
 /// What install, uninstall and board on|off print.

@@ -171,7 +171,8 @@ impl App {
             Kind::Session => {
                 let s = self.db.session_by_id(id)?.context("no such session")?;
                 let has_outputs = !self.db.outputs_for(id)?.is_empty();
-                row.column = columns::compute(&columns::Input::from_session(&s, has_outputs, now));
+                let input = columns::Input::from_session(&s, has_outputs, now, self.quiet);
+                row.column = columns::compute(&input);
                 row.remind = remind::of_session(&s, now);
                 row.session = Some(s);
             }

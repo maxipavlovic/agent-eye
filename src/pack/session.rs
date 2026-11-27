@@ -7,6 +7,7 @@ use crate::conversation::Message;
 use crate::db::Db;
 use crate::model::{Output, Session};
 use crate::paths::Paths;
+use crate::quiet::Quiet;
 use crate::summarize::mask_secrets;
 use crate::util::{fmt_ts, now_ms, short_id};
 use anyhow::{Context, Result};
@@ -26,14 +27,15 @@ impl Format {
     }
 }
 
-/// One session of the database as a page: its file name and its text. The conversation is read
-/// from the transcript, or from eye's archive copy when the agent deleted it; a session with
-/// neither gets a page that says so.
+/// One session of the database as a page: its file name and its text, with the column `quiet`
+/// gives. The conversation is read from the transcript, or from eye's archive copy when the agent
+/// deleted it; a session with neither gets a page that says so.
 pub fn export_session(
     db: &Db,
     paths: &Paths,
     agents: &Agents,
     id: &str,
+    quiet: Quiet,
     format: Format,
 ) -> Result<(String, String)> {
     let id = db.resolve_id(id)?;
@@ -42,6 +44,7 @@ pub fn export_session(
         &s,
         !db.outputs_for(&id)?.is_empty(),
         now_ms(),
+        quiet,
     ));
     let agent = agents.of_session(&s);
     let conv = match agent {

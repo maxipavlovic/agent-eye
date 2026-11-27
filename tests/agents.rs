@@ -403,7 +403,9 @@ async fn claude_busy_after_an_approval_is_running_though_the_wait_is_still_recor
     };
     let card = |w: &World| {
         let s = w.db.session_by_id(CLAUDE_ID).unwrap().unwrap();
-        let input = agent_eye::columns::Input::from_session(&s, false, s.last_activity_at.unwrap());
+        let quiet = agent_eye::quiet::Quiet::NONE;
+        let input =
+            agent_eye::columns::Input::from_session(&s, false, s.last_activity_at.unwrap(), quiet);
         (
             s.live_status.clone(),
             agent_eye::columns::compute(&input).as_str(),

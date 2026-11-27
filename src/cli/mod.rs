@@ -26,6 +26,7 @@ use crate::config::{Config, UserCfg};
 use crate::db::Db;
 use crate::model::{Column, Session};
 use crate::paths::Paths;
+use crate::quiet::Quiet;
 use crate::util::{home_rel, now_ms, printable};
 use anyhow::Result;
 use args::PickArgs;
@@ -128,12 +129,13 @@ fn session_json(s: &Session, col: Column, user: &UserCfg, agents: &Agents) -> Va
     })
 }
 
-fn column_of(db: &Db, s: &Session) -> Result<Column> {
+fn column_of(db: &Db, s: &Session, quiet: Quiet) -> Result<Column> {
     let has = !db.outputs_for(&s.id)?.is_empty();
     Ok(columns::compute(&columns::Input::from_session(
         s,
         has,
         now_ms(),
+        quiet,
     )))
 }
 
