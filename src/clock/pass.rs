@@ -4,11 +4,11 @@
 //! most that is sent in one pass is `NIGHTLY_MAX`, and what is left waits for the next one.
 
 use super::detect::{self, Exchange, Judged};
+use super::judging;
 use super::report::MAX_WEEKS;
 use super::signals::{self, MAX_PROMPT_CHARS, UNJUDGED};
 use crate::agents::Agents;
 use crate::config::Config;
-use crate::config_clock::ClockCfg;
 use crate::conversation;
 use crate::db::Db;
 use crate::paths::Paths;
@@ -57,14 +57,9 @@ pub fn run(
             ..Outcome::default()
         })
     };
-    if !ClockCfg::llm_on(cfg) {
-        return stop(
-            "judging corrections is off ([clock] llm or [summary] enabled)",
-            db,
-        );
-    }
-    let Some(ask) = agents.summary_agent(cfg).cloned() else {
-        return stop("no agent is enabled to judge corrections", db);
+    let ask = match judging::judge(cfg, agents) {
+        Ok(agent) => agent.clone(),
+        Err((_, why)) => return stop(&format!("corrections are not judged: {why}"), db),
     };
     let mut out = Outcome::default();
     let candidates = collect(db, paths, cfg, agents, from, now, &mut out)?;

@@ -63,13 +63,14 @@ impl World {
         }
     }
 
-    /// Nine day hours at 8% and two evening hours at 16%.
+    /// Nine day hours at 8% and two evening hours at 16%: enough that shuffling the corrections
+    /// over the prompts rarely does as well.
     fn steady_days_worse_evenings(&mut self, evening_think: i64) {
         for h in 9..18 {
-            self.hour(h, 50, 4, 1000);
+            self.hour(h, 100, 8, 1000);
         }
         for h in 19..21 {
-            self.hour(h, 100, 16, evening_think);
+            self.hour(h, 200, 32, evening_think);
         }
     }
 
@@ -92,7 +93,7 @@ fn worse_evenings_with_a_steady_model_are_you() {
     let mut w = World::new();
     w.steady_days_worse_evenings(1000);
     let r = w.report("");
-    assert_eq!((r.prompts, r.corrections), (650, 68));
+    assert_eq!((r.prompts, r.corrections), (1300, 136));
     assert_eq!(
         r.bad,
         [Bad {
@@ -104,16 +105,16 @@ fn worse_evenings_with_a_steady_model_are_you() {
     assert_eq!(r.verdict.kind, Kind::You);
     assert_eq!(
         (r.verdict.you_ratio, r.verdict.you_n),
-        (Some(2.0), Some(32))
+        (Some(2.0), Some(64))
     );
     assert_eq!(r.verdict.think_ratio, Some(1.0));
     assert!(r
         .verdict
         .text
-        .starts_with("Evenings: 2.0x more corrections (32)."));
+        .starts_with("Evenings: 2.0x more corrections (64)."));
     assert_eq!(
         (r.hours.len(), r.hours[19].prompts, r.hours[19].think),
-        (24, 100, Some(1000))
+        (24, 200, Some(1000))
     );
     assert_eq!(
         (r.from.as_str(), r.to.as_str()),
@@ -391,6 +392,7 @@ fn the_json_has_the_documented_fields() {
             "since_break",
             "think_agent",
             "to",
+            "tool_agent",
             "verdict"
         ]
     );
@@ -472,13 +474,17 @@ fn a_few_thoughts_in_the_hours_are_no_model_side() {
 #[test]
 fn nothing_measured_on_the_model_side_is_said_so() {
     let mut w = World::new();
-    // no tool calls and no thinking at all
-    for h in 9..18 {
-        for i in 0..50 {
+    // no tool calls and no thinking at all: the steady day hours and the worse evening
+    let hours: Vec<(i64, i64, i64)> = (9..18)
+        .map(|h| (h, 100, 8))
+        .chain((19..21).map(|h| (h, 200, 32)))
+        .collect();
+    for (h, prompts, corrections) in hours {
+        for i in 0..prompts {
             let ts = D0 + h * H + i * 1000;
             w.turn(ts - 500, "end", 5);
             w.turn(ts, "prompt", 30);
-            if i < 4 {
+            if i < corrections {
                 w.db.conn
                     .execute(
                         "INSERT INTO correction(session_id, prompt_ts, verdict) VALUES('s',?1,'yes')",
@@ -486,19 +492,6 @@ fn nothing_measured_on_the_model_side_is_said_so() {
                     )
                     .unwrap();
             }
-        }
-    }
-    for i in 0..100 {
-        let ts = D0 + 19 * H + i * 1000;
-        w.turn(ts - 500, "end", 5);
-        w.turn(ts, "prompt", 30);
-        if i < 16 {
-            w.db.conn
-                .execute(
-                    "INSERT INTO correction(session_id, prompt_ts, verdict) VALUES('s',?1,'yes')",
-                    [ts],
-                )
-                .unwrap();
         }
     }
     let r = w.report("");

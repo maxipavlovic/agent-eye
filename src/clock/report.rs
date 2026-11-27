@@ -3,6 +3,9 @@
 //! `GET /api/clock` and `eye clock` show.
 
 use super::bands::{self, Band, Hour, Range};
+use super::judging;
+pub use super::judging::Judging;
+use super::permute;
 use super::signals::{self, Data};
 use super::verdict::{self, capitalized, range_label, AgentSide, Findings, Verdict};
 use crate::agents::Agents;
@@ -14,6 +17,9 @@ use serde::Serialize;
 
 /// The longest window the report can cover, in weeks (the corrections pass looks this far back).
 pub const MAX_WEEKS: i64 = 12;
+/// The window every hint is worked out from, whatever window the caller asked a report for: the
+/// board and the picker must say the same thing at the same moment.
+pub const HINT_WEEKS: i64 = 4;
 const DAY_MS: i64 = 86_400_000;
 const MIN_MS: i64 = 60_000;
 /// A hint about time since a break waits until it has been this long.
@@ -63,17 +69,6 @@ pub struct AgentRow {
     pub signals: Vec<&'static str>,
 }
 
-/// Whether corrections are being judged, and if not, why not.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Judging {
-    On,
-    /// Switched off in the config (the clock, or `[clock] llm`, or the summaries it follows).
-    Off,
-    /// On in the config, but no enabled agent can judge.
-    Unavailable,
-}
-
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Report {
     pub enabled: bool,
@@ -96,6 +91,10 @@ pub struct Report {
     /// The agent the hours' `think` values belong to (the one with the most thinking in the
     /// window), null when none thought.
     pub think_agent: Option<String>,
+    /// The agent the hours' `tool_calls` and `tool_errors` belong to (the one with the most tool
+    /// calls in the window), null when none called a tool. The verdict compares each agent with
+    /// itself, so the strip shows one agent's.
+    pub tool_agent: Option<String>,
     pub verdict: Verdict,
     pub now: Now,
     pub agents: Vec<AgentRow>,
@@ -119,6 +118,10 @@ pub fn build(
 ) -> Result<Report> {
     let c = &cfg.clock;
     let llm = crate::config_clock::ClockCfg::llm_on(cfg);
+    let (judging, judging_reason) = match judging::judge(cfg, agents) {
+        Ok(_) => (Judging::On, None),
+        Err((state, why)) => (state, Some(why)),
+    };
     let today_start = now - (now + off(now)).rem_euclid(DAY_MS);
     let from_ms = today_start - weeks * 7 * DAY_MS;
     let data = if c.enabled {
@@ -144,16 +147,15 @@ pub fn build(
     let prompts = hours.iter().map(|h| h.prompts).sum();
     let corrections = hours.iter().map(|h| h.corrections).sum();
     let cand = bands::candidate_hours(&hours);
-    let (bad_c, bad_p) = sums(&hours, |h| cand[h.h]);
-    let you = bands::passes_gate((bad_c, bad_p), (corrections - bad_c, prompts - bad_p))
-        .map(|ratio| (ratio, bad_c));
+    let (bad_c, _) = sums(&hours, |h| cand[h.h]);
+    let you = permute::band_gate(&hours, permute::SEED).map(|ratio| (ratio, bad_c));
     let cand_ranges = bands::ranges(&cand);
     let any_cand = cand.iter().any(|b| *b);
     let band = any_cand.then(|| (&cand_ranges[..], verdict::model_side(&data, off, &cand)));
     let verdict = verdict::decide(&Findings {
         prompts,
         corrections,
-        llm,
+        not_judged: judging_reason.as_deref(),
         you,
         band,
     });
@@ -178,21 +180,25 @@ pub fn build(
         .iter()
         .fold((0, 0), |(c, p), b| (c + b.corrections, p + b.prompts));
     let break_effect = bands::passes_gate(later, (first.corrections, first.prompts));
-    let hint = c
-        .hints
-        .then(|| {
-            hint(
-                current.map(range_label).zip(you),
-                since_break_min,
-                break_effect,
-            )
-        })
-        .flatten()
-        .map(|text| Hint {
-            text,
-            offer: cfg.night.enabled,
-        });
-    let (judging, judging_reason) = judging(cfg, agents);
+    let own_hint = hint(
+        current.map(range_label).zip(you),
+        since_break_min,
+        break_effect,
+    );
+    let hint = if !c.hints {
+        None
+    } else if weeks == HINT_WEEKS {
+        own_hint
+    } else {
+        build(conn, cfg, agents, now, HINT_WEEKS, off)?
+            .now
+            .hint
+            .map(|h| h.text)
+    }
+    .map(|text| Hint {
+        text,
+        offer: cfg.night.enabled,
+    });
     let sides = if any_cand {
         verdict::agent_sides(&data, off, &cand)
     } else {
@@ -226,35 +232,11 @@ pub fn build(
             })
             .collect(),
         think_agent: bands::main_think_agent(&data),
+        tool_agent: bands::main_tool_agent(&data),
         verdict,
         now: now_state,
         agents: agent_rows(&data, cfg, &sides),
     })
-}
-
-/// Whether corrections are being judged, with the reason when not.
-fn judging(cfg: &Config, agents: &Agents) -> (Judging, Option<String>) {
-    let c = &cfg.clock;
-    if !c.enabled {
-        return (
-            Judging::Off,
-            Some("the steering clock is off ([clock] enabled)".into()),
-        );
-    }
-    if !crate::config_clock::ClockCfg::llm_on(cfg) {
-        let why = match c.llm {
-            Some(false) => "[clock] llm is off",
-            _ => "[summary] enabled is off, and corrections follow it",
-        };
-        return (Judging::Off, Some(why.into()));
-    }
-    if agents.summary_agent(cfg).is_none() {
-        return (
-            Judging::Unavailable,
-            Some("no enabled agent can judge corrections".into()),
-        );
-    }
-    (Judging::On, None)
 }
 
 /// The hint's text for this moment, for a surface that has no key or button for the offer (the
@@ -269,7 +251,7 @@ pub fn now_hint(
     if !cfg.clock.enabled || !cfg.clock.hints {
         return Ok(None);
     }
-    Ok(build(conn, cfg, agents, now, 4, off)?
+    Ok(build(conn, cfg, agents, now, HINT_WEEKS, off)?
         .now
         .hint
         .map(|h| h.text))

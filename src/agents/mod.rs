@@ -106,6 +106,13 @@ pub trait Agent: Send + Sync + std::fmt::Debug {
     fn turn_kinds(&self) -> &'static [TurnKind] {
         &[]
     }
+    /// Is this agent's headless run proven to be locked down (no tools, no files, no network, no
+    /// session kept)? The corrections pass sends it prompt text with planted instructions in it only
+    /// when it is. The default says yes: an agent is the exception when its lock-down is not checked
+    /// on a real run.
+    fn judging_locked_down(&self) -> bool {
+        true
+    }
     /// What `n` of a `think` event counts for this agent (`"signature"`, `"reasoning_tokens"`),
     /// None when it reports no thinking. Thinking is only compared with the same agent's own.
     fn think_unit(&self) -> Option<&'static str> {

@@ -2,7 +2,7 @@
 //! hours that run clearly worse than the rest, if the difference is more than chance, are the bad
 //! band. All times are Unix ms with an offset function for local time, as in `night::clock`.
 
-use super::signals::{Data, Prompt};
+use super::signals::{Call, Data, Prompt};
 use crate::night::clock::OffsetFn;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -18,7 +18,7 @@ const BAD_FACTOR: f64 = 1.5;
 /// The band counts only when chance explains the difference less than this often.
 pub const MAX_P: f64 = 0.1;
 /// A ratio is reported as at most this much (a rest with no corrections at all).
-const MAX_RATIO: f64 = 99.0;
+pub const MAX_RATIO: f64 = 99.0;
 /// ...and rests on at least this many events (corrections, failed tool calls) in the group that is
 /// higher.
 pub const MIN_EVENTS: i64 = 10;
@@ -37,6 +37,7 @@ pub struct Hour {
     pub prompts: i64,
     pub corrections: i64,
     pub interrupts: i64,
+    /// The main tool agent's calls and failed calls (`main_tool_agent`).
     pub tool_calls: i64,
     pub tool_errors: i64,
     /// The median thinking measure of the main agent in this hour (its own unit), if it thought.
@@ -51,9 +52,19 @@ fn median(v: &mut [i64]) -> Option<i64> {
 
 /// The agent with the most thinking in the data, the one the hours show the median of.
 pub fn main_think_agent(data: &Data) -> Option<String> {
+    most_common(data.thinks.iter().map(|t| t.agent.as_str()))
+}
+
+/// The agent with the most tool calls in the data, the one the hours show the failed calls of (the
+/// verdict compares each agent with itself, so the strip may not pool them).
+pub fn main_tool_agent(data: &Data) -> Option<String> {
+    most_common(data.tools.iter().map(|c| c.agent.as_str()))
+}
+
+fn most_common<'a>(agents: impl Iterator<Item = &'a str>) -> Option<String> {
     let mut n: HashMap<&str, usize> = HashMap::new();
-    for t in &data.thinks {
-        *n.entry(&t.agent).or_default() += 1;
+    for a in agents {
+        *n.entry(a).or_default() += 1;
     }
     n.into_iter()
         .max_by(|a, b| a.1.cmp(&b.1).then(b.0.cmp(a.0)))
@@ -82,10 +93,12 @@ pub fn hours(data: &Data, off: OffsetFn) -> Vec<Hour> {
     for ts in &data.interrupts {
         hours[local_hour(*ts, off)].interrupts += 1;
     }
-    for c in &data.tools {
+    let tool_agent = main_tool_agent(data);
+    let of_tool_agent = |c: &&Call| tool_agent.as_deref() == Some(c.agent.as_str());
+    for c in data.tools.iter().filter(of_tool_agent) {
         hours[local_hour(c.ts, off)].tool_calls += 1;
     }
-    for c in &data.tool_errors {
+    for c in data.tool_errors.iter().filter(of_tool_agent) {
         hours[local_hour(c.ts, off)].tool_errors += 1;
     }
     if let Some(main) = main_think_agent(data) {
@@ -195,24 +208,27 @@ pub fn ranges(mask: &[bool]) -> Vec<Range> {
 }
 
 /// The hours whose correction rate is at least 1.5 times the median hour's, among the hours with
-/// enough prompts. Chance has not been ruled out yet (see `passes_gate`).
+/// enough prompts. Chance has not been ruled out yet (see `permute::band_gate`).
 pub fn candidate_hours(hours: &[Hour]) -> Vec<bool> {
-    let mut rates: Vec<f64> = hours
+    let counts: Vec<(i64, i64)> = hours.iter().map(|h| (h.prompts, h.corrections)).collect();
+    let mut mask = vec![false; hours.len()];
+    candidate_mask(&counts, &mut mask);
+    mask
+}
+
+/// `candidate_hours` on `(prompts, corrections)` per hour, written into `mask`.
+pub fn candidate_mask(counts: &[(i64, i64)], mask: &mut [bool]) {
+    let mut rates: Vec<f64> = counts
         .iter()
-        .filter(|h| h.prompts >= MIN_HOUR_PROMPTS)
-        .map(|h| rate(h.corrections, h.prompts))
+        .filter(|(n, _)| *n >= MIN_HOUR_PROMPTS)
+        .map(|(n, c)| rate(*c, *n))
         .collect();
     rates.sort_by(f64::total_cmp);
-    let Some(mid) = rates.get(rates.len() / 2).copied() else {
-        return vec![false; hours.len()];
-    };
-    hours
-        .iter()
-        .map(|h| {
-            let r = rate(h.corrections, h.prompts);
-            h.prompts >= MIN_HOUR_PROMPTS && r > 0.0 && r >= BAD_FACTOR * mid
-        })
-        .collect()
+    let mid = rates.get(rates.len() / 2).copied();
+    for (m, (n, c)) in mask.iter_mut().zip(counts) {
+        let r = rate(*c, *n);
+        *m = mid.is_some_and(|mid| *n >= MIN_HOUR_PROMPTS && r > 0.0 && r >= BAD_FACTOR * mid);
+    }
 }
 
 pub fn rate(corrections: i64, prompts: i64) -> f64 {
@@ -225,7 +241,8 @@ pub fn rate(corrections: i64, prompts: i64) -> f64 {
 
 /// How much more often the first group is corrected than the second, when that is more than chance
 /// and rests on enough corrections: a two-sided two-proportion test under 0.1, with 10 or more
-/// corrections in the first group. `(corrections, prompts)` for each.
+/// corrections in the first group. `(corrections, prompts)` for each. For two groups fixed in
+/// advance (before and after a break); groups picked from the data go through `permute`.
 pub fn passes_gate(bad: (i64, i64), rest: (i64, i64)) -> Option<f64> {
     let ((c1, n1), (c2, n2)) = (bad, rest);
     if c1 < MIN_EVENTS || rate(c1, n1) <= rate(c2, n2) {
@@ -245,13 +262,18 @@ pub fn passes_gate(bad: (i64, i64), rest: (i64, i64)) -> Option<f64> {
 /// two-proportion z-test. `(events, size)` for each. None when it cannot be told: a group is empty,
 /// or there are no events or only events.
 pub fn proportion_p(a: (i64, i64), b: (i64, i64)) -> Option<f64> {
+    proportion_z(a, b).map(two_sided_p)
+}
+
+/// The two-proportion z statistic (first group over second, signed), None when `proportion_p` is.
+pub fn proportion_z(a: (i64, i64), b: (i64, i64)) -> Option<f64> {
     let ((c1, n1), (c2, n2)) = (a, b);
     if n1 == 0 || n2 == 0 {
         return None;
     }
     let pooled = (c1 + c2) as f64 / (n1 + n2) as f64;
     let se = (pooled * (1.0 - pooled) * (1.0 / n1 as f64 + 1.0 / n2 as f64)).sqrt();
-    (se > 0.0).then(|| two_sided_p((rate(c1, n1) - rate(c2, n2)) / se))
+    (se > 0.0).then(|| (rate(c1, n1) - rate(c2, n2)) / se)
 }
 
 /// P(|Z| > z) for a standard normal Z.

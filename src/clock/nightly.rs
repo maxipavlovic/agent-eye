@@ -25,8 +25,9 @@ use std::time::{Duration, Instant};
 const DONE_KEY: &str = "clock_detect_night";
 const IDLE_EVERY: Duration = Duration::from_secs(60);
 const DUE_EVERY: Duration = Duration::from_secs(60);
-/// You are at work when you sent a prompt this recently...
-const BUSY_PROMPT_MS: i64 = 10 * 60_000;
+/// You are at work when you sent a prompt or an agent did anything (a reply, a tool call) this
+/// recently, so a long run you started counts while it works...
+const BUSY_TURN_MS: i64 = 10 * 60_000;
 /// ...or, with the idle sensor on, had input this recently.
 const BUSY_IDLE_MS: i64 = 2 * 60_000;
 /// Without the night shift, the pass runs from this local hour on.
@@ -46,17 +47,18 @@ pub fn due(cfg: &Config, now: i64, done: Option<&str>, off: OffsetFn) -> Option<
     (done != Some(night.as_str())).then_some(night)
 }
 
-/// Is the user at work: a prompt in the last ten minutes, or (`idle` is how long the machine has
-/// been idle, when the sensor is on) input in the last two.
+/// Is the user at work: any turn event (a prompt, an agent's reply or tool call) in the last ten
+/// minutes, or (`idle` is how long the machine has been idle, when the sensor is on) input in the
+/// last two.
 pub fn user_busy(conn: &Connection, now: i64, idle: Option<i64>) -> bool {
-    let prompted = conn
+    let working = conn
         .query_row(
-            "SELECT EXISTS(SELECT 1 FROM turn WHERE kind='prompt' AND ts>=?1)",
-            [now - BUSY_PROMPT_MS],
+            "SELECT EXISTS(SELECT 1 FROM turn WHERE ts>=?1)",
+            [now - BUSY_TURN_MS],
             |r| r.get(0),
         )
         .unwrap_or(false);
-    prompted || idle.is_some_and(|ms| ms < BUSY_IDLE_MS)
+    working || idle.is_some_and(|ms| ms < BUSY_IDLE_MS)
 }
 
 /// The clock's part of the daemon's loop.

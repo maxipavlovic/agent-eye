@@ -264,6 +264,12 @@ impl Agent for OpenCode {
         crate::agents::ALL_TURN_KINDS
     }
 
+    /// Not proven: the deny rules are built from OpenCode's documentation and have not been checked
+    /// against a real run (`docs/security.md`).
+    fn judging_locked_down(&self) -> bool {
+        false
+    }
+
     /// What a `think` event counts: the reasoning tokens of an assistant message.
     fn think_unit(&self) -> Option<&'static str> {
         Some("reasoning_tokens")

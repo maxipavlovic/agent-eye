@@ -270,6 +270,7 @@ mod tests {
                 label: "evening",
             }],
             think_agent: None,
+            tool_agent: None,
             verdict: Verdict {
                 kind: Kind::You,
                 you_ratio: Some(2.0),

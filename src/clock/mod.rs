@@ -8,8 +8,10 @@
 pub mod bands;
 pub mod detect;
 pub mod idle;
+pub mod judging;
 pub mod nightly;
 pub mod pass;
+pub mod permute;
 pub mod report;
 pub mod signals;
 pub mod verdict;

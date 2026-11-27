@@ -29,7 +29,8 @@ pub struct Think {
     pub n: i64,
 }
 
-/// The turn events since a time, by kind, oldest first.
+/// The turn events since a time, by kind, oldest first. Sessions started by a script (`headless`) or
+/// by the night shift are left out: those prompts are eye's own or a program's, not the user steering.
 #[derive(Default)]
 pub struct Data {
     pub prompts: Vec<Prompt>,
@@ -47,6 +48,7 @@ pub fn load(conn: &Connection, from_ms: i64) -> Result<Data> {
          FROM turn t JOIN session s ON s.id=t.session_id
          LEFT JOIN correction c ON c.session_id=t.session_id AND c.prompt_ts=t.ts AND t.kind='prompt'
          WHERE t.ts>=?1 AND t.kind IN ('prompt','interrupt','tool','tool_error','think')
+           AND COALESCE(s.origin,'') NOT IN ('headless','night')
          ORDER BY t.ts",
     )?;
     let mut rows = st.query(params![from_ms])?;
@@ -98,8 +100,10 @@ pub fn pending(conn: &Connection, from_ms: i64) -> Result<i64> {
     )?)
 }
 
-/// A prompt turn (`t`) a model could be asked about and has not been (`?2` is the length cap).
+/// A prompt turn (`t`) a model could be asked about and has not been (`?2` is the length cap). A
+/// session of a script or the night shift is not asked about: its prompts are not the user's.
 pub const UNJUDGED: &str = "t.kind='prompt' AND t.n<=?2
+    AND NOT EXISTS(SELECT 1 FROM session s WHERE s.id=t.session_id AND s.origin IN ('headless','night'))
     AND EXISTS(SELECT 1 FROM turn e WHERE e.session_id=t.session_id AND e.kind='end' AND e.ts<t.ts)
     AND NOT EXISTS(SELECT 1 FROM correction c WHERE c.session_id=t.session_id AND c.prompt_ts=t.ts)";
 

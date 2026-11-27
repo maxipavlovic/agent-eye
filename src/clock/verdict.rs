@@ -2,6 +2,7 @@
 //! user's, and the plain-English line that says so, with the counts.
 
 use super::bands::{self, local_hour, Range};
+use super::permute;
 use super::signals::{Call, Data};
 use crate::night::clock::OffsetFn;
 use serde::Serialize;
@@ -10,7 +11,7 @@ use serde::Serialize;
 pub const MIN_PROMPTS: i64 = 300;
 pub const MIN_CORRECTIONS: i64 = 30;
 /// An agent's thinking is compared only when it thought at least this often inside the hours and
-/// outside them.
+/// outside them (and, as for your corrections, only when chance rarely does as well: `permute`).
 pub const MIN_THINK_N: usize = 30;
 /// The model's thinking moved when its ratio leaves this range...
 const THINK_FLAT: (f64, f64) = (0.9, 1.1);
@@ -25,6 +26,9 @@ pub struct ModelSide {
     pub think_ratio: Option<f64>,
     /// Failed tool calls per call in the hours over the same elsewhere.
     pub tool_error_ratio: Option<f64>,
+    /// The thinking differs in those hours by more than `THINK_FLAT` and by more than chance (a
+    /// shuffle test over every agent's thoughts, as for your corrections).
+    pub think_moved: bool,
     /// Some agent's failed calls differ in those hours by more than chance and by more than
     /// `ERRORS_FLAT` (tested per agent, never pooled).
     pub tool_errors_moved: bool,
@@ -37,10 +41,7 @@ impl ModelSide {
     }
 
     pub fn moved(&self) -> bool {
-        let think = self
-            .think_ratio
-            .is_some_and(|r| r < THINK_FLAT.0 || r > THINK_FLAT.1);
-        think || self.tool_errors_moved
+        self.think_moved || self.tool_errors_moved
     }
 }
 
@@ -159,6 +160,8 @@ pub fn model_side(data: &Data, off: OffsetFn, mask: &[bool]) -> ModelSide {
         (Some(b), Some(r)) if r > 0.0 => Some(b / r),
         _ => None,
     };
+    let think_moved = think_ratio.is_some_and(|r| r < THINK_FLAT.0 || r > THINK_FLAT.1)
+        && permute::median_shift_p(&bad, &rest, permute::SEED).is_some_and(|p| p < bands::MAX_P);
     let sides = agent_sides(data, off, mask);
     // the agent whose errors moved and who made most calls speaks for the band; with none that
     // moved, the measured agents' ratios are averaged, weighted by their calls
@@ -179,6 +182,7 @@ pub fn model_side(data: &Data, off: OffsetFn, mask: &[bool]) -> ModelSide {
     ModelSide {
         think_ratio,
         tool_error_ratio,
+        think_moved,
         tool_errors_moved: moved.is_some(),
     }
 }
@@ -217,8 +221,8 @@ pub struct Verdict {
 pub struct Findings<'a> {
     pub prompts: i64,
     pub corrections: i64,
-    /// Corrections are being judged (`[clock] llm`).
-    pub llm: bool,
+    /// Why corrections are not being judged (`report::judging`), None when they are.
+    pub not_judged: Option<&'a str>,
     /// The bad band passed the gate: how much more it is corrected, and its corrections.
     pub you: Option<(f64, i64)>,
     /// The hours that stood out (before the gate), if any, and the model's side in them.
@@ -287,14 +291,14 @@ pub fn decide(f: &Findings) -> Verdict {
         text: String::new(),
     };
     if f.prompts < MIN_PROMPTS || f.corrections < MIN_CORRECTIONS {
-        v.text = if f.llm {
-            format!(
+        v.text = match f.not_judged {
+            None => format!(
                 "Too few to tell yet: {} prompts and {} corrections (it needs {MIN_PROMPTS} and {MIN_CORRECTIONS}).",
                 f.prompts, f.corrections
-            )
-        } else {
-            "Corrections are not being judged ([clock] llm is off), so there is nothing to compare."
-                .into()
+            ),
+            Some(why) => {
+                format!("Corrections are not being judged: {why}, so there is nothing to compare.")
+            }
         };
         return v;
     }
@@ -335,9 +339,13 @@ pub fn decide(f: &Findings) -> Verdict {
     let model = if v.kind == Kind::Unmeasured {
         "No model-side data, so it cannot be said whether it was you or the model.".to_string()
     } else {
-        let think = m.think_ratio.map_or("No thinking data".into(), |r| {
-            format!("Model thinking {}", change(r))
-        });
+        let think = match m.think_ratio {
+            None => "No thinking data".into(),
+            Some(r) if m.think_moved || (THINK_FLAT.0..=THINK_FLAT.1).contains(&r) => {
+                format!("Model thinking {}", change(r))
+            }
+            Some(_) => "Model thinking not clearly different".into(),
+        };
         let errors = match m.tool_error_ratio {
             None => "No tool-error data".into(),
             Some(r) if m.tool_errors_moved => format!("Tool errors {}", change(r)),
@@ -375,16 +383,19 @@ mod tests {
     const FLAT: ModelSide = ModelSide {
         think_ratio: Some(0.95),
         tool_error_ratio: Some(1.0),
+        think_moved: false,
         tool_errors_moved: false,
     };
     const SHALLOW: ModelSide = ModelSide {
         think_ratio: Some(0.8),
         tool_error_ratio: Some(1.0),
+        think_moved: true,
         tool_errors_moved: false,
     };
     const BLIND: ModelSide = ModelSide {
         think_ratio: None,
         tool_error_ratio: None,
+        think_moved: false,
         tool_errors_moved: false,
     };
 
@@ -392,7 +403,7 @@ mod tests {
         decide(&Findings {
             prompts,
             corrections,
-            llm: true,
+            not_judged: None,
             you: you.then_some((1.8, 105)),
             band: band.as_ref().map(|m| (&EVENING[..], *m)),
         })
@@ -461,6 +472,29 @@ mod tests {
         few_outside.thinks.extend(thoughts(19, "claude", 500, 200));
         few_outside.thinks.extend(thoughts(10, "claude", 1000, 5));
         assert_eq!(model_side(&few_outside, &utc, &evening()).think_ratio, None);
+    }
+
+    #[test]
+    fn a_thinking_ratio_that_chance_explains_is_not_the_model_moving() {
+        // 30 thoughts a side, 16 long ones inside and 14 outside: the medians are 30% apart, which
+        // shuffling the same thoughts over the hours does about as well as
+        let mut d = Data::default();
+        d.thinks.extend(thoughts(19, "claude", 1300, 16));
+        d.thinks.extend(thoughts(19, "claude", 1000, 14));
+        d.thinks.extend(thoughts(10, "claude", 1300, 14));
+        d.thinks.extend(thoughts(10, "claude", 1000, 16));
+        let m = model_side(&d, &utc, &evening());
+        assert!((m.think_ratio.unwrap() - 1.3).abs() < 1e-9);
+        assert!(!m.think_moved && !m.moved());
+        let v = decide(&Findings {
+            prompts: 900,
+            corrections: 90,
+            not_judged: None,
+            you: Some((1.8, 105)),
+            band: Some((&EVENING[..], m)),
+        });
+        assert!(v.text.contains("Model thinking not clearly different."));
+        assert_eq!(v.kind, Kind::You);
     }
 
     #[test]
@@ -533,7 +567,7 @@ mod tests {
     #[test]
     fn the_text_has_the_counts_in_plain_words() {
         assert_eq!(
-            kind(2231, 205, true, Some(ModelSide { think_ratio: Some(0.92), tool_error_ratio: Some(0.91), tool_errors_moved: false })).text,
+            kind(2231, 205, true, Some(ModelSide { think_ratio: Some(0.92), tool_error_ratio: Some(0.91), think_moved: false, tool_errors_moved: false })).text,
             "Evenings: 1.8x more corrections (105). Model thinking \u{2212}8%. Tool errors flat. Mostly you."
         );
         let t = kind(
@@ -543,6 +577,7 @@ mod tests {
             Some(ModelSide {
                 think_ratio: Some(1.0),
                 tool_error_ratio: Some(1.5),
+                think_moved: false,
                 tool_errors_moved: true,
             }),
         )
@@ -575,6 +610,7 @@ mod tests {
         let one = ModelSide {
             think_ratio: None,
             tool_error_ratio: Some(1.0),
+            think_moved: false,
             tool_errors_moved: false,
         };
         assert_eq!(
@@ -588,6 +624,7 @@ mod tests {
         let loose = ModelSide {
             think_ratio: Some(1.0),
             tool_error_ratio: Some(3.0),
+            think_moved: false,
             tool_errors_moved: false,
         };
         assert!(kind(900, 90, true, Some(loose))
@@ -600,7 +637,7 @@ mod tests {
         let v = decide(&Findings {
             prompts: 900,
             corrections: 0,
-            llm: false,
+            not_judged: Some("[clock] llm is off"),
             you: None,
             band: None,
         });
