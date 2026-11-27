@@ -1,9 +1,6 @@
 import type { OriginChoice, OriginsSetting, SettingsInput } from '../api/types';
 import { Part, Row, Switch, type Folds } from './SettingsParts';
 
-/** The section's title. */
-export const QUIET_PART = 'STARTED BY PROGRAMS';
-
 /** "1 session", "5 sessions". */
 const count = (n: number) => `${n} session${n === 1 ? '' : 's'}`;
 
@@ -38,7 +35,7 @@ export function quietList(q: OriginsSetting, id: string, on: boolean): string[] 
  */
 export function QuietSettings({ q, sample, save, folds }: { q: OriginsSetting; sample: boolean; save: (input: SettingsInput) => Promise<boolean>; folds: Folds }) {
   return (
-    <Part t={QUIET_PART} sum={quietSum(q)} folds={folds}>
+    <Part t="STARTED BY PROGRAMS" sum={quietSum(q)} folds={folds}>
       {q.choices.length === 0 ? (
         <p class="umeta">No sessions started by a program on this machine.</p>
       ) : (
