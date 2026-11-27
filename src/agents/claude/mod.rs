@@ -410,6 +410,10 @@ impl Agent for Claude {
     fn default_summary_model(&self) -> &'static str {
         "haiku"
     }
+    /// The aliases `claude --model` takes for the latest model of each size.
+    fn summary_models(&self) -> &'static [&'static str] {
+        &["haiku", "sonnet", "opus"]
+    }
 
     fn executable(&self) -> String {
         self.executable_path()

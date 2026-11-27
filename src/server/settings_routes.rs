@@ -63,12 +63,20 @@ fn known_agents(cfg: &Config) -> Vec<(String, String)> {
 }
 
 /// One key as the panel gets it: its type, what it may be, and the value now. `restart` says the
-/// daemon reads the key only when it starts.
+/// daemon reads the key only when it starts. `summary.model` also names the agent that writes
+/// summaries, its own default model and the names it takes, so the board can offer them.
 fn describe(cfg: &Config, key: &str) -> Value {
     match key {
         "summary.enabled" => json!({"type": "bool", "value": cfg.summary.enabled, "restart": true}),
         "summary.model" => {
-            json!({"type": "text", "max": MODEL_MAX, "value": cfg.summary.model, "restart": true})
+            let enabled = agents::enabled(cfg);
+            let agent = enabled.summary_agent(cfg);
+            json!({
+                "type": "text", "max": MODEL_MAX, "value": cfg.summary.model, "restart": true,
+                "agent": agent.map(|a| a.name()),
+                "default": agent.map_or("", |a| a.default_summary_model()),
+                "choices": agent.map(|a| agents::summary_choices(a.as_ref())).unwrap_or_default(),
+            })
         }
         "night.enabled" => json!({"type": "bool", "value": cfg.night.enabled}),
         "night.window" => {
@@ -229,14 +237,40 @@ mod tests {
         call(e, req("POST", "/api/settings", Some(body))).await
     }
 
+    /// Does `key` stand in `text` as a whole word?
+    fn has_word(text: &str, key: &str) -> bool {
+        let is_word = |c: Option<char>| c.is_some_and(|c| c.is_alphanumeric() || c == '_');
+        text.match_indices(key).any(|(i, _)| {
+            !is_word(text[..i].chars().next_back())
+                && !is_word(text[i + key.len()..].chars().next())
+        })
+    }
+
     #[test]
-    fn every_setting_is_in_the_api_and_config_docs() {
-        let api = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/docs/api.md"));
-        let config = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/docs/config.md"));
+    fn every_setting_and_its_fields_are_in_the_api_docs_the_config_docs_and_the_types() {
+        let root = env!("CARGO_MANIFEST_DIR");
+        let read = |file: &str| std::fs::read_to_string(format!("{root}/{file}")).unwrap();
+        let (api, config, types) = (
+            read("docs/api.md"),
+            read("docs/config.md"),
+            read("face/src/api/types.ts"),
+        );
+        // the route's own row of api.md, and the settings types of types.ts
+        let row = api
+            .lines()
+            .find(|l| l.starts_with("| `GET /api/settings`"))
+            .unwrap();
+        let from = types.find("One setting of GET /api/settings").unwrap();
+        let typed = &types[from..types[from..].find("SettingsInput").unwrap() + from];
+        let cfg = crate::config::Config::default();
         for key in super::KEYS {
             assert!(
-                api.contains(&format!("`{key}`")),
+                row.contains(&format!("`{key}`")),
                 "{key} is not in docs/api.md"
+            );
+            assert!(
+                typed.contains(&format!("'{key}'")),
+                "{key} is not in types.ts"
             );
             // config.md names a key under its table: `[clock]` and then `break_minutes`
             let (table, name) = key.split_once('.').unwrap();
@@ -244,6 +278,67 @@ mod tests {
                 config.contains(&format!("[{table}]")) && config.contains(name),
                 "{key} is not in docs/config.md"
             );
+            for field in super::describe(&cfg, key).as_object().unwrap().keys() {
+                assert!(has_word(row, field), "{key}: {field} is not in docs/api.md");
+                assert!(has_word(typed, field), "{key}: {field} is not in types.ts");
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn the_model_names_the_summary_agent_its_default_and_the_names_it_takes() {
+        let e = env();
+        let (_, v) = call(&e, req("GET", "/api/settings", None)).await;
+        assert_eq!(
+            v["settings"]["summary.model"],
+            json!({
+                "type": "text", "max": 64, "value": "", "restart": true,
+                "agent": "Claude Code", "default": "haiku", "choices": ["haiku", "sonnet", "opus"],
+            })
+        );
+        let known = crate::agents::known(&crate::config::Config::default());
+        let default_of = |id: &str| known.get(id).unwrap().default_summary_model();
+        // `[summary] agent` when the file names one, else the first enabled agent; an agent that
+        // lists no more names offers only its default
+        for (file, agent, default) in [
+            (
+                "[agents]\nenabled = [\"claude\", \"codex\"]\n\n[summary]\nagent = \"codex\"\n",
+                "Codex CLI",
+                default_of("codex"),
+            ),
+            (
+                "[agents]\nenabled = [\"agy\", \"claude\"]\n",
+                "Antigravity CLI",
+                default_of("agy"),
+            ),
+            ("[agents]\nenabled = [\"opencode\"]\n", "OpenCode", "free"),
+        ] {
+            std::fs::write(config_path(&e), file).unwrap();
+            let (_, v) = call(&e, req("GET", "/api/settings", None)).await;
+            let m = &v["settings"]["summary.model"];
+            assert_eq!(m["agent"], agent, "{file}");
+            assert_eq!(m["default"], default, "{file}");
+            assert_eq!(m["choices"], json!([default]), "{file}");
+        }
+        // no agent writes summaries: nothing to name or offer
+        std::fs::write(config_path(&e), "[agents]\nenabled = []\n").unwrap();
+        let (_, v) = call(&e, req("GET", "/api/settings", None)).await;
+        let m = &v["settings"]["summary.model"];
+        assert_eq!(
+            (&m["agent"], &m["default"], &m["choices"]),
+            (&Value::Null, &json!(""), &json!([]))
+        );
+    }
+
+    #[tokio::test]
+    async fn every_model_the_board_offers_is_one_a_post_takes() {
+        let e = env();
+        for agent in crate::agents::known(&crate::config::Config::default()).iter() {
+            for model in crate::agents::summary_choices(agent.as_ref()) {
+                let (st, v) = post(&e, json!({"summary.model": model})).await;
+                assert_eq!(st, StatusCode::OK, "{}: {model}: {v}", agent.id());
+                assert_eq!(v["settings"]["summary.model"]["value"], model);
+            }
         }
     }
 

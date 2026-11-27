@@ -585,6 +585,11 @@ export interface RemindSettings {
 /** One setting of GET /api/settings; `restart` says the daemon reads it only when it starts. */
 export interface BoolSetting { type: 'bool'; value: boolean; restart?: boolean }
 export interface TextSetting { type: 'text'; max: number; value: string; restart?: boolean }
+/**
+ * `summary.model`: also the agent that writes summaries (its name, null when none does), the model it is given while
+ * `value` is empty (`""` when it names none) and the model names it takes, the default first. Older engines send none of the three.
+ */
+export interface ModelSetting extends TextSetting { agent?: string | null; default?: string; choices?: string[] }
 export interface IntSetting { type: 'int'; min: number; max: number; value: number; restart?: boolean }
 export interface ChoiceSetting { type: 'choice'; choices: string[]; value: string; restart?: boolean }
 /** `HH:MM-HH:MM`, local time. */
@@ -596,7 +601,7 @@ export interface AgentsSetting { type: 'agents'; choices: Array<{ id: string; na
 export interface SettingsState {
   settings: {
     'summary.enabled': BoolSetting;
-    'summary.model': TextSetting;
+    'summary.model': ModelSetting;
     'night.enabled': BoolSetting;
     'night.window': WindowSetting;
     'night.parallel': IntSetting;

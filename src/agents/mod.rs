@@ -279,6 +279,12 @@ pub trait Agent: Send + Sync + std::fmt::Debug {
     fn default_summary_model(&self) -> &'static str {
         ""
     }
+    /// More model names `ask` takes for summaries, for the board to offer beside the default: short
+    /// names that stay valid across the agent's releases (Claude Code's `sonnet`), only as the
+    /// agent's own help or docs give them. The default: none, so only the default is offered.
+    fn summary_models(&self) -> &'static [&'static str] {
+        &[]
+    }
 
     // ---- commands ----
 
@@ -346,6 +352,20 @@ const SUMMARY_AGENTS_BEFORE_0_5: [&str; 4] = ["claude", "codex", "agy", "opencod
 /// May this agent write summaries? When its run is proven locked down, or it did before 0.5.
 pub fn may_summarize(agent: &dyn Agent) -> bool {
     agent.judging_locked_down() || SUMMARY_AGENTS_BEFORE_0_5.contains(&agent.id())
+}
+
+/// The model names an agent takes for summaries: its default first (when it names one), then the
+/// ones it lists, each once.
+pub fn summary_choices(agent: &dyn Agent) -> Vec<&'static str> {
+    let mut out: Vec<&'static str> = Vec::new();
+    let all = std::iter::once(agent.default_summary_model())
+        .chain(agent.summary_models().iter().copied());
+    for m in all {
+        if !m.is_empty() && !out.contains(&m) {
+            out.push(m);
+        }
+    }
+    out
 }
 
 static EXTRA: Mutex<Vec<(String, Factory)>> = Mutex::new(Vec::new());
@@ -597,6 +617,26 @@ mod tests {
             .contains("id of this session"));
         s.agent = "gone".into();
         assert!(agents.runnable(&s).unwrap_err().contains("not enabled"));
+    }
+
+    #[test]
+    fn the_models_offered_for_summaries_start_with_the_default_and_repeat_none() {
+        let choices = |id: &str| {
+            let agents = known(&Config::default());
+            summary_choices(agents.get(id).unwrap().as_ref())
+        };
+        // Claude Code's three aliases, as `claude --help` gives them
+        assert_eq!(choices("claude"), ["haiku", "sonnet", "opus"]);
+        // the others list no names of their own: only their default is offered
+        for id in ["codex", "agy", "opencode"] {
+            let agents = known(&Config::default());
+            assert_eq!(
+                choices(id),
+                [agents.get(id).unwrap().default_summary_model()],
+                "{id}"
+            );
+        }
+        assert_eq!(choices("opencode"), ["free"]);
     }
 
     #[test]

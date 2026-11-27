@@ -217,7 +217,7 @@ function conversationOf(d: CardDetail): Message[] {
 const SETTINGS: SettingsState = {
   settings: {
     'summary.enabled': { type: 'bool', value: true, restart: true },
-    'summary.model': { type: 'text', max: 64, value: '', restart: true },
+    'summary.model': { type: 'text', max: 64, value: '', restart: true, agent: AGENT.name, default: 'haiku', choices: ['haiku', 'sonnet', 'opus'] },
     'night.enabled': { type: 'bool', value: false },
     'night.window': { type: 'window', value: '01:00-07:00' },
     'night.parallel': { type: 'int', min: 1, max: 8, value: 2 },
