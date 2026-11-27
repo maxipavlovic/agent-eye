@@ -227,11 +227,7 @@ mod tests {
         ] {
             assert_eq!(kind(said), Some(TurnKind::Refusal), "{said}");
         }
-        for failed in [
-            "EACCES: permission denied, open '/etc/hosts'",
-            "git push was rejected: non-fast-forward",
-            "command not allowed in this shell",
-        ] {
+        for failed in crate::turns::testing::NOT_REFUSALS {
             assert_eq!(kind(failed), Some(TurnKind::ToolError), "{failed}");
         }
     }

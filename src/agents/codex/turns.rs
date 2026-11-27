@@ -377,6 +377,12 @@ mod tests {
             output("the rejected patch is not mentioned first"),
         ];
         assert_eq!(of(&lines), vec![TurnKind::Refusal, TurnKind::Refusal]);
+        // a failed command that says "rejected" or "permission denied" is not one
+        let failures: Vec<Value> = crate::turns::testing::NOT_REFUSALS
+            .iter()
+            .map(|t| output(&format!("Process exited with code 1\nOutput:\n{t}")))
+            .collect();
+        assert!(!of(&failures).contains(&TurnKind::Refusal));
     }
 
     #[test]

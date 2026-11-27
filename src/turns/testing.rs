@@ -8,6 +8,16 @@ pub fn kinds(events: &[TurnEvent]) -> Vec<(TurnKind, i64)> {
     events.iter().map(|e| (e.kind, e.n)).collect()
 }
 
+/// Failed results that use the words of a refusal and are not one: no one said no. Every
+/// adapter's refusal test runs them, and none may count as a refusal.
+pub const NOT_REFUSALS: [&str; 5] = [
+    "Exit code 1\nbash: ./run.sh: Permission denied",
+    "Exit code 1\n! [remote rejected] main -> main (permission denied)",
+    "EACCES: permission denied, open '/etc/hosts'",
+    "git push was rejected: non-fast-forward",
+    "Error: file not allowed here",
+];
+
 /// The times of the `End` events.
 pub fn end_times(events: &[TurnEvent]) -> Vec<i64> {
     events

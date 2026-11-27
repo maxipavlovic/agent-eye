@@ -190,11 +190,22 @@ mod tests {
             t.step(&step(status, error));
             assert_eq!(t.0.last().map(|e| e.kind), Some(want), "{error}");
         }
+        for error in crate::turns::testing::NOT_REFUSALS {
+            t.step(&step("ERROR", error));
+            assert_eq!(
+                t.0.last().map(|e| e.kind),
+                Some(TurnKind::ToolError),
+                "{error}"
+            );
+        }
         let ok = serde_json::json!({"type": "GENERIC", "status": "DONE", "created_at": "2026-11-04T08:00:00Z"});
         t.step(&decode(ok.to_string().as_bytes()).unwrap());
         let running = serde_json::json!({"type": "GENERIC", "status": "RUNNING", "created_at": "2026-11-04T08:00:00Z"});
         t.step(&decode(running.to_string().as_bytes()).unwrap());
-        assert_eq!(t.finish().0.len(), 6);
+        assert_eq!(
+            t.finish().0.len(),
+            6 + crate::turns::testing::NOT_REFUSALS.len()
+        );
     }
 
     #[test]

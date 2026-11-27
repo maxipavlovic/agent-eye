@@ -403,6 +403,17 @@ mod tests {
             t.line(&v, "user");
             assert_eq!(t.0.last().map(|e| e.kind), Some(want), "{text}");
         }
+        for text in crate::turns::testing::NOT_REFUSALS {
+            let v = user_line(
+                serde_json::json!([{"type": "tool_result", "is_error": true, "content": text}]),
+            );
+            t.line(&v, "user");
+            assert_eq!(
+                t.0.last().map(|e| e.kind),
+                Some(TurnKind::ToolError),
+                "{text}"
+            );
+        }
     }
 
     #[test]
