@@ -95,6 +95,11 @@ export function SettingsHost({ store, layout, setLayout }: { store: Store; layou
     saved.value = 'Saved';
     if (input['remind.notify'] !== undefined) store.loadNotice();
     if (Object.keys(input).some((k) => k.startsWith('clock.'))) store.loadClockHint();
+    // quiet sessions leave Needs you and the steering clock at once
+    if (input['board.quiet'] !== undefined) {
+      void store.refresh();
+      store.loadClockHint();
+    }
     return true;
   };
   return (

@@ -213,11 +213,22 @@ function conversationOf(d: CardDetail): Message[] {
   return out;
 }
 
-/** The settings the sample shows: the engine's defaults, with the two agents of the demo. */
+/**
+ * The settings the sample shows: the engine's defaults, with the two agents of the demo and what a machine with a program
+ * on the Agent SDK and a few `claude -p` runs finds.
+ */
 const SETTINGS: SettingsState = {
   settings: {
     'summary.enabled': { type: 'bool', value: true, restart: true },
     'summary.model': { type: 'text', max: 64, value: '', restart: true, agent: AGENT.name, default: 'haiku', choices: ['haiku', 'sonnet', 'opus'] },
+    'board.quiet': {
+      type: 'origins',
+      choices: [
+        { id: 'app', name: 'App', about: "started by an app through an agent's SDK", sessions: 5, needs_you: 2 },
+        { id: 'headless', name: 'Headless', about: 'started by a script (claude -p, codex exec)', sessions: 3, needs_you: 0 },
+      ],
+      value: [],
+    },
     'night.enabled': { type: 'bool', value: false },
     'night.window': { type: 'window', value: '01:00-07:00' },
     'night.parallel': { type: 'int', min: 1, max: 8, value: 2 },
