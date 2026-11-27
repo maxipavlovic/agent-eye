@@ -14,15 +14,11 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 - `eye clock`: the steering clock. It shows your correction rate by hour of the day and by time since your last break, which hours run clearly worse than the rest (only when the difference is more than chance), and whether a bad stretch looks like you or the model, from the model's thinking and its failed tool calls in the same hours. `--weeks N`, `--json`, `--brief` (one line, for an agent). A model judges which prompts were corrections once a night (and with `eye clock detect`), through the agent and model that write summaries; `[clock] llm = false` stops it. The board's API gets `GET /api/clock`. See `docs/clock.md`.
 - `[clock] idle = true` (off by default) takes breaks from the machine's idle time on macOS and on Linux with logind, instead of from gaps between prompts. It reads one number once a minute, never keys or windows. `eye doctor` reports whether it is available.
 - `GET /api/usage` takes `series=project|model` and answers with the cost of every day split that way, and `eye usage --by-day` prints one row per day (see `docs/api.md`).
-
 - A **HOURS** button beside USAGE opens the steering clock: your corrections per 100 prompts for each hour of the day, how much the model thought against its usual, and failed tool calls, on one 24-hour axis with your bad hours shaded, plus corrections by time since your last break. Every hour has a tooltip, there is a table view, and thin data reads plainly ("Not enough data yet"). With `[clock] hints` on, a quiet mark beside HOURS and on the card you are working in says when your corrections usually rise.
 - USAGE draws the cost of every day as stacked columns, by project or by model, with a legend, tooltips and a table view.
 - The settings gear has a HOURS section: the clock, judging corrections, the hint, the break length and idle time (`clock.*` in `/api/settings`).
 - With `[clock] hints = true`, the picker's footer shows the clock's hint after the keys when the screen is wide enough. It is worked out in the background, so the picker still opens at once.
 - While the hint is set, **Continue tonight** comes first in the right-click menu, in MORE and in the panel's actions of the live session you are working in, with the reason in one plain line. T does what it did.
-
-### Changed
-
 - The steering clock's verdict is tested by chance properly. The bad hours are picked because they look worst, so they are now tested by running the whole pick-and-measure procedure again on corrections dealt out at random (seeded, 1,000 rounds, a few milliseconds), and the model's thinking the same way; on made-up weeks with no pattern the old test named hours in more than half. See `docs/clock.md`.
 - The clock leaves out sessions started by a script (`claude -p`, `codex exec`) or by the night shift, since those prompts are not you steering. The nightly pass also waits while an agent is working, not only after your own prompts.
 - The clock's hint comes from the last 4 weeks wherever it is shown (board, picker, `eye clock --brief`). The tool-error strip of HOURS shows one agent's calls (`tool_agent` in `/api/clock`), as the verdict compares each agent with itself. "Too few to tell yet" with judging off names the real reason.
@@ -31,12 +27,17 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 - A break is an idle stretch or a gap between prompts, so a night with no idle sample is still a break. On Linux the idle sensor finds your graphical session through `loginctl`, and `eye doctor` reports what the daemon itself can read.
 - The clock reads its settings again: changes made in the gear count without a restart (recording turns follows the daemon's start). The nightly corrections pass waits while you are at work.
 - The call that judges corrections is locked down for OpenCode (the shell, edits and web fetches are denied) and cleans up after agy (its conversation is deleted). `docs/clock.md` and `docs/security.md` say what each agent's call can and cannot do.
-- A settings write that fails on disk is a 500, not a 400.
-- The header no longer carries the Lanes / Grid, theme, look and colour buttons: they are in the settings panel, and their keys and saved settings are unchanged.
 - HOURS draws its single series in the look's ink, not a colour: colour stays for "needs you". Its hint mark is ink too. The model strip is cut at 50% either side of usual with a mark where a swing is cut, shows a tick for an hour that was about usual and fades an hour with few thinking events. The bad stretches are named by the engine ("your night" for 22:00 to 04:00) and labelled where they sit.
-- USAGE's stacked colours are a new palette, checked for both looks and both themes, that leaves out the colours near your accent colour, so no column looks like "needs you". On a phone (under 640 px) the HOURS and USAGE drawings are 320 wide, so their words stay readable.
+- USAGE's stacked colours are a new palette, checked for both looks and both themes, that leaves out the colours near your accent colour, so no column looks like "needs you". On a phone (under 640 px) the HOURS and USAGE drawings are laid out again at 320 wide, and at a desktop width their words are 15 px in the drawing, so they stay readable. USAGE's columns are one control read with the arrow keys, like HOURS, and a tap on either chart reads the hour or day you touched.
 - HOURS says why corrections are zero (the engine's reason) when they are not judged, lists each agent with its own thinking and tool errors ("—" where it has no such signal), names the thinking unit of the agent the hours belong to, and keeps the chart on screen while another number of weeks loads.
 - The settings rows are named after what they set ("Write summaries", "Start by themselves", "Follow", "Skin") and the form labels match them.
+- A settings write that fails on disk is a 500, not a 400, and HOURS says what failed unless the engine simply has no clock.
+- The Steering clock switch in the gear says it takes effect when the service restarts, as the docs do.
+- `eye usage --by-day` follows `--by project|model` and refuses the other groupings; `eye clock --help` reads as two sentences and describes `--json`; an empty break band says "no prompts".
+
+### Changed
+
+- The header no longer carries the Lanes / Grid, theme, look and colour buttons: they are in the settings panel, and their keys and saved settings are unchanged.
 
 ## 0.4.1 - 2026-11-25
 

@@ -116,30 +116,31 @@ for (const scheme of SCHEMES) {
   });
 }
 
-// The clock's hint: the header mark and the working card's top-edge mark, then the menu with Continue tonight
-// first (the board with the card's panel open). Light, 1440 wide, in each look.
+// The clock's hint: the header mark on the board itself (the card's own mark shows only with its panel open, which
+// covers the header, so flows.spec checks that one), then the menu with Continue tonight first. Light; 1440 wide and 1280, where both looks are still on one row, so the
+// mark has to shrink to keep the gear and + IDEA in view.
 const HINT = { text: 'Evening: your corrections usually run 1.8x now.', offer: true };
-test.describe('the clock hint light 1440', () => {
-  test.use({ colorScheme: 'light', viewport: { width: 1440, height: 900 } });
-  for (const view of ['board', 'menu'] as const) {
-    test(view, async ({ board }) => {
-      const c = hintClock();
-      await board.route('**/api/clock*', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ ...c, now: { ...c.now, hint: HINT } }) }));
-      await board.reload();
-      await expect(board.locator('.hourhint')).toBeVisible();
-      await card(board, /Fix stale tokens/).click();
-      await expect(board.getByRole('heading', { level: 2, name: /Fix stale tokens/ })).toBeVisible();
-      if (view === 'menu') {
-        // the panel's scrim would catch the click, so the menu is seen on the board
-        await board.keyboard.press('Escape');
-        await card(board, /Fix stale tokens/).click({ button: 'right' });
-        await expect(board.getByRole('menu')).toBeVisible();
-      }
-      await board.waitForLoadState('networkidle');
-      await board.evaluate(() => document.fonts.ready);
-      await board.evaluate(() => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))));
-      await board.mouse.move(1435, 895);
-      await expect(board).toHaveScreenshot(`hint-${view}-light-1440.png`, { mask: [board.locator('.brand'), board.locator('.conn')] });
-    });
-  }
-});
+for (const width of [1440, 1280]) {
+  test.describe(`the clock hint light ${width}`, () => {
+    test.use({ colorScheme: 'light', viewport: { width, height: 900 } });
+    for (const view of ['board', 'menu'] as const) {
+      test(view, async ({ board }) => {
+        const c = hintClock();
+        await board.route('**/api/clock*', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ ...c, now: { ...c.now, hint: HINT } }) }));
+        await board.reload();
+        await expect(board.locator('.hourhint')).toBeVisible();
+        await expect(board.getByRole('button', { name: 'Settings', exact: true })).toBeInViewport({ ratio: 1 });
+        await expect(board.getByRole('button', { name: '+ IDEA' })).toBeInViewport({ ratio: 1 });
+        if (view === 'menu') {
+          await card(board, /Fix stale tokens/).click({ button: 'right' });
+          await expect(board.getByRole('menu')).toBeVisible();
+        }
+        await board.waitForLoadState('networkidle');
+        await board.evaluate(() => document.fonts.ready);
+        await board.evaluate(() => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))));
+        await board.mouse.move(width - 5, 895);
+        await expect(board).toHaveScreenshot(`hint-${view}-light-${width}.png`, { mask: [board.locator('.brand'), board.locator('.conn')] });
+      });
+    }
+  });
+}
