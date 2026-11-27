@@ -70,7 +70,7 @@ async function mount(src: Source = fixtureSource()) {
   return { store, root, $, $$, open, press, head, heads, unfold };
 }
 
-const AGENT_PARTS = ['SUMMARIES', 'NIGHT SHIFT', 'REMINDERS', 'HOURS', 'AGENTS'];
+const AGENT_PARTS = ['SUMMARIES', 'STARTED BY PROGRAMS', 'NIGHT SHIFT', 'REMINDERS', 'HOURS', 'AGENTS'];
 /** A section of the open panel, by its title. */
 const section = (t: string) => [...document.querySelectorAll('.settings .sec')].find((sec) => sec.querySelector('.fhead')?.firstChild?.textContent === t)!;
 const RESTART = /when the background service restarts|then run eye restart/g;
@@ -179,10 +179,11 @@ describe('the folded sections', () => {
   it('opens with only LOOK unfolded, and each folded heading says what it is set to', async () => {
     const { $, heads, open } = await mount(engine().source);
     await open();
-    await vi.waitFor(() => expect(heads()).toHaveLength(6));
+    await vi.waitFor(() => expect(heads()).toHaveLength(7));
     expect(heads()).toEqual([
       ['LOOK', 'true', null],
       ['SUMMARIES', 'false', 'ON · haiku'],
+      ['STARTED BY PROGRAMS', 'false', '8 FOUND · OFF'],
       ['NIGHT SHIFT', 'false', 'OFF'],
       ['REMINDERS', 'false', 'OFF'],
       ['HOURS', 'false', 'ON'],
@@ -206,8 +207,8 @@ describe('the folded sections', () => {
     key(',');
     await vi.waitFor(() => expect($('aside[aria-label=Settings]')).toBeNull());
     await open();
-    await vi.waitFor(() => expect(heads()).toHaveLength(6));
-    expect(heads().map(([, o]) => o)).toEqual(['true', 'false', 'false', 'false', 'false', 'false']);
+    await vi.waitFor(() => expect(heads()).toHaveLength(7));
+    expect(heads().map(([, o]) => o)).toEqual(['true', 'false', 'false', 'false', 'false', 'false', 'false']);
   });
 
   it('says what the engine has in each folded heading: summaries off, the night window, the agents in order', async () => {
@@ -217,10 +218,11 @@ describe('the folded sections', () => {
     state.settings['remind.notify'].value = true;
     state.settings['clock.enabled'].value = false;
     state.settings['agents.enabled'].value = ['codex', 'claude'];
+    state.settings['board.quiet'].value = ['app'];
     const { heads, open } = await mount({ ...fixtureSource(), name: 'live' as const, settings: async () => structuredClone(state) } as Source);
     await open();
-    await vi.waitFor(() => expect(heads()).toHaveLength(6));
-    expect(heads().slice(1).map(([, , sum]) => sum)).toEqual(['OFF', 'ON · 01:00-07:00', 'ON', 'OFF', 'Codex CLI, Claude Code']);
+    await vi.waitFor(() => expect(heads()).toHaveLength(7));
+    expect(heads().slice(1).map(([, , sum]) => sum)).toEqual(['OFF', 'APP QUIET', 'ON · 01:00-07:00', 'ON', 'OFF', 'Codex CLI, Claude Code']);
   });
 
   it('closes on Esc with the focus on a heading', async () => {
@@ -400,6 +402,83 @@ describe('the agent settings', () => {
     await open();
     await vi.waitFor(() => expect($('.settings .state')!.textContent).toContain('Update eye'));
     expect($('.settings [aria-label=Layout]')).not.toBeNull();
+  });
+});
+
+describe('the sessions started by programs', () => {
+  const T = 'STARTED BY PROGRAMS';
+  const withQuiet = (q: SettingsState['settings']['board.quiet']) => {
+    const state = structuredClone(sampleState);
+    state.settings['board.quiet'] = q;
+    return { ...fixtureSource(), name: 'live' as const, settings: async () => structuredClone(state) } as Source;
+  };
+  const switches = () => [...section(T).querySelectorAll('[role=group]')].map((g) => [g.getAttribute('aria-label'), g.querySelector('[aria-pressed=true]')?.textContent]);
+
+  it('comes after SUMMARIES with a switch for each program origin found, its sessions and its Needs you count', async () => {
+    const { heads, open, unfold } = await mount(engine().source);
+    await open();
+    await unfold(T);
+    expect(heads().map(([t]) => t).slice(1, 3)).toEqual(['SUMMARIES', T]);
+    expect(switches()).toEqual([['Quiet App', 'OFF'], ['Quiet Headless', 'OFF']]);
+    const lines = [...section(T).querySelectorAll('.srow .umeta')].map((p) => p.textContent);
+    expect(lines).toEqual([
+      "5 sessions started by an app through an agent's SDK, 2 in Needs you now.",
+      '3 sessions started by a script (claude -p, codex exec), none in Needs you now.',
+    ]);
+    expect(section(T).textContent).toContain('A quiet session never moves to Needs you by itself, gets no summary and stays out of HOURS.');
+  });
+
+  it('saves the list at once, folds to which are quiet, and loads the board again', async () => {
+    const { saveSettings, source } = engine();
+    const board = vi.spyOn(source, 'board');
+    const { $, head, heads, open, press, unfold } = await mount(source);
+    await open();
+    await unfold(T);
+    const loads = board.mock.calls.length;
+    press('Quiet App', 'ON');
+    await vi.waitFor(() => expect(saveSettings).toHaveBeenCalledWith({ 'board.quiet': ['app'] }));
+    await vi.waitFor(() => expect($('.settings [role=status]')!.textContent).toBe('Saved'));
+    await vi.waitFor(() => expect(board.mock.calls.length).toBeGreaterThan(loads));
+    expect(switches()).toEqual([['Quiet App', 'ON'], ['Quiet Headless', 'OFF']]);
+    expect(section(T).querySelector('.srow .umeta')!.textContent).toBe("5 sessions started by an app through an agent's SDK, 2 kept out of Needs you.");
+    press('Quiet Headless', 'ON');
+    await vi.waitFor(() => expect(saveSettings).toHaveBeenLastCalledWith({ 'board.quiet': ['app', 'headless'] }));
+    head(T)!.click();
+    await vi.waitFor(() => expect(heads()[2]).toEqual([T, 'false', 'QUIET']));
+    await unfold(T);
+    press('Quiet App', 'OFF');
+    await vi.waitFor(() => expect(saveSettings).toHaveBeenLastCalledWith({ 'board.quiet': ['headless'] }));
+  });
+
+  it('says so when no session was started by a program, and shows no switch', async () => {
+    const { heads, open, unfold } = await mount(withQuiet({ type: 'origins', choices: [], value: [] }));
+    await open();
+    await unfold(T);
+    expect(section(T).textContent).toContain('No sessions started by a program on this machine.');
+    expect(switches()).toEqual([]);
+    expect(heads()[2]).toEqual([T, 'true', null]);
+  });
+
+  it('keeps the switch of an origin set to quiet when none of its sessions are left, so it can be turned off', async () => {
+    const q = { type: 'origins' as const, choices: [{ id: 'headless', name: 'Headless', about: 'started by a script (claude -p, codex exec)', sessions: 0, needs_you: 0 }], value: ['headless'] };
+    const { heads, open, unfold } = await mount(withQuiet(q));
+    await open();
+    await vi.waitFor(() => expect(heads()[2]).toEqual([T, 'false', 'QUIET']));
+    await unfold(T);
+    expect(switches()).toEqual([['Quiet Headless', 'ON']]);
+    expect(section(T).querySelector('.srow .umeta')!.textContent).toBe('No sessions started by a script (claude -p, codex exec) left.');
+  });
+
+  it('folds to NONE when nothing was found, and the sample board shows its switches without saving', async () => {
+    const a = await mount(withQuiet({ type: 'origins', choices: [], value: [] }));
+    await a.open();
+    await vi.waitFor(() => expect(a.heads()[2]).toEqual([T, 'false', 'NONE']));
+    render(null, a.root);
+    settingsPanel.value = false;
+    const b = await mount();
+    await b.open();
+    await b.unfold(T);
+    expect(b.$$<HTMLButtonElement>('.settings [aria-label="Quiet App"] button').every((x) => x.disabled)).toBe(true);
   });
 });
 

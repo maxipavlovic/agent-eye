@@ -2,19 +2,14 @@ import { useSignal } from '@preact/signals';
 import type { SettingsInput, SettingsState } from '../api/types';
 import type { Store } from '../store';
 import { ModelPick } from './SettingsModel';
-import { onOff, Part, restartNote, Row, Seg, Shown, type Folds } from './SettingsParts';
+import { onOff, Part, restartNote, Row, Seg, Shown, Switch, type Folds } from './SettingsParts';
+import { QuietSettings } from './SettingsQuiet';
 
-const ON_OFF: ReadonlyArray<readonly ['on' | 'off', string]> = [['on', 'ON'], ['off', 'OFF']];
 const ISOLATION: ReadonlyArray<readonly ['worktree' | 'copy', string]> = [['worktree', 'WORKTREE'], ['copy', 'COPY']];
 
-/** ON or OFF for one on/off key. */
-function Switch({ label, on, disabled, onPick }: { label: string; on: boolean; disabled: boolean; onPick: (on: boolean) => void }) {
-  return <Seg label={label} value={on ? 'on' : 'off'} options={ON_OFF} disabled={disabled} onPick={(v) => onPick(v === 'on')} />;
-}
-
 /**
- * The settings that live in `config.toml`: summaries, the night shift, reminders, the steering clock and which agents
- * eye follows. Each one the panel changes saves at once through POST /api/settings; the agents and the clock switch
+ * The settings that live in `config.toml`: summaries, which programs' sessions are quiet, the night shift, reminders,
+ * the steering clock and which agents eye follows. Each one the panel changes saves at once through POST /api/settings; the agents and the clock switch
  * need a restart, so the panel shows them and says how to change them. The sample board shows them but cannot save.
  */
 export function AgentSettings({ store, state, save, folds }: { store: Store; state: SettingsState; save: (input: SettingsInput) => Promise<boolean>; folds: Folds }) {
@@ -53,6 +48,7 @@ export function AgentSettings({ store, state, save, folds }: { store: Store; sta
         </Row>
         <ModelPick m={model} sample={sample} save={save} />
       </Part>
+      <QuietSettings q={s['board.quiet']} sample={sample} save={save} folds={folds} />
       <Part t="NIGHT SHIFT" sum={s['night.enabled'].value ? `ON · ${s['night.window'].value}` : onOff(false)} folds={folds}>
         <Row label="Start by themselves" restart={s['night.enabled'].restart} help="Planned runs start by themselves inside the window, when nothing you work in is live.">
           <Switch label="Night shift" on={s['night.enabled'].value} disabled={sample} onPick={(on) => void save({ 'night.enabled': on })} />

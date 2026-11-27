@@ -38,6 +38,13 @@ export function Shown({ label, value, help, file, restart, children }: {
   );
 }
 
+const ON_OFF: ReadonlyArray<readonly ['on' | 'off', string]> = [['on', 'ON'], ['off', 'OFF']];
+
+/** ON or OFF for one on/off key. */
+export function Switch({ label, on, disabled, onPick }: { label: string; on: boolean; disabled: boolean; onPick: (on: boolean) => void }) {
+  return <Seg label={label} value={on ? 'on' : 'off'} options={ON_OFF} disabled={disabled} onPick={(v) => onPick(v === 'on')} />;
+}
+
 /** A segmented choice: one button per option, the current one pressed. */
 export function Seg<T extends string>({ label, value, options, onPick, disabled }: {
   label: string; value: T; options: ReadonlyArray<readonly [T, string]>; onPick: (v: T) => void; disabled?: boolean;
