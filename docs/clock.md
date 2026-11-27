@@ -83,6 +83,8 @@ random 300 times, and the medians compared each time. The seed is fixed, so two 
 data give the same answer. A year of prompts takes about 4 ms and a year of thinking about 20 ms
 (release build).
 
+Your corrections, the thinking and each agent's failed calls are tested together, not each at 0.1 on its own: with all of them in play, 0.1 each would name a pattern in about one week of five on pure noise, so a gate passes only when its p survives the Holm-Bonferroni rule (the smallest p must be under 0.1 divided by the number of tests, the next under 0.1 divided by one less, and so on), which keeps the chance of any false alarm at 0.1.
+
 What it assumes: each prompt (and each thought) counts as independent. Prompts in one sitting are
 related, so the test errs a little towards finding a pattern. In a seeded simulation of weeks with
 no pattern (`clock::permute`'s tests) hours were named in about 9% of them; with a real 2x effect in
