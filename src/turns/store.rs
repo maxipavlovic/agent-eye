@@ -34,20 +34,21 @@ pub fn record(tx: &Connection, sid: &str, turns: &[TurnEvent], replaces: bool) -
     Ok(())
 }
 
-/// A forked session starts with a copy of its parent's history, so a prompt that another session
-/// already has (same time, same length) is left out: it was typed once.
+/// A forked session starts with a copy of its parent's history, so a prompt (same time and length)
+/// or an end (same time; its word count can differ in a fork) that another session already has is
+/// left out: it happened once. Tool calls and the rest are kept, as two sessions can make one at
+/// the same moment.
 fn insert(tx: &Connection, sid: &str, turns: &[TurnEvent]) -> Result<()> {
     let mut any =
         tx.prepare_cached("INSERT INTO turn(session_id, ts, kind, n) VALUES(?1,?2,?3,?4)")?;
-    let mut prompt = tx.prepare_cached(
+    let mut once = tx.prepare_cached(
         "INSERT INTO turn(session_id, ts, kind, n) SELECT ?1,?2,?3,?4
-         WHERE NOT EXISTS (SELECT 1 FROM turn WHERE kind='prompt' AND ts=?2 AND n=?4 AND session_id<>?1)",
+         WHERE NOT EXISTS (SELECT 1 FROM turn WHERE kind=?3 AND ts=?2 AND (?3='end' OR n=?4) AND session_id<>?1)",
     )?;
     for t in turns {
-        let stmt = if t.kind == TurnKind::Prompt {
-            &mut prompt
-        } else {
-            &mut any
+        let stmt = match t.kind {
+            TurnKind::Prompt | TurnKind::End => &mut once,
+            _ => &mut any,
         };
         stmt.execute(params![sid, t.ts, t.kind.as_str(), t.n])?;
     }
@@ -93,26 +94,28 @@ mod tests {
     }
 
     #[test]
-    fn a_prompt_a_fork_copied_from_its_parent_is_counted_once() {
+    fn a_prompt_and_an_end_a_fork_copied_from_its_parent_are_counted_once() {
         let db = Db::open_memory().unwrap();
         let parent = [
             TurnEvent::new(10, Prompt, 20),
             TurnEvent::new(11, Tool, 0),
+            TurnEvent::new(15, End, 3),
             TurnEvent::new(20, Prompt, 7),
         ];
         record(&db.conn, "parent", &parent, true).unwrap();
         let fork = [
             TurnEvent::new(10, Prompt, 20),
             TurnEvent::new(11, Tool, 0),
+            TurnEvent::new(15, End, 5),
             TurnEvent::new(20, Prompt, 7),
             TurnEvent::new(30, Prompt, 7),
         ];
         record(&db.conn, "fork", &fork, true).unwrap();
         // the fork keeps its own tool call and the prompt it typed itself
-        assert_eq!((rows(&db, "parent"), rows(&db, "fork")), (3, 2));
+        assert_eq!((rows(&db, "parent"), rows(&db, "fork")), (4, 2));
         // reading the parent again does not lose its prompts to the fork
         record(&db.conn, "parent", &parent, true).unwrap();
-        assert_eq!(rows(&db, "parent"), 3);
+        assert_eq!(rows(&db, "parent"), 4);
     }
 
     #[test]
