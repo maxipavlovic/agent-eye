@@ -173,6 +173,55 @@ fn a_session_active_during_the_upgrade_gets_one_end_for_its_open_turn() {
     assert_eq!(end_times(&e).len(), 2);
 }
 
+/// What a session that was read, lost its turns (as before the upgrade) and then grew holds when
+/// the whole file is read at once.
+fn whole_read() -> Vec<(String, i64)> {
+    let mut e = Env::new(FIXTURE);
+    e.scan();
+    e.counts()
+}
+
+/// A session read up to line 14, without turns, that then grew by the rest of the fixture.
+fn grown_without_turns() -> Env {
+    let lines: Vec<&str> = FIXTURE.lines().collect();
+    let (head, tail) = lines.split_at(14);
+    let mut e = Env::new(&(head.join("\n") + "\n"));
+    e.scan();
+    e.forget_turns();
+    append(&e.transcript, &(tail.join("\n") + "\n"));
+    e
+}
+
+#[test]
+fn a_session_that_grew_before_the_backfill_got_to_it_is_counted_once_whichever_comes_first() {
+    // the scan first: it adds nothing to a session without turns, the backfill then reads it whole
+    let mut e = grown_without_turns();
+    e.scan();
+    assert_eq!(e.backfill().counted, 1);
+    e.scan();
+    assert_eq!(e.counts(), whole_read());
+
+    // the backfill first: it waits for the scan, which has not read the new lines yet
+    let mut e = grown_without_turns();
+    assert_eq!(e.backfill().counted, 0);
+    assert_eq!(backfill::waiting(&e.db, &e.agents()).unwrap(), 1);
+    e.scan();
+    e.backfill();
+    e.scan();
+    assert_eq!(e.counts(), whole_read());
+}
+
+#[test]
+fn a_session_in_a_folder_excluded_after_it_was_indexed_gets_no_turns_from_the_backfill() {
+    let mut e = Env::new(FIXTURE);
+    e.scan();
+    e.forget_turns();
+    e.cfg.exclude.paths = vec!["/tmp/demo".into()];
+    assert_eq!(e.backfill().counted, 1);
+    assert_eq!(all_rows(&e), 0);
+    assert_eq!(backfill::waiting(&e.db, &e.agents()).unwrap(), 0);
+}
+
 #[test]
 fn a_full_scan_replaces_the_turns_instead_of_adding() {
     let mut e = Env::new(FIXTURE);

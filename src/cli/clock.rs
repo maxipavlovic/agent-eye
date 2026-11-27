@@ -26,7 +26,7 @@ pub fn run(g: &Global, sub: Option<ClockCmd>, weeks: i64, json: bool, brief: boo
     // Sessions read before turns were kept get theirs now, so the numbers are whole. A one-line
     // answer for an agent skips it: the daemon does this in the background.
     if !brief {
-        backfill::run_all(&mut env.db, &env.paths, &env.cfg)?;
+        read_turns(&mut env)?;
     }
     let r = report::build(
         &env.db.conn,
@@ -46,10 +46,18 @@ pub fn run(g: &Global, sub: Option<ClockCmd>, weeks: i64, json: bool, brief: boo
     Ok(())
 }
 
+/// Scan first, so a session that grew since the last scan is read from its cursor and the back-fill
+/// does not meet it half read, then read the past of the sessions that have no turns yet.
+fn read_turns(env: &mut crate::cli::Env) -> Result<()> {
+    crate::scan::scan(&mut env.db, &env.cfg, false)?;
+    backfill::run_all(&mut env.db, &env.paths, &env.cfg)?;
+    Ok(())
+}
+
 /// Judge the prompts nobody has judged yet, with a progress line per call.
 fn detect(g: &Global) -> Result<()> {
     let mut env = g.open()?;
-    backfill::run_all(&mut env.db, &env.paths, &env.cfg)?;
+    read_turns(&mut env)?;
     let out = pass::run(
         &env.db,
         &env.paths,

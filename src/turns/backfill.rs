@@ -4,7 +4,9 @@
 //! pass, and touches nothing else (no cursor, output, token count or summary). A session is done
 //! once: the daemon does a few per tick, `eye scan` all of them, and `store::record` leaves a
 //! session that is not done alone, so a pass that repeats or meets a normal read of the same
-//! session adds nothing twice. Progress is the `turn_state` rows; when none is left the pass
+//! session adds nothing twice. A transcript that has grown since the scan last read it waits for
+//! that scan: the back-fill reads to the end of the file, and the scan would read the same lines
+//! again from its older cursor. Progress is the `turn_state` rows; when none is left the pass
 //! writes `turns_backfilled_at` to `meta`.
 
 use super::store;
@@ -57,15 +59,18 @@ pub fn run_batch(db: &mut Db, paths: &Paths, cfg: &Config, limit: usize) -> Resu
     let ids: Vec<String> = db
         .conn
         .prepare(&format!(
-            "SELECT id {WAITING} ORDER BY last_activity_at DESC LIMIT ?2"
+            "SELECT id {WAITING} ORDER BY last_activity_at DESC"
         ))?
-        .query_map(params![enabled, limit as i64], |r| r.get(0))?
+        .query_map(params![enabled], |r| r.get(0))?
         .collect::<rusqlite::Result<_>>()?;
     let mut pass = Pass::default();
     let started = std::time::Instant::now();
     let mut read_bytes = 0u64;
     for id in &ids {
-        if started.elapsed() > PASS_BUDGET || read_bytes >= PASS_BYTES {
+        if started.elapsed() > PASS_BUDGET
+            || read_bytes >= PASS_BYTES
+            || pass.counted + pass.unreadable >= limit
+        {
             break;
         }
         let Some(s) = db.session_by_id(id)? else {
@@ -82,14 +87,21 @@ pub fn run_batch(db: &mut Db, paths: &Paths, cfg: &Config, limit: usize) -> Resu
             .conn
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
         if !store::is_counted(&tx, id)? {
-            match read(&s, paths, agents) {
-                Ok(turns) => {
-                    store::record(&tx, id, &turns, true)?;
-                    pass.counted += 1;
-                }
-                Err(_) => {
-                    store::mark_unreadable(&tx, id)?;
-                    pass.unreadable += 1;
+            if s.cwd.as_deref().is_some_and(|c| cfg.is_excluded(c)) {
+                // left out like the scan leaves it out, and done, so it is not asked for again
+                store::record(&tx, id, &[], true)?;
+                pass.counted += 1;
+            } else if caught_up(&tx, &s, agents)? {
+                match read(&s, paths, agents) {
+                    Ok(turns) if caught_up(&tx, &s, agents)? => {
+                        store::record(&tx, id, &turns, true)?;
+                        pass.counted += 1;
+                    }
+                    Ok(_) => {}
+                    Err(_) => {
+                        store::mark_unreadable(&tx, id)?;
+                        pass.unreadable += 1;
+                    }
                 }
             }
         }
@@ -100,6 +112,21 @@ pub fn run_batch(db: &mut Db, paths: &Paths, cfg: &Config, limit: usize) -> Resu
         db.meta_set(DONE_KEY, &crate::util::now_ms().to_string())?;
     }
     Ok(pass)
+}
+
+/// Has the scan read the transcript as far as it goes now? A transcript with no stamp (gone, so
+/// read from eye's copy) or no cursor has nothing a scan could read again.
+fn caught_up(conn: &rusqlite::Connection, s: &Session, agents: &Agents) -> Result<bool> {
+    let (Some(path), Some(agent)) = (s.transcript_path.as_deref(), agents.of_session(s)) else {
+        return Ok(true);
+    };
+    let (Some(now), Some(read)) = (
+        agent.transcript_stamp(std::path::Path::new(path)),
+        crate::db::cursor_get(conn, path)?,
+    ) else {
+        return Ok(true);
+    };
+    Ok(now == read.stamp)
 }
 
 /// Read every session that has no turns yet, in batches of `BATCH`.
