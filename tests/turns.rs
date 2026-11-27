@@ -110,6 +110,25 @@ fn a_session_read_for_the_first_time_gets_its_turns_from_the_normal_read() {
     e.scan();
     assert_eq!(e.counts(), all_of_the_fixture());
     assert_eq!(backfill::waiting(&e.db, &e.agents()).unwrap(), 0);
+    // the scanner and the turn reader agree on what a prompt is, and an end follows a prompt
+    let prompts = e.counts().iter().find(|(k, _)| k == "prompt").unwrap().1;
+    let counted: i64 =
+        e.db.conn
+            .query_row("SELECT prompt_count FROM session", [], |r| r.get(0))
+            .unwrap();
+    assert_eq!(counted, prompts);
+    let kinds: Vec<String> =
+        e.db.conn
+            .prepare("SELECT kind FROM turn WHERE kind IN ('prompt','end') ORDER BY rowid")
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .collect::<rusqlite::Result<_>>()
+            .unwrap();
+    for pair in kinds.windows(2) {
+        assert!(pair[0] != "end" || pair[1] != "end", "two ends in a row");
+    }
+    assert_ne!(kinds.first().map(String::as_str), Some("end"));
 }
 
 #[test]
@@ -181,10 +200,10 @@ fn whole_read() -> Vec<(String, i64)> {
     e.counts()
 }
 
-/// A session read up to line 14, without turns, that then grew by the rest of the fixture.
-fn grown_without_turns() -> Env {
+/// A session read up to line `at`, without turns, that then grew by the rest of the fixture.
+fn grown_without_turns(at: usize) -> Env {
     let lines: Vec<&str> = FIXTURE.lines().collect();
-    let (head, tail) = lines.split_at(14);
+    let (head, tail) = lines.split_at(at);
     let mut e = Env::new(&(head.join("\n") + "\n"));
     e.scan();
     e.forget_turns();
@@ -194,21 +213,24 @@ fn grown_without_turns() -> Env {
 
 #[test]
 fn a_session_that_grew_before_the_backfill_got_to_it_is_counted_once_whichever_comes_first() {
-    // the scan first: it adds nothing to a session without turns, the backfill then reads it whole
-    let mut e = grown_without_turns();
-    e.scan();
-    assert_eq!(e.backfill().counted, 1);
-    e.scan();
-    assert_eq!(e.counts(), whole_read());
+    let whole = whole_read();
+    // wherever the first read stopped
+    for at in 1..FIXTURE.lines().count() {
+        // the scan first: it adds nothing to a session without turns, the backfill then reads it whole
+        let mut e = grown_without_turns(at);
+        e.scan();
+        e.backfill();
+        e.scan();
+        assert_eq!(e.counts(), whole, "scan first, split after line {at}");
 
-    // the backfill first: it waits for the scan, which has not read the new lines yet
-    let mut e = grown_without_turns();
-    assert_eq!(e.backfill().counted, 0);
-    assert_eq!(backfill::waiting(&e.db, &e.agents()).unwrap(), 1);
-    e.scan();
-    e.backfill();
-    e.scan();
-    assert_eq!(e.counts(), whole_read());
+        // the backfill first: it waits for the scan if that has not read the new lines yet
+        let mut e = grown_without_turns(at);
+        e.backfill();
+        e.scan();
+        e.backfill();
+        e.scan();
+        assert_eq!(e.counts(), whole, "backfill first, split after line {at}");
+    }
 }
 
 #[test]

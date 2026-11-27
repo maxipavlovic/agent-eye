@@ -495,3 +495,94 @@ fn every_prompt_of_every_agent_has_its_exchange_in_the_conversation() {
         );
     }
 }
+
+/// Every row of the turn table in the order the reader stored it.
+fn turn_rows(e: &Env) -> Vec<(String, i64, i64)> {
+    e.db.conn
+        .prepare("SELECT kind, ts, n FROM turn ORDER BY rowid")
+        .unwrap()
+        .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+        .unwrap()
+        .collect::<rusqlite::Result<_>>()
+        .unwrap()
+}
+
+/// A growing Codex or agy file is read, back-filled and read again in any order, split anywhere:
+/// the rows are those of one read of the whole file, none added twice or lost.
+#[test]
+fn a_growing_file_gives_the_rows_of_a_whole_read_for_every_split_and_every_order() {
+    for (a, text) in [(Agent::Codex, CODEX), (Agent::Agy, AGY)] {
+        let place = |e: &Env| match a {
+            Agent::Codex => codex_rollout(e),
+            _ => agy_log(e),
+        };
+        let mut whole = Env::new(a.id());
+        write(&place(&whole), text);
+        whole.scan();
+        let want = turn_rows(&whole);
+        for at in 1..text.lines().count() {
+            let (head, tail) = halves(text, at);
+            // read, grown, back-filled, read
+            let mut e = Env::new(a.id());
+            write(&place(&e), &head);
+            e.scan();
+            append(&place(&e), &tail);
+            e.backfill();
+            e.scan();
+            assert_eq!(turn_rows(&e), want, "{} read first, split {at}", a.id());
+            // an older eye's session: back-filled, grown, read
+            let mut e = Env::new(a.id());
+            write(&place(&e), &head);
+            e.scan();
+            e.forget_turns();
+            e.backfill();
+            append(&place(&e), &tail);
+            e.scan();
+            assert_eq!(
+                turn_rows(&e),
+                want,
+                "{} back-fill first, split {at}",
+                a.id()
+            );
+        }
+    }
+}
+
+/// A turn ends once, and only after a prompt: a compaction or a task nobody prompted adds no end.
+#[test]
+fn every_end_of_every_agent_follows_a_prompt_with_no_end_between() {
+    for a in AGENTS {
+        let e = read_session(a);
+        let mut open = false;
+        for (kind, _, _) in turn_rows(&e) {
+            match kind.as_str() {
+                "prompt" => open = true,
+                "end" => assert!(
+                    std::mem::take(&mut open),
+                    "{}: an end with no prompt",
+                    a.id()
+                ),
+                _ => {}
+            }
+        }
+    }
+}
+
+/// The scanner's prompt count and the turn reader agree on what a prompt is.
+#[test]
+fn the_prompt_count_of_every_agent_is_the_number_of_its_prompt_rows() {
+    for a in AGENTS {
+        let e = read_session(a);
+        let prompts =
+            e.db.conn
+                .query_row("SELECT count(*) FROM turn WHERE kind='prompt'", [], |r| {
+                    r.get::<_, i64>(0)
+                });
+        let counted =
+            e.db.conn
+                .query_row("SELECT prompt_count FROM session", [], |r| {
+                    r.get::<_, i64>(0)
+                });
+        assert_eq!(counted.unwrap(), prompts.unwrap(), "{}", a.id());
+    }
+}
