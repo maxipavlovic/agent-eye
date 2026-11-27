@@ -57,6 +57,10 @@ fn call(h: i64, agent: &str) -> Call {
     }
 }
 
+fn model_of(d: &Data) -> ModelSide {
+    test_band(d, &utc, &evening(), None).model
+}
+
 /// `n` thoughts of `value` in hour `h`.
 fn thoughts(h: i64, agent: &str, value: i64, n: usize) -> Vec<Think> {
     (0..n).map(|_| think(h, agent, value)).collect()
@@ -77,10 +81,10 @@ fn the_model_side_compares_each_agent_with_itself() {
         d.thinks.extend(thoughts(10, agent, day, 40));
         d.thinks.extend(thoughts(11, agent, day, 40));
     }
-    let m = model_side(&d, &utc, &evening());
+    let m = model_of(&d);
     assert!((m.think_ratio.unwrap() - 0.8).abs() < 1e-9);
     assert!(m.moved() && m.measured());
-    let none = model_side(&Data::default(), &utc, &evening());
+    let none = model_of(&Data::default());
     assert_eq!(
         (
             none.think_ratio,
@@ -98,13 +102,13 @@ fn thinking_needs_enough_thoughts_on_both_sides() {
     d.thinks
         .extend(thoughts(19, "claude", 500, MIN_THINK_N - 1));
     d.thinks.extend(thoughts(10, "claude", 1000, 200));
-    assert_eq!(model_side(&d, &utc, &evening()).think_ratio, None);
+    assert_eq!(model_of(&d).think_ratio, None);
     d.thinks.extend(thoughts(19, "claude", 500, 1));
-    assert!(model_side(&d, &utc, &evening()).think_ratio.is_some());
+    assert!(model_of(&d).think_ratio.is_some());
     let mut few_outside = Data::default();
     few_outside.thinks.extend(thoughts(19, "claude", 500, 200));
     few_outside.thinks.extend(thoughts(10, "claude", 1000, 5));
-    assert_eq!(model_side(&few_outside, &utc, &evening()).think_ratio, None);
+    assert_eq!(model_of(&few_outside).think_ratio, None);
 }
 
 #[test]
@@ -116,7 +120,7 @@ fn a_thinking_ratio_that_chance_explains_is_not_the_model_moving() {
     d.thinks.extend(thoughts(19, "claude", 1000, 14));
     d.thinks.extend(thoughts(10, "claude", 1300, 14));
     d.thinks.extend(thoughts(10, "claude", 1000, 16));
-    let m = model_side(&d, &utc, &evening());
+    let m = model_of(&d);
     assert!((m.think_ratio.unwrap() - 1.3).abs() < 1e-9);
     assert!(!m.think_moved && !m.moved());
     let v = decide(&Findings {
@@ -136,14 +140,14 @@ fn a_handful_of_errors_is_not_the_model_moving() {
     let mut d = Data::default();
     tools(&mut d, 19, "claude", 40, 3);
     tools(&mut d, 10, "claude", 4000, 100);
-    let m = model_side(&d, &utc, &evening());
+    let m = model_of(&d);
     assert!(m.tool_error_ratio.unwrap() > 2.9);
     assert!(!m.tool_errors_moved && !m.moved());
     // the same rates on ten times the data are
     let mut big = Data::default();
     tools(&mut big, 19, "claude", 400, 30);
     tools(&mut big, 10, "claude", 4000, 100);
-    assert!(model_side(&big, &utc, &evening()).tool_errors_moved);
+    assert!(model_of(&big).tool_errors_moved);
 }
 
 #[test]
@@ -154,9 +158,10 @@ fn a_big_difference_between_agents_is_not_the_hours() {
     tools(&mut d, 19, "codex", 400, 40);
     tools(&mut d, 19, "claude", 400, 8);
     tools(&mut d, 10, "claude", 4000, 80);
-    let m = model_side(&d, &utc, &evening());
+    let m = model_of(&d);
     assert!(!m.tool_errors_moved);
-    let codex = agent_sides(&d, &utc, &evening())
+    let codex = test_band(&d, &utc, &evening(), None)
+        .sides
         .into_iter()
         .find(|s| s.agent == "codex")
         .unwrap();
@@ -172,10 +177,10 @@ fn the_agent_whose_errors_moved_speaks_for_the_band() {
     tools(&mut d, 10, "claude", 4000, 100);
     tools(&mut d, 19, "codex", 100, 5);
     tools(&mut d, 10, "codex", 1000, 50);
-    let m = model_side(&d, &utc, &evening());
+    let m = model_of(&d);
     assert!(m.tool_errors_moved);
     assert!((m.tool_error_ratio.unwrap() - 4.0).abs() < 1e-9);
-    let sides = agent_sides(&d, &utc, &evening());
+    let sides = test_band(&d, &utc, &evening(), None).sides;
     let flags: Vec<_> = sides
         .iter()
         .map(|s| (s.agent.as_str(), s.tool_errors_moved))

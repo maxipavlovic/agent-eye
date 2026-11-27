@@ -2,7 +2,7 @@
 //! as if they had been chosen in advance would find a pattern in noise most of the time. Instead the
 //! whole procedure (pick the hours, measure how much worse they are) is run again on data where the
 //! corrections have been dealt out at random over the prompts. The pattern counts when random
-//! dealing rarely does as well as the real data (`MAX_P`). The same is done for the model's
+//! dealing rarely does as well as the real data (`MAX_P`, shared out over every test of the report by `holm`). The same is done for the model's
 //! thinking. Every shuffle uses a fixed seed, so a report never changes between two looks at the
 //! same data.
 //!
@@ -69,10 +69,20 @@ fn band_sums(counts: &[(i64, i64)], mask: &[bool]) -> ((i64, i64), (i64, i64)) {
     (bad, rest)
 }
 
-/// How much more the worst hours are corrected than the other hours (as a ratio, at most
-/// `MAX_RATIO`), when random dealing of the same corrections over the same prompts does as well
-/// less than one time in ten. None when no hours stand out or chance explains them.
-pub fn band_gate(hours: &[Hour], seed: u64) -> Option<f64> {
+/// The worst hours of the window tested against chance.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct BandTest {
+    /// How much more the hours are corrected than the other hours (at most `MAX_RATIO`).
+    pub ratio: f64,
+    /// How often random dealing of the same corrections over the same prompts does as well; 1 once
+    /// it is clear that is `MAX_P` or more of the time (the exact value then does not matter, the
+    /// verdict's family test never passes a p that large).
+    pub p: f64,
+}
+
+/// The test of the worst hours against random dealing. None when no hours stand out or they are
+/// not corrected more than the rest.
+pub fn band_test(hours: &[Hour], seed: u64) -> Option<BandTest> {
     let counts: Vec<(i64, i64)> = hours.iter().map(|h| (h.prompts, h.corrections)).collect();
     let mut mask = vec![false; counts.len()];
     let observed = band_stat(&counts, &mut mask);
@@ -101,15 +111,19 @@ pub fn band_gate(hours: &[Hour], seed: u64) -> Option<f64> {
         if band_stat(&dealt, &mut mask) >= observed - 1e-9 {
             as_good += 1;
             if too_common(as_good, PERMUTATIONS) {
-                return None;
+                return Some(BandTest { ratio: 1.0, p: 1.0 });
             }
         }
     }
     let (r1, r2) = (bands::rate(bad.0, bad.1), bands::rate(rest.0, rest.1));
-    Some(if r2 == 0.0 {
+    let ratio = if r2 == 0.0 {
         bands::MAX_RATIO
     } else {
         (r1 / r2).min(bands::MAX_RATIO)
+    };
+    Some(BandTest {
+        ratio,
+        p: (as_good + 1) as f64 / (PERMUTATIONS + 1) as f64,
     })
 }
 

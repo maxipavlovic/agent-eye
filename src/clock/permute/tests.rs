@@ -25,6 +25,10 @@ fn the_generator_is_seeded_and_stays_in_range() {
     assert!((0..100).all(|_| (0.0..1.0).contains(&a.unit())));
 }
 
+fn passes(t: Option<BandTest>) -> bool {
+    t.is_some_and(|t| t.p < bands::MAX_P)
+}
+
 #[test]
 fn an_evening_that_runs_twice_as_bad_passes() {
     let mut rng = Rng::new(1);
@@ -35,8 +39,9 @@ fn an_evening_that_runs_twice_as_bad_passes() {
             0.08
         }
     });
-    let ratio = band_gate(&hours, SEED).expect("a real effect");
-    assert!((1.5..3.0).contains(&ratio), "{ratio}");
+    let t = band_test(&hours, SEED).expect("a real effect");
+    assert!((1.5..3.0).contains(&t.ratio), "{}", t.ratio);
+    assert!(t.p < bands::MAX_P, "{}", t.p);
 }
 
 #[test]
@@ -48,14 +53,14 @@ fn hours_that_are_all_alike_give_nothing() {
             ..h
         })
         .collect();
-    assert_eq!(band_gate(&flat, SEED), None);
-    assert_eq!(band_gate(&[], SEED), None);
+    assert_eq!(band_test(&flat, SEED), None);
+    assert_eq!(band_test(&[], SEED), None);
 }
 
 #[test]
 fn the_same_data_gives_the_same_answer_every_time() {
     let hours = week(&mut Rng::new(3), 60, |h| if h == 19 { 0.2 } else { 0.08 });
-    assert_eq!(band_gate(&hours, SEED), band_gate(&hours, SEED));
+    assert_eq!(band_test(&hours, SEED), band_test(&hours, SEED));
 }
 
 /// The test the whole file is for: with no hour worse than another, the verdict must not name hours
@@ -66,7 +71,7 @@ fn with_no_effect_hours_are_named_in_about_one_week_of_ten_at_most() {
     let mut rng = Rng::new(20_261_126);
     let trials = 300;
     let named = (0..trials)
-        .filter(|_| band_gate(&week(&mut rng, 60, |_| 0.08), SEED).is_some())
+        .filter(|_| passes(band_test(&week(&mut rng, 60, |_| 0.08), SEED)))
         .count();
     assert!(named * 100 <= trials * 12, "{named} of {trials}");
 }
@@ -84,7 +89,7 @@ fn with_a_real_double_effect_it_is_found() {
                     0.08
                 }
             });
-            band_gate(&hours, SEED).is_some()
+            passes(band_test(&hours, SEED))
         })
         .count();
     assert!(found * 100 >= trials * 90, "{found} of {trials}");

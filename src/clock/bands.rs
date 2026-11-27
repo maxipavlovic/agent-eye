@@ -208,7 +208,7 @@ pub fn ranges(mask: &[bool]) -> Vec<Range> {
 }
 
 /// The hours whose correction rate is at least 1.5 times the median hour's, among the hours with
-/// enough prompts. Chance has not been ruled out yet (see `permute::band_gate`).
+/// enough prompts. Chance has not been ruled out yet (see `permute::band_test`).
 pub fn candidate_hours(hours: &[Hour]) -> Vec<bool> {
     let counts: Vec<(i64, i64)> = hours.iter().map(|h| (h.prompts, h.corrections)).collect();
     let mut mask = vec![false; hours.len()];

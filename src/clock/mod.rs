@@ -9,6 +9,7 @@
 
 pub mod bands;
 pub mod detect;
+pub mod holm;
 pub mod idle;
 pub mod judging;
 pub mod nightly;

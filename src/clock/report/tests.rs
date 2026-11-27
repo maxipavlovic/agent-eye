@@ -179,8 +179,9 @@ impl Noise {
     }
 }
 
-/// Twelve hours of random steering for two agents, the same 8% of prompts corrected and 10% of
-/// tool calls failed in every hour; `worse` lifts the corrections of two evening hours to `worse`.
+/// Twelve hours of random steering for two agents (90 prompts an hour each), the same 8% of
+/// prompts corrected and 10% of tool calls failed in every hour; `worse` lifts the corrections of
+/// three evening hours to `worse`.
 fn seeded_world(seed: u64, worse: f64) -> World {
     let mut w = World::new();
     w.db.conn
@@ -192,8 +193,8 @@ fn seeded_world(seed: u64, worse: f64) -> World {
     }
     for (session, day_shift) in [("s", 0), ("o", 1)] {
         for h in 9..21 {
-            let p = if (19..21).contains(&h) { worse } else { 0.08 };
-            for i in 0..60 {
+            let p = if (18..21).contains(&h) { worse } else { 0.08 };
+            for i in 0..90 {
                 w.n += 1;
                 let ts = D0 + ((w.n + day_shift) % 20) * DAY + h * H + i * 1000;
                 let put = |ts: i64, kind: &str, n: i64| {
@@ -232,23 +233,42 @@ fn seeded_world(seed: u64, worse: f64) -> World {
     w
 }
 
-/// A doubled correction rate in two evening hours is found by the whole report, for both agents,
-/// in at least four random worlds in five.
-#[test]
-fn a_doubled_rate_in_the_evenings_is_found_through_random_noise() {
-    let agents = Agents::from_vec(vec![
+fn two_agents() -> Agents {
+    Agents::from_vec(vec![
         Arc::new(Claude::new("/nonexistent".into())),
         Arc::new(crate::agents::codex::Codex::new("/nonexistent".into())),
-    ]);
-    let found = (1..=30)
+    ])
+}
+
+/// In how many of `seeds` random worlds (`worse` is the correction rate of the three evening hours)
+/// does the whole report name hours?
+fn worlds_with_a_verdict(seeds: std::ops::RangeInclusive<u64>, worse: f64) -> usize {
+    let agents = two_agents();
+    seeds
         .filter(|seed| {
-            let w = seeded_world(*seed, 0.16);
+            let w = seeded_world(*seed, worse);
             let cfg = Config::parse("").unwrap();
             let r = build(&w.db.conn, &cfg, &agents, NOW, 4, &utc).unwrap();
             r.verdict.kind.names_hours()
         })
-        .count();
+        .count()
+}
+
+/// A doubled correction rate in three evening hours is found by the whole report, for both agents,
+/// in at least four random worlds in five.
+#[test]
+fn a_doubled_rate_in_the_evenings_is_found_through_random_noise() {
+    let found = worlds_with_a_verdict(1..=30, 0.16);
     assert!(found >= 24, "{found} of 30 doubled rates are found");
+}
+
+/// With nothing going on (the same 8% corrected and 10% of tool calls failing in every hour, for
+/// two agents), the report names a pattern in at most one world in ten: the spec's rate for a
+/// false alarm over every test the verdict uses (`holm`).
+#[test]
+fn pure_noise_gets_a_verdict_in_at_most_one_world_in_ten() {
+    let named = worlds_with_a_verdict(1..=200, 0.08);
+    assert!(named <= 20, "{named} of 200 noise worlds name a pattern");
 }
 
 #[test]

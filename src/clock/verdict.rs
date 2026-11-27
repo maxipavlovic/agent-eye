@@ -2,6 +2,7 @@
 //! user's, and the plain-English line that says so, with the counts.
 
 use super::bands::{self, local_hour, Range};
+use super::holm;
 use super::permute;
 use super::signals::{Call, Data};
 use crate::night::clock::OffsetFn;
@@ -27,7 +28,7 @@ pub struct ModelSide {
     /// Failed tool calls per call in the hours over the same elsewhere.
     pub tool_error_ratio: Option<f64>,
     /// The thinking differs in those hours by more than `THINK_FLAT` and by more than chance (a
-    /// shuffle test over every agent's thoughts, as for your corrections).
+    /// shuffle test over every agent's thoughts, held to the family rate with the rest).
     pub think_moved: bool,
     /// Some agent's failed calls differ in those hours by more than chance and by more than
     /// `ERRORS_FLAT` (tested per agent, never pooled).
@@ -51,7 +52,11 @@ pub struct AgentSide {
     pub agent: String,
     pub think_ratio: Option<f64>,
     pub tool_error_ratio: Option<f64>,
+    /// Its failed calls differ by more than `ERRORS_FLAT`, on enough errors, and more than chance
+    /// across the whole report's tests (`holm`).
     pub tool_errors_moved: bool,
+    /// How likely chance is to do as well, when it could be told (it needs a ratio of its own).
+    tool_error_p: Option<f64>,
     /// Its calls inside the hours: how much its ratio weighs.
     calls_in: i64,
 }
@@ -86,30 +91,33 @@ pub fn agent_sides(data: &Data, off: OffsetFn, mask: &[bool]) -> Vec<AgentSide> 
             let (err_in, err_out) = calls(&data.tool_errors);
             let tool_error_ratio = (calls_in > 0 && calls_out > 0 && err_out > 0)
                 .then(|| (err_in as f64 / calls_in as f64) / (err_out as f64 / calls_out as f64));
+            let (errs_in, errs_out) = ((err_in, calls_in), (err_out, calls_out));
+            let tool_error_p =
+                tool_error_ratio.and_then(|_| bands::proportion_p(errs_in, errs_out));
             let tool_errors_moved = tool_error_ratio
                 .is_some_and(|r| r < ERRORS_FLAT.0 || r > ERRORS_FLAT.1)
-                && errors_differ((err_in, calls_in), (err_out, calls_out));
+                && enough_errors(errs_in, errs_out);
             AgentSide {
                 agent: agent.to_string(),
                 think_ratio: think_ratio(data, agent, &inside).map(|t| t.0),
                 tool_error_ratio,
                 tool_errors_moved,
+                tool_error_p,
                 calls_in,
             }
         })
         .collect()
 }
 
-/// Do failed calls differ between two groups of calls (`(errors, calls)` each) by more than chance
-/// explains? The same test and floor as for the user's side: p under 0.1, and 10 or more errors in
-/// the group with the higher rate.
-fn errors_differ(a: (i64, i64), b: (i64, i64)) -> bool {
+/// Is the difference between two groups of calls (`(errors, calls)` each) built on enough errors?
+/// The same floor as for the user's side: 10 or more in the group with the higher rate.
+fn enough_errors(a: (i64, i64), b: (i64, i64)) -> bool {
     let higher = if bands::rate(a.0, a.1) >= bands::rate(b.0, b.1) {
         a
     } else {
         b
     };
-    higher.0 >= bands::MIN_EVENTS && bands::proportion_p(a, b).is_some_and(|p| p < bands::MAX_P)
+    higher.0 >= bands::MIN_EVENTS
 }
 
 /// An agent's thinking in the hours over its thinking elsewhere, with its values taken against its
@@ -143,8 +151,21 @@ fn think_ratio(
     (r > 0.0).then(|| (b / r, bad, rest))
 }
 
-/// The model's side inside the hours set in `mask` against the rest, over all agents.
-pub fn model_side(data: &Data, off: OffsetFn, mask: &[bool]) -> ModelSide {
+/// What the tests of one band found.
+pub struct Tested {
+    /// Your side passed: the hours are corrected more than chance explains.
+    pub you: bool,
+    /// The model's side.
+    pub model: ModelSide,
+    /// Each agent's side, in agent order.
+    pub sides: Vec<AgentSide>,
+}
+
+/// Every test of the band's hours (your corrections, given as `you_p`, the model's thinking over
+/// all agents, each agent's failed calls) held to one family-wise rate, so that random data names
+/// a pattern no more often than `bands::MAX_P` however many gates there are (`holm`). A gate whose
+/// effect is too small to matter is still counted, with a p of 1.
+pub fn test_band(data: &Data, off: OffsetFn, mask: &[bool], you_p: Option<f64>) -> Tested {
     let inside = |ts: i64| mask[local_hour(ts, off)];
     let (mut bad, mut rest) = (vec![], vec![]);
     let mut seen: Vec<&str> = data.thinks.iter().map(|t| t.agent.as_str()).collect();
@@ -160,9 +181,16 @@ pub fn model_side(data: &Data, off: OffsetFn, mask: &[bool]) -> ModelSide {
         (Some(b), Some(r)) if r > 0.0 => Some(b / r),
         _ => None,
     };
-    let think_moved = think_ratio.is_some_and(|r| r < THINK_FLAT.0 || r > THINK_FLAT.1)
-        && permute::median_shift_p(&bad, &rest, permute::SEED).is_some_and(|p| p < bands::MAX_P);
-    let sides = agent_sides(data, off, mask);
+    let think_p = think_ratio
+        .filter(|r| *r < THINK_FLAT.0 || *r > THINK_FLAT.1)
+        .and_then(|_| permute::median_shift_p(&bad, &rest, permute::SEED));
+    let mut sides = agent_sides(data, off, mask);
+    let mut ps = vec![you_p, think_p];
+    ps.extend(sides.iter().map(|s| s.tool_error_p));
+    let passed = holm::survivors(&ps);
+    for (side, ok) in sides.iter_mut().zip(&passed[2..]) {
+        side.tool_errors_moved &= *ok;
+    }
     // the agent whose errors moved and who made most calls speaks for the band; with none that
     // moved, the measured agents' ratios are averaged, weighted by their calls
     let moved = sides
@@ -179,11 +207,16 @@ pub fn model_side(data: &Data, off: OffsetFn, mask: &[bool]) -> ModelSide {
             (weight > 0.0).then(|| sum / weight)
         }
     };
-    ModelSide {
+    let model = ModelSide {
         think_ratio,
         tool_error_ratio,
-        think_moved,
+        think_moved: think_ratio.is_some_and(|r| r < THINK_FLAT.0 || r > THINK_FLAT.1) && passed[1],
         tool_errors_moved: moved.is_some(),
+    };
+    Tested {
+        you: passed[0],
+        model,
+        sides,
     }
 }
 

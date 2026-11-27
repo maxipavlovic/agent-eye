@@ -148,10 +148,16 @@ pub fn build(
     let corrections = hours.iter().map(|h| h.corrections).sum();
     let cand = bands::candidate_hours(&hours);
     let (bad_c, _) = sums(&hours, |h| cand[h.h]);
-    let you = permute::band_gate(&hours, permute::SEED).map(|ratio| (ratio, bad_c));
+    let you_test = permute::band_test(&hours, permute::SEED);
     let cand_ranges = bands::ranges(&cand);
     let any_cand = cand.iter().any(|b| *b);
-    let band = any_cand.then(|| (&cand_ranges[..], verdict::model_side(&data, off, &cand)));
+    let tested = any_cand.then(|| verdict::test_band(&data, off, &cand, you_test.map(|t| t.p)));
+    let you = tested
+        .as_ref()
+        .filter(|t| t.you)
+        .zip(you_test)
+        .map(|(_, t)| (t.ratio, bad_c));
+    let band = tested.as_ref().map(|t| (&cand_ranges[..], t.model));
     let verdict = verdict::decide(&Findings {
         prompts,
         corrections,
@@ -199,11 +205,7 @@ pub fn build(
         text,
         offer: cfg.night.enabled,
     });
-    let sides = if any_cand {
-        verdict::agent_sides(&data, off, &cand)
-    } else {
-        vec![]
-    };
+    let sides = tested.map_or(vec![], |t| t.sides);
     let now_state = Now {
         in_bad: current.is_some(),
         since_break_min,
