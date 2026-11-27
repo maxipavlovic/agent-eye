@@ -2,6 +2,13 @@
 
 All notable changes are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Added
+
+- `[board] quiet` (off by default) keeps the sessions a program started quiet, by origin: `app` (an app that drives the agent through its SDK, or the agent as an MCP server) and `headless` (`claude -p`, `codex exec`). What such a session's agent asks is for the program, so a quiet session never moves to Needs you by itself: a hook that waits, a last reply that ends in `?`, a prompt on screen or a summary's "needs you" leave it where its summary puts it, Paused for "needs you". A due reminder or a move by hand still puts it in Needs you. The daemon writes no summary for it (`eye summarize <id>` still does), and the steering clock leaves out its prompts and turns, as it does a script's and the night shift's. It is still indexed, found, listed and resumable. The board, summaries and the clock follow a change without a restart; any other word in the list is an error.
+- The settings gear has a STARTED BY PROGRAMS section after SUMMARIES: a quiet switch for each program origin found on this machine, with how many sessions it started and how many are in Needs you now. Its folded heading says what it found (`5 FOUND · OFF`, `QUIET`); with none found it says so and shows no switch. `/api/settings` gains `board.quiet` (type `origins`, with those counts per origin).
+
 ## 0.5.0-rc.1 - 2026-11-27
 
 ### Added
