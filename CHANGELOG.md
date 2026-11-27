@@ -29,6 +29,10 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 - The call that judges corrections is locked down for OpenCode (the shell, edits and web fetches are denied) and cleans up after agy (its conversation is deleted). `docs/clock.md` and `docs/security.md` say what each agent's call can and cannot do.
 - A settings write that fails on disk is a 500, not a 400.
 - The header no longer carries the Lanes / Grid, theme, look and colour buttons: they are in the settings panel, and their keys and saved settings are unchanged.
+- HOURS draws its single series in the look's ink, not a colour: colour stays for "needs you". Its hint mark is ink too. The model strip is cut at 50% either side of usual with a mark where a swing is cut, shows a tick for an hour that was about usual and fades an hour with few thinking events. The bad stretches are named by the engine ("your night" for 22:00 to 04:00) and labelled where they sit.
+- USAGE's stacked colours are a new palette, checked for both looks and both themes, that leaves out the colours near your accent colour, so no column looks like "needs you". On a phone (under 640 px) the HOURS and USAGE drawings are 320 wide, so their words stay readable.
+- HOURS says why corrections are zero (the engine's reason) when they are not judged, lists each agent with its own thinking and tool errors ("—" where it has no such signal), names the thinking unit of the agent the hours belong to, and keeps the chart on screen while another number of weeks loads.
+- The settings rows are named after what they set ("Write summaries", "Start by themselves", "Follow", "Skin") and the form labels match them.
 
 ## 0.4.1 - 2026-11-25
 
