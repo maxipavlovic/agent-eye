@@ -53,3 +53,5 @@ pub fn judge<'a>(cfg: &Config, agents: &'a Agents) -> Result<&'a AgentRef, (Judg
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+pub(crate) mod unproven;

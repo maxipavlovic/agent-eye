@@ -802,15 +802,15 @@ fn a_scripted_session_does_not_move_the_hours() {
 }
 
 #[test]
-fn judging_says_opencode_is_not_used_and_the_verdict_does_not_blame_llm() {
+fn judging_says_an_unproven_agent_is_not_used_and_the_verdict_does_not_blame_llm() {
     let w = World::new();
-    let agents = Agents::from_vec(vec![Arc::new(crate::agents::opencode::OpenCode::new(
-        "/nonexistent".into(),
+    let agents = Agents::from_vec(vec![Arc::new(crate::clock::judging::unproven::Unproven(
+        Arc::new(crate::agents::claude::Claude::new("/nonexistent".into())),
     ))]);
     let r = build(&w.db.conn, &Config::default(), &agents, NOW, 4, &utc).unwrap();
     assert_eq!(r.judging, Judging::Unavailable);
     let why = r.judging_reason.unwrap();
-    assert!(why.contains("OpenCode"), "{why}");
+    assert!(why.contains("Claude Code is not used for judging"), "{why}");
     assert!(r.verdict.text.contains(&why) && !r.verdict.text.contains("llm"));
     let off = w.report("[summary]\nenabled = false");
     assert!(off.verdict.text.contains("[summary] enabled is off"));

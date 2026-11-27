@@ -268,10 +268,12 @@ impl Agent for OpenCode {
         crate::agents::ALL_TURN_KINDS
     }
 
-    /// Not proven: the deny rules are built from OpenCode's documentation and have not been checked
-    /// against a real run (`docs/security.md`).
+    /// Proven by `a_question_runs_as_its_own_agent_with_everything_denied_and_the_mcp_servers_off`,
+    /// `a_question_leaves_no_session_after_success_failure_and_timeout` and
+    /// `every_opencode_command_eye_runs_is_locked_down_and_never_updates`, and checked on a real
+    /// OpenCode 2.3.2 (`docs/security.md`).
     fn judging_locked_down(&self) -> bool {
-        false
+        true
     }
 
     /// What a `think` event counts: the reasoning tokens of an assistant message.

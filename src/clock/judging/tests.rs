@@ -1,3 +1,4 @@
+use super::unproven::Unproven;
 use super::*;
 use crate::agents::claude::Claude;
 use crate::agents::opencode::OpenCode;
@@ -44,12 +45,23 @@ fn no_agent_means_unavailable() {
 }
 
 #[test]
-fn opencode_is_not_asked_until_its_lock_down_is_checked_on_a_real_install() {
+fn opencode_judges_now_that_its_lock_down_is_checked_on_a_real_install() {
     let opencode = with(Arc::new(OpenCode::new("/nonexistent".into())));
-    let (state, reason) = why("", &opencode);
+    assert_eq!(
+        judge(&Config::default(), &opencode).unwrap().id(),
+        "opencode"
+    );
+}
+
+#[test]
+fn an_agent_whose_run_is_unproven_is_not_asked_and_the_reason_names_it() {
+    let unproven = with(Arc::new(Unproven(Arc::new(Claude::new(
+        "/nonexistent".into(),
+    )))));
+    let (state, reason) = why("", &unproven);
     assert_eq!(state, Judging::Unavailable);
     assert!(
-        reason.starts_with("OpenCode is not used for judging"),
+        reason.starts_with("Claude Code is not used for judging"),
         "{reason}"
     );
 }
