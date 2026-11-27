@@ -287,11 +287,96 @@ test.describe('settings', () => {
   test('an agent setting is saved into the config at once, and a key left to the file is refused', async ({ board, eye }) => {
     const panel = board.getByRole('complementary', { name: 'Settings' });
     await board.getByRole('button', { name: 'Settings', exact: true }).click();
+    await panel.getByRole('button', { name: /^SUMMARIES/ }).click();
     await panel.getByRole('group', { name: 'Summaries' }).getByRole('button', { name: 'ON' }).click();
     await expect(panel.getByRole('status')).toHaveText('Saved');
     expect((await eye.api('/api/settings')).settings['summary.enabled'].value).toBe(true);
     await expect(panel).toContainText('config.toml');
     expect((await eye.api('/api/settings', { 'board.port': 1 })).error).toMatch(/not a setting/);
+  });
+
+  test('only LOOK is open, each folded heading says what it holds, and a heading opens its section', async ({ board }) => {
+    const panel = board.getByRole('complementary', { name: 'Settings' });
+    await board.getByRole('button', { name: 'Settings', exact: true }).click();
+    const heads = panel.locator('h4 > button');
+    await expect(heads).toHaveCount(6);
+    const read = () => heads.evaluateAll((bs) => bs.map((b) => [b.firstChild?.textContent, b.getAttribute('aria-expanded'), b.querySelector('.fsum')?.textContent ?? null]));
+    expect(await read()).toEqual([
+      ['LOOK', 'true', null],
+      ['SUMMARIES', 'false', 'OFF'],
+      ['NIGHT SHIFT', 'false', 'OFF'],
+      ['REMINDERS', 'false', 'OFF'],
+      ['HOURS', 'false', 'ON'],
+      ['AGENTS', 'false', 'Claude Code, Codex CLI, Antigravity CLI, OpenCode'],
+    ]);
+    await expect(panel.getByRole('heading', { name: /BOARD/ })).toHaveCount(0);
+    // the keyboard reaches a heading, Enter opens it, Esc closes the panel
+    await panel.getByRole('button', { name: /^NIGHT SHIFT/ }).focus();
+    await board.keyboard.press('Enter');
+    await expect(panel.getByRole('button', { name: /^NIGHT SHIFT/ })).toHaveAttribute('aria-expanded', 'true');
+    await expect(panel.getByRole('group', { name: 'Night shift' })).toBeVisible();
+    await board.keyboard.press('Escape');
+    await expect(panel).toHaveCount(0);
+  });
+
+  test('the agents and the steering clock are shown with how to change them, and the API still takes both', async ({ board, eye }) => {
+    const panel = board.getByRole('complementary', { name: 'Settings' });
+    await board.getByRole('button', { name: 'Settings', exact: true }).click();
+    await panel.getByRole('button', { name: /^HOURS/ }).click();
+    await panel.getByRole('button', { name: /^AGENTS/ }).click();
+    await expect(panel.getByRole('group', { name: 'Steering clock' })).toHaveCount(0);
+    await expect(panel.getByRole('group', { name: 'Agents' })).toHaveCount(0);
+    await expect(panel.locator('.srow', { hasText: 'STEERING CLOCK' }).locator('.sval')).toHaveText('ON');
+    await expect(panel).toContainText('To change it, set [clock] enabled in ~/.agent-eye/config.toml, then run eye restart.');
+    await expect(panel.locator('.srow', { hasText: 'FOLLOWED' }).locator('.sval')).toHaveText('Claude Code, Codex CLI, Antigravity CLI, OpenCode');
+    await expect(panel).toContainText('To change it, set [agents] enabled in ~/.agent-eye/config.toml, then run eye restart.');
+    // the rest of HOURS still saves at once
+    await panel.getByRole('group', { name: 'Hint' }).getByRole('button', { name: 'ON' }).click();
+    await expect(panel.getByRole('status')).toHaveText('Saved');
+    // no breaking change: the keys are still the API's
+    const s = (await eye.api('/api/settings', { 'clock.enabled': false, 'agents.enabled': ['claude'] })).settings;
+    expect([s['clock.enabled'].value, s['agents.enabled'].value, s['clock.hints'].value]).toEqual([false, ['claude'], true]);
+  });
+
+  test('the model is a choice of the summary agent\'s names, and Other… opens a field for any other', async ({ board, eye }) => {
+    const panel = board.getByRole('complementary', { name: 'Settings' });
+    await board.getByRole('button', { name: 'Settings', exact: true }).click();
+    await panel.getByRole('button', { name: /^SUMMARIES/ }).click();
+    const model = panel.getByRole('combobox', { name: 'MODEL FOR SUMMARIES' });
+    await expect(model.locator('option')).toHaveText(['Default: haiku', 'sonnet', 'opus', 'Other…']);
+    await expect(panel).toContainText('The model Claude Code writes summaries (and judges corrections) with.');
+    await model.selectOption('sonnet');
+    await expect(panel.getByRole('status')).toHaveText('Saved');
+    expect((await eye.api('/api/settings')).settings['summary.model'].value).toBe('sonnet');
+    await expect(panel.getByRole('textbox', { name: 'MODEL NAME' })).toHaveCount(0);
+    await model.selectOption({ label: 'Other…' });
+    const field = panel.getByRole('textbox', { name: 'MODEL NAME' });
+    await expect(field).toBeFocused();
+    await field.fill('claude-small-2');
+    await panel.getByRole('button', { name: 'SET', exact: true }).click();
+    await expect(field).toHaveCount(0);
+    await expect(model).toHaveValue('claude-small-2');
+    expect((await eye.api('/api/settings')).settings['summary.model'].value).toBe('claude-small-2');
+    await model.selectOption('');
+    await expect.poll(async () => (await eye.api('/api/settings')).settings['summary.model'].value).toBe('');
+  });
+
+  test('on a phone, with every section open and Other… showing its field, nothing scrolls sideways', async ({ board }) => {
+    await board.setViewportSize({ width: 360, height: 800 });
+    const panel = board.getByRole('complementary', { name: 'Settings' });
+    await board.getByRole('button', { name: 'Settings', exact: true }).click();
+    for (const t of ['SUMMARIES', 'NIGHT SHIFT', 'REMINDERS', 'HOURS', 'AGENTS']) await panel.getByRole('button', { name: new RegExp(`^${t}`) }).click();
+    await panel.getByRole('combobox', { name: 'MODEL FOR SUMMARIES' }).selectOption({ label: 'Other…' });
+    await expect(panel.getByRole('textbox', { name: 'MODEL NAME' })).toBeVisible();
+    const wide = await board.evaluate(() => {
+      const over = (el: Element) => el.scrollWidth > el.clientWidth + 1;
+      return [document.documentElement, ...document.querySelectorAll('.settings, .settings *')].filter(over).map((el) => `${el.tagName}.${el.className}`);
+    });
+    expect(wide).toEqual([]);
+    for (const b of await panel.locator('h4 > button').all()) {
+      const box = (await b.boundingBox())!;
+      expect(box.x + box.width).toBeLessThanOrEqual(360);
+    }
   });
 });
 

@@ -25,3 +25,5 @@
 /* a setting shown but left to the file: its value in plain words, and the agents it does not follow quieter */
 .settings .sval { font: 600 17px/1.4 var(--f-body); text-transform: none; letter-spacing: 0; color: var(--ink); }
 .settings .umeta.soff { color: var(--mute); }
+/* a folded heading's status may be a list of agents: it wraps under itself, never past the panel */
+.settings .fsum { line-height: 1.3; }
