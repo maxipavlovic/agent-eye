@@ -457,3 +457,36 @@ fn an_opencode_session_that_grows_one_message_at_a_time_ends_with_the_turns_of_a
     }
     assert_eq!(e.counts(), opencode_counts());
 }
+
+/// The correction pass judges a prompt by finding the message of the conversation at the prompt's
+/// time: every prompt the turns hold must have its exchange, with the agent's reply before it.
+#[test]
+fn every_prompt_of_every_agent_has_its_exchange_in_the_conversation() {
+    for a in AGENTS {
+        let e = read_session(a);
+        let s = e.db.all_sessions().unwrap().remove(0);
+        let agents = e.agents();
+        let agent = agents.of_session(&s).unwrap();
+        let messages = agent_eye::conversation::read(&s, &e.paths, agent.as_ref()).unwrap();
+        let times: Vec<i64> =
+            e.db.conn
+                .prepare("SELECT ts FROM turn WHERE kind='prompt' ORDER BY ts")
+                .unwrap()
+                .query_map([], |r| r.get(0))
+                .unwrap()
+                .collect::<rusqlite::Result<_>>()
+                .unwrap();
+        assert!(times.len() >= 2, "{}", a.id());
+        let exchanges: Vec<_> = times
+            .iter()
+            .map(|t| agent_eye::clock::detect::exchange(&messages, *t))
+            .collect();
+        assert!(exchanges.iter().all(Option::is_some), "{}", a.id());
+        // the second prompt follows a reply of the agent's
+        assert!(
+            !exchanges[1].as_ref().unwrap().reply.is_empty(),
+            "{}",
+            a.id()
+        );
+    }
+}
