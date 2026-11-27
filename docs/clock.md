@@ -174,7 +174,8 @@ the pass sends nothing, and `judging` is `unavailable` with `judging_reason` say
   pass after you switch it.
 - The nightly pass does not start while you are at work, as summaries do not: any turn in the last
   10 minutes (your prompt, or an agent's reply or tool call, so a long run you started counts while
-  it works), or (with the idle sensor on) input in the last 2. It stays due and starts when you
+  it works; a session `[board] quiet` keeps quiet does not), or (with the idle sensor on) input in
+  the last 2. It stays due and starts when you
   stop, later that night or the next.
 - It stops quietly when the agent is missing or its plan limit is hit, and tries again the next
   night. Each exchange is judged once and stored with a hash of what was judged; the same exchange in

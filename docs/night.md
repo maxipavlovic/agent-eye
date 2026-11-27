@@ -39,7 +39,7 @@ All of these, checked once a minute:
 
 1. `[night] enabled = true` and the run is planned.
 2. The clock is inside the window, and the run's night has come.
-3. **Quiet:** no live interactive session that is not itself a night run has been busy or touched for `[night] quiet_minutes` (20). A headless run (`claude -p`, `codex exec`) does not count as a session you work in; neither does anything working inside eye's night folder.
+3. **Quiet:** no live interactive session that is not itself a night run has been busy or touched for `[night] quiet_minutes` (20). A headless run (`claude -p`, `codex exec`) does not count as a session you work in; neither does a session `[board] quiet` keeps quiet (an app on an agent's SDK, see `config.md`), nor anything working inside eye's night folder.
 4. Fewer than `[night] parallel` (2) runs are going. Planned runs never block each other: two planned for tonight both run, in parallel, each in its own worktree or copy. A third starts when one ends.
 
 A run that is going at the end of the window may finish; no new one starts.
