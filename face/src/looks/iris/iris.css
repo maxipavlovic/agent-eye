@@ -58,7 +58,7 @@ a:hover { background: var(--ink); color: var(--paper); text-decoration: none; }
 .brand { gap: 12px; padding: 0 16px 0 14px; }
 .brand .word { font: 600 15px/1 var(--f-disp); font-stretch: 125%; letter-spacing: .32em; margin-right: -.32em; }
 .brand .code { font-size: 12px; line-height: 1; padding: 3px 5px; border: var(--hair) solid var(--rule); }
-.search { flex: 1 1 auto; cursor: text; }
+.search { flex: 1 1 0; min-width: 120px; cursor: text; }
 .search input { flex: 1; min-width: 0; border: 0; background: none; outline: 0; font: 400 17px var(--f-body); height: 100%; color: var(--ink); }
 .search input::placeholder { color: var(--mute); opacity: 1; }
 .search input::-webkit-search-cancel-button { display: none; }
