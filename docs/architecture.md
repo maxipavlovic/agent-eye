@@ -45,6 +45,7 @@ leaves the machine except the excerpts sent to your agent for summaries (see `se
 | `scan/` | Walks transcripts with cursors (stamp and marker); stores sessions, sub-agents and tokens, history-only sessions, jobs and live status, Jira keys. |
 | `db.rs`, `model.rs` | SQLite schema with migrations; the session, idea, stream and output types. |
 | `columns.rs`, `hide.rs` | Which column a session is in; which sessions are throw-away or belong to a switched-off agent. |
+| `quiet.rs` | `[board] quiet`: which program origins (`app`, `headless`) are quiet, and what the settings panel counts for each. A quiet session never moves itself to Needs you (`columns.rs`), the daemon writes it no summary, and the clock leaves it out (`clock/signals.rs`, `left_out`). |
 | `search/`, `pick.rs` | One search engine for the picker, `eye find` and the board: `query.rs` reads what was typed, `typo.rs` fixes a mistyped word, `score.rs` weighs each word by how rare it is and where it is found (SQLite FTS5 with word stemming). `pick.rs` holds the picker's index, ideas, launching. |
 | `summarize.rs`, `summarize_prompt.txt` | Builds the masked excerpt of a session, asks the summary agent, stores the answer. |
 | `remind/` | "Check on this" reminders: the reading of a time (`when.rs`: `tomorrow`, `mon`, `4h`, `2026-11-20 14:00`, in local time), when one is due, setting, clearing, listing, and telling about due ones once. The column rule is in `columns.rs`; the notice itself is in `platform/notify.rs`. |

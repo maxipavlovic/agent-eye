@@ -43,7 +43,6 @@ export function QuietSettings({ q, sample, save, folds }: { q: OriginsSetting; s
         <p class="umeta">No sessions started by a program on this machine.</p>
       ) : (
         <>
-          <p class="umeta">What a program's agent asks is for that program, not for you. A quiet session never moves to Needs you by itself, gets no summary and stays out of HOURS. It is still listed, found and resumable, and a reminder or a move by hand still works.</p>
           {q.choices.map((c) => {
             const on = q.value.includes(c.id);
             return (
@@ -52,6 +51,7 @@ export function QuietSettings({ q, sample, save, folds }: { q: OriginsSetting; s
               </Row>
             );
           })}
+          <p class="umeta">What a program's agent asks is for that program, not for you. A quiet session never moves to Needs you by itself, gets no summary and stays out of HOURS. It is still listed, found and resumable, and a reminder or a move by hand still works.</p>
         </>
       )}
     </Part>
