@@ -322,10 +322,17 @@ fn ask_asks_for_json_validates_retries_once_and_deletes_what_it_made() {
             .any(|p| p.contains("previous answer was not valid")),
         "the retry says why"
     );
-    assert!(
-        std::fs::read_dir(&work).unwrap().next().is_none(),
-        "the scratch folder is removed"
-    );
+    // every question runs in one folder, which stays and stays empty
+    let names: Vec<String> = std::fs::read_dir(&work)
+        .unwrap()
+        .flatten()
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(names, ["opencode-ask"]);
+    assert!(std::fs::read_dir(work.join("opencode-ask"))
+        .unwrap()
+        .next()
+        .is_none());
 }
 
 #[test]

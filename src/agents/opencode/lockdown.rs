@@ -23,9 +23,12 @@ pub const AGENT: &str = "eye-ask";
 /// The variable OpenCode reads its inline config from.
 pub const CONFIG_VAR: &str = "OPENCODE_CONFIG_CONTENT";
 
-/// The switches every command gets besides the config.
+/// The switch that keeps OpenCode from updating itself, besides `autoupdate: false`.
+pub const NO_UPDATE: (&str, &str) = ("OPENCODE_DISABLE_AUTOUPDATE", "1");
+
+/// The switches every command of the adapter gets besides the config.
 pub const ENV: [(&str, &str); 3] = [
-    ("OPENCODE_DISABLE_AUTOUPDATE", "1"),
+    NO_UPDATE,
     ("OPENCODE_DISABLE_CLAUDE_CODE", "1"),
     ("OPENCODE_DISABLE_PROJECT_CONFIG", "1"),
 ];
@@ -50,16 +53,26 @@ fn deny() -> Value {
     Value::Object(rules)
 }
 
-/// The inline config: every permission denied by default and for [`AGENT`] itself, every tool off,
-/// the MCP servers `mcp` names switched off (a server is switched off by a whole entry; the
-/// command is never run), no sharing and no update. Nothing in it allows or asks anything, and the
-/// run is not given `--auto`, so nothing is approved on its behalf.
+/// The inline config of a question: every permission denied by default and for [`AGENT`] itself,
+/// every tool off, the MCP servers `mcp` names switched off, no sharing and no update. Nothing in
+/// it allows or asks anything, and the run is not given `--auto`, so nothing is approved on its
+/// behalf.
 pub fn config(mcp: &[String]) -> String {
+    let mut c = agent_config(AGENT, deny(), mcp);
+    c["tools"] = json!({"*": false});
+    c["agent"][AGENT]["tools"] = json!({"*": false});
+    c["share"] = json!("disabled");
+    c.to_string()
+}
+
+/// The inline config of a run as `agent`, an agent only this config defines: `rules` for every
+/// agent by default and again for `agent` itself, so that they come after any permissions the
+/// user's config gives an agent; the MCP servers `mcp` names switched off (a server is switched off
+/// by a whole entry, whose command is never run); no update.
+pub fn agent_config(agent: &str, rules: Value, mcp: &[String]) -> Value {
     let mut c = json!({
-        "permission": deny(),
-        "tools": {"*": false},
-        "agent": {AGENT: {"mode": "primary", "permission": deny(), "tools": {"*": false}}},
-        "share": "disabled",
+        "permission": rules,
+        "agent": {agent: {"mode": "primary", "permission": rules}},
         "autoupdate": false,
     });
     if !mcp.is_empty() {
@@ -72,7 +85,7 @@ pub fn config(mcp: &[String]) -> String {
             .collect();
         c["mcp"] = Value::Object(off);
     }
-    c.to_string()
+    c
 }
 
 /// The names of the MCP servers in what `opencode debug config` prints: `mcp.servers.<name>` in

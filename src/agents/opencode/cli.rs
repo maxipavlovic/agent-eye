@@ -45,45 +45,10 @@ impl OpenCode {
     /// Run `opencode <args>` in `cwd`; its stdout. A run that takes more than a minute is stopped.
     pub(super) fn output(&self, args: &[&str], cwd: Option<&Path>) -> Result<String> {
         let mut cmd = self.command(args);
-        cmd.stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
         if let Some(c) = cwd {
             cmd.current_dir(c);
         }
-        let mut child = cmd
-            .spawn()
-            .with_context(|| format!("starting `{}` (is it on PATH?)", self.executable_path()))?;
-        let out = child.stdout.take().map(super::headless::drain);
-        let err = child.stderr.take().map(super::headless::drain);
-        let start = Instant::now();
-        let status = loop {
-            if let Some(st) = child.try_wait()? {
-                break st;
-            }
-            if start.elapsed() > TIMEOUT {
-                let _ = child.kill();
-                let _ = child.wait();
-                anyhow::bail!(
-                    "`opencode {}` timed out",
-                    args.first().copied().unwrap_or("")
-                );
-            }
-            std::thread::sleep(Duration::from_millis(30));
-        };
-        let out = out
-            .map(|h| h.join().unwrap_or_default())
-            .unwrap_or_default();
-        let err = err
-            .map(|h| h.join().unwrap_or_default())
-            .unwrap_or_default();
-        anyhow::ensure!(
-            status.success(),
-            "`opencode {}` failed ({status}): {}",
-            args.join(" "),
-            crate::util::head_chars(String::from_utf8_lossy(&err).trim(), 300)
-        );
-        Ok(String::from_utf8_lossy(&out).into_owned())
+        to_end(cmd, &self.executable_path(), args)
     }
 
     /// The names of the MCP servers OpenCode's config declares for a run in `dir`, read by OpenCode
@@ -94,21 +59,25 @@ impl OpenCode {
             .unwrap_or_default()
     }
 
-    /// Delete a session through OpenCode; nothing is said when it cannot.
-    pub(super) fn delete_session(&self, id: &str) {
-        let _ = self.output(&["session", "delete", id], None);
+    /// Delete a session through OpenCode, asked in `dir` (OpenCode makes a project for the folder
+    /// any command starts in); nothing is said when it cannot.
+    pub(super) fn delete_session(&self, id: &str, dir: &Path) {
+        let _ = self.output(&["session", "delete", id], Some(dir));
     }
 
-    /// Delete the sessions a summary run made in `dir` (when its own events did not name them):
-    /// those titled `eye-ask`, from the project's session list.
-    pub(super) fn delete_ask_sessions(&self, dir: &Path) {
+    /// Delete the sessions a question made in `dir` when its own events did not name them: those
+    /// with its `title` (unique to the question), from the project's session list. Other questions'
+    /// sessions in the same folder are left alone.
+    pub(super) fn delete_ask_sessions(&self, dir: &Path, title: &str) {
         let Ok(list) = self.output(&["session", "list"], Some(dir)) else {
             return;
         };
         for line in list.lines() {
             let mut f = line.split('\t');
-            if let (Some(id), Some("eye-ask")) = (f.next(), f.next()) {
-                self.delete_session(id.trim());
+            if let (Some(id), Some(t)) = (f.next(), f.next()) {
+                if t.trim() == title {
+                    self.delete_session(id.trim(), dir);
+                }
             }
         }
     }
@@ -143,4 +112,60 @@ impl OpenCode {
     pub(super) fn has_session(&self, dest: &Path) -> bool {
         store::exists(dest)
     }
+}
+
+/// Run an `opencode <args>` command to its end; its stdout. One that takes more than a minute is
+/// stopped.
+fn to_end(mut cmd: Command, exe: &str, args: &[&str]) -> Result<String> {
+    cmd.stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let mut child = cmd
+        .spawn()
+        .with_context(|| format!("starting `{exe}` (is it on PATH?)"))?;
+    let out = child.stdout.take().map(super::headless::drain);
+    let err = child.stderr.take().map(super::headless::drain);
+    let start = Instant::now();
+    let status = loop {
+        if let Some(st) = child.try_wait()? {
+            break st;
+        }
+        if start.elapsed() > TIMEOUT {
+            let _ = child.kill();
+            let _ = child.wait();
+            anyhow::bail!(
+                "`opencode {}` timed out",
+                args.first().copied().unwrap_or("")
+            );
+        }
+        std::thread::sleep(Duration::from_millis(30));
+    };
+    let out = out
+        .map(|h| h.join().unwrap_or_default())
+        .unwrap_or_default();
+    let err = err
+        .map(|h| h.join().unwrap_or_default())
+        .unwrap_or_default();
+    anyhow::ensure!(
+        status.success(),
+        "`opencode {}` failed ({status}): {}",
+        args.join(" "),
+        crate::util::head_chars(String::from_utf8_lossy(&err).trim(), 300)
+    );
+    Ok(String::from_utf8_lossy(&out).into_owned())
+}
+
+/// The names of the MCP servers a run of `exe` in `dir` would start when it keeps the project's
+/// config and eye's own environment, as a night run does: read by OpenCode itself, with updates
+/// off; none when it cannot say.
+pub fn mcp_servers_for_run(exe: &str, dir: &Path) -> Vec<String> {
+    let args = ["debug", "config", "--standalone"];
+    let mut cmd = Command::new(exe);
+    cmd.args(args)
+        .current_dir(dir)
+        .env(lockdown::CONFIG_VAR, lockdown::config(&[]))
+        .envs([lockdown::NO_UPDATE]);
+    to_end(cmd, exe, &args)
+        .map(|out| lockdown::mcp_names(&out))
+        .unwrap_or_default()
 }

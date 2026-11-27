@@ -5,33 +5,43 @@ use super::{headless, lockdown, OpenCode};
 use crate::agents::HeadlessRequest;
 use crate::platform::test_support::script;
 use serde_json::{json, Value};
+use std::os::unix::fs::PermissionsExt;
+use std::path::PathBuf;
 use std::time::Duration;
 
-/// An `opencode` that answers like 2.3.2 does. A `run` makes a session (a line in `sessions`) and
-/// then does what the file `mode` says: `ok` answers `{"a":1}`, `bad` answers prose, `slow` hangs.
-/// `session delete` removes the session; every call is a line of `calls.log`: the arguments, the
-/// switches and the inline config.
+/// An `opencode` that answers like 2.3.2 does. A `run` makes a session (a line of `sessions`: id
+/// and title) and then does what its prompt says: `SLOW` hangs, `WAIT` answers after 5 s (while
+/// `running-<id>` exists), `BAD` answers prose, anything else `{"a":1}`. `session delete` removes
+/// the session and notes in `violations` when it was still running; `session list` notes in
+/// `saw_running` how many sessions were running. Every call is a line of `calls.log`: the
+/// arguments, the switches, the inline config and the folder.
 const OPENCODE: &str = r#"d="$(dirname "$0")"
-printf '%s\t%s%s%s\t%s\n' "$*" "$OPENCODE_DISABLE_AUTOUPDATE" "$OPENCODE_DISABLE_CLAUDE_CODE" "$OPENCODE_DISABLE_PROJECT_CONFIG" "$OPENCODE_CONFIG_CONTENT" >> "$d/calls.log"
+lock() { until mkdir "$d/lock" 2>/dev/null; do sleep 0.01; done; }
+unlock() { rmdir "$d/lock"; }
+printf '%s\t%s%s%s\t%s\t%s\n' "$*" "$OPENCODE_DISABLE_AUTOUPDATE" "$OPENCODE_DISABLE_CLAUDE_CODE" "$OPENCODE_DISABLE_PROJECT_CONFIG" "$OPENCODE_CONFIG_CONTENT" "$PWD" >> "$d/calls.log"
 touch "$d/sessions"
 case "$1 $2" in
 "run --help") echo "--format --archived --title --agent --model --standalone" ;;
 "models "*) printf 'opencode/big-free\nopencode/x-flash-free\n' ;;
 "debug config") echo '[{"type":"document","info":{"mcp":{"servers":{"jira":{"type":"local","command":["j"]}}}}}]' ;;
-"session list") while read -r id; do printf '%s\teye-ask\t11/27/2026\n' "$id"; done < "$d/sessions" ;;
-"session delete") grep -v -x "$3" "$d/sessions" > "$d/left"; mv "$d/left" "$d/sessions" ;;
+"session list")
+  ls "$d" | grep -c '^running-' >> "$d/saw_running"
+  while IFS="$(printf '\t')" read -r id title; do printf '%s\t%s\t11/27/2026\n' "$id" "$title"; done < "$d/sessions" ;;
+"session delete")
+  [ -e "$d/running-$3" ] && echo "$3" >> "$d/violations"
+  lock; awk -F '\t' -v id="$3" '$1 != id' "$d/sessions" > "$d/left"; mv "$d/left" "$d/sessions"; unlock ;;
 "session export") echo '{"info":{},"messages":[]}' ;;
 "session import") ;;
 "--version "*) echo "2.3.2" ;;
 run\ *)
-  cat > /dev/null
-  n=$(($(cat "$d/n" 2>/dev/null || echo 0) + 1)); echo $n > "$d/n"
-  echo "ses_$n" >> "$d/sessions"
-  case "$(cat "$d/mode")" in
-  slow) exec sleep 5 ;;
-  bad) t='Sorry, no JSON today.' ;;
-  *) t='{\"a\":1}' ;;
-  esac
+  title=""; prev=""
+  for a in "$@"; do [ "$prev" = --title ] && title="$a"; prev="$a"; done
+  input="$(cat)"
+  lock; n=$(($(cat "$d/n" 2>/dev/null || echo 0) + 1)); echo $n > "$d/n"
+  printf 'ses_%s\t%s\n' "$n" "$title" >> "$d/sessions"; unlock
+  case "$input" in *SLOW*) exec sleep 5 ;; esac
+  case "$input" in *WAIT*) touch "$d/running-ses_$n"; sleep 5; rm "$d/running-ses_$n" ;; esac
+  case "$input" in *BAD*) t='Sorry, no JSON today.' ;; *) t='{\"a\":1}' ;; esac
   echo "{\"type\":\"step_start\",\"sessionID\":\"ses_$n\",\"part\":{}}"
   echo "{\"type\":\"text\",\"sessionID\":\"ses_$n\",\"part\":{\"messageID\":\"m\",\"text\":\"$t\"}}" ;;
 esac"#;
@@ -39,6 +49,14 @@ esac"#;
 struct Stub {
     tmp: tempfile::TempDir,
     c: OpenCode,
+}
+
+/// One call of the stand-in: its arguments, switches, inline config and folder.
+struct Call {
+    args: String,
+    switches: String,
+    config: Value,
+    cwd: String,
 }
 
 impl Stub {
@@ -52,14 +70,13 @@ impl Stub {
         Stub { tmp, c }
     }
 
-    fn ask(&self, mode: &str, timeout: Duration) -> anyhow::Result<Value> {
-        std::fs::write(self.tmp.path().join("mode"), mode).unwrap();
+    fn ask(&self, input: &str, timeout: Duration) -> anyhow::Result<Value> {
         let schema = json!({"type": "object", "required": ["a"]});
         let work = self.tmp.path().join("work");
         let req = HeadlessRequest {
             model: "",
             system: "sys",
-            input: "in",
+            input,
             schema: &schema,
             work_dir: &work,
             timeout,
@@ -67,56 +84,100 @@ impl Stub {
         headless::ask(&self.c, &req).map(|r| r.output)
     }
 
-    fn sessions_left(&self) -> String {
-        std::fs::read_to_string(self.tmp.path().join("sessions")).unwrap_or_default()
+    fn file(&self, name: &str) -> String {
+        std::fs::read_to_string(self.tmp.path().join(name)).unwrap_or_default()
     }
 
-    /// Each call: its arguments, its switches and its inline config.
-    fn calls(&self) -> Vec<(String, String, Value)> {
-        std::fs::read_to_string(self.tmp.path().join("calls.log"))
-            .unwrap()
+    fn calls(&self) -> Vec<Call> {
+        self.file("calls.log")
             .lines()
             .map(|l| {
-                let f: Vec<&str> = l.splitn(3, '\t').collect();
-                let config = serde_json::from_str(f[2]).unwrap_or(Value::Null);
-                (f[0].to_string(), f[1].to_string(), config)
+                let f: Vec<&str> = l.splitn(4, '\t').collect();
+                Call {
+                    args: f[0].to_string(),
+                    switches: f[1].to_string(),
+                    config: serde_json::from_str(f[2]).unwrap_or(Value::Null),
+                    cwd: f[3].to_string(),
+                }
             })
             .collect()
     }
 
-    fn work_is_empty(&self) -> bool {
-        std::fs::read_dir(self.tmp.path().join("work"))
-            .unwrap()
-            .next()
-            .is_none()
+    fn deleted(&self, id: &str) -> bool {
+        self.calls()
+            .iter()
+            .any(|c| c.args.starts_with(&format!("session delete {id} ")))
+    }
+
+    /// The one folder every question runs in.
+    fn ask_dir(&self) -> PathBuf {
+        self.tmp.path().join("work/opencode-ask")
     }
 }
 
 /// OpenCode keeps every session a run makes (`--archived` only keeps it out of lists), so every
 /// way a question ends deletes what it made: by the ids the event stream names, or, when the run
-/// was stopped before it said, by the `eye-ask` sessions of the question's folder.
+/// was stopped before it said, by the question's own title in the folder's session list.
 #[test]
 fn a_question_leaves_no_session_after_success_failure_and_timeout() {
     let s = Stub::new();
     assert_eq!(s.ask("ok", Duration::from_secs(30)).unwrap()["a"], 1);
-    assert_eq!(s.sessions_left(), "");
+    assert_eq!(s.file("sessions"), "");
 
     // an invalid answer is asked again; both sessions go
-    let e = s.ask("bad", Duration::from_secs(30)).unwrap_err();
+    let e = s.ask("BAD", Duration::from_secs(30)).unwrap_err();
     assert!(format!("{e:#}").contains("twice"), "{e:#}");
-    assert_eq!(s.sessions_left(), "");
-    let deleted = |id: &str| {
-        s.calls()
-            .iter()
-            .any(|(args, _, _)| args.starts_with(&format!("session delete {id} ")))
-    };
-    assert!(deleted("ses_2") && deleted("ses_3"));
+    assert_eq!(s.file("sessions"), "");
+    assert!(s.deleted("ses_2") && s.deleted("ses_3"));
 
-    let e = s.ask("slow", Duration::from_millis(1500)).unwrap_err();
+    let e = s.ask("SLOW", Duration::from_millis(1500)).unwrap_err();
     assert!(e.to_string().contains("timed out"), "{e:#}");
-    assert_eq!(s.sessions_left(), "");
-    assert!(deleted("ses_4"));
-    assert!(s.work_is_empty());
+    assert_eq!(s.file("sessions"), "");
+    assert!(s.deleted("ses_4"));
+    // the folder stays, private and empty
+    let meta = std::fs::metadata(s.ask_dir()).unwrap();
+    assert_eq!(meta.permissions().mode() & 0o777, 0o700);
+    assert!(std::fs::read_dir(s.ask_dir()).unwrap().next().is_none());
+}
+
+/// Questions run side by side in the same folder (summaries do), so the clean-up of one that timed
+/// out must leave alone the session of another that is still running.
+#[test]
+fn a_timed_out_question_cleans_up_only_its_own_session_in_the_shared_folder() {
+    let s = std::sync::Arc::new(Stub::new());
+    let other = {
+        let s = s.clone();
+        std::thread::spawn(move || s.ask("WAIT", Duration::from_secs(30)))
+    };
+    std::thread::sleep(Duration::from_millis(300));
+    let e = s.ask("SLOW", Duration::from_millis(1500)).unwrap_err();
+    assert!(e.to_string().contains("timed out"), "{e:#}");
+    assert_eq!(other.join().unwrap().unwrap()["a"], 1);
+    // the clean-up listed the sessions while the other question's run was going on
+    assert!(s.file("saw_running").lines().any(|n| n != "0"));
+    assert_eq!(s.file("violations"), "", "a running session was deleted");
+    assert_eq!(s.file("sessions"), "");
+    let runs: Vec<Call> = s
+        .calls()
+        .into_iter()
+        .filter(|c| c.args.starts_with("run --format"))
+        .collect();
+    assert_eq!(runs.len(), 2);
+    for r in &runs {
+        assert_eq!(
+            PathBuf::from(&r.cwd).canonicalize().unwrap(),
+            s.ask_dir().canonicalize().unwrap()
+        );
+    }
+    let title = |c: &Call| {
+        c.args
+            .split(' ')
+            .skip_while(|a| *a != "--title")
+            .nth(1)
+            .map(String::from)
+    };
+    let (a, b) = (title(&runs[0]).unwrap(), title(&runs[1]).unwrap());
+    assert!(a.starts_with("eye-ask-") && b.starts_with("eye-ask-") && a != b);
 }
 
 /// So that eye never acts through OpenCode, updates it or starts its background service as a side
@@ -127,7 +188,7 @@ fn a_question_leaves_no_session_after_success_failure_and_timeout() {
 fn every_opencode_command_eye_runs_is_locked_down_and_never_updates() {
     let s = Stub::new();
     s.ask("ok", Duration::from_secs(30)).unwrap();
-    s.ask("slow", Duration::from_millis(1500)).unwrap_err();
+    s.ask("SLOW", Duration::from_millis(1500)).unwrap_err();
     let _ = s.c.export_native("ses_9");
     let tmp = s.tmp.path().join("import.json");
     s.c.import_native(&json!({"info": {}, "messages": []}), &tmp)
@@ -145,25 +206,60 @@ fn every_opencode_command_eye_runs_is_locked_down_and_never_updates() {
         "session import",
         "--version",
     ] {
-        assert!(
-            calls.iter().any(|(a, _, _)| a.starts_with(first)),
-            "{first}"
-        );
+        assert!(calls.iter().any(|c| c.args.starts_with(first)), "{first}");
     }
-    for (args, switches, config) in &calls {
+    for c in &calls {
+        let args = &c.args;
         assert!(args.split(' ').any(|a| a == "--standalone"), "{args}");
-        assert_eq!(switches, "111", "{args}");
-        assert_eq!(config["autoupdate"], false, "{args}");
-        assert_eq!(config["permission"]["*"], "deny", "{args}");
-        assert_eq!(config["share"], "disabled", "{args}");
+        assert_eq!(c.switches, "111", "{args}");
+        assert_eq!(c.config["autoupdate"], false, "{args}");
+        assert_eq!(c.config["permission"]["*"], "deny", "{args}");
+        assert_eq!(c.config["share"], "disabled", "{args}");
         if args.starts_with("run --format") {
             assert!(args.contains(&format!("--agent {}", lockdown::AGENT)));
-            assert_eq!(config["mcp"]["jira"]["enabled"], false);
+            assert_eq!(c.config["mcp"]["jira"]["enabled"], false);
+        }
+        // a question's commands start in its folder, so OpenCode makes no project anywhere else
+        if [
+            "models",
+            "debug",
+            "run --format",
+            "session delete",
+            "session list",
+        ]
+        .iter()
+        .any(|p| args.starts_with(p))
+        {
+            let cwd = PathBuf::from(&c.cwd).canonicalize().unwrap();
+            assert_eq!(cwd, s.ask_dir().canonicalize().unwrap(), "{args}");
         }
     }
     // the free model is the small one the list shows
-    assert!(calls
-        .iter()
-        .any(|(a, _, _)| a.starts_with("run --format") && a.ends_with("-m opencode/x-flash-free")));
+    assert!(calls.iter().any(
+        |c| c.args.starts_with("run --format") && c.args.ends_with("-m opencode/x-flash-free")
+    ));
     assert!(!tmp.exists());
+}
+
+/// A night run keeps the project's config (its instructions, formatters and MCP servers), so the
+/// names of the servers to switch off are read in the run's folder with only updates off.
+#[test]
+fn a_night_runs_mcp_servers_are_read_in_its_folder_with_the_projects_config() {
+    let s = Stub::new();
+    let exe = s.tmp.path().join("opencode");
+    let folder = s.tmp.path().join("wt");
+    std::fs::create_dir_all(&folder).unwrap();
+    let names = super::mcp_servers_for_run(exe.to_str().unwrap(), &folder);
+    assert_eq!(names, ["jira"]);
+    let calls = s.calls();
+    assert_eq!(calls.len(), 1);
+    let c = &calls[0];
+    assert_eq!(c.args, "debug config --standalone");
+    assert_eq!(
+        c.switches, "1",
+        "updates off, the project's config and instructions kept"
+    );
+    assert_eq!(c.config["autoupdate"], false);
+    let cwd = PathBuf::from(&c.cwd).canonicalize().unwrap();
+    assert_eq!(cwd, folder.canonicalize().unwrap());
 }

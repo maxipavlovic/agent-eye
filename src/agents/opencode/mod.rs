@@ -24,6 +24,9 @@ mod run_tests;
 mod store;
 mod turns;
 
+pub use cli::mcp_servers_for_run;
+pub use lockdown::agent_config;
+
 use super::*;
 use crate::config::AgentCfg;
 use crate::report::Report;

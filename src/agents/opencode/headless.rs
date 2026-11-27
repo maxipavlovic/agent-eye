@@ -2,7 +2,8 @@
 //! so the prompt asks for strict JSON, the last text of the event stream is validated against the
 //! schema eye uses, and one invalid answer is asked again. The run is made `--archived` (out of
 //! OpenCode's lists) and its session is deleted afterwards, also when the answer is invalid or the
-//! run times out, so it never shows up in eye or in OpenCode. It runs as an agent of its own with
+//! run times out, so it never shows up in eye or in OpenCode. Every question runs in one folder
+//! (`opencode-ask`) with a session title of its own. It runs as an agent of its own with
 //! every permission denied and every tool off, a private server and the user's MCP servers switched
 //! off (`lockdown.rs`), so text inside what it is asked about (a quoted web page, a tool's output)
 //! has nothing to drive. Checked on a real OpenCode 2.3.2 (`docs/security.md`).
@@ -87,7 +88,8 @@ pub fn pick_free(models: &str) -> Option<String> {
         .map(|m| m.to_string())
 }
 
-fn free_model(c: &OpenCode) -> Option<String> {
+/// The free model, asked in `dir` (the questions' folder, so OpenCode makes no project elsewhere).
+fn free_model(c: &OpenCode, dir: &Path) -> Option<String> {
     let exe = c.executable_path();
     if let Some(m) = FREE_MODEL
         .lock()
@@ -96,7 +98,12 @@ fn free_model(c: &OpenCode) -> Option<String> {
     {
         return m.clone();
     }
-    let out = c.command(&["models"]).stdin(Stdio::null()).output().ok()?;
+    let out = c
+        .command(&["models"])
+        .current_dir(dir)
+        .stdin(Stdio::null())
+        .output()
+        .ok()?;
     let m = pick_free(&String::from_utf8_lossy(&out.stdout));
     FREE_MODEL
         .lock()
@@ -105,24 +112,32 @@ fn free_model(c: &OpenCode) -> Option<String> {
     m
 }
 
-struct Scratch(PathBuf);
+/// The folder every question runs in, under eye's work folder. OpenCode keeps a project for each
+/// folder it starts in and has no command to remove one, so one folder for all questions leaves one
+/// project. Made once (owner only) and never removed: another question may be running in it, and
+/// nothing is written to it.
+const ASK_DIR: &str = "opencode-ask";
 
-impl Scratch {
-    fn new(work: &Path) -> Result<Scratch> {
-        std::fs::create_dir_all(work).with_context(|| format!("creating {}", work.display()))?;
-        let dir = work.join(format!("opencode-{}", new_uuid()?));
-        std::fs::DirBuilder::new()
-            .mode(0o700)
-            .create(&dir)
-            .with_context(|| format!("creating {}", dir.display()))?;
-        Ok(Scratch(dir))
+/// The start of a question's session title; a uuid follows, so that a clean-up deletes the
+/// question's own session and never one of another question running in the same folder.
+pub(super) const ASK_TITLE: &str = "eye-ask-";
+
+fn ask_dir(work: &Path) -> Result<PathBuf> {
+    std::fs::create_dir_all(work).with_context(|| format!("creating {}", work.display()))?;
+    let dir = work.join(ASK_DIR);
+    match std::fs::DirBuilder::new().mode(0o700).create(&dir) {
+        Err(e) if e.kind() != std::io::ErrorKind::AlreadyExists => {
+            Err(e).with_context(|| format!("creating {}", dir.display()))
+        }
+        _ => Ok(dir),
     }
 }
 
-impl Drop for Scratch {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
-    }
+/// What the runs of one question share: the title of their sessions and the MCP servers they
+/// switch off.
+struct Question {
+    title: String,
+    mcp: Vec<String>,
 }
 
 pub(super) fn drain<R: Read + Send + 'static>(r: R) -> std::thread::JoinHandle<Vec<u8>> {
@@ -284,19 +299,19 @@ fn prompt(req: &HeadlessRequest, problem: Option<&str>) -> String {
 }
 
 /// The command of one question: `opencode run` in its own archived session, as the locked-down
-/// agent, with the MCP servers `mcp` names switched off.
-fn ask_command(c: &OpenCode, model: &str, mcp: &[String]) -> Command {
+/// agent, with the MCP servers the question names switched off.
+fn ask_command(c: &OpenCode, model: &str, q: &Question) -> Command {
     let mut cmd = c.command(&[
         "run",
         "--format",
         "json",
         "--archived",
         "--title",
-        "eye-ask",
+        &q.title,
         "--agent",
         lockdown::AGENT,
     ]);
-    cmd.env(lockdown::CONFIG_VAR, lockdown::config(mcp));
+    cmd.env(lockdown::CONFIG_VAR, lockdown::config(&q.mcp));
     if !model.is_empty() {
         cmd.args(["-m", model]);
     }
@@ -307,12 +322,12 @@ fn ask_command(c: &OpenCode, model: &str, mcp: &[String]) -> Command {
 fn run_once(
     c: &OpenCode,
     model: &str,
-    mcp: &[String],
+    q: &Question,
     prompt: String,
     dir: &Path,
     timeout: Duration,
 ) -> Result<String> {
-    let mut child = ask_command(c, model, mcp)
+    let mut child = ask_command(c, model, q)
         .current_dir(dir)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -355,36 +370,32 @@ fn run_once(
 /// Ask OpenCode one structured question. See the module comment.
 pub fn ask(c: &OpenCode, req: &HeadlessRequest) -> Result<HeadlessReply> {
     flags_check(c)?;
-    let scratch = Scratch::new(req.work_dir)?;
+    let dir = ask_dir(req.work_dir)?;
     let model = match req.model.trim() {
-        "" | FREE => free_model(c).unwrap_or_default(),
+        "" | FREE => free_model(c, &dir).unwrap_or_default(),
         m => m.to_string(),
     };
     let started = Instant::now();
-    let mcp = c.mcp_servers(&scratch.0);
+    let q = Question {
+        title: format!("{ASK_TITLE}{}", new_uuid()?),
+        mcp: c.mcp_servers(&dir),
+    };
     let mut cost = None::<f64>;
     let mut problem: Option<String> = None;
     let mut last_err = anyhow::anyhow!("no answer");
     for _ in 0..2 {
         let left = req.timeout.saturating_sub(started.elapsed());
-        let out = run_once(
-            c,
-            &model,
-            &mcp,
-            prompt(req, problem.as_deref()),
-            &scratch.0,
-            left,
-        );
+        let out = run_once(c, &model, &q, prompt(req, problem.as_deref()), &dir, left);
         let out = match out {
             Ok(o) => o,
             Err(e) => {
-                c.delete_ask_sessions(&scratch.0);
+                c.delete_ask_sessions(&dir, &q.title);
                 return Err(e);
             }
         };
         let run = read_events(&out);
         if let Some(id) = &run.session {
-            c.delete_session(id);
+            c.delete_session(id, &dir);
         }
         cost = run.cost.or(cost);
         match json_in(&run.text).and_then(|v| match validate(req.schema, &v, "$") {
@@ -423,7 +434,11 @@ mod tests {
     #[test]
     fn a_question_runs_as_its_own_agent_with_everything_denied_and_the_mcp_servers_off() {
         let c = OpenCode::new(std::path::PathBuf::from("/nonexistent"));
-        let cmd = ask_command(&c, "provider/model", &["jira".into(), "docs".into()]);
+        let q = Question {
+            title: "eye-ask-1".into(),
+            mcp: vec!["jira".into(), "docs".into()],
+        };
+        let cmd = ask_command(&c, "provider/model", &q);
         let rules: Value =
             serde_json::from_str(&env_of(&cmd, lockdown::CONFIG_VAR).unwrap()).unwrap();
         // the default rule, so what the list below leaves out (an MCP tool, code mode) is denied
@@ -470,6 +485,7 @@ mod tests {
         assert!(args.windows(2).any(|w| w == ["--agent", lockdown::AGENT]));
         assert!(args.windows(2).any(|w| w == ["-m", "provider/model"]));
         assert!(args.contains(&"--archived".to_string()));
+        assert!(args.windows(2).any(|w| w == ["--title", "eye-ask-1"]));
         assert!(args.contains(&"--standalone".to_string()));
     }
 
