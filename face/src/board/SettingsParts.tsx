@@ -2,12 +2,15 @@ import type { ComponentChildren } from 'preact';
 
 // The two controls every setting is built from, in the panel's look-neutral markup.
 
-/** One setting: its name, the control, and one plain line on what it does. */
-export function Row({ label, help, children }: { label: string; help?: ComponentChildren; children: ComponentChildren }) {
+/** The sentence a setting gets when the engine marks its key `restart: true`: written here once, never by hand per row. */
+export const restartNote = (restart?: boolean) => (restart ? ' Takes effect when the background service restarts.' : '');
+
+/** One setting: its name, the control, and one plain line on what it does, with the restart sentence when `restart` is set. */
+export function Row({ label, help, restart, children }: { label: string; help: string; restart?: boolean; children: ComponentChildren }) {
   return (
     <div class="srow">
       <div class="nrow"><span>{label.toUpperCase()}</span>{children}</div>
-      {help && <p class="umeta">{help}</p>}
+      <p class="umeta">{help}{restartNote(restart)}</p>
     </div>
   );
 }

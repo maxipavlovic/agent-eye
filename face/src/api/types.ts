@@ -580,10 +580,10 @@ export interface RemindSettings {
 /** One setting of GET /api/settings; `restart` says the daemon reads it only when it starts. */
 export interface BoolSetting { type: 'bool'; value: boolean; restart?: boolean }
 export interface TextSetting { type: 'text'; max: number; value: string; restart?: boolean }
-export interface IntSetting { type: 'int'; min: number; max: number; value: number }
-export interface ChoiceSetting { type: 'choice'; choices: string[]; value: string }
+export interface IntSetting { type: 'int'; min: number; max: number; value: number; restart?: boolean }
+export interface ChoiceSetting { type: 'choice'; choices: string[]; value: string; restart?: boolean }
 /** `HH:MM-HH:MM`, local time. */
-export interface WindowSetting { type: 'window'; value: string }
+export interface WindowSetting { type: 'window'; value: string; restart?: boolean }
 /** The agents eye follows: `value` is the enabled ids in order, `choices` every agent eye knows. */
 export interface AgentsSetting { type: 'agents'; choices: Array<{ id: string; name: string }>; value: string[]; restart?: boolean }
 

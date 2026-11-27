@@ -185,6 +185,19 @@ describe('the agent settings', () => {
     expect(row?.textContent).toContain('Takes effect when the background service restarts');
   });
 
+  it('writes the restart sentence once for every setting the engine marks as needing a restart', async () => {
+    const state = structuredClone(sampleState);
+    for (const setting of Object.values(state.settings)) (setting as { restart?: boolean }).restart = true;
+    const { $$, open } = await mount({ ...fixtureSource(), name: 'live' as const, settings: async () => structuredClone(state) } as Source);
+    await open();
+    await vi.waitFor(() => expect($$('.settings .srow').length).toBeGreaterThan(5));
+    const said = (el: Element) => (el.textContent ?? '').split('Takes effect when the background service restarts').length - 1;
+    // each row and each form beside it, one sentence apiece
+    const rows = $$('.settings .sec').filter((sec) => ['SUMMARIES', 'NIGHT SHIFT', 'REMINDERS', 'HOURS', 'AGENTS'].includes(sec.querySelector('h4')?.textContent ?? '')).flatMap((sec) => [...sec.querySelectorAll('.srow, .nset')]);
+    expect(rows.length).toBeGreaterThan(9);
+    for (const row of rows) expect(said(row), row.textContent!).toBe(1);
+  });
+
   it('saves a switch at once and says Saved', async () => {
     const { saveSettings, source } = engine();
     const { $, open, press } = await mount(source);
