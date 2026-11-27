@@ -371,7 +371,14 @@ mod tests {
     }
 
     fn run_stub(body: &str, timeout: Duration) -> (Result<HeadlessReply>, tempfile::TempDir) {
-        let t = tempfile::tempdir().unwrap();
+        run_stub_in(tempfile::tempdir().unwrap(), body, timeout)
+    }
+
+    fn run_stub_in(
+        t: tempfile::TempDir,
+        body: &str,
+        timeout: Duration,
+    ) -> (Result<HeadlessReply>, tempfile::TempDir) {
         let (agy, work) = (t.path().join("agy"), t.path().join("work"));
         let a = Agy::new(agy.clone()).with_executable(&stub(t.path(), &agy, body));
         let schema = json!({"type":"object"});
@@ -408,9 +415,29 @@ mod tests {
         assert!(reply.is_err());
         assert_clean(&t);
 
-        let (reply, t) = run_stub("exec sleep 5", Duration::from_millis(300));
+        // a run that times out never says which conversation it made: the row agy wrote for the
+        // question's folder is how it is found
+        let t = tempfile::tempdir().unwrap();
+        let (agy, work) = (t.path().join("agy"), t.path().join("work"));
+        let writer = std::thread::spawn(move || {
+            for _ in 0..200 {
+                std::thread::sleep(Duration::from_millis(10));
+                let folder = std::fs::read_dir(&work)
+                    .ok()
+                    .and_then(|d| d.flatten().next())
+                    .map(|e| e.path());
+                if let Some(folder) = folder {
+                    std::fs::create_dir_all(&agy).unwrap();
+                    summaries(&agy, &[("asked-run", &folder)]);
+                    return;
+                }
+            }
+        });
+        let (reply, t) = run_stub_in(t, "exec sleep 5", Duration::from_millis(1500));
+        writer.join().unwrap();
         assert!(reply.unwrap_err().to_string().contains("timed out"));
-        assert_eq!(std::fs::read_dir(t.path().join("work")).unwrap().count(), 0);
+        assert_clean(&t);
+        assert!(rows(&t.path().join("agy")).is_empty());
     }
 
     #[test]

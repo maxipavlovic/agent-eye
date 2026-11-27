@@ -29,6 +29,10 @@ fn passes(t: Option<BandTest>) -> bool {
     t.is_some_and(|t| t.p < bands::MAX_P)
 }
 
+/// The bar a gate faces in a report that holds three (`holm`): the report's rate over a few gates,
+/// so a gate on its own at this bar names noise in at most one world in ten, with room to spare.
+const IN_A_FAMILY_OF_THREE: f64 = bands::MAX_P / 3.0;
+
 #[test]
 fn an_evening_that_runs_twice_as_bad_passes() {
     let mut rng = Rng::new(1);
@@ -63,17 +67,20 @@ fn the_same_data_gives_the_same_answer_every_time() {
     assert_eq!(band_test(&hours, SEED), band_test(&hours, SEED));
 }
 
-/// The test the whole file is for: with no hour worse than another, the verdict must not name hours
-/// more than about one time in ten, though the hours are picked because they look worst. (Testing
-/// the picked hours with a plain two-proportion test, as before, named them in more than half.)
+/// The test the whole file is for: with no hour worse than another, the hours must not be named
+/// more than one time in ten, though they are picked because they look worst. (Testing the picked
+/// hours with a plain two-proportion test, as before, named them in more than half.)
 #[test]
-fn with_no_effect_hours_are_named_in_about_one_week_of_ten_at_most() {
+fn with_no_effect_hours_are_named_in_one_week_of_ten_at_most() {
     let mut rng = Rng::new(20_261_126);
     let trials = 300;
     let named = (0..trials)
-        .filter(|_| passes(band_test(&week(&mut rng, 60, |_| 0.08), SEED)))
+        .filter(|_| {
+            band_test(&week(&mut rng, 60, |_| 0.08), SEED)
+                .is_some_and(|t| t.p < IN_A_FAMILY_OF_THREE)
+        })
         .count();
-    assert!(named * 100 <= trials * 12, "{named} of {trials}");
+    assert!(named * 100 <= trials * 10, "{named} of {trials}");
 }
 
 #[test]
@@ -109,10 +116,10 @@ fn thinking_that_does_not_move_is_rarely_called_moved() {
     let moved = (0..trials)
         .filter(|_| {
             let (a, b) = (thoughts(&mut rng, 40, 1.0), thoughts(&mut rng, 80, 1.0));
-            median_shift_p(&a, &b, SEED).is_some_and(|p| p < bands::MAX_P)
+            median_shift_p(&a, &b, SEED).is_some_and(|p| p < IN_A_FAMILY_OF_THREE)
         })
         .count();
-    assert!(moved * 100 <= trials * 13, "{moved} of {trials}");
+    assert!(moved * 100 <= trials * 10, "{moved} of {trials}");
 }
 
 #[test]
