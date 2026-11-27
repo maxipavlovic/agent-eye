@@ -37,7 +37,7 @@ a:hover { background: var(--ink); color: var(--paper); text-decoration: none; }
 .strip { height: 8px; background: var(--d50); border-top: 4px solid var(--ink); flex: none; }
 
 
-.search { display: flex; align-items: center; gap: 10px; width: min(420px, 34vw); border: 2px solid var(--ink); padding: 0 10px; height: 40px; background: var(--paper); }
+.search { display: flex; align-items: center; gap: 10px; width: min(420px, 34vw); min-width: 160px; border: 2px solid var(--ink); padding: 0 10px; height: 40px; background: var(--paper); }
 .search:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
 .search kbd { font: 400 16px/1 var(--f-label); background: var(--ink); color: var(--paper); padding: 4px 6px 3px; }
 .search input { flex: 1; min-width: 0; border: 0; background: none; outline: 0; font: 500 17px var(--f-body); height: 100%; }
