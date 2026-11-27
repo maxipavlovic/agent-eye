@@ -218,7 +218,7 @@ test.describe('usage chart', () => {
 // It is evening and hints are on: the engine says so in the words it uses.
 const evening = () => {
   const c = hintClock();
-  return { ...c, now: { ...c.now, hint: 'Evening: your corrections usually run 1.8x now. Hand this to the night shift? (T)' } };
+  return { ...c, now: { ...c.now, hint: { text: 'Evening: your corrections usually run 1.8x now.', offer: true } } };
 };
 
 test.describe('hours', () => {

@@ -77,7 +77,7 @@ export function HoursDiagram({ clock }: { clock: ClockReport }) {
   const bands = clock.bad.flatMap(bandSpans);
   const colX = (h: number) => hx(h) + (SLOT - BAR) / 2;
   return (
-    <div class="cwrap cfocus" role="group" tabIndex={0} aria-label="Your hours, one column per hour of the day. Use the arrow keys to read each hour." onFocus={() => { if (active.value === null) set(0); }} onBlur={() => set(null)} onKeyDown={onKey}>
+    <div class="cwrap cfocus" role="slider" tabIndex={0} aria-label="Your hours, one column per hour of the day. Use the arrow keys to read each hour." aria-orientation="horizontal" aria-valuemin={0} aria-valuemax={23} aria-valuenow={active.value ?? 0} aria-valuetext={active.value === null ? undefined : hourRange(active.value)} onFocus={() => { if (active.value === null) set(0); }} onBlur={() => set(null)} onKeyDown={onKey}>
       <svg class="cdiagram" viewBox={`0 0 ${W} ${g.H}`} aria-hidden="true" onPointerMove={(e) => set(hourAt(e))} onPointerLeave={(e) => { if (document.activeElement !== e.currentTarget.parentElement) set(null); }}>
         {bands.map((b, i) => (
           [you, model, tool].map((s) => <rect key={`${i}-${s.y}`} class="cband" x={hx(b.from)} width={(b.to - b.from) * SLOT} y={yTop(s)} height={s.h - TITLE} />)
