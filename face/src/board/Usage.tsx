@@ -70,9 +70,8 @@ const SPLITS = [{ by: 'project', label: 'BY PROJECT' }, { by: 'model', label: 'B
 /** The USAGE panel: limits, the cost of each day, this week by project and by agent, the top 10 sessions, four weeks. */
 export function UsageHost({ store }: { store: Store }) {
   const open = usagePanel.value;
-  // the daily chart's colours follow the accent and the theme
-  store.accent.value;
-  store.theme.value;
+  // the daily chart's colours follow the accent and the theme: a change of either draws it again
+  const colourKey = `${store.accent.value}/${store.theme.value}`;
   const days = useSignal(7);
   const data = useSignal<UsageReport | null>(null);
   const failed = useSignal(false);
@@ -126,8 +125,8 @@ export function UsageHost({ store }: { store: Store }) {
               {r.series && !noCost(r.series) && (
                 <Sec t={`DAILY COST, LAST ${days.value} DAYS`}>
                   <ChartFrame title={`by ${r.series.by}`} table={table.value} onTable={(t) => { table.value = t; }}>
-                    <UsageLegend series={r.series} />
-                    {table.value ? <UsageDaysTable series={r.series} /> : <UsageDaysChart series={r.series} />}
+                    <UsageLegend key={colourKey} series={r.series} />
+                    {table.value ? <UsageDaysTable key={colourKey} series={r.series} /> : <UsageDaysChart key={colourKey} series={r.series} />}
                   </ChartFrame>
                 </Sec>
               )}
