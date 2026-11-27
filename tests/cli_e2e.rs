@@ -253,7 +253,9 @@ fn usage_by_day_lists_every_day_of_the_window_and_json_gets_the_series() {
 #[test]
 fn usage_by_day_follows_by_for_project_and_model_and_refuses_the_rest() {
     let w = usage_world();
-    let j = w.json(&["usage", "--json", "--by-day", "--by", "model", "--days", "3"]);
+    let j = w.json(&[
+        "usage", "--json", "--by-day", "--by", "model", "--days", "3",
+    ]);
     assert_eq!(j["series"]["by"], "model");
     assert!(w
         .err(&["usage", "--by-day", "--by", "agent"])
