@@ -131,6 +131,23 @@ fn a_session_read_for_the_first_time_gets_its_turns_from_the_normal_read() {
     assert_ne!(kinds.first().map(String::as_str), Some("end"));
 }
 
+/// A prompt typed while the agent worked and a comment on a refused call are prompts to the turn
+/// reader, so the session's count has to include them.
+#[test]
+fn the_prompt_count_is_the_number_of_prompt_rows_with_queued_prompts_and_comments() {
+    let said = "The user doesn't want to proceed with this tool use. To tell you how to proceed, the user said:\nuse rg instead";
+    let comment = serde_json::json!({"type": "user", "timestamp": "2026-11-02T10:08:00.000Z",
+        "message": {"content": [{"type": "tool_result", "tool_use_id": "t9", "is_error": true, "content": said}]}});
+    let queued = serde_json::json!({"type": "attachment", "timestamp": "2026-11-02T10:09:00.000Z",
+        "attachment": {"type": "queued_command", "prompt": "and the tests", "commandMode": "prompt",
+            "origin": {"kind": "human"}}});
+    let mut e = Env::new(&format!("{FIXTURE}{comment}\n{queued}\n"));
+    e.scan();
+    let one = |sql: &str| -> i64 { e.db.conn.query_row(sql, [], |r| r.get(0)).unwrap() };
+    assert_eq!(one("SELECT count(*) FROM turn WHERE kind='prompt'"), 4);
+    assert_eq!(one("SELECT prompt_count FROM session"), 4);
+}
+
 #[test]
 fn a_session_that_grows_gets_what_is_new_and_a_scan_that_finds_nothing_changes_nothing() {
     let lines: Vec<&str> = FIXTURE.lines().collect();

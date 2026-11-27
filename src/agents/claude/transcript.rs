@@ -131,6 +131,7 @@ pub fn parse_reader<R: BufRead>(mut r: R, from: u64, opts: &ParseOpts) -> Result
         if ty == "attachment" {
             if is_queued_prompt(line) {
                 if let Ok(v) = serde_json::from_slice::<Value>(line) {
+                    d.prompt_count += u32::from(super::prompt::typed_prompt(&v).is_some());
                     turns.line(&v, ty);
                 }
             }
@@ -356,6 +357,8 @@ fn process_user(
     let Some(content) = v.get("message").and_then(|m| m.get("content")) else {
         return;
     };
+    // what the turn reader counts as a prompt: a typed one, a queued one, a comment on a refusal
+    d.prompt_count += u32::from(super::prompt::typed_prompt(v).is_some());
     let is_meta = v.get("isMeta").and_then(Value::as_bool) == Some(true)
         || v.get("isCompactSummary").and_then(Value::as_bool) == Some(true);
     let mut texts: Vec<&str> = Vec::new();
@@ -382,10 +385,6 @@ fn process_user(
     let Some(p) = clean_prompt(&texts.join("\n")) else {
         return;
     };
-    // a bare slash command is no prompt, here as in the turn reader
-    if super::prompt::display_prompt(&p).is_some() {
-        d.prompt_count += 1;
-    }
     for pre in scan_jira(d, seen, &p, ts) {
         d.jira_prompt_prefixes.insert(pre);
     }
