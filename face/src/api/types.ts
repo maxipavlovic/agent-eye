@@ -598,7 +598,7 @@ export interface WindowSetting { type: 'window'; value: string; restart?: boolea
 export interface AgentsSetting { type: 'agents'; choices: Array<{ id: string; name: string }>; value: string[]; restart?: boolean }
 /**
  * A program origin found on this machine: `name` is the word a card shows (App, Headless), `about` what started its
- * sessions, `sessions` how many eye lists (not hidden, not archived), `needs_you` how many are in Needs you now as if
+ * sessions, `sessions` how many it has (not hidden, not archived by hand), `needs_you` how many are in Needs you now as if
  * nothing were quiet: what turning it on would clear.
  */
 export interface OriginChoice { id: string; name: string; about: string; sessions: number; needs_you: number }
