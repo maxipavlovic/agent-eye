@@ -198,8 +198,8 @@ fn toml_value(cfg: &Config, key: &str, v: &Value) -> Result<String, String> {
             Ok(config::toml_list(&ids))
         }
         "board.quiet" => {
-            let origins = word_list(key, v, "a list of origins")?;
-            quiet::check(&origins).map_err(|e| format!("{key}: {e}"))?;
+            let words = word_list(key, v, "a list of origins")?;
+            let origins = quiet::canonical(&words).map_err(|e| format!("{key}: {e}"))?;
             Ok(config::toml_list(&origins))
         }
         _ => unreachable!("{key} is in KEYS without being checked"),
@@ -518,6 +518,7 @@ mod tests {
             json!({"agents.enabled": "claude"}),
             json!({"board.quiet": ["terminal"]}),
             json!({"board.quiet": ["app", "app"]}),
+            json!({"board.quiet": ["app", "App"]}),
             json!({"board.quiet": "app"}),
             json!({"board.quiet": [1]}),
             json!({}),
@@ -565,7 +566,8 @@ mod tests {
         let (_, b) = call(&e, req("GET", "/api/board", None)).await;
         assert!(needs_you(&b).contains(&"app1".to_string()));
 
-        let (st, v) = post(&e, json!({"board.quiet": ["app"]})).await;
+        // the word the board shows works too, and the file gets the origin
+        let (st, v) = post(&e, json!({"board.quiet": ["App"]})).await;
         assert_eq!(st, StatusCode::OK, "{v}");
         // the count still says what it clears
         assert_eq!(

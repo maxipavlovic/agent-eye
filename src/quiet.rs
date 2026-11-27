@@ -25,9 +25,9 @@ impl Quiet {
     /// Nothing is quiet: the column a session gets without the setting.
     pub const NONE: Quiet = Quiet([false; ORIGINS.len()]);
 
-    /// The origins `[board] quiet` lists.
+    /// The origins `[board] quiet` lists, in any case.
     pub fn of(cfg: &Config) -> Quiet {
-        Quiet(ORIGINS.map(|o| cfg.board.quiet.iter().any(|q| q == o)))
+        Quiet(ORIGINS.map(|o| cfg.board.quiet.iter().any(|q| origin_of(q) == Some(o))))
     }
 
     /// Is a session of this origin quiet?
@@ -44,12 +44,42 @@ impl Quiet {
     }
 }
 
-/// Why a list cannot be `[board] quiet`: it names an origin that is not a program's.
-pub fn check(list: &[String]) -> Result<(), String> {
-    match list.iter().find(|o| !ORIGINS.contains(&o.as_str())) {
-        Some(o) => Err(format!("'{o}' cannot be quiet: give app or headless")),
-        None => Ok(()),
+/// The origin a word of `[board] quiet` names, in any case (`App` is `app`); None for a word this
+/// version does not know, which a newer eye may.
+pub fn origin_of(word: &str) -> Option<&'static str> {
+    ORIGINS
+        .into_iter()
+        .find(|o| o.eq_ignore_ascii_case(word.trim()))
+}
+
+/// The list as the file should hold it, each word as its origin, or why it cannot be: a word that
+/// names no program origin, or an origin named twice.
+pub fn canonical(words: &[String]) -> Result<Vec<String>, String> {
+    let mut out: Vec<String> = vec![];
+    for w in words {
+        let o =
+            origin_of(w).ok_or_else(|| format!("'{w}' cannot be quiet: give app or headless"))?;
+        if out.iter().any(|k| k == o) {
+            return Err(format!("'{w}' is listed twice"));
+        }
+        out.push(o.into());
     }
+    Ok(out)
+}
+
+/// Split the list the file holds into the origins it names, once each and in lower case, and the
+/// words this version does not know (left out, and reported as unknown settings are).
+pub(crate) fn sort_out(words: &[String]) -> (Vec<String>, Vec<String>) {
+    let mut known: Vec<String> = vec![];
+    let mut unknown = vec![];
+    for w in words {
+        match origin_of(w) {
+            Some(o) if !known.iter().any(|k| k == o) => known.push(o.into()),
+            Some(_) => {}
+            None => unknown.push(w.clone()),
+        }
+    }
+    (known, unknown)
 }
 
 /// One program origin as the settings panel shows it.
@@ -59,7 +89,8 @@ pub struct Found {
     /// Its sessions, but for hidden ones and ones archived by hand: what quiet covers. A throw-away
     /// one the rules file in the archive counts, since its summary and its prompts are quiet too.
     pub sessions: usize,
-    /// Those in Needs you now, as if nothing were quiet: what turning quiet on would clear.
+    /// Those quiet takes out of Needs you: in Needs you without it and not with it (a due reminder
+    /// or a move by hand keeps one there). The same whether the origin is quiet now or not.
     pub needs_you: usize,
 }
 
@@ -86,9 +117,12 @@ pub fn found(db: &Db, cfg: &Config, now: i64) -> Result<Vec<Found>> {
         if s.archived || hidden.contains(&s.id) {
             continue;
         }
-        let input = Input::from_session(&s, outputs.contains(&s.id), now, Quiet::NONE);
+        let mut input = Input::from_session(&s, outputs.contains(&s.id), now, Quiet::NONE);
+        let loud = columns::compute(&input);
+        input.quiet = true;
+        let hushed = columns::compute(&input);
         f.sessions += 1;
-        f.needs_you += usize::from(columns::compute(&input) == Column::NeedsYou);
+        f.needs_you += usize::from(loud == Column::NeedsYou && hushed != Column::NeedsYou);
     }
     let set = Quiet::of(cfg);
     out.retain(|f| f.sessions > 0 || set.holds(Some(f.origin)));
@@ -130,21 +164,36 @@ mod tests {
     }
 
     #[test]
-    fn only_the_origins_a_program_starts_can_be_quiet() {
-        let c = Config::parse("[board]\nquiet = [\"app\", \"headless\"]\n").unwrap();
+    fn the_words_match_in_any_case_and_one_this_version_does_not_know_is_left_out_with_a_warning() {
+        let (c, unknown) =
+            Config::parse_noting("[board]\nquiet = [\"App\", \" HEADLESS \", \"app\"]\n").unwrap();
+        assert_eq!(c.board.quiet, ORIGINS);
         assert_eq!(Quiet::of(&c).origins().collect::<Vec<_>>(), ORIGINS);
-        for word in ["terminal", "night", "desktop", "App", ""] {
-            let e = Config::parse(&format!("[board]\nquiet = [\"app\", \"{word}\"]\n"))
-                .unwrap_err()
-                .to_string();
-            assert!(
-                e.contains(&format!(
-                    "[board] quiet: '{word}' cannot be quiet: give app or headless"
-                )),
-                "{e}"
-            );
-        }
+        assert!(unknown.is_empty(), "{unknown:?}");
+        // a newer eye may know more origins: this one still loads the file
+        let (c, unknown) =
+            Config::parse_noting("[board]\nquiet = [\"app\", \"terminal\", \"robots\"]\n").unwrap();
+        assert_eq!(c.board.quiet, ["app"]);
+        assert_eq!(
+            unknown,
+            ["board.quiet \"robots\"", "board.quiet \"terminal\""]
+        );
+        // a value of the wrong type is still an error, as for any known key
         assert!(Config::parse("[board]\nquiet = \"app\"\n").is_err());
+        // the board's POST is strict: a word it cannot place, or one origin twice, is refused
+        let words = |w: &[&str]| w.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        assert_eq!(
+            canonical(&words(&["Headless", "app"])).unwrap(),
+            ["headless", "app"]
+        );
+        assert_eq!(
+            canonical(&words(&["app", "terminal"])).unwrap_err(),
+            "'terminal' cannot be quiet: give app or headless"
+        );
+        assert_eq!(
+            canonical(&words(&["app", "App"])).unwrap_err(),
+            "'App' is listed twice"
+        );
     }
 
     #[test]
@@ -156,7 +205,7 @@ mod tests {
     }
 
     #[test]
-    fn the_panel_counts_sessions_and_needs_you_as_if_nothing_were_quiet() {
+    fn the_panel_counts_sessions_and_the_ones_quiet_takes_out_of_needs_you() {
         let db = Db::open_memory().unwrap();
         add(&db, "a1", Some("app"), Some("needs_you"));
         add(&db, "a2", Some("app"), Some("needs_you"));
@@ -173,12 +222,27 @@ mod tests {
         db.conn
             .execute("UPDATE session SET archived=1 WHERE id='a6'", [])
             .unwrap();
+        // in Needs you for a reason quiet leaves alone: a due reminder, a move by hand
+        add(&db, "a7", Some("app"), Some("needs_you"));
+        add(&db, "a8", Some("app"), Some("paused"));
+        db.conn
+            .execute(
+                "UPDATE session SET remind_at=?1 WHERE id='a7'",
+                [NOW - 30_000],
+            )
+            .unwrap();
+        db.conn
+            .execute(
+                "UPDATE session SET column_manual='needs_you', column_manual_at=?1 WHERE id='a8'",
+                [NOW],
+            )
+            .unwrap();
         // not a program's
         add(&db, "t1", Some("terminal"), Some("needs_you"));
         add(&db, "u1", None, Some("needs_you"));
         let want = vec![Found {
             origin: "app",
-            sessions: 4,
+            sessions: 6,
             needs_you: 2,
         }];
         assert_eq!(found(&db, &Config::default(), NOW).unwrap(), want);

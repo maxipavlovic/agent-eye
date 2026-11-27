@@ -373,15 +373,15 @@ test.describe('settings', () => {
     await head.focus();
     await board.keyboard.press('Enter');
     await expect(head).toHaveAttribute('aria-expanded', 'true');
-    await expect(panel).toContainText("2 sessions started by an app through an agent's SDK, 1 in Needs you now.");
-    await expect(panel).toContainText('2 sessions started by a script or a CI job, none in Needs you now.');
+    await expect(panel).toContainText("2 sessions started by an app through an agent's SDK; quiet would take 1 out of Needs you.");
+    await expect(panel).toContainText('2 sessions started by a script or a CI job; quiet would take none out of Needs you.');
     const on = panel.getByRole('group', { name: 'Quiet App' }).getByRole('button', { name: 'ON' });
     await board.keyboard.press('Tab');
     await expect(on).toBeFocused();
     await board.keyboard.press('Enter');
     await expect(panel.getByRole('status')).toHaveText('Saved');
     await expect(on).toHaveAttribute('aria-pressed', 'true');
-    await expect(panel).toContainText("2 sessions started by an app through an agent's SDK, 1 kept out of Needs you.");
+    await expect(panel).toContainText("2 sessions started by an app through an agent's SDK; 1 kept out of Needs you.");
     expect((await eye.api('/api/settings')).settings['board.quiet'].value).toEqual(['app']);
     await board.keyboard.press('Escape');
     // the board follows without a restart: Paused, where its summary puts it, and still found

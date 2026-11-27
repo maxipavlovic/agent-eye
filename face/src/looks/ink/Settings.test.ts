@@ -414,7 +414,7 @@ describe('the sessions started by programs', () => {
   };
   const switches = () => [...section(T).querySelectorAll('[role=group]')].map((g) => [g.getAttribute('aria-label'), g.querySelector('[aria-pressed=true]')?.textContent]);
 
-  it('comes after SUMMARIES with a switch for each program origin found, its sessions and its Needs you count', async () => {
+  it('comes after SUMMARIES with a switch for each program origin found, its sessions and how many quiet takes out of Needs you', async () => {
     const { heads, open, unfold } = await mount(engine().source);
     await open();
     await unfold(T);
@@ -422,8 +422,8 @@ describe('the sessions started by programs', () => {
     expect(switches()).toEqual([['Quiet App', 'OFF'], ['Quiet Headless', 'OFF']]);
     const lines = [...section(T).querySelectorAll('.srow .umeta')].map((p) => p.textContent);
     expect(lines).toEqual([
-      "5 sessions started by an app through an agent's SDK, 2 in Needs you now.",
-      '3 sessions started by a script or a CI job, none in Needs you now.',
+      "5 sessions started by an app through an agent's SDK; quiet would take 2 out of Needs you.",
+      '3 sessions started by a script or a CI job; quiet would take none out of Needs you.',
     ]);
     expect(section(T).textContent).toContain('A quiet session never moves to Needs you by itself, gets no summary and stays out of HOURS.');
   });
@@ -440,7 +440,7 @@ describe('the sessions started by programs', () => {
     await vi.waitFor(() => expect($('.settings [role=status]')!.textContent).toBe('Saved'));
     await vi.waitFor(() => expect(board.mock.calls.length).toBeGreaterThan(loads));
     expect(switches()).toEqual([['Quiet App', 'ON'], ['Quiet Headless', 'OFF']]);
-    expect(section(T).querySelector('.srow .umeta')!.textContent).toBe("5 sessions started by an app through an agent's SDK, 2 kept out of Needs you.");
+    expect(section(T).querySelector('.srow .umeta')!.textContent).toBe("5 sessions started by an app through an agent's SDK; 2 kept out of Needs you.");
     press('Quiet Headless', 'ON');
     await vi.waitFor(() => expect(saveSettings).toHaveBeenLastCalledWith({ 'board.quiet': ['app', 'headless'] }));
     head(T)!.click();

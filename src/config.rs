@@ -406,7 +406,8 @@ pub struct BoardCfg {
     pub resume: String,
     /// Done sessions idle for longer than this many days leave the board (0 = no limit).
     pub done_days: u32,
-    /// Origins whose sessions are quiet (see `quiet`): only `app` and `headless` are taken.
+    /// Origins whose sessions are quiet (see `quiet`), in lower case: a word that names neither
+    /// `app` nor `headless` is left out when the file is read.
     pub quiet: Vec<String>,
 }
 impl Default for BoardCfg {
@@ -544,8 +545,9 @@ impl Config {
             a.retain(|k, v| k == "enabled" || v.is_table());
         }
         let mut cfg = Config::deserialize(table).context("parsing config.toml")?;
-        crate::quiet::check(&cfg.board.quiet)
-            .map_err(|e| anyhow::anyhow!("parsing config.toml: [board] quiet: {e}"))?;
+        let (quiet, others) = crate::quiet::sort_out(&cfg.board.quiet);
+        cfg.board.quiet = quiet;
+        unknown.extend(others.iter().map(|w| format!("board.quiet {w:?}")));
         cfg.clock = cfg.clock.normalized();
         unknown.sort();
         Ok((cfg, unknown))
@@ -574,27 +576,6 @@ impl Config {
         let mut cfg = cfg;
         cfg.night_dir = path.parent().map(|p| p.join("night"));
         Ok(cfg)
-    }
-
-    /// The settings as the file says now, for a long-running part (the daemon, the board) that
-    /// should see a change made after it started. What the file does not hold (the folder root and
-    /// the night folder and a folder given on the command line, set by the process that loaded it)
-    /// is kept from `self`, and so is `self` whole when the file cannot be read or parsed.
-    pub fn fresh(&self, path: &Path) -> Config {
-        let Some(mut c) = std::fs::read_to_string(path)
-            .ok()
-            .and_then(|t| Config::parse(&t).ok())
-        else {
-            return self.clone();
-        };
-        c.folder_root.clone_from(&self.folder_root);
-        c.night_dir.clone_from(&self.night_dir);
-        for (id, a) in &self.agents.each {
-            if a.dir_override.is_some() {
-                c.agents.each.entry(id.clone()).or_default().dir_override = a.dir_override.clone();
-            }
-        }
-        c
     }
 
     /// The ids in `[agents] enabled`; Claude Code when the key is not set.
