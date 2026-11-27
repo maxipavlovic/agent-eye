@@ -447,7 +447,7 @@ pub enum Cmd {
         #[arg(long)]
         json: bool,
     },
-    /// The steering clock: which hours you steer worse, and whether it was you or the model
+    /// The steering clock: which hours you steer worse, and whether it was you or the model.
     /// `clock detect` judges the prompts that have not been judged yet, now
     #[command(args_conflicts_with_subcommands = true)]
     Clock {
@@ -456,6 +456,7 @@ pub enum Cmd {
         /// The last N weeks (1 to 12)
         #[arg(long, default_value_t = 4)]
         weeks: i64,
+        /// Machine-readable output
         #[arg(long)]
         json: bool,
         /// Only the verdict, as one line

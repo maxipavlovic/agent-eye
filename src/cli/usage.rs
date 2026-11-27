@@ -12,6 +12,12 @@ pub fn run(g: &Global, days: i64, by: &str, by_day: bool, json: bool) -> Result<
     if days < 1 {
         bail!("--days takes a number of days from 1");
     }
+    if by_day && !matches!(by, report::By::Project | report::By::Model) {
+        bail!(
+            "--by-day splits the days by project or model, not by '{}'",
+            by.name()
+        );
+    }
     let mut env = g.open()?;
     // Sessions read before usage by day existed are counted now, so the numbers are whole.
     backfill::run_all(&mut env.db, &env.paths, &env.agents)?;
@@ -30,7 +36,7 @@ pub fn run(g: &Global, days: i64, by: &str, by_day: bool, json: bool) -> Result<
             &env.db.conn,
             &env.cfg.usage,
             days,
-            report::By::Project,
+            by,
             now,
             &crate::worked::summary::local_offset_ms,
         )

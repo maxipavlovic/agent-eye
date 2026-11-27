@@ -166,13 +166,16 @@ fn text(r: &Report, weeks: i64) -> String {
         } else {
             0
         };
+        let rate = if b.prompts == 0 {
+            format!("{:>13}", "no prompts")
+        } else {
+            format!("{v:>5.1} per 100  ({} prompts)", b.prompts)
+        };
         let _ = writeln!(
             o,
-            "  {:<5} {:<w$} {:>5.1} per 100  ({} prompts)",
+            "  {:<5} {:<w$} {rate}",
             b.band,
             "█".repeat(cells),
-            v,
-            b.prompts,
             w = BAR_CELLS
         );
     }
@@ -338,10 +341,7 @@ mod tests {
             t.contains("  <1h   █████████                  7.0 per 100  (1000 prompts)"),
             "{t}"
         );
-        assert!(
-            t.contains("  2-4h                             0.0 per 100  (0 prompts)"),
-            "{t}"
-        );
+        assert!(t.contains("  2-4h ") && t.contains(" no prompts\n"), "{t}");
         assert!(t.contains("Now: 35 min since your last break, in one of the worse hours."));
     }
 
