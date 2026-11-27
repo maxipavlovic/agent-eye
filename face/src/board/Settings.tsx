@@ -19,12 +19,14 @@ const THEMES: ReadonlyArray<readonly [ThemePref, string]> = [['light', 'LIGHT'],
 /** The sections open when the panel opens: only how the board looks. */
 const FIRST_OPEN: ReadonlySet<string> = new Set(['LOOK']);
 
+/** The text a list of [value, text] gives `v`. */
+const textOf = <T,>(list: ReadonlyArray<readonly [T, string]>, v: T) => list.find(([k]) => k === v)?.[1];
+
 /** How the board looks: the look, the accent colour, the layout and the theme. They apply at once and live in the browser and the engine. */
 function LookSettings({ store, layout, setLayout, folds }: { store: Store; layout: Layout; setLayout: (l: Layout) => void; folds: Folds }) {
   const look = lookNamed(document.documentElement.dataset.look);
   const accent = store.accent.value;
-  const label = <T,>(list: ReadonlyArray<readonly [T, string]>, v: T) => list.find(([k]) => k === v)?.[1];
-  const sum = [LOOK_LIST.find((l) => l.id === look)?.label, label(LAYOUTS, layout), label(THEMES, store.themePref.value)].filter(Boolean).join(' · ');
+  const sum = [LOOK_LIST.find((l) => l.id === look)?.label, textOf(LAYOUTS, layout), textOf(THEMES, store.themePref.value)].filter(Boolean).join(' · ');
   return (
     <Part t="LOOK" sum={sum} folds={folds}>
       {look && (

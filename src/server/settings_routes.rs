@@ -248,13 +248,12 @@ mod tests {
 
     #[test]
     fn every_setting_and_its_fields_are_in_the_api_docs_the_config_docs_and_the_types() {
-        let root = env!("CARGO_MANIFEST_DIR");
-        let read = |file: &str| std::fs::read_to_string(format!("{root}/{file}")).unwrap();
-        let (api, config, types) = (
-            read("docs/api.md"),
-            read("docs/config.md"),
-            read("face/src/api/types.ts"),
-        );
+        let api = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/docs/api.md"));
+        let config = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/docs/config.md"));
+        let types = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/face/src/api/types.ts"
+        ));
         // the route's own row of api.md, and the settings types of types.ts
         let row = api
             .lines()

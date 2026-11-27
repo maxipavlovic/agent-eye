@@ -621,20 +621,14 @@ mod tests {
 
     #[test]
     fn the_models_offered_for_summaries_start_with_the_default_and_repeat_none() {
-        let choices = |id: &str| {
-            let agents = known(&Config::default());
-            summary_choices(agents.get(id).unwrap().as_ref())
-        };
+        let agents = known(&Config::default());
+        let choices = |id: &str| summary_choices(agents.get(id).unwrap().as_ref());
         // Claude Code's three aliases, as `claude --help` gives them
         assert_eq!(choices("claude"), ["haiku", "sonnet", "opus"]);
         // the others list no names of their own: only their default is offered
         for id in ["codex", "agy", "opencode"] {
-            let agents = known(&Config::default());
-            assert_eq!(
-                choices(id),
-                [agents.get(id).unwrap().default_summary_model()],
-                "{id}"
-            );
+            let default = agents.get(id).unwrap().default_summary_model();
+            assert_eq!(choices(id), [default], "{id}");
         }
         assert_eq!(choices("opencode"), ["free"]);
     }
