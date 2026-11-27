@@ -89,12 +89,13 @@ impl Turns {
             }
             Event::Meta { .. } | Event::Turn { .. } | Event::Other => match payload_type(v) {
                 Some("task_complete") => s.close_at(ts),
-                Some("turn_aborted") => {
-                    // a task that a newer one replaced, or that ran out of budget, is no one's interrupt
-                    if v.pointer("/payload/reason").and_then(Value::as_str) == Some("interrupted") {
-                        s.push(ts, TurnKind::Interrupt, 0);
-                        s.abandon();
-                    }
+                // a task that a newer one replaced, or that ran out of budget, is no one's interrupt
+                Some("turn_aborted")
+                    if v.pointer("/payload/reason").and_then(Value::as_str)
+                        == Some("interrupted") =>
+                {
+                    s.push(ts, TurnKind::Interrupt, 0);
+                    s.abandon();
                 }
                 _ => {}
             },

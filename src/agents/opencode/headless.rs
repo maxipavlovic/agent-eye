@@ -2,9 +2,12 @@
 //! so the prompt asks for strict JSON, the last text of the event stream is validated against the
 //! schema eye uses, and one invalid answer is asked again. The run is made `--archived` (out of
 //! OpenCode's lists) and its session is deleted afterwards, so it never shows up in eye or in
-//! OpenCode. The run is given permission rules that deny the shell, edits, web fetches and any
-//! folder outside its own empty one (`PERMISSIONS`), so text inside what it is asked about (a quoted
-//! web page, a tool's output) cannot make it do anything.
+//! OpenCode. The run gets a config of its own (`deny_all`, passed inline, never written to the
+//! user's config file) that denies every permission by default and switches every tool off, so
+//! text inside what it is asked about (a quoted web page, a tool's output) has nothing to drive: not
+//! the shell, edits, web fetches or search, sub-agents, skills, nor the tools of the user's MCP
+//! servers. That is written from OpenCode's documentation and not yet run against a real
+//! OpenCode (`docs/security.md`).
 
 use super::OpenCode;
 use crate::agents::{HeadlessReply, HeadlessRequest};
@@ -24,11 +27,34 @@ pub const FREE: &str = "free";
 /// Words in a model name that mark a small, fast one; the first free model with one is taken.
 const SMALL: [&str; 6] = ["flash", "lightning", "small", "mini", "nano", "lite"];
 
-/// OpenCode's permission rules for a question: nothing that acts is allowed. They are given as the
-/// run's inline config, which beats the user's own. The run is not given `--auto`, so nothing is
-/// approved on its behalf; what is left open is reading its own empty folder.
-const PERMISSIONS: &str =
-    r#"{"permission":{"bash":"deny","edit":"deny","webfetch":"deny","external_directory":"deny"}}"#;
+/// The config of a question: nothing that acts is allowed. OpenCode starts every agent from a rule
+/// that allows everything, so a list of denied tools would leave the rest open (web search,
+/// sub-agents, skills, any MCP server's tools); the `*` rule denies all of them, the named keys say
+/// it again for the ones OpenCode has always had, and `tools` switches every tool off as well. It
+/// is the run's inline config, which beats the user's own. The run is not given `--auto`, so
+/// nothing is approved on its behalf; what is left open is reading its own empty folder.
+fn deny_all() -> String {
+    let permission: serde_json::Map<String, Value> = [
+        "*",
+        "bash",
+        "edit",
+        "webfetch",
+        "websearch",
+        "external_directory",
+        "task",
+        "skill",
+    ]
+    .into_iter()
+    .map(|k| (k.to_string(), json!("deny")))
+    .collect();
+    json!({
+        "permission": permission,
+        "tools": {"*": false},
+        "share": "disabled",
+        "autoupdate": false,
+    })
+    .to_string()
+}
 
 /// The flags a summary run needs `opencode run` to have.
 const FLAGS: [&str; 3] = ["--format", "--archived", "--title"];
@@ -295,7 +321,7 @@ fn prompt(req: &HeadlessRequest, problem: Option<&str>) -> String {
 /// The command of one question: `opencode run` in its own archived session, with the deny rules.
 fn ask_command(c: &OpenCode, model: &str) -> Command {
     let mut cmd = command(c);
-    cmd.env("OPENCODE_CONFIG_CONTENT", PERMISSIONS);
+    cmd.env("OPENCODE_CONFIG_CONTENT", deny_all());
     cmd.args([
         "run",
         "--standalone",
@@ -418,16 +444,35 @@ mod tests {
     }
 
     #[test]
-    fn a_question_runs_with_the_shell_edits_and_web_denied() {
+    fn a_question_runs_with_everything_denied_by_default_and_every_tool_off() {
         let c = OpenCode::new(std::path::PathBuf::from("/nonexistent"));
         let cmd = ask_command(&c, "provider/model");
         let rules: Value =
             serde_json::from_str(&env_of(&cmd, "OPENCODE_CONFIG_CONTENT").unwrap()).unwrap();
-        for tool in ["bash", "edit", "webfetch", "external_directory"] {
+        // the default rule, so what the list below leaves out (an MCP tool) is denied too
+        assert_eq!(rules["permission"]["*"], "deny");
+        for tool in [
+            "bash",
+            "edit",
+            "webfetch",
+            "websearch",
+            "external_directory",
+            "task",
+            "skill",
+        ] {
             assert_eq!(rules["permission"][tool], "deny", "{tool}");
         }
-        // nothing in the rules allows anything, and the run is not told to approve what it asks
+        assert_eq!(rules["tools"]["*"], false);
+        // nothing in the config allows or asks anything, and the run is not told to approve what it asks
+        assert!(rules["permission"]
+            .as_object()
+            .unwrap()
+            .values()
+            .all(|v| v == "deny"));
         assert!(!rules.to_string().contains("allow"));
+        assert!(!rules.to_string().contains("\"ask\""));
+        // inline only: the user's own config file is not named, written or read
+        assert!(cmd.get_envs().all(|(k, _)| k != "OPENCODE_CONFIG"));
         let args: Vec<String> = cmd
             .get_args()
             .map(|a| a.to_string_lossy().into_owned())

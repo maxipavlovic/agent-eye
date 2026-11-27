@@ -310,7 +310,7 @@ mod tests {
             queued.to_string(),
             user("<command-name>/review-pr</command-name><command-args>12</command-args>"),
         ]);
-        let got: Vec<(&str, &str)> = m.iter().map(|m| (&*m.role, &*m.text)).collect();
+        let got: Vec<(&str, &str)> = m.iter().map(|m| (m.role, &*m.text)).collect();
         assert_eq!(
             got,
             vec![

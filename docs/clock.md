@@ -103,7 +103,7 @@ use for summaries, with the same call. What that call can and cannot do depends 
 | Claude Code | none (`--tools ""`), no MCP servers, hooks off | none (`--no-session-persistence`) | |
 | Codex CLI | no tool-less mode: a read-only sandbox, so it can read files but not write or run anything that changes them, and the sandbox has no network | none (`--ephemeral`) | your config, hooks and rules are ignored |
 | agy | plan mode and `--sandbox`: agy's own changelog says plan mode does not edit or run commands; not tested here | the conversation is deleted after the call: its folder, database and row in `conversation_summaries.db`; `history.jsonl` is only edited while agy is closed | the run happens in a folder named `eye-ask-<uuid>`, which the scanner skips |
-| OpenCode | denied by permission rules for the run (not proven on a real install) | the session is deleted after the call | **skipped by the pass** |
+| OpenCode | every permission is denied by default and every tool is off, for the run (shell, edits, web fetches and search, sub-agents, skills and your MCP servers' tools). Written from OpenCode's documentation, not proven on a real install | the session is deleted after the call | **skipped by the pass** |
 
 The pass only asks an agent whose locked-down run is proven. Claude Code, Codex and agy are.
 **OpenCode is skipped**: its rules were written from its documentation and have not been checked on
