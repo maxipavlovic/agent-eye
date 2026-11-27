@@ -5,7 +5,9 @@
 //! `crate::turns::stream`). OpenCode records the thinking of a message as `tokens.reasoning`, so a
 //! thought is one message's reasoning tokens. A message that was stopped by the user carries a
 //! `MessageAbortedError`; a tool part that failed has `state.status` `error`, and is a refusal
-//! when its error says the user or a rule rejected the call.
+//! when its error is OpenCode's own message for a permission decision (the user said no, or a
+//! rule did), which is a message and not a failure of the tool. The wording is from OpenCode's
+//! source and not yet seen in a real session.
 
 use super::events::{n, s, text_parts, Ev};
 use crate::turns::stream::Stream;
@@ -16,7 +18,10 @@ use std::collections::HashMap;
 use std::sync::LazyLock;
 
 static RE_REFUSAL: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?i)rejected|prevents you|denied|not allowed|permission").expect("static regex")
+    Regex::new(
+        r"^\s*(The user rejected permission|The user has specified a rule which prevents you)",
+    )
+    .expect("static regex")
 });
 
 /// Turns the messages of a session, in order, into turn events. The last turn has no `End` until
@@ -206,6 +211,32 @@ mod tests {
     }
 
     #[test]
+    fn only_a_permission_decision_is_a_refusal_not_an_error_that_mentions_permission() {
+        let kind = |error: &str| {
+            let mut b = Builder::default();
+            b.tool(
+                1000,
+                &json!({"type": "tool", "state": {"status": "error", "error": error}}),
+            );
+            b.finish().last().map(|e| e.kind)
+        };
+        for said in [
+            "The user rejected permission to use this specific tool call.",
+            "The user rejected permission to use this specific tool call. You may try again with the following guidance: use rg",
+            "The user has specified a rule which prevents you from using this specific tool call.",
+        ] {
+            assert_eq!(kind(said), Some(TurnKind::Refusal), "{said}");
+        }
+        for failed in [
+            "EACCES: permission denied, open '/etc/hosts'",
+            "git push was rejected: non-fast-forward",
+            "command not allowed in this shell",
+        ] {
+            assert_eq!(kind(failed), Some(TurnKind::ToolError), "{failed}");
+        }
+    }
+
+    #[test]
     fn a_session_reports_every_kind_once() {
         let (msgs, parts) = v1();
         let events = from_v1(&msgs, &parts);
@@ -276,7 +307,7 @@ mod tests {
                 "assistant".to_string(),
                 2000,
                 json!({"time": {"completed": 3000}, "tokens": {"reasoning": 7},
-                    "content": [{"type": "tool", "state": {"status": "error", "error": "denied by rule"}},
+                    "content": [{"type": "tool", "state": {"status": "error", "error": "The user has specified a rule which prevents you from using this specific tool call."}},
                                 {"type": "text", "text": "ok done"}]}),
             ),
             ("c".to_string(), "compaction".to_string(), 4000, json!({})),

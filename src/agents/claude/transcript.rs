@@ -125,7 +125,17 @@ pub fn parse_reader<R: BufRead>(mut r: R, from: u64, opts: &ParseOpts) -> Result
             None => continue,
         };
         // Whitelist: everything else (attachments, api-request*, file-history*, ...) is skipped
-        // before JSON parsing. They embed MEMORY.md and tool lists and would give false links.
+        // before JSON parsing. They embed MEMORY.md and tool lists and would give false links. The
+        // one attachment that matters is a prompt typed while the agent worked: only the turn
+        // events read it.
+        if ty == "attachment" {
+            if is_queued_prompt(line) {
+                if let Ok(v) = serde_json::from_slice::<Value>(line) {
+                    turns.line(&v, ty);
+                }
+            }
+            continue;
+        }
         if !matches!(
             ty,
             "user"
@@ -315,6 +325,12 @@ pub fn clean_prompt(raw: &str) -> Option<String> {
         return None;
     }
     Some(t.to_string())
+}
+
+/// Is this an `attachment` line that records a prompt typed while the agent worked? Attachments are
+/// skipped before parsing, as they embed memory files and tool lists, so only these are let in.
+pub(super) fn is_queued_prompt(line: &[u8]) -> bool {
+    line.windows(16).any(|w| w == b"\"queued_command\"")
 }
 
 pub(super) fn result_text(content: Option<&Value>) -> String {

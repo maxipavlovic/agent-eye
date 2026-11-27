@@ -1,8 +1,8 @@
 //! Claude Code transcripts read as a conversation (real prompts and replies) and as the tail
 //! for a summary excerpt (the last messages with one line per tool call).
 
-use super::prompt::display_prompt;
-use super::transcript::clean_prompt;
+use super::prompt::typed_prompt;
+use super::transcript::{clean_prompt, is_queued_prompt};
 use crate::agents::TailItem;
 use crate::conversation::Message;
 use crate::util::{iso_to_ms, tail_chars};
@@ -30,14 +30,18 @@ pub fn conversation(r: &mut dyn BufRead) -> Vec<Message> {
         }
         let line = buf.strip_suffix(b"\n").unwrap_or(&buf);
         let user = contains(line, b"\"type\":\"user\"");
-        let assistant = !user && contains(line, b"\"type\":\"assistant\"");
-        if !user && !assistant {
+        let queued =
+            !user && line.starts_with(b"{\"type\":\"attachment\"") && is_queued_prompt(line);
+        let assistant = !user && !queued && contains(line, b"\"type\":\"assistant\"");
+        if !user && !queued && !assistant {
             continue;
         }
-        // A tool result is the bulk of a transcript and never a prompt.
+        // A tool result is the bulk of a transcript and never a prompt, unless it carries the user's
+        // comment on a refused call.
         if user
             && contains(line, b"\"type\":\"tool_result\"")
             && !contains(line, b"\"type\":\"text\"")
+            && !contains(line, b"the user said:")
         {
             continue;
         }
@@ -52,8 +56,8 @@ pub fn conversation(r: &mut dyn BufRead) -> Vec<Message> {
             .and_then(Value::as_str)
             .and_then(iso_to_ms);
         match v.get("type").and_then(Value::as_str) {
-            Some("user") => {
-                if let Some(text) = prompt_of(&v) {
+            Some("user" | "attachment") => {
+                if let Some(text) = typed_prompt(&v) {
                     turn.flush(&mut out);
                     out.push(Message::new("user", &text, ts, 0));
                 }
@@ -68,27 +72,6 @@ pub fn conversation(r: &mut dyn BufRead) -> Vec<Message> {
 
 fn contains(hay: &[u8], needle: &[u8]) -> bool {
     hay.windows(needle.len()).any(|w| w == needle)
-}
-
-/// The text of a real prompt, None for tool results, injected lines and slash commands.
-fn prompt_of(v: &Value) -> Option<String> {
-    let flag = |k: &str| v.get(k).and_then(Value::as_bool) == Some(true);
-    if flag("isMeta") || flag("isCompactSummary") {
-        return None;
-    }
-    let texts: Vec<&str> = match v.get("message")?.get("content")? {
-        Value::String(t) => vec![t.as_str()],
-        Value::Array(blocks) => blocks
-            .iter()
-            .filter(|b| b.get("type").and_then(Value::as_str) == Some("text"))
-            .filter_map(|b| b.get("text").and_then(Value::as_str))
-            .collect(),
-        _ => return None,
-    };
-    if texts.is_empty() {
-        return None;
-    }
-    display_prompt(&clean_prompt(&texts.join("\n"))?)
 }
 
 /// Claude's lines since the last prompt.
@@ -310,6 +293,35 @@ mod tests {
 
     fn convo(lines: &[String]) -> Vec<Message> {
         conversation(&mut Cursor::new(lines.join("\n").into_bytes()))
+    }
+
+    #[test]
+    fn the_prompts_the_turn_events_count_are_messages_of_the_conversation_too() {
+        let said = "The user doesn't want to proceed with this tool use. To tell you how to proceed, the user said:\nuse rg instead";
+        let feedback = serde_json::json!({"type": "user", "timestamp": "2026-11-08T10:01:00.000Z",
+            "message": {"content": [{"type": "tool_result", "tool_use_id": "t", "is_error": true, "content": said}]}});
+        let queued = serde_json::json!({"type": "attachment", "timestamp": "2026-11-08T10:02:00.000Z",
+            "attachment": {"type": "queued_command", "prompt": "and the tests", "commandMode": "prompt",
+                "origin": {"kind": "human"}}});
+        let m = convo(&[
+            user("<pasted_content id=1>x</pasted_content> why?"),
+            assistant(r#"{"type":"text","text":"Trying."}"#, ""),
+            feedback.to_string(),
+            queued.to_string(),
+            user("<command-name>/review-pr</command-name><command-args>12</command-args>"),
+        ]);
+        let got: Vec<(&str, &str)> = m.iter().map(|m| (&*m.role, &*m.text)).collect();
+        assert_eq!(
+            got,
+            vec![
+                ("user", "x why?"),
+                ("assistant", "Trying."),
+                ("user", "use rg instead"),
+                ("user", "and the tests"),
+                ("user", "/review-pr 12"),
+            ]
+        );
+        assert!(m[2].ts < m[3].ts);
     }
 
     #[test]

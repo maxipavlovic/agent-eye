@@ -2,7 +2,8 @@
 //! ends with the last assistant line before the next prompt (see `crate::turns::stream`).
 
 use super::super::append_only::for_each_line;
-use super::transcript::{line_type, result_text};
+use super::prompt::typed_prompt;
+use super::transcript::{is_queued_prompt, line_type, result_text};
 use crate::turns::stream::Stream;
 use crate::turns::{TurnEvent, TurnKind};
 use crate::util::iso_to_ms;
@@ -12,11 +13,14 @@ use serde_json::Value;
 use std::path::Path;
 use std::sync::LazyLock;
 
-/// How much of a failed tool result is looked at to tell a refusal from an error.
-const RESULT_LOOK: usize = 400;
-
+/// How Claude Code words a permission decision in a tool result: the user said no ("The user
+/// doesn't want to proceed with this tool use", "... to take this action right now"), or a rule or
+/// the permission mode did ("Permission to use Bash has been denied", "Permission for this action
+/// ..."). A failed command that happens to say "Permission denied" or "rejected" is a tool error,
+/// not a decision.
 static RE_REFUSAL: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?i)denied|rejected|doesn't want|not allowed|permission").expect("static regex")
+    Regex::new(r"^\s*(The user doesn't want to|Permission (to use|for this))")
+        .expect("static regex")
 });
 
 /// Collects the turn events of the lines it is shown, in file order.
@@ -44,6 +48,7 @@ impl Turns {
         match ty {
             "user" => self.user(v, ts),
             "assistant" => self.assistant(v, ts),
+            "attachment" => self.prompt(v, ts),
             "system" if v.get("subtype").and_then(Value::as_str) == Some("compact_boundary") => {
                 self.push(ts, TurnKind::Compact, 0);
             }
@@ -56,40 +61,38 @@ impl Turns {
     }
 
     fn user(&mut self, v: &Value, ts: i64) {
-        let flag = |k| v.get(k).and_then(Value::as_bool) == Some(true);
         let Some(content) = v.get("message").and_then(|m| m.get("content")) else {
             return;
         };
-        // What the user typed: a string, or the text blocks of a list (a pasted image comes with its
-        // text, and the feedback on a rejected tool call comes next to the result).
-        let mut typed: Vec<&str> = vec![];
-        match content {
-            Value::String(t) => typed.push(t),
-            Value::Array(blocks) => {
-                for b in blocks {
-                    match b.get("type").and_then(Value::as_str) {
-                        Some("text") => typed.extend(b.get("text").and_then(Value::as_str)),
-                        Some("tool_result") => self.result(b, ts),
-                        _ => {}
+        // A user line holds text blocks (or a string) and tool results; an interruption notice is
+        // one of the texts.
+        let mut interrupted = matches!(content, Value::String(t) if is_interrupt(t));
+        if let Value::Array(blocks) = content {
+            for b in blocks {
+                match b.get("type").and_then(Value::as_str) {
+                    Some("text") => {
+                        interrupted |= b
+                            .get("text")
+                            .and_then(Value::as_str)
+                            .is_some_and(is_interrupt);
                     }
+                    Some("tool_result") => self.result(b, ts),
+                    _ => {}
                 }
             }
-            _ => {}
         }
-        if typed.iter().any(|t| is_interrupt(t)) {
+        if interrupted {
             self.push(ts, TurnKind::Interrupt, 0);
-            typed.retain(|t| !is_interrupt(t));
         }
-        let text = typed.join("\n");
-        if flag("isMeta") || flag("isCompactSummary") {
-            return;
+        self.prompt(v, ts);
+    }
+
+    /// The prompt of a line, if it holds one (`typed_prompt`): it ends the turn before it.
+    fn prompt(&mut self, v: &Value, ts: i64) {
+        if let Some(text) = typed_prompt(v) {
+            self.0.close();
+            self.push(ts, TurnKind::Prompt, text.chars().count() as i64);
         }
-        let text = text.trim();
-        if text.is_empty() || text.starts_with('<') {
-            return;
-        }
-        self.0.close();
-        self.push(ts, TurnKind::Prompt, text.chars().count() as i64);
     }
 
     /// A failed tool result is a refusal when its text says the user or a rule said no.
@@ -98,11 +101,7 @@ impl Turns {
             return;
         }
         let text = result_text(b.get("content"));
-        let look = text
-            .char_indices()
-            .nth(RESULT_LOOK)
-            .map_or(&*text, |(i, _)| &text[..i]);
-        let kind = if RE_REFUSAL.is_match(look) {
+        let kind = if RE_REFUSAL.is_match(&text) {
             TurnKind::Refusal
         } else {
             TurnKind::ToolError
@@ -153,7 +152,8 @@ pub(super) fn read_events(path: &Path) -> Result<Vec<TurnEvent>> {
         if !matches!(
             line_type(line),
             None | Some("user" | "assistant" | "system")
-        ) {
+        ) && !(line_type(line) == Some("attachment") && is_queued_prompt(line))
+        {
             return;
         }
         let Ok(v) = serde_json::from_slice::<Value>(line) else {
@@ -273,19 +273,89 @@ mod tests {
 
     #[test]
     fn the_feedback_on_a_rejected_tool_call_is_a_refusal_and_a_prompt() {
+        use TurnKind::*;
+        // as Claude Code writes it: the comment is the end of the tool result's own text
         let mut t = Turns::resume(None);
         let v = user_line(serde_json::json!([
             {"type": "tool_result", "is_error": true,
-             "content": "The user doesn't want to proceed with this tool use."},
-            {"type": "text", "text": "use rg instead"},
+             "content": "The user doesn't want to proceed with this tool use. The tool use was rejected (eg. if it was a file edit, the new_string was NOT written to the file). To tell you how to proceed, the user said:\nuse rg instead"},
+        ]));
+        t.line(&v, "user");
+        assert_eq!(kinds(&t.finish().0), vec![(Refusal, 0), (Prompt, 14)]);
+
+        // a refusal with no comment, and the interruption notice that comes with it
+        let mut t = Turns::resume(None);
+        let v = user_line(serde_json::json!([
+            {"type": "tool_result", "is_error": true,
+             "content": "The user doesn't want to proceed with this tool use. The tool use was rejected."},
             {"type": "text", "text": "[Request interrupted by user for tool use]"}
         ]));
         t.line(&v, "user");
+        assert_eq!(kinds(&t.finish().0), vec![(Refusal, 0), (Interrupt, 0)]);
+
+        // a comment in a text block next to the result is a prompt too
+        let mut t = Turns::resume(None);
+        let v = user_line(serde_json::json!([
+            {"type": "tool_result", "is_error": true, "content": "The user doesn't want to proceed."},
+            {"type": "text", "text": "use rg instead"},
+        ]));
+        t.line(&v, "user");
+        assert_eq!(kinds(&t.finish().0), vec![(Refusal, 0), (Prompt, 14)]);
+    }
+
+    #[test]
+    fn a_prompt_that_starts_with_a_paste_or_a_slash_command_with_arguments_is_a_prompt() {
         use TurnKind::*;
-        assert_eq!(
-            kinds(&t.finish().0),
-            vec![(Refusal, 0), (Interrupt, 0), (Prompt, 14)]
+        for (raw, n) in [
+            (
+                "<pasted_content id=\"a\">trace</pasted_content id=\"a\"> why does this fail?",
+                "trace why does this fail?".len() as i64,
+            ),
+            (
+                "<command-name>/review-pr</command-name><command-args>12 quickly</command-args>",
+                "/review-pr 12 quickly".len() as i64,
+            ),
+        ] {
+            let mut t = Turns::resume(None);
+            t.line(&user_line(serde_json::json!(raw)), "user");
+            assert_eq!(kinds(&t.finish().0), vec![(Prompt, n)], "{raw}");
+        }
+        // a bare slash command and a background-task notice are not prompts
+        let mut t = Turns::resume(None);
+        for raw in [
+            "<command-name>/clear</command-name><command-args></command-args>",
+            "<task-notification>done</task-notification>",
+        ] {
+            t.line(&user_line(serde_json::json!(raw)), "user");
+        }
+        assert!(t.finish().0.is_empty());
+    }
+
+    #[test]
+    fn a_prompt_typed_while_the_agent_worked_is_a_prompt_that_closes_the_turn() {
+        use TurnKind::*;
+        let queued = |origin: Value, mode: &str, meta: bool| {
+            serde_json::json!({"type": "attachment", "timestamp": "2026-11-02T10:09:00.000Z",
+                "attachment": {"type": "queued_command", "prompt": "also add a test",
+                    "commandMode": mode, "origin": origin, "isMeta": meta}})
+        };
+        let human = serde_json::json!({"kind": "human"});
+        let mut t = Turns::resume(None);
+        let reply = serde_json::json!({"type": "assistant", "timestamp": "2026-11-02T10:08:00.000Z",
+            "message": {"content": [{"type": "text", "text": "working on it"}]}});
+        t.line(&reply, "assistant");
+        t.line(&queued(human.clone(), "prompt", false), "attachment");
+        // a notice of a background task, another agent's message and a reminder are not prompts
+        t.line(
+            &queued(human.clone(), "task-notification", false),
+            "attachment",
         );
+        t.line(
+            &queued(serde_json::json!({"kind": "peer"}), "prompt", false),
+            "attachment",
+        );
+        t.line(&queued(human, "prompt", true), "attachment");
+        assert_eq!(kinds(&t.finish().0), vec![(End, 3), (Prompt, 15)]);
     }
 
     #[test]
@@ -307,8 +377,25 @@ mod tests {
         let mut t = Turns::resume(None);
         for (text, want) in [
             ("Permission to use Bash has been denied.", TurnKind::Refusal),
-            ("The tool use was REJECTED by a rule", TurnKind::Refusal),
+            (
+                "Permission for this action has been denied.",
+                TurnKind::Refusal,
+            ),
+            (
+                "The user doesn't want to take this action right now. STOP what you are doing.",
+                TurnKind::Refusal,
+            ),
             ("Exit code 1", TurnKind::ToolError),
+            // a command that failed with words a refusal has is still a failed command
+            (
+                "Exit code 1\nbash: ./run.sh: Permission denied",
+                TurnKind::ToolError,
+            ),
+            (
+                "Exit code 1\n! [remote rejected] main -> main (permission denied)",
+                TurnKind::ToolError,
+            ),
+            ("Error: file not allowed here", TurnKind::ToolError),
         ] {
             let v = user_line(
                 serde_json::json!([{"type": "tool_result", "is_error": true, "content": text}]),
@@ -316,13 +403,6 @@ mod tests {
             t.line(&v, "user");
             assert_eq!(t.0.last().map(|e| e.kind), Some(want), "{text}");
         }
-        // an error that only mentions it past the first 400 characters is a plain error
-        let long = format!("{} permission", "x".repeat(400));
-        let v = user_line(
-            serde_json::json!([{"type": "tool_result", "is_error": true, "content": long}]),
-        );
-        t.line(&v, "user");
-        assert_eq!(t.0.last().map(|e| e.kind), Some(TurnKind::ToolError));
     }
 
     #[test]

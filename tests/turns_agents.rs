@@ -442,7 +442,12 @@ fn a_session_whose_transcript_is_gone_gets_its_turns_from_eyes_archive_copy() {
         e.forget_turns();
         a.remove(&e);
         e.scan();
-        assert_eq!(backfill::waiting(&e.db, &e.agents()).unwrap(), 1, "{}", a.id());
+        assert_eq!(
+            backfill::waiting(&e.db, &e.agents()).unwrap(),
+            1,
+            "{}",
+            a.id()
+        );
         e.backfill();
         assert_eq!(e.counts(), a.counts(), "{}", a.id());
     }

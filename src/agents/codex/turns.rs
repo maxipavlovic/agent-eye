@@ -289,7 +289,9 @@ mod tests {
     #[test]
     fn a_compaction_whose_two_lines_fall_in_two_reads_is_stored_once() {
         let line = |ts: &str, ty: &str| match ty {
-            "compacted" => json!({"timestamp": ts, "type": "compacted", "payload": {"message": ""}}),
+            "compacted" => {
+                json!({"timestamp": ts, "type": "compacted", "payload": {"message": ""}})
+            }
             _ => json!({"timestamp": ts, "type": "event_msg", "payload": {"type": ty}}),
         };
         let first = line("2026-11-03T09:05:10.000Z", "compacted").to_string();
