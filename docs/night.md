@@ -112,11 +112,21 @@ Every Claude run also gets `--settings '<json>'` (made per run, see `src/night/b
 
 ### OpenCode
 
-`opencode run --standalone --auto` in the run's folder, started through `env` with `OPENCODE_CONFIG_CONTENT`, a permission
-config for this run only: `bash` is allowed except `git push`, `git -C * push`, `git remote`, `gh`, `ssh`, `scp`, `npm publish`,
-`cargo publish`, `twine upload`, `gem push` and `docker push`; edits are allowed and `external_directory` is denied. `--standalone`
-makes the server that applies the config a private one (OpenCode's background service ignores a client's environment). The
-session is found the way an idea's session is: by the run's folder. `[night] opencode_model` (`provider/model`) picks the model.
+`opencode run --standalone --auto --agent eye-night` in the run's folder, started through `env` with `OPENCODE_CONFIG_CONTENT`,
+a config for this run only: `bash` is allowed except `git push`, `git -C * push`, `git remote`, `gh`, `ssh`, `scp`, `npm publish`,
+`cargo publish`, `twine upload`, `gem push` and `docker push`; edits are allowed; `external_directory` and sub-agents are denied;
+OpenCode never updates itself. `--standalone` makes the server that applies the config a private one (OpenCode's background
+service ignores a client's environment). The session is found the way an idea's session is: by the run's folder.
+`[night] opencode_model` (`provider/model`) picks the model.
+
+The run is `eye-night`, an agent only that config defines, and the rules are given for every agent and again for it. OpenCode
+applies an agent's own permissions after the global ones, so a run as your default agent let `agent.build.permission` in your
+config beat the rules, and a sub-agent runs as another agent your config may open up: on a real OpenCode 2.3.2 with such a
+config, both pushed. Now `git push` is "Permission denied" and nothing is pushed. The MCP servers your config and the project's
+declare (named by `opencode debug config`, run in the folder first) are switched off: their tools are not commands the rules can
+match, and one could push or open a pull request. The run keeps the project's `opencode.json` and `AGENTS.md` and
+`~/.claude/CLAUDE.md`: the work needs the project's instructions and tools, and none of them can loosen the rules, which come
+last.
 
 OpenCode has no OS sandbox, and its rules match the text of a call: a shell command such as `echo x > /elsewhere` is not stopped
 (checked on a real run). So eye **refuses to plan or start an OpenCode night run** unless `[night] allow_unsandboxed = true`, and

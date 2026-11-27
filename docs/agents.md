@@ -243,7 +243,9 @@ out. The older table and JSON layouts are tested on synthetic data only. What is
 - **Summaries and judging** (`headless.rs`, `lockdown.rs`). `opencode run --format json` cannot answer with a schema,
   so the prompt asks for one JSON object, the last message's text is validated against the summary schema, and an
   invalid answer is asked again once. The run is `--archived` (out of its lists) and its session is deleted afterwards,
-  also after an invalid answer or a timeout, so nothing shows in eye or OpenCode. It runs as an agent of its own
+  also after an invalid answer or a timeout, so nothing shows in eye or OpenCode. Every question runs in one folder
+  (`opencode-ask` in eye's work folder, so OpenCode keeps one project for all of them) with a session title of its own
+  (`eye-ask-<uuid>`), which is how a timed-out run is found without touching another question's. It runs as an agent of its own
   (`--agent eye-ask`, defined only in the run's inline config) with every permission denied and every tool off, and the
   MCP servers your config declares (their names come from `opencode debug config`) switched off. Every `opencode`
   command eye runs (`run`, `run --help`, `models`, `debug config`, `session`, `--version`) is `--standalone` (a private
@@ -265,12 +267,12 @@ out. The older table and JSON layouts are tested on synthetic data only. What is
   run is refused with that reason).
 - **Origin: not possible.** A session row, its messages and its events carry no field for how it started (terminal,
   `run`, server, web).
-- **Night shift.** `opencode run --standalone --auto` in the run's folder, with a permission config for that run only
-  (`OPENCODE_CONFIG_CONTENT`, which only a private server reads): `bash` allowed except `git push`, `git remote`,
-  `gh`, `ssh`, `scp` and the publish commands, edits allowed, `external_directory` denied, no update. These rules match
-  the text of a call, and permissions you give an agent in your own config (`agent.build.permission`) come after them
-  and win; a shell command can still write anywhere, so a run is refused (in the plan, with the reason) unless `[night]
-  allow_unsandboxed = true`. `[night] opencode_model` picks a model. "Continue tonight" needs a fork, which OpenCode does
+- **Night shift.** `opencode run --standalone --auto --agent eye-night` in the run's folder, with a config for that run
+  only (`OPENCODE_CONFIG_CONTENT`, which only a private server reads; `night.md`): `bash` allowed except `git push`,
+  `git remote`, `gh`, `ssh`, `scp` and the publish commands, edits allowed, `external_directory` and sub-agents denied,
+  the folder's MCP servers off, no update, for every agent and again for `eye-night`, so your config's agent
+  permissions cannot beat them. These rules match the text of a call; a shell command can still write anywhere, so a
+  run is refused (in the plan, with the reason) unless `[night] allow_unsandboxed = true`. `[night] opencode_model` picks a model. "Continue tonight" needs a fork, which OpenCode does
   not offer from its terminal UI, so only ideas run.
 - **Fork: not possible** in the terminal UI (`opencode --session <id> --fork` is "Unrecognized flag"). `opencode run
   --fork --session <id> <message>` forks headlessly; eye does not offer it as a board action.
