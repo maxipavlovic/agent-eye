@@ -133,8 +133,10 @@ mod tests {
         assert_eq!(free.cost_usd, None, "no cost said is no cost, not zero");
     }
 
+    /// What a judged prompt may reach: no session kept, no tools, no MCP server, no hook, no
+    /// memory of its own.
     #[test]
-    fn a_summary_call_never_persists_a_session() {
+    fn a_summary_call_is_locked_down() {
         let schema = serde_json::json!({});
         let req = HeadlessRequest {
             model: "m",
@@ -144,6 +146,13 @@ mod tests {
             work_dir: std::path::Path::new("/tmp"),
             timeout: std::time::Duration::from_secs(1),
         };
-        assert!(args(&req).iter().any(|a| a == "--no-session-persistence"));
+        let args = args(&req);
+        let value = |flag: &str| &args[args.iter().position(|a| a == flag).unwrap() + 1];
+        assert!(args.iter().any(|a| a == "--no-session-persistence"));
+        assert_eq!(value("--tools"), "");
+        assert!(args.iter().any(|a| a == "--strict-mcp-config"));
+        let settings: serde_json::Value = serde_json::from_str(value("--settings")).unwrap();
+        assert_eq!(settings["disableAllHooks"], true);
+        assert_eq!(settings["autoMemoryEnabled"], false);
     }
 }

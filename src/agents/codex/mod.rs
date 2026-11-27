@@ -136,6 +136,12 @@ impl Agent for Codex {
     fn id(&self) -> &'static str {
         ID
     }
+
+    /// Proven by `a_summary_is_codex_exec_in_a_read_only_sandbox_that_keeps_nothing` (tests/codex.rs).
+    fn judging_locked_down(&self) -> bool {
+        true
+    }
+
     fn name(&self) -> &'static str {
         "Codex CLI"
     }

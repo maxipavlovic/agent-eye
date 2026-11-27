@@ -602,3 +602,17 @@ async fn no_agent_at_all_is_an_empty_board_not_a_crash() {
     assert_eq!(s, StatusCode::BAD_REQUEST);
     assert!(e["error"].as_str().unwrap().contains("no agent is enabled"));
 }
+
+/// An agent that does not say its run is locked down (the default) is asked for nothing: not to
+/// judge corrections, and, being new in 0.5, not to write summaries either.
+#[test]
+fn an_agent_left_at_the_default_is_asked_neither_by_the_pass_nor_by_summaries() {
+    let w = world("[\"fake\"]");
+    let agents = agent_eye::agents::enabled(&w.cfg);
+    let fake = agents.get("fake").unwrap();
+    assert!(!fake.judging_locked_down());
+    assert!(!agent_eye::agents::may_summarize(fake.as_ref()));
+    assert!(agents.summary_agent(&w.cfg).is_none());
+    let (state, _) = agent_eye::clock::judging::judge(&w.cfg, &agents).unwrap_err();
+    assert_eq!(state, agent_eye::clock::judging::Judging::Unavailable);
+}

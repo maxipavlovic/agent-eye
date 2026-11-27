@@ -107,11 +107,11 @@ pub trait Agent: Send + Sync + std::fmt::Debug {
         &[]
     }
     /// Is this agent's headless run proven to be locked down (no tools, no files, no network, no
-    /// session kept)? The corrections pass sends it prompt text with planted instructions in it only
-    /// when it is. The default says yes: an agent is the exception when its lock-down is not checked
-    /// on a real run.
+    /// session kept), with a test of its runner? The corrections pass sends it prompt text with
+    /// planted instructions in it only when it is, and a new agent gets summaries only then too
+    /// (`may_summarize`). The default says no: an agent opts in when its lock-down is tested.
     fn judging_locked_down(&self) -> bool {
-        true
+        false
     }
     /// What `n` of a `think` event counts for this agent (`"signature"`, `"reasoning_tokens"`),
     /// None when it reports no thinking. Thinking is only compared with the same agent's own.
@@ -338,6 +338,15 @@ pub type Factory = fn(&AgentCfg) -> AgentRef;
 /// before eye knew several agents.
 pub const LEGACY_ID: &str = "claude";
 
+/// The agents that wrote summaries before 0.5. Their runs stay allowed whether or not their
+/// lock-down is proven, so an update never turns summaries off.
+const SUMMARY_AGENTS_BEFORE_0_5: [&str; 4] = ["claude", "codex", "agy", "opencode"];
+
+/// May this agent write summaries? When its run is proven locked down, or it did before 0.5.
+pub fn may_summarize(agent: &dyn Agent) -> bool {
+    agent.judging_locked_down() || SUMMARY_AGENTS_BEFORE_0_5.contains(&agent.id())
+}
+
 static EXTRA: Mutex<Vec<(String, Factory)>> = Mutex::new(Vec::new());
 
 /// Add an agent to the registry (or replace one with the same id). It is used only when the config
@@ -419,12 +428,14 @@ impl Agents {
         self.resolve(Some(s.agent.as_str()))
     }
 
-    /// The agent that writes summaries: `[summary] agent`, else the default agent.
+    /// The agent that writes summaries: `[summary] agent`, else the default agent, when it may
+    /// (`may_summarize`).
     pub fn summary_agent(&self, cfg: &Config) -> Option<&AgentRef> {
         match cfg.summary.agent.trim() {
             "" => self.default_agent(),
             id => self.get(id),
         }
+        .filter(|a| may_summarize(a.as_ref()))
     }
 
     /// The short name for an agent id, for text shown to people (an empty id is the default

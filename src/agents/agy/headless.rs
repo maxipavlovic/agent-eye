@@ -351,6 +351,68 @@ mod tests {
         assert!(!path.exists() && left(&agy).is_empty() && rows(&agy).is_empty());
     }
 
+    /// An `agy` that makes the conversation `asked-run` (as the real one would, in agy's folder),
+    /// then does `body`.
+    fn stub(t: &Path, agy: &Path, body: &str) -> String {
+        let p = t.join("agy-stub");
+        let (brain, db) = (agy.join(BRAIN).join("asked-run"), agy.join("conversations"));
+        std::fs::write(
+            &p,
+            format!(
+                "#!/bin/sh\nmkdir -p '{}' '{}'\ntouch '{}/asked-run.db'\n{body}\n",
+                brain.display(),
+                db.display(),
+                db.display()
+            ),
+        )
+        .unwrap();
+        std::fs::set_permissions(&p, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+        p.to_string_lossy().into_owned()
+    }
+
+    fn run_stub(body: &str, timeout: Duration) -> (Result<HeadlessReply>, tempfile::TempDir) {
+        let t = tempfile::tempdir().unwrap();
+        let (agy, work) = (t.path().join("agy"), t.path().join("work"));
+        let a = Agy::new(agy.clone()).with_executable(&stub(t.path(), &agy, body));
+        let schema = json!({"type":"object"});
+        let req = HeadlessRequest {
+            model: "",
+            system: "sys",
+            input: "in",
+            schema: &schema,
+            work_dir: &work,
+            timeout,
+        };
+        (ask(&a, &req), t)
+    }
+
+    /// Neither the run's folder nor the conversation it made is left.
+    fn assert_clean(t: &tempfile::TempDir) {
+        let agy = t.path().join("agy");
+        assert!(left(&agy).is_empty(), "{:?}", left(&agy));
+        assert!(!agy.join("conversations/asked-run.db").exists());
+        assert_eq!(std::fs::read_dir(t.path().join("work")).unwrap().count(), 0);
+    }
+
+    /// agy has no flag to keep a run from making a conversation, so every way a question can end
+    /// removes what it made: its folder always, its conversation when the answer names it.
+    #[test]
+    fn a_question_leaves_nothing_after_success_failure_and_timeout() {
+        let said = r#"printf '%s' '{"conversation_id":"asked-run","status":"SUCCESS","response":"","structured_output":{"a":1}}'"#;
+        let (reply, t) = run_stub(said, Duration::from_secs(30));
+        assert_eq!(reply.unwrap().output["a"], 1);
+        assert_clean(&t);
+
+        let failed = format!("{said}; echo oops >&2; exit 3");
+        let (reply, t) = run_stub(&failed, Duration::from_secs(30));
+        assert!(reply.is_err());
+        assert_clean(&t);
+
+        let (reply, t) = run_stub("exec sleep 5", Duration::from_millis(300));
+        assert!(reply.unwrap_err().to_string().contains("timed out"));
+        assert_eq!(std::fs::read_dir(t.path().join("work")).unwrap().count(), 0);
+    }
+
     #[test]
     fn the_answers_conversation_id_is_read() {
         assert_eq!(

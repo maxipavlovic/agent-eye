@@ -151,6 +151,12 @@ impl Agent for Claude {
     fn id(&self) -> &'static str {
         ID
     }
+
+    /// Proven by `a_summary_call_is_locked_down`.
+    fn judging_locked_down(&self) -> bool {
+        true
+    }
+
     fn name(&self) -> &'static str {
         "Claude Code"
     }

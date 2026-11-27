@@ -168,6 +168,12 @@ impl Agent for Agy {
     fn id(&self) -> &'static str {
         ID
     }
+
+    /// Proven by `the_flags_that_stop_tools_are_in_the_command` and `a_question_leaves_nothing_after_success_failure_and_timeout`.
+    fn judging_locked_down(&self) -> bool {
+        true
+    }
+
     fn name(&self) -> &'static str {
         "Antigravity CLI"
     }
