@@ -167,6 +167,90 @@ fn no_hour_standing_out_is_no_pattern() {
     assert!(r.bad.is_empty());
 }
 
+/// A fixed-seed xorshift, so the noise is the same on every run.
+struct Noise(u64);
+
+impl Noise {
+    fn chance(&mut self, p: f64) -> bool {
+        self.0 ^= self.0 << 13;
+        self.0 ^= self.0 >> 7;
+        self.0 ^= self.0 << 17;
+        (self.0 % 10_000) as f64 / 10_000.0 < p
+    }
+}
+
+/// Twelve hours of random steering for two agents, the same 8% of prompts corrected and 10% of
+/// tool calls failed in every hour; `worse` lifts the corrections of two evening hours to `worse`.
+fn seeded_world(seed: u64, worse: f64) -> World {
+    let mut w = World::new();
+    w.db.conn
+        .execute("INSERT INTO session(id, agent) VALUES('o','codex')", [])
+        .unwrap();
+    let mut noise = Noise(seed * 7919 + 104_729);
+    for _ in 0..10 {
+        noise.chance(0.5);
+    }
+    for (session, day_shift) in [("s", 0), ("o", 1)] {
+        for h in 9..21 {
+            let p = if (19..21).contains(&h) { worse } else { 0.08 };
+            for i in 0..60 {
+                w.n += 1;
+                let ts = D0 + ((w.n + day_shift) % 20) * DAY + h * H + i * 1000;
+                let mut put = |ts: i64, kind: &str, n: i64| {
+                    w.db.conn
+                        .execute(
+                            "INSERT INTO turn(session_id, ts, kind, n) VALUES(?1,?2,?3,?4)",
+                            rusqlite::params![session, ts, kind, n],
+                        )
+                        .unwrap();
+                };
+                put(ts - 500, "end", 5);
+                put(ts, "prompt", 30);
+                for k in 0..10 {
+                    put(
+                        ts + 10 + k,
+                        if noise.chance(0.1) {
+                            "tool_error"
+                        } else {
+                            "tool"
+                        },
+                        0,
+                    );
+                }
+                put(ts + 40, "think", 800 + (noise.0 % 400) as i64);
+                if noise.chance(p) {
+                    w.db.conn
+                        .execute(
+                            "INSERT INTO correction(session_id, prompt_ts, verdict, model) VALUES(?1,?2,'yes','haiku')",
+                            rusqlite::params![session, ts],
+                        )
+                        .unwrap();
+                }
+            }
+        }
+    }
+    w
+}
+
+/// A doubled correction rate in two evening hours is found by the whole report, for both agents,
+/// in at least four random worlds in five.
+#[test]
+fn a_doubled_rate_in_the_evenings_is_found_through_random_noise() {
+    let agents = Agents::from_vec(vec![
+        Arc::new(Claude::new("/nonexistent".into())),
+        Arc::new(crate::agents::codex::Codex::new("/nonexistent".into())),
+    ]);
+    let found = (1..=30)
+        .filter(|seed| {
+            let w = seeded_world(*seed, 0.16);
+            let cfg = Config::parse("").unwrap();
+            let r = build(&w.db.conn, &cfg, &agents, NOW, 4, &utc).unwrap();
+            r.verdict.kind.names_hours()
+        })
+        .count();
+    assert!(found >= 24, "{found} of 30 doubled rates are found");
+}
+
 #[test]
 fn too_few_prompts_or_corrections_say_so() {
     let mut w = World::new();
