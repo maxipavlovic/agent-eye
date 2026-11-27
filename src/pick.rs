@@ -589,6 +589,23 @@ mod tests {
             .any(|r| r.folder_state == Some(FolderState::Exists)));
     }
 
+    #[test]
+    fn the_picker_puts_a_quiet_session_where_the_board_does() {
+        let db = Db::open_memory().unwrap();
+        db.conn
+            .execute(
+                "INSERT INTO session(id, kind, prompt_count, last_activity_at, ai_status, origin)
+                 VALUES('app1', 'interactive', 3, 900, 'needs_you', 'app')",
+                [],
+            )
+            .unwrap();
+        let column = |cfg: &Config| Index::load(&db, cfg, 1_000).unwrap().rows[0].column;
+        let mut cfg = Config::default();
+        assert_eq!(column(&cfg), Column::NeedsYou);
+        cfg.board.quiet = vec!["app".into()];
+        assert_eq!(column(&cfg), Column::Paused);
+    }
+
     fn row(id: &str, title: &str, col: Column, last: i64) -> Row {
         Row {
             kind: Kind::Session,
