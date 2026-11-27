@@ -1,6 +1,6 @@
 //! `[board] quiet`: a session an app started through an agent's SDK, kept quiet, gets no summary
-//! from the daemon and is never sent to the corrections pass, while an explicit `eye summarize <id>`
-//! still writes one. The daemon reads the key from the file, so the config it started with does
+//! from the daemon or `eye summarize --all` and is never sent to the corrections pass, while an
+//! explicit `eye summarize <id>` still writes one. The daemon reads the key from the file, so the config it started with does
 //! not matter. The transcripts copy the shape `tests/filters.rs` uses; `sdk-py` is the entrypoint
 //! the Agent SDK for Python writes.
 
@@ -62,7 +62,7 @@ fn options(ids: Vec<String>) -> Options {
 }
 
 #[test]
-fn a_quiet_session_gets_no_summary_from_the_daemon_and_stays_out_of_the_pass() {
+fn a_quiet_session_gets_no_summary_from_the_daemon_or_a_bulk_run_and_stays_out_of_the_pass() {
     let tmp = tempfile::tempdir().unwrap();
     let claude = tmp.path().join("claude");
     let bin = tmp.path().join("bin");
@@ -111,8 +111,19 @@ fn a_quiet_session_gets_no_summary_from_the_daemon_and_stays_out_of_the_pass() {
     let summary_of = |db: &Db, n: u32| db.session_by_id(&id(n)).unwrap().unwrap().summary_at;
     assert!(summary_of(&db, 1).is_some() && summary_of(&db, 2).is_none());
 
-    // asked for by id, it is summarized all the same
-    summarize(&db, &paths, &quiet, &options(vec![id(2)])).unwrap();
+    // nor does a bulk run, which says why
+    let mut all = options(vec![]);
+    all.all = true;
+    let out = summarize(&db, &paths, &quiet, &all).unwrap();
+    assert!(log("mark-own"), "the bulk run summarized the user's own");
+    assert!(!log("mark-app"), "the bulk run summarized a quiet session");
+    let app = out.iter().find(|o| o.id == id(2)).unwrap();
+    assert_eq!(app.result, "skipped: quiet");
+
+    // asked for by id, it is summarized all the same, in a bulk run too
+    let mut both = options(vec![id(2)]);
+    both.all = true;
+    summarize(&db, &paths, &quiet, &both).unwrap();
     assert!(log("mark-app"));
     assert!(summary_of(&db, 2).is_some());
 

@@ -8,6 +8,7 @@ use crate::config::Config;
 use crate::db::{fts_write, Db};
 use crate::model::{AiStatus, Session};
 use crate::paths::Paths;
+use crate::quiet::Quiet;
 use crate::util::{fmt_ts, head_chars, now_ms};
 use anyhow::{Context, Result};
 use regex::Regex;
@@ -407,6 +408,10 @@ pub fn summarize(db: &Db, paths: &Paths, cfg: &Config, opts: &Options) -> Result
         let id = db.resolve_id(id)?;
         sessions.extend(db.session_by_id(&id)?);
     }
+    // a bulk run spends no tokens on what a program started and `[board] quiet` keeps quiet; a
+    // session asked for by id is summarized all the same
+    let asked = sessions.len();
+    let quiet = Quiet::of(cfg);
     if opts.all {
         let mut all = db.all_sessions()?;
         all.sort_by_key(|s| std::cmp::Reverse(s.last_activity_at.unwrap_or(0)));
@@ -419,7 +424,7 @@ pub fn summarize(db: &Db, paths: &Paths, cfg: &Config, opts: &Options) -> Result
     };
     let hidden = crate::hide::hidden_ids(db, cfg)?;
     let mut jobs: VecDeque<Job> = VecDeque::new();
-    for s in sessions {
+    for (n, s) in sessions.into_iter().enumerate() {
         if opts.max.is_some_and(|m| jobs.len() >= m) {
             break;
         }
@@ -434,6 +439,10 @@ pub fn summarize(db: &Db, paths: &Paths, cfg: &Config, opts: &Options) -> Result
         };
         if hidden.contains(&s.id) {
             outcomes.push(mk("skipped: hidden", 0));
+            continue;
+        }
+        if n >= asked && quiet.holds(s.origin.as_deref()) {
+            outcomes.push(mk("skipped: quiet", 0));
             continue;
         }
         if let Some(why) = skip_reason(cfg, &s) {
