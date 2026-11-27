@@ -3,7 +3,7 @@
 Settings live in `~/.agent-eye/config.toml` (or `$EYE_HOME/config.toml`). eye writes the defaults on
 first run and reads the file on every start; the file is private to you (mode 0600). A key you leave
 out keeps its default, so an old file keeps working. The board and the daemon read the file when
-they start: after a change, `eye board off && eye board on` or restart the daemon.
+they start: after a change, run `eye restart`.
 
 ## `[agents]`
 

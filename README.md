@@ -65,6 +65,7 @@ eye loose                 # leftovers: what sessions left running or unpushed
 eye night                 # work planned for tonight
 eye export                # one file with everything, to move or keep
 eye forget <id>           # remove a session (--transcript: from its agent too)
+eye restart               # restart the background service after a change to config.toml
 ```
 
 <p align="center"><a href="assets/board-demo.gif"><img src="assets/board-light.png" alt="The board: Needs you, Running, Waiting on others, Paused, Done and Ideas" width="860"></a></p>

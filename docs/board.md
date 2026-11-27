@@ -84,16 +84,17 @@ USAGE draws the cost of every day as stacked columns, by project or by model (th
 
 ## Settings
 
-The gear (or the `,` key) opens SETTINGS. Every change applies at once and the panel says **Saved**.
+The gear (or the `,` key) opens SETTINGS. Its sections fold: only LOOK is open when the panel opens, and a folded heading says what is inside (`SUMMARIES  ON · haiku`, `NIGHT SHIFT  OFF`, `AGENTS  Claude Code, Codex CLI`), so the panel reads at a glance. A heading opens or folds its section. Every change applies at once and the panel says **Saved**.
 
 - **Look**: the skin (INK or IRIS), the eight accent colours, Lanes or Grid, and light, dark or auto.
-- **Board**: which lanes are folded.
-- **Summaries**: on or off, and the model (`[summary] enabled`, `model`).
+- **Summaries**: on or off, and the model (`[summary] enabled`, `model`). The model is a choice: the summary agent's default first (`Default: haiku` for Claude Code), then the other names that agent takes (`sonnet`, `opus`), and **Other…**, which opens a field for any other name.
 - **Night shift**: on or off, the window, how many runs at once and where runs work (`[night] enabled`, `window`, `parallel`, `isolation`). The window is checked as `eye night window` checks it.
 - **Reminders**: the desktop notice (`[remind] notify`).
-- **Hours**: the steering clock on or off, judging corrections, the hint beside HOURS, how long a gap counts as a break, and idle time (`[clock] enabled`, `llm`, `hints`, `break_minutes`, `idle`; see `clock.md`). Only the clock itself needs the background service to restart, and its row says so.
-- **Agents**: which agents eye follows (`[agents] enabled`), in the order of the file; new ones are added at the end, and the first is the default.
+- **Hours**: judging corrections, the hint beside HOURS, how long a gap counts as a break, and idle time (`[clock] llm`, `hints`, `break_minutes`, `idle`; see `clock.md`). They count at once, and are off while the clock is. The steering clock itself is shown as ON or OFF, not changed here: it needs the background service to restart, so the row says to set `[clock] enabled` in `config.toml` and run `eye restart`.
+- **Agents**: the agents eye follows, in the order of the file (the first is the default), and, quieter, the ones it knows but does not follow. They are shown, not changed here, for the same reason: set `[agents] enabled` in `config.toml`, then run `eye restart`.
 
-They are written into `config.toml` (comments and other keys stay), through `/api/settings` (see `api.md`). The background service reads the night shift and reminder keys again on each pass; summaries, agents and turning the clock on or off count after it restarts, and the panel says so. Folders, prices, exclude lists and the night sandbox switches are not in the panel: they stay in `config.toml` (see `config.md`). On the sample board (the site's demo) the settings are shown, but nothing is saved.
+Lanes fold on the board itself: a click on a lane's head folds it, and a click on the folded lane opens it again.
+
+The settings are written into `config.toml` (comments and other keys stay), through `/api/settings` (see `api.md`). The background service reads the night shift, reminder and clock keys again on each pass; summaries count after it restarts, and the panel says so. Folders, prices, exclude lists and the night sandbox switches are not in the panel: they stay in `config.toml` (see `config.md`). On the sample board (the site's demo) the settings are shown, but nothing is saved.
 
 **Looks.** Ink is pixel art on warm paper. Iris draws the board as a technical drawing in one-pixel lines: header cells, big condensed counts, and under each lane name one fact (how long the oldest ask has waited, who you are waiting on, how many are working) and a timeline with one tick per session, two weeks ago on the left, now on the right. A title block under the board counts what is on it. Its drawings move a little: the eye blinks, the bell rings while something waits on you, the hourglass turns over while you wait on others; with reduced motion set in your system, nothing moves on its own. Both have the same cards, panel, keys and colours. Switching looks loads the page again; `?look=iris` in the address shows one for that page only and saves nothing.

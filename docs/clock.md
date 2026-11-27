@@ -201,7 +201,7 @@ while the daemon is not running) and whether the sensor is on.
   uses the same reason, never `[clock] llm` when something else is why.
 - `[clock] enabled = false`: no report and no pass. What is stored stays; `eye forget` and
   `eye uninstall --purge` remove it with the rest. The daemon records turns by the setting it
-  started with, so recording stops at its next start (the gear says so).
+  started with, so recording stops at its next start: run `eye restart` (the gear says so).
 - `[clock] idle` is already off unless you turned it on.
 
 Changes to `[clock]` made in the gear or in `config.toml` count without a restart: the report, the
