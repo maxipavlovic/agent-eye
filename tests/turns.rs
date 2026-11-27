@@ -138,9 +138,8 @@ fn the_prompt_count_is_the_number_of_prompt_rows_with_queued_prompts_and_comment
     let said = "The user doesn't want to proceed with this tool use. To tell you how to proceed, the user said:\nuse rg instead";
     let comment = serde_json::json!({"type": "user", "timestamp": "2026-11-02T10:08:00.000Z",
         "message": {"content": [{"type": "tool_result", "tool_use_id": "t9", "is_error": true, "content": said}]}});
-    let queued = serde_json::json!({"type": "attachment", "timestamp": "2026-11-02T10:09:00.000Z",
-        "attachment": {"type": "queued_command", "prompt": "and the tests", "commandMode": "prompt",
-            "origin": {"kind": "human"}}});
+    // a queued prompt as the agent writes it: the type is not the first key
+    let queued = r#"{"attachment":{"type":"queued_command","prompt":"and the tests","commandMode":"prompt","origin":{"kind":"human"}},"timestamp":"2026-11-02T10:09:00.000Z","type":"attachment"}"#;
     let mut e = Env::new(&format!("{FIXTURE}{comment}\n{queued}\n"));
     e.scan();
     let one = |sql: &str| -> i64 { e.db.conn.query_row(sql, [], |r| r.get(0)).unwrap() };

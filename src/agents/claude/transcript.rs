@@ -9,6 +9,7 @@ use super::super::outputs::{
 use super::super::{Delta, ParseOpts, PROMPTS_CAP, REPLIES_CAP};
 use super::signals::Tracker;
 use super::turns::Turns;
+use crate::turns::TurnKind;
 use super::work::work_event;
 use crate::model::Tokens;
 use crate::usage::UsageMsg;
@@ -131,7 +132,6 @@ pub fn parse_reader<R: BufRead>(mut r: R, from: u64, opts: &ParseOpts) -> Result
         if ty == "attachment" {
             if is_queued_prompt(line) {
                 if let Ok(v) = serde_json::from_slice::<Value>(line) {
-                    d.prompt_count += u32::from(super::prompt::typed_prompt(&v).is_some());
                     turns.line(&v, ty);
                 }
             }
@@ -181,6 +181,11 @@ pub fn parse_reader<R: BufRead>(mut r: R, from: u64, opts: &ParseOpts) -> Result
     d.signals = Some(tracker.signals());
     let signals_out = tracker.state();
     let (turn_events, turn_out) = turns.finish();
+    // a prompt is what the turn reader says it is (typed, queued, a comment on a refusal)
+    d.prompt_count = turn_events
+        .iter()
+        .filter(|e| e.kind == TurnKind::Prompt)
+        .count() as u32;
     d.turns = turn_events;
     if !pending_out.is_empty() || signals_out.is_some() || turn_out.is_some() {
         d.carry = Some(
@@ -357,8 +362,6 @@ fn process_user(
     let Some(content) = v.get("message").and_then(|m| m.get("content")) else {
         return;
     };
-    // what the turn reader counts as a prompt: a typed one, a queued one, a comment on a refusal
-    d.prompt_count += u32::from(super::prompt::typed_prompt(v).is_some());
     let is_meta = v.get("isMeta").and_then(Value::as_bool) == Some(true)
         || v.get("isCompactSummary").and_then(Value::as_bool) == Some(true);
     let mut texts: Vec<&str> = Vec::new();
