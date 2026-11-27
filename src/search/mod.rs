@@ -11,6 +11,7 @@ mod typo;
 use crate::columns;
 use crate::db::Db;
 use crate::model::{Column, Session};
+use crate::quiet::Quiet;
 use anyhow::Result;
 use rusqlite::OptionalExtension;
 use std::cmp::Ordering;
@@ -82,9 +83,10 @@ pub fn id_query(words: &[String]) -> Option<String> {
     .then_some(w)
 }
 
-/// Search every session (hidden ones too unless filtered by the caller).
+/// Search every session (hidden ones too unless filtered by the caller), each hit in the column it
+/// has without `[board] quiet`.
 pub fn find(db: &Db, words: &[String], limit: usize, all: bool, now_ms: i64) -> Result<Vec<Hit>> {
-    find_without(db, words, limit, all, &HashSet::new(), now_ms)
+    find_without(db, words, limit, all, &HashSet::new(), Quiet::NONE, now_ms)
 }
 
 /// What the order of a session needs besides its score.
@@ -111,14 +113,15 @@ fn facts(db: &Db, id: &str) -> Result<Option<Facts>> {
         .optional()?)
 }
 
-/// Like `find`, leaving out the sessions in `hidden`. Archived sessions are listed only with
-/// `all`, and then last.
+/// Like `find`, leaving out the sessions in `hidden`, with the columns `quiet` gives. Archived
+/// sessions are listed only with `all`, and then last.
 pub fn find_without(
     db: &Db,
     words: &[String],
     limit: usize,
     all: bool,
     hidden: &HashSet<String>,
+    quiet: Quiet,
     now_ms: i64,
 ) -> Result<Vec<Hit>> {
     let q = query::parse(words);
@@ -179,6 +182,7 @@ pub fn find_without(
             &session,
             with_outputs.contains(&id),
             now_ms,
+            quiet,
         ));
         let snippet = if rank.id_hit {
             "session id".to_string()

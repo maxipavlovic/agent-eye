@@ -596,12 +596,24 @@ export interface ChoiceSetting { type: 'choice'; choices: string[]; value: strin
 export interface WindowSetting { type: 'window'; value: string; restart?: boolean }
 /** The agents eye follows: `value` is the enabled ids in order, `choices` every agent eye knows. */
 export interface AgentsSetting { type: 'agents'; choices: Array<{ id: string; name: string }>; value: string[]; restart?: boolean }
+/**
+ * A program origin found on this machine: `name` is the word a card shows (App, Headless), `about` what started its
+ * sessions, `sessions` how many eye lists (not hidden, not archived), `needs_you` how many are in Needs you now as if
+ * nothing were quiet: what turning it on would clear.
+ */
+export interface OriginChoice { id: string; name: string; about: string; sessions: number; needs_you: number }
+/**
+ * `board.quiet`: the origins whose sessions are quiet (`value`, as set) and the program origins found here (`choices`),
+ * plus any that is set with no sessions left. Empty `choices`: no session started by a program on this machine.
+ */
+export interface OriginsSetting { type: 'origins'; choices: OriginChoice[]; value: string[]; restart?: boolean }
 
 /** GET and POST /api/settings: the config keys the board may change, read from the file each time. */
 export interface SettingsState {
   settings: {
     'summary.enabled': BoolSetting;
     'summary.model': ModelSetting;
+    'board.quiet': OriginsSetting;
     'night.enabled': BoolSetting;
     'night.window': WindowSetting;
     'night.parallel': IntSetting;

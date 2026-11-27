@@ -4,6 +4,7 @@ use super::{column_of, folder, session_json, Global};
 use crate::activity;
 use crate::columns;
 use crate::model::{Column, Session};
+use crate::quiet::Quiet;
 use crate::resume;
 use crate::scan;
 use crate::search;
@@ -81,7 +82,8 @@ pub fn find(g: &Global, words: &[String], limit: usize, all: bool, json: bool) -
     } else {
         crate::hide::hidden_ids(&env.db, &env.cfg)?
     };
-    let hits = search::find_without(&env.db, words, limit, all, &hidden, now_ms())?;
+    let quiet = Quiet::of(&env.cfg);
+    let hits = search::find_without(&env.db, words, limit, all, &hidden, quiet, now_ms())?;
     if json {
         let arr: Vec<Value> = hits
             .iter()
@@ -151,6 +153,7 @@ pub fn ls(
         None => None,
     };
     let with_outputs = env.db.session_ids_with_outputs()?;
+    let quiet = Quiet::of(&env.cfg);
     let mut rows: Vec<(Session, Column)> = env
         .db
         .all_sessions()?
@@ -162,6 +165,7 @@ pub fn ls(
                 &s,
                 with_outputs.contains(&s.id),
                 now,
+                quiet,
             ));
             (s, c)
         })
@@ -261,7 +265,7 @@ pub fn show(g: &Global, id: &str, json: bool, conversation: bool, n: usize) -> R
         }
         return Ok(());
     }
-    let col = column_of(&env.db, &s)?;
+    let col = column_of(&env.db, &s, Quiet::of(&env.cfg))?;
     let streams = env.db.streams_for(&id)?;
     let outputs = env.db.outputs_for(&id)?;
     if json {

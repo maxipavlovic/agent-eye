@@ -169,7 +169,9 @@ the pass sends nothing, and `judging` is `unavailable` with `judging_reason` say
   shift is on), newest first, at most 300 exchanges. Older prompts follow on later nights, and the
   report's `pending` says how many are still waiting. `eye clock detect` does a pass now.
 - Prompts of sessions started by a script (`claude -p`, `codex exec`) or by the night shift are not
-  sent and not counted: they are not you steering.
+  sent and not counted: they are not you steering. Neither are the prompts and turns of sessions
+  `[board] quiet` keeps quiet (an app on an agent's SDK, see `config.md`), from the next report or
+  pass after you switch it.
 - The nightly pass does not start while you are at work, as summaries do not: any turn in the last
   10 minutes (your prompt, or an agent's reply or tool call, so a long run you started counts while
   it works), or (with the idle sensor on) input in the last 2. It stays due and starts when you

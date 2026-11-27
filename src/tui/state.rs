@@ -42,6 +42,8 @@ pub struct App {
     pub user: UserCfg,
     /// Prices for the usage line of the preview.
     pub usage_cfg: crate::config::UsageCfg,
+    /// The origins `[board] quiet` keeps quiet, for a row's column when it is read again.
+    pub quiet: crate::quiet::Quiet,
     /// The enabled agents: their names label the preview, and they read the conversations.
     pub agents: Agents,
     /// The preview pane shows the conversation instead of the summary (Ctrl-T).
@@ -83,6 +85,7 @@ impl App {
             paths: None,
             user: UserCfg::default(),
             usage_cfg: Default::default(),
+            quiet: Default::default(),
             agents: Agents::default(),
             talk: false,
             talk_scroll: 0,

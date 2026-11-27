@@ -9,6 +9,7 @@ use crate::config::Config;
 use crate::db::{meta_set, Db};
 use crate::hook;
 use crate::paths::Paths;
+use crate::quiet::Quiet;
 use crate::scan;
 use crate::server;
 use crate::summarize;
@@ -408,13 +409,16 @@ pub fn drain_queue(db: &Db, paths: &Paths, agents: &Agents) -> Result<usize> {
     Ok(n)
 }
 
+/// A session of the worker round: id, last activity, whether it needs a summary, and origin.
+pub type QuietRow = (String, i64, bool, Option<String>);
+
 /// Sessions with no activity for `quiet_minutes`, or whose SessionEnd arrived after their last
 /// activity, and that are not busy.
-pub fn quiet_sessions(db: &Db, cfg: &Config, now: i64) -> Result<Vec<(String, i64, bool)>> {
+pub fn quiet_sessions(db: &Db, cfg: &Config, now: i64) -> Result<Vec<QuietRow>> {
     let quiet_ms = cfg.summary.quiet_minutes as i64 * 60_000;
     let mut st = db.conn.prepare(
         "SELECT s.id, s.last_activity_at,
-                (s.summary_at IS NULL OR s.last_activity_at > s.summary_at) AS needs_summary
+                (s.summary_at IS NULL OR s.last_activity_at > s.summary_at) AS needs_summary, s.origin
          FROM session s
          WHERE s.transcript_state='present' AND s.kind IS NOT 'history_only'
            AND s.live_status IS NOT 'busy' AND s.last_activity_at IS NOT NULL
@@ -428,22 +432,30 @@ pub fn quiet_sessions(db: &Db, cfg: &Config, now: i64) -> Result<Vec<(String, i6
             r.get::<_, String>(0)?,
             r.get::<_, i64>(1)?,
             r.get::<_, bool>(2)?,
+            r.get::<_, Option<String>>(3)?,
         ))
     })?;
     Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
 
 /// One worker round: summarize recent quiet sessions (when enabled), then archive every quiet
-/// session whose transcript changed.
+/// session whose transcript changed. A session of an origin `[board] quiet` lists gets no summary
+/// here (`eye summarize <id>` still writes one); the key is read from the file each round, so a
+/// switch on the board counts at the next.
 pub fn quiet_round(db: &mut Db, paths: &Paths, cfg: &Config) -> Result<(usize, usize)> {
     let now = now_ms();
     let quiet = quiet_sessions(db, cfg, now)?;
     let mut summarized = 0;
     if cfg.summary.enabled {
         let horizon = now - cfg.summary.auto_days as i64 * 24 * 3600 * 1000;
+        let kept_quiet = Quiet::of(&cfg.fresh(&paths.config_path()));
         let mut ids = vec![];
-        for (id, last, needs) in &quiet {
-            if !needs || *last < horizon || ids.len() >= SUMMARIES_PER_ROUND {
+        for (id, last, needs, origin) in &quiet {
+            if !needs
+                || *last < horizon
+                || ids.len() >= SUMMARIES_PER_ROUND
+                || kept_quiet.holds(origin.as_deref())
+            {
                 continue;
             }
             let key = format!("quiet_tried:{id}");
@@ -475,7 +487,7 @@ pub fn quiet_round(db: &mut Db, paths: &Paths, cfg: &Config) -> Result<(usize, u
     }
     let mut archived = 0;
     let agents = agents::enabled(cfg);
-    for (id, _, _) in &quiet {
+    for (id, ..) in &quiet {
         match archive::archive_session(db, paths, &agents, id) {
             Ok(archive::Archived::Copied(n)) => {
                 archived += 1;

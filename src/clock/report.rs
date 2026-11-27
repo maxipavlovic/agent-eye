@@ -137,12 +137,12 @@ pub fn build(
     let today_start = now - (now + off(now)).rem_euclid(DAY_MS);
     let from_ms = today_start - weeks * 7 * DAY_MS;
     let data = if c.enabled {
-        signals::load(conn, from_ms)?
+        signals::load(conn, cfg, from_ms)?
     } else {
         Data::default()
     };
     let pending = if llm {
-        signals::pending(conn, from_ms)?
+        signals::pending(conn, cfg, from_ms)?
     } else {
         0
     };

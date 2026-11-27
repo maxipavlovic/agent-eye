@@ -216,11 +216,20 @@ async fn everything_in_an_existing_home_loads() {
         } else {
             agent_eye::hide::hidden_ids(&w.db, &w.cfg).unwrap()
         };
-        agent_eye::search::find_without(&w.db, &ws, 10, all, &hidden, agent_eye::util::now_ms())
-            .unwrap()
-            .into_iter()
-            .map(|h| h.session.id)
-            .collect()
+        let quiet = agent_eye::quiet::Quiet::of(&w.cfg);
+        agent_eye::search::find_without(
+            &w.db,
+            &ws,
+            10,
+            all,
+            &hidden,
+            quiet,
+            agent_eye::util::now_ms(),
+        )
+        .unwrap()
+        .into_iter()
+        .map(|h| h.session.id)
+        .collect()
     };
     assert_eq!(find("rounding", false)[0], A);
     assert_eq!(find("adapter tests", false), [B]);

@@ -2,13 +2,15 @@
 //! with its type and what it may be. Everything else (folders, homes, prices, exclude lists, the
 //! dangerous night switches) stays in `config.toml`; a key not listed here is a 400.
 
-use super::api::{ApiError, ApiResult};
+use super::api::{blocking, open_db, ApiError, ApiResult};
 use super::{AppState, Shared};
-use crate::agents;
+use crate::agents::{self, origin};
 use crate::config::{self, Config, PARALLEL_RANGE};
 use crate::config_clock::BREAK_RANGE;
 use crate::night::clock;
 use crate::platform::idle;
+use crate::quiet::{self, Found};
+use crate::util::now_ms;
 use axum::extract::State;
 use axum::Json;
 use serde_json::{json, Map, Value};
@@ -18,6 +20,7 @@ use std::ops::RangeInclusive;
 const KEYS: &[&str] = &[
     "summary.enabled",
     "summary.model",
+    "board.quiet",
     "night.enabled",
     "night.window",
     "night.parallel",
@@ -33,11 +36,6 @@ const KEYS: &[&str] = &[
 
 /// The longest model name accepted: they are short names such as `haiku` or `provider/model`.
 const MODEL_MAX: usize = 64;
-
-/// The settings now: the file is read again, so a change made elsewhere shows at once.
-fn fresh_cfg(st: &AppState) -> Config {
-    st.cfg.fresh(&st.paths.config_path())
-}
 
 /// A whole number inside `range` as the text to put after `key =`, or what the key takes.
 fn int_in(key: &str, v: &Value, range: &RangeInclusive<u32>) -> Result<String, String> {
@@ -62,10 +60,27 @@ fn known_agents(cfg: &Config) -> Vec<(String, String)> {
         .collect()
 }
 
+/// A list of words from a request, or what the key takes; a word listed twice is refused.
+fn word_list(key: &str, v: &Value, what: &str) -> Result<Vec<String>, String> {
+    let words: Vec<String> = v
+        .as_array()
+        .and_then(|a| a.iter().map(|w| w.as_str().map(String::from)).collect())
+        .ok_or_else(|| format!("{key}: give {what}"))?;
+    match words
+        .iter()
+        .enumerate()
+        .find(|(n, w)| words[..*n].contains(w))
+    {
+        Some((_, w)) => Err(format!("{key}: '{w}' is listed twice")),
+        None => Ok(words),
+    }
+}
+
 /// One key as the panel gets it: its type, what it may be, and the value now. `restart` says the
 /// daemon reads the key only when it starts. `summary.model` also names the agent that writes
 /// summaries, its own default model and the names it takes, so the board can offer them.
-fn describe(cfg: &Config, key: &str) -> Value {
+/// `board.quiet` offers the program origins `found` on this machine, with their counts.
+fn describe(cfg: &Config, key: &str, found: &[Found]) -> Value {
     match key {
         "summary.enabled" => json!({"type": "bool", "value": cfg.summary.enabled, "restart": true}),
         "summary.model" => {
@@ -77,6 +92,18 @@ fn describe(cfg: &Config, key: &str) -> Value {
                 "default": agent.map_or("", |a| a.default_summary_model()),
                 "choices": agent.map(|a| agents::summary_choices(a.as_ref())).unwrap_or_default(),
             })
+        }
+        "board.quiet" => {
+            let choices: Vec<Value> = found
+                .iter()
+                .map(|f| {
+                    json!({
+                        "id": f.origin, "name": origin::chip(f.origin), "about": origin::started_by(f.origin),
+                        "sessions": f.sessions, "needs_you": f.needs_you,
+                    })
+                })
+                .collect();
+            json!({"type": "origins", "choices": choices, "value": cfg.board.quiet})
         }
         "night.enabled" => json!({"type": "bool", "value": cfg.night.enabled}),
         "night.window" => {
@@ -114,12 +141,20 @@ fn describe(cfg: &Config, key: &str) -> Value {
     }
 }
 
-fn all(cfg: &Config) -> Value {
+fn all(cfg: &Config, found: &[Found]) -> Value {
     let map: Map<String, Value> = KEYS
         .iter()
-        .map(|k| (k.to_string(), describe(cfg, k)))
+        .map(|k| (k.to_string(), describe(cfg, k, found)))
         .collect();
     json!({"settings": map})
+}
+
+/// Every setting as the file says now (read again, so a change made elsewhere shows at once), with
+/// the program origins this machine has.
+fn settings_now(st: &AppState) -> Result<Value, ApiError> {
+    let cfg = st.fresh_cfg();
+    let found = quiet::found(&open_db(st)?, &cfg, now_ms())?;
+    Ok(all(&cfg, &found))
 }
 
 /// A value from a request as the text to put after `key =` in the file, or why it is refused.
@@ -156,29 +191,23 @@ fn toml_value(cfg: &Config, key: &str, v: &Value) -> Result<String, String> {
         },
         "agents.enabled" => {
             let known = known_agents(cfg);
-            let ids: Vec<&str> = v
-                .as_array()
-                .ok_or_else(|| want("a list of agent ids"))?
-                .iter()
-                .map(|i| i.as_str().ok_or_else(|| want("a list of agent ids")))
-                .collect::<Result<_, _>>()?;
-            for (n, id) in ids.iter().enumerate() {
-                if !known.iter().any(|(k, _)| k == id) {
-                    return Err(format!("{key}: '{id}' is not an agent eye knows"));
-                }
-                if ids[..n].contains(id) {
-                    return Err(format!("{key}: '{id}' is listed twice"));
-                }
+            let ids = word_list(key, v, "a list of agent ids")?;
+            if let Some(id) = ids.iter().find(|id| !known.iter().any(|(k, _)| k == *id)) {
+                return Err(format!("{key}: '{id}' is not an agent eye knows"));
             }
-            let ids: Vec<String> = ids.iter().map(|i| i.to_string()).collect();
-            Ok(config::agents_list(&ids))
+            Ok(config::toml_list(&ids))
+        }
+        "board.quiet" => {
+            let origins = word_list(key, v, "a list of origins")?;
+            quiet::check(&origins).map_err(|e| format!("{key}: {e}"))?;
+            Ok(config::toml_list(&origins))
         }
         _ => unreachable!("{key} is in KEYS without being checked"),
     }
 }
 
 pub(super) async fn api_settings(State(st): State<Shared>) -> ApiResult {
-    Ok(Json(all(&fresh_cfg(&st))))
+    blocking(move || Ok(Json(settings_now(&st)?))).await
 }
 
 /// Writes the given keys into `config.toml` in one go, keeping its comments and other keys. Every
@@ -188,7 +217,7 @@ pub(super) async fn api_settings_set(State(st): State<Shared>, Json(b): Json<Val
         .as_object()
         .filter(|o| !o.is_empty())
         .ok_or_else(|| ApiError::bad("send an object with the settings to change"))?;
-    let cfg = fresh_cfg(&st);
+    let cfg = st.fresh_cfg();
     let mut edits = Vec::new();
     for (key, v) in given {
         let key = KEYS
@@ -220,7 +249,7 @@ pub(super) async fn api_settings_set(State(st): State<Shared>, Json(b): Json<Val
                 ApiError::bad(format!("saving settings: {e:#}"))
             }
         })?;
-    Ok(Json(all(&fresh_cfg(&st))))
+    blocking(move || Ok(Json(settings_now(&st)?))).await
 }
 
 #[cfg(test)]
@@ -262,6 +291,12 @@ mod tests {
         let from = types.find("One setting of GET /api/settings").unwrap();
         let typed = &types[from..types[from..].find("SettingsInput").unwrap() + from];
         let cfg = crate::config::Config::default();
+        // a machine with a program's sessions, so `board.quiet` has a choice to describe
+        let found = [crate::quiet::Found {
+            origin: "app",
+            sessions: 5,
+            needs_you: 2,
+        }];
         for key in super::KEYS {
             assert!(
                 row.contains(&format!("`{key}`")),
@@ -277,7 +312,13 @@ mod tests {
                 config.contains(&format!("[{table}]")) && config.contains(name),
                 "{key} is not in docs/config.md"
             );
-            for field in super::describe(&cfg, key).as_object().unwrap().keys() {
+            let described = super::describe(&cfg, key, &found);
+            let mut fields: Vec<&String> = described.as_object().unwrap().keys().collect();
+            // and the fields of a choice that is an object (`agents.enabled`, `board.quiet`)
+            if let Some(choice) = described["choices"].get(0).and_then(Value::as_object) {
+                fields.extend(choice.keys());
+            }
+            for field in fields {
                 assert!(has_word(row, field), "{key}: {field} is not in docs/api.md");
                 assert!(has_word(typed, field), "{key}: {field} is not in types.ts");
             }
@@ -347,7 +388,11 @@ mod tests {
         let (st, v) = call(&e, req("GET", "/api/settings", None)).await;
         assert_eq!(st, StatusCode::OK);
         let s = &v["settings"];
-        assert_eq!(s.as_object().unwrap().len(), 13);
+        assert_eq!(s.as_object().unwrap().len(), 14);
+        assert_eq!(
+            s["board.quiet"],
+            json!({"type": "origins", "choices": [], "value": []})
+        );
         assert_eq!(
             s["summary.enabled"],
             json!({"type": "bool", "value": true, "restart": true})
@@ -471,6 +516,10 @@ mod tests {
             json!({"agents.enabled": ["nobody"]}),
             json!({"agents.enabled": ["claude", "claude"]}),
             json!({"agents.enabled": "claude"}),
+            json!({"board.quiet": ["terminal"]}),
+            json!({"board.quiet": ["app", "app"]}),
+            json!({"board.quiet": "app"}),
+            json!({"board.quiet": [1]}),
             json!({}),
             json!([1]),
             // one good key does not save a request that has a bad one
@@ -482,6 +531,67 @@ mod tests {
             assert!(v["error"].is_string());
         }
         assert!(!config_path(&e).exists(), "nothing was written");
+    }
+
+    #[tokio::test]
+    async fn quiet_offers_the_program_origins_found_here_and_the_board_follows_it_at_once() {
+        let e = env();
+        let now = crate::util::now_ms();
+        for (id, origin, ai) in [
+            ("a1", "app", "needs_you"),
+            ("a2", "app", "paused"),
+            ("t1", "terminal", "needs_you"),
+        ] {
+            add_session(&e.db, id, id, Some(ai), 3, now - 60_000);
+            e.db.conn
+                .execute(
+                    "UPDATE session SET origin=?2 WHERE id=?1",
+                    rusqlite::params![id, origin],
+                )
+                .unwrap();
+        }
+        let app = json!({
+            "id": "app", "name": "App", "about": "started by an app through an agent's SDK",
+            "sessions": 2, "needs_you": 1,
+        });
+        let (_, v) = call(&e, req("GET", "/api/settings", None)).await;
+        assert_eq!(
+            v["settings"]["board.quiet"],
+            json!({"type": "origins", "choices": [app], "value": []})
+        );
+        let needs_you = |b: &Value| card_ids(b, "needs_you");
+        let (_, b) = call(&e, req("GET", "/api/board", None)).await;
+        assert!(needs_you(&b).contains(&"a1".to_string()));
+
+        let (st, v) = post(&e, json!({"board.quiet": ["app"]})).await;
+        assert_eq!(st, StatusCode::OK, "{v}");
+        // the count still says what it clears
+        assert_eq!(
+            v["settings"]["board.quiet"],
+            json!({"type": "origins", "choices": [app], "value": ["app"]})
+        );
+        let text = std::fs::read_to_string(config_path(&e)).unwrap();
+        assert!(text.contains("quiet = [\"app\"]"), "{text}");
+        // the board and a card follow the file without a restart
+        let (_, b) = call(&e, req("GET", "/api/board", None)).await;
+        assert_eq!(needs_you(&b), ["t1"]);
+        assert!(card_ids(&b, "paused").contains(&"a1".to_string()));
+        let (_, c) = call(&e, req("GET", "/api/cards/a1", None)).await;
+        assert_eq!(c["column"], "paused");
+
+        // an origin set to quiet with no sessions keeps its switch
+        let (_, v) = post(&e, json!({"board.quiet": ["app", "headless"]})).await;
+        let ids: Vec<&str> = v["settings"]["board.quiet"]["choices"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|c| c["id"].as_str().unwrap())
+            .collect();
+        assert_eq!(ids, ["app", "headless"]);
+        assert_eq!(v["settings"]["board.quiet"]["choices"][1]["sessions"], 0);
+        post(&e, json!({"board.quiet": []})).await;
+        let (_, b) = call(&e, req("GET", "/api/board", None)).await;
+        assert!(needs_you(&b).contains(&"a1".to_string()));
     }
 
     #[tokio::test]

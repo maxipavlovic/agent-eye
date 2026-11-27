@@ -77,6 +77,7 @@ pub fn run(g: &Global, a: &PickArgs) -> Result<()> {
     app.paths = Some(paths.clone());
     app.user = cfg.user.clone();
     app.usage_cfg = cfg.usage.clone();
+    app.quiet = crate::quiet::Quiet::of(&cfg);
     app.agents = agents.clone();
     if cfg.clock.enabled && cfg.clock.hints {
         app.watch_clock_hint(clock_hint(&paths, &cfg, &agents, now));

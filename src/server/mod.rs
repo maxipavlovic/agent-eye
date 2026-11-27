@@ -28,6 +28,7 @@ pub use run::{ask_shutdown, board_url, serve, shutdown_signal};
 use crate::agents::{self, Agents};
 use crate::config::Config;
 use crate::paths::Paths;
+use crate::quiet::Quiet;
 use axum::middleware;
 use axum::routing::{get, post};
 use axum::Router;
@@ -47,10 +48,23 @@ pub struct AppState {
 }
 
 impl AppState {
+    /// The settings as the file says now, for what should follow a change without a restart.
+    fn fresh_cfg(&self) -> Config {
+        self.cfg.fresh(&self.paths.config_path())
+    }
+
+    /// What a card needs; `[board] quiet` is read from the file, so the columns follow a switch at
+    /// once.
     fn card_ctx(&self) -> CardCtx<'_> {
+        self.card_ctx_with(&self.fresh_cfg())
+    }
+
+    /// The same, with `[board] quiet` from settings already read.
+    fn card_ctx_with(&self, cfg: &Config) -> CardCtx<'_> {
         CardCtx {
             user: &self.cfg.user,
             agents: &self.agents,
+            quiet: Quiet::of(cfg),
         }
     }
 }

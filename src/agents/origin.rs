@@ -131,6 +131,16 @@ pub fn phrase(origin: &str, raw: Option<&str>) -> String {
     }
 }
 
+/// What started the sessions of an origin a program starts, as the settings panel says it ("5
+/// sessions started by an app through an agent's SDK"); None for the others.
+pub fn started_by(origin: &str) -> Option<&'static str> {
+    Some(match origin {
+        "app" => "started by an app through an agent's SDK",
+        "headless" => "started by a script (claude -p, codex exec)",
+        _ => return None,
+    })
+}
+
 /// The word shown on a chip, None for the terminal (the normal case).
 pub fn chip(origin: &str) -> Option<&'static str> {
     Some(match origin {

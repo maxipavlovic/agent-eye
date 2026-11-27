@@ -1,5 +1,6 @@
 use crate::activity::{self, DIALOG};
 use crate::model::{AiStatus, Column, Session};
+use crate::quiet::Quiet;
 
 const SEVEN_DAYS_MS: i64 = 7 * 24 * 3600 * 1000;
 
@@ -25,11 +26,15 @@ pub struct Input<'a> {
     pub prompt_count: i64,
     pub has_outputs: bool,
     pub now_ms: i64,
+    /// A program started it and `[board] quiet` keeps its origin quiet: what it asks is for the
+    /// program, so it never moves itself to Needs you.
+    pub quiet: bool,
 }
 
 impl<'a> Input<'a> {
-    /// The input for a session; `has_outputs` says it has any output.
-    pub fn from_session(s: &'a Session, has_outputs: bool, now_ms: i64) -> Input<'a> {
+    /// The input for a session; `has_outputs` says it has any output, `quiet` which origins are
+    /// quiet (`Quiet::NONE` for the column without the setting).
+    pub fn from_session(s: &'a Session, has_outputs: bool, now_ms: i64, quiet: Quiet) -> Input<'a> {
         Input {
             archived: s.archived,
             remind_due: crate::remind::is_due(s.remind_at, s.last_activity_at.unwrap_or(0), now_ms),
@@ -46,11 +51,15 @@ impl<'a> Input<'a> {
             prompt_count: s.prompt_count,
             has_outputs,
             now_ms,
+            quiet: quiet.holds(s.origin.as_deref()),
         }
     }
 }
 
-/// The column a session belongs in; the first matching rule wins.
+/// The column a session belongs in; the first matching rule wins. A quiet session that waits (a
+/// hook, a closing question, a prompt on screen, a summary that says it needs you) waits on the
+/// program that started it: it goes where the summary puts it, Paused for "needs you", and is not
+/// Running while it waits, whatever runs beside it. A due reminder and a move by hand still win.
 pub fn compute(i: &Input) -> Column {
     if i.archived {
         return Column::Archive;
@@ -72,20 +81,19 @@ pub fn compute(i: &Input) -> Column {
             .last_assistant_text
             .map(|t| t.trim_end().ends_with('?'))
             .unwrap_or(false);
-        if i.hook_waiting || (ls == "idle" && asks) {
-            return Column::NeedsYou;
-        }
         let dialog = i.live_wait.is_some_and(|w| w.eq_ignore_ascii_case(DIALOG));
         let live_waiting = ls == "waiting" && !dialog;
-        if live_waiting && i.live_wait.is_some() {
+        let waits =
+            i.hook_waiting || (ls == "idle" && asks) || (live_waiting && i.live_wait.is_some());
+        if waits && !i.quiet {
             return Column::NeedsYou;
         }
-        if i.has_background && !asks && !live_waiting {
+        if i.has_background && !asks && !live_waiting && !waits {
             return Column::Running;
         }
     }
     match i.ai_status {
-        Some(AiStatus::NeedsYou) if i.now_ms - i.last_activity_at <= SEVEN_DAYS_MS => {
+        Some(AiStatus::NeedsYou) if !i.quiet && i.now_ms - i.last_activity_at <= SEVEN_DAYS_MS => {
             Column::NeedsYou
         }
         Some(AiStatus::WaitingOnOthers) => Column::Waiting,
@@ -124,6 +132,7 @@ mod tests {
             prompt_count: 5,
             has_outputs: false,
             now_ms: 2_000,
+            quiet: false,
         }
     }
 
@@ -160,7 +169,7 @@ mod tests {
             column_manual_at: Some(1_000),
             ..Default::default()
         };
-        let col = |s: &Session, now| compute(&Input::from_session(s, true, now));
+        let col = |s: &Session, now| compute(&Input::from_session(s, true, now, Quiet::NONE));
         assert_eq!(col(&s, 2_000), Column::Waiting, "not yet");
         assert_eq!(col(&s, 5_000), Column::NeedsYou, "due");
         s.last_activity_at = Some(5_001);
@@ -288,6 +297,119 @@ mod tests {
         assert_eq!(compute(&i), Column::Done);
         i.ai_status = Some(AiStatus::Paused);
         assert_eq!(compute(&i), Column::Paused);
+    }
+
+    /// Every way a session gets to Needs you by itself: a hook that says it waits, a closing
+    /// question while it is open, a prompt on screen, and a summary that says so.
+    fn every_ask() -> Vec<(&'static str, Input<'static>)> {
+        let mut hook = base();
+        hook.live_status = Some("idle");
+        hook.hook_waiting = true;
+        let mut question = base();
+        question.live_status = Some("idle");
+        question.last_assistant_text = Some("Shall I place the order?");
+        let mut prompt = base();
+        prompt.live_status = Some("waiting");
+        prompt.live_wait = Some("permission prompt");
+        let mut summary = base();
+        summary.ai_status = Some(AiStatus::NeedsYou);
+        vec![
+            ("hook", hook),
+            ("question", question),
+            ("prompt", prompt),
+            ("summary", summary),
+        ]
+    }
+
+    #[test]
+    fn a_quiet_session_never_moves_itself_to_needs_you() {
+        for (how, mut i) in every_ask() {
+            assert_eq!(compute(&i), Column::NeedsYou, "{how}, not quiet");
+            i.quiet = true;
+            assert_eq!(compute(&i), Column::Paused, "{how}, quiet");
+        }
+    }
+
+    #[test]
+    fn a_quiet_session_that_waits_goes_where_its_summary_puts_it_and_is_not_running() {
+        for (how, mut i) in every_ask().into_iter().filter(|(h, _)| *h != "summary") {
+            i.quiet = true;
+            i.ai_status = Some(AiStatus::WaitingOnOthers);
+            assert_eq!(compute(&i), Column::Waiting, "{how}");
+            i.ai_status = Some(AiStatus::Done);
+            assert_eq!(compute(&i), Column::Done, "{how}");
+            i.ai_status = None;
+            i.has_background = true;
+            assert_eq!(
+                compute(&i),
+                Column::Paused,
+                "{how}: it waits on its program"
+            );
+        }
+    }
+
+    #[test]
+    fn a_due_reminder_and_a_move_by_hand_still_put_a_quiet_session_in_needs_you() {
+        for (how, mut i) in every_ask() {
+            i.quiet = true;
+            i.remind_due = true;
+            assert_eq!(compute(&i), Column::NeedsYou, "{how}: reminder");
+            i.remind_due = false;
+            i.column_manual = Some(Column::NeedsYou);
+            i.column_manual_at = Some(1_000);
+            assert_eq!(compute(&i), Column::NeedsYou, "{how}: by hand");
+        }
+    }
+
+    #[test]
+    fn quiet_changes_nothing_for_a_session_that_does_not_ask() {
+        let mut cases = vec![];
+        for (live, wait, background) in [
+            (Some("busy"), None, false),
+            (Some("idle"), None, true),
+            (Some("idle"), None, false),
+            (Some("waiting"), Some("dialog open"), true),
+            (Some("waiting"), None, false),
+            (None, None, false),
+        ] {
+            for ai in [
+                None,
+                Some(AiStatus::Done),
+                Some(AiStatus::WaitingOnOthers),
+                Some(AiStatus::Paused),
+            ] {
+                let mut i = base();
+                (i.live_status, i.live_wait, i.has_background, i.ai_status) =
+                    (live, wait, background, ai);
+                cases.push(i);
+            }
+        }
+        let mut trivial = base();
+        trivial.prompt_count = 1;
+        cases.push(trivial);
+        for mut i in cases {
+            let loud = compute(&i);
+            i.quiet = true;
+            assert_eq!(compute(&i), loud, "{i:?}");
+        }
+    }
+
+    #[test]
+    fn the_origin_of_the_session_decides_whether_it_is_quiet() {
+        let s = |origin: &str| Session {
+            origin: Some(origin.into()),
+            ai_status: Some("needs_you".into()),
+            last_activity_at: Some(1_000),
+            prompt_count: 3,
+            ..Default::default()
+        };
+        let mut cfg = crate::config::Config::default();
+        cfg.board.quiet = vec!["app".into()];
+        let col = |s: &Session, q| compute(&Input::from_session(s, false, 2_000, q));
+        assert_eq!(col(&s("app"), Quiet::of(&cfg)), Column::Paused);
+        assert_eq!(col(&s("app"), Quiet::NONE), Column::NeedsYou);
+        assert_eq!(col(&s("headless"), Quiet::of(&cfg)), Column::NeedsYou);
+        assert_eq!(col(&s("terminal"), Quiet::of(&cfg)), Column::NeedsYou);
     }
 
     #[test]

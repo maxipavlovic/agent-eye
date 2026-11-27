@@ -1,6 +1,8 @@
 //! What the clock reads from the database: the user's prompts (and which were corrections), and the
 //! model's side (tool calls, failed ones, thinking), each with a time. Nothing is judged here.
 
+use crate::config::Config;
+use crate::quiet::Quiet;
 use anyhow::Result;
 use rusqlite::{params, Connection};
 use std::collections::HashMap;
@@ -36,8 +38,28 @@ pub struct Think {
     pub n: i64,
 }
 
-/// The turn events since a time, by kind, oldest first. Sessions started by a script (`headless`) or
-/// by the night shift are left out: those prompts are eye's own or a program's, not the user steering.
+/// The origins whose sessions the clock leaves out: a script's (`headless`), the night shift's, and
+/// those `[board] quiet` keeps quiet. Their prompts are eye's own or a program's, not the user
+/// steering. Every query of the clock takes its list from here.
+pub fn left_out(cfg: &Config) -> Vec<&'static str> {
+    let mut out = vec!["headless", "night"];
+    for o in Quiet::of(cfg).origins() {
+        if !out.contains(&o) {
+            out.push(o);
+        }
+    }
+    out
+}
+
+/// `left_out` as an SQL list (`'headless','night'`). The words are eye's own constants, never
+/// text from the file.
+fn left_out_sql(cfg: &Config) -> String {
+    let quoted: Vec<String> = left_out(cfg).iter().map(|o| format!("'{o}'")).collect();
+    quoted.join(",")
+}
+
+/// The turn events since a time, by kind, oldest first. Sessions of an origin in `left_out` are
+/// left out.
 #[derive(Default)]
 pub struct Data {
     pub prompts: Vec<Prompt>,
@@ -48,19 +70,21 @@ pub struct Data {
 }
 
 /// Every event from `from_ms` on.
-pub fn load(conn: &Connection, from_ms: i64) -> Result<Data> {
+pub fn load(conn: &Connection, cfg: &Config, from_ms: i64) -> Result<Data> {
     let mut data = Data::default();
     // the turn each session is in: a prompt starts a new one
     let mut open: HashMap<String, i64> = HashMap::new();
     let mut turns = 0;
     let mut st = conn.prepare(
         &format!(
-            "SELECT t.ts, t.kind, t.n, s.agent, c.verdict IS 'yes', t.session_id, {UNJUDGED}
+            "SELECT t.ts, t.kind, t.n, s.agent, c.verdict IS 'yes', t.session_id, {}
              FROM turn t JOIN session s ON s.id=t.session_id
              LEFT JOIN correction c ON c.session_id=t.session_id AND c.prompt_ts=t.ts AND t.kind='prompt'
              WHERE t.ts>=?1 AND t.kind IN ('prompt','interrupt','tool','tool_error','think')
-               AND COALESCE(s.origin,'') NOT IN ('headless','night')
-             ORDER BY t.ts"
+               AND COALESCE(s.origin,'') NOT IN ({})
+             ORDER BY t.ts",
+            unjudged(cfg),
+            left_out_sql(cfg),
         ),
     )?;
     let mut rows = st.query(params![from_ms, MAX_PROMPT_CHARS])?;
@@ -116,20 +140,29 @@ pub fn idle_break_ends(conn: &Connection, from_ms: i64, min_ms: i64) -> Result<V
 
 /// Prompts since `from_ms` that a model could still be asked about and has not been: short enough,
 /// after an agent turn, with no verdict stored.
-pub fn pending(conn: &Connection, from_ms: i64) -> Result<i64> {
+pub fn pending(conn: &Connection, cfg: &Config, from_ms: i64) -> Result<i64> {
     Ok(conn.query_row(
-        &format!("SELECT COUNT(*) FROM turn t WHERE {UNJUDGED} AND t.ts>=?1"),
+        &format!(
+            "SELECT COUNT(*) FROM turn t WHERE {} AND t.ts>=?1",
+            unjudged(cfg)
+        ),
         params![from_ms, MAX_PROMPT_CHARS],
         |r| r.get(0),
     )?)
 }
 
-/// A prompt turn (`t`) a model could be asked about and has not been (`?2` is the length cap). A
-/// session of a script or the night shift is not asked about: its prompts are not the user's.
-pub const UNJUDGED: &str = "t.kind='prompt' AND t.n<=?2
-    AND NOT EXISTS(SELECT 1 FROM session s WHERE s.id=t.session_id AND s.origin IN ('headless','night'))
+/// The condition on a prompt turn (`t`) a model could be asked about and has not been (`?2` is the
+/// length cap). A session of an origin in `left_out` is not asked about: its prompts are not the
+/// user's.
+pub fn unjudged(cfg: &Config) -> String {
+    format!(
+        "t.kind='prompt' AND t.n<=?2
+    AND NOT EXISTS(SELECT 1 FROM session s WHERE s.id=t.session_id AND s.origin IN ({}))
     AND EXISTS(SELECT 1 FROM turn e WHERE e.session_id=t.session_id AND e.kind='end' AND e.ts<t.ts)
-    AND NOT EXISTS(SELECT 1 FROM correction c WHERE c.session_id=t.session_id AND c.prompt_ts=t.ts)";
+    AND NOT EXISTS(SELECT 1 FROM correction c WHERE c.session_id=t.session_id AND c.prompt_ts=t.ts)",
+        left_out_sql(cfg)
+    )
+}
 
 #[cfg(test)]
 mod tests {
@@ -175,7 +208,7 @@ mod tests {
                 [],
             )
             .unwrap();
-        let d = load(&db.conn, 5).unwrap();
+        let d = load(&db.conn, &Config::default(), 5).unwrap();
         let p: Vec<_> = d
             .prompts
             .iter()
@@ -187,7 +220,10 @@ mod tests {
             (1, 1, 1)
         );
         assert_eq!((d.thinks[0].agent.as_str(), d.thinks[0].n), ("codex", 900));
-        assert!(load(&db.conn, 99).unwrap().prompts.is_empty());
+        assert!(load(&db.conn, &Config::default(), 99)
+            .unwrap()
+            .prompts
+            .is_empty());
     }
 
     #[test]
@@ -208,10 +244,10 @@ mod tests {
                 [],
             )
             .unwrap();
-        assert_eq!(pending(&db.conn, 0).unwrap(), 1);
-        assert_eq!(pending(&db.conn, 60).unwrap(), 0);
+        assert_eq!(pending(&db.conn, &Config::default(), 0).unwrap(), 1);
+        assert_eq!(pending(&db.conn, &Config::default(), 60).unwrap(), 0);
         // the prompts load marks as waiting are exactly the ones counted here
-        let marked: Vec<i64> = load(&db.conn, 0)
+        let marked: Vec<i64> = load(&db.conn, &Config::default(), 0)
             .unwrap()
             .prompts
             .iter()
@@ -233,19 +269,60 @@ mod tests {
             db.conn
                 .execute("UPDATE session SET origin=?1 WHERE id='b'", [origin])
                 .unwrap();
-            let d = load(&db.conn, 0).unwrap();
+            let d = load(&db.conn, &Config::default(), 0).unwrap();
             assert_eq!(d.prompts.iter().map(|p| p.ts).collect::<Vec<_>>(), [20]);
             // and a model is not asked about them
-            assert_eq!(pending(&db.conn, 0).unwrap(), 1, "{origin}");
+            assert_eq!(
+                pending(&db.conn, &Config::default(), 0).unwrap(),
+                1,
+                "{origin}"
+            );
         }
         // a session of unknown origin, or one started in a terminal, counts
         for origin in [None, Some("terminal")] {
             db.conn
                 .execute("UPDATE session SET origin=?1 WHERE id='b'", [origin])
                 .unwrap();
-            assert_eq!(load(&db.conn, 0).unwrap().prompts.len(), 2);
-            assert_eq!(pending(&db.conn, 0).unwrap(), 2);
+            assert_eq!(
+                load(&db.conn, &Config::default(), 0).unwrap().prompts.len(),
+                2
+            );
+            assert_eq!(pending(&db.conn, &Config::default(), 0).unwrap(), 2);
         }
+    }
+
+    #[test]
+    fn sessions_kept_quiet_are_left_out_like_a_script_s() {
+        let db = db_with(&[
+            ("a", 10, "end", 5),
+            ("a", 20, "prompt", 20),
+            ("b", 30, "end", 5),
+            ("b", 40, "prompt", 20),
+            ("b", 41, "tool", 0),
+            ("b", 42, "tool_error", 0),
+            ("b", 43, "think", 50),
+            ("b", 44, "interrupt", 0),
+        ]);
+        db.conn
+            .execute("UPDATE session SET origin='app' WHERE id='b'", [])
+            .unwrap();
+        let loud = Config::default();
+        let d = load(&db.conn, &loud, 0).unwrap();
+        assert_eq!((d.prompts.len(), d.tools.len(), d.thinks.len()), (2, 1, 1));
+        assert_eq!(pending(&db.conn, &loud, 0).unwrap(), 2);
+        let mut quiet = Config::default();
+        quiet.board.quiet = vec!["app".into()];
+        let d = load(&db.conn, &quiet, 0).unwrap();
+        assert_eq!(d.prompts.iter().map(|p| p.ts).collect::<Vec<_>>(), [20]);
+        assert!(d.tools.is_empty() && d.tool_errors.is_empty());
+        assert!(d.thinks.is_empty() && d.interrupts.is_empty());
+        // and a model is not asked about them
+        assert_eq!(pending(&db.conn, &quiet, 0).unwrap(), 1);
+        // one list: a script's and the night shift's always, a quiet origin once
+        assert_eq!(left_out(&loud), ["headless", "night"]);
+        assert_eq!(left_out(&quiet), ["headless", "night", "app"]);
+        quiet.board.quiet = vec!["headless".into(), "app".into()];
+        assert_eq!(left_out(&quiet), ["headless", "night", "app"]);
     }
 
     #[test]
