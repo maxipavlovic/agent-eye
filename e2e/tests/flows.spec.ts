@@ -460,3 +460,74 @@ test.describe('looks', () => {
     await expect(board.getByRole('menu').getByRole('menuitem').first()).toHaveText('MARK DONE');
   });
 });
+
+// A chart's words are drawn in SVG user units and the chart is scaled to its box, so the size that counts is the font size
+// times the scale on screen. Nothing may be read at under 12 px, in either look, from a phone to a wide screen.
+const onScreenSizes = (p: import('@playwright/test').Page, selector: string) =>
+  p.locator(selector).evaluateAll((els) => els.map((el) => Number.parseFloat(getComputedStyle(el).fontSize) * (el as SVGTextElement).getScreenCTM()!.a));
+
+for (const width of [360, 1000, 1440]) {
+  test.describe(`readable size at ${width}`, () => {
+    test.use({ viewport: { width, height: 900 } });
+
+    test('every word in the HOURS chart is at least 12 px on screen', async ({ board }) => {
+      await answer(board, demoClock(4));
+      await board.getByRole('button', { name: 'HOURS', exact: true }).click();
+      await expect(board.locator('.hours .cdiagram')).toBeVisible();
+      const sizes = await onScreenSizes(board, '.hours .cdiagram text');
+      expect(sizes.length).toBeGreaterThan(10);
+      expect(Math.min(...sizes)).toBeGreaterThanOrEqual(12);
+    });
+
+    test('every word in the USAGE chart is at least 12 px on screen', async ({ board }) => {
+      await board.getByRole('button', { name: 'USAGE' }).click();
+      const panel = board.getByRole('complementary', { name: 'Usage' });
+      await expect(panel.getByRole('heading', { name: /DAILY COST/ })).toBeVisible();
+      const sizes = await onScreenSizes(board, 'aside[aria-label=Usage] svg text');
+      expect(sizes.length).toBeGreaterThan(3);
+      expect(Math.min(...sizes)).toBeGreaterThanOrEqual(12);
+    });
+  });
+}
+
+// The longest hint the engine words (a break's, at the biggest ratio) must not push the gear or + IDEA out of the header.
+test.describe('the header with the longest hint', () => {
+  for (const width of [1000, 1280, 1440, 1600]) {
+    test(`keeps every header button in view at ${width}`, async ({ board }) => {
+      await board.setViewportSize({ width, height: 900 });
+      const c = hintClock();
+      const text = 'An hour or more since a break: your corrections usually run 9.9x now.';
+      await answer(board, { ...c, now: { ...c.now, hint: { text, offer: true } } });
+      await board.reload();
+      await expect(board.locator('.hourhint')).toBeVisible();
+      await expect(board.getByRole('button', { name: 'Settings', exact: true })).toBeInViewport({ ratio: 1 });
+      await expect(board.getByRole('button', { name: '+ IDEA' })).toBeInViewport({ ratio: 1 });
+      const out = await board.locator('.hd button').evaluateAll((els) => els.flatMap((el) => {
+        const r = el.getBoundingClientRect();
+        return r.width > 0 && (r.left < 0 || r.right > window.innerWidth) ? [`${el.textContent || el.getAttribute('aria-label')} ${Math.round(r.left)}-${Math.round(r.right)}`] : [];
+      }));
+      expect(out).toEqual([]);
+    });
+  }
+});
+
+test.describe('on a touch screen', () => {
+  test.use({ hasTouch: true });
+
+  test('tapping an HOURS column shows that hour', async ({ board }) => {
+    await answer(board, demoClock(4));
+    await board.getByRole('button', { name: 'HOURS', exact: true }).click();
+    const panel = board.getByRole('complementary', { name: 'Hours' });
+    await expect(panel.locator('.cdiagram')).toBeVisible();
+    await expect(panel.locator('.ctip')).toHaveCount(0);
+    // the middle of hour 12's column: the chart is 720 units wide, its plot starts at 48 and ends 8 short of the edge
+    const tapHour12 = async () => {
+      const svg = (await panel.locator('.cdiagram').boundingBox())!;
+      const x = 48 + ((720 - 48 - 8) / 24) * 12.5;
+      await board.touchscreen.tap(svg.x + (svg.width * x) / 720, svg.y + svg.height * 0.8);
+      await expect(panel.locator('.ctip')).toContainText('12:00–13:00', { timeout: 1000 });
+    };
+    // the board's cards still settle into place under the panel for a moment: tap again until the chart holds still
+    await expect(tapHour12).toPass();
+  });
+});
