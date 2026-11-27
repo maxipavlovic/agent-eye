@@ -371,6 +371,7 @@ pub enum Cmd {
     /// Ask the summary agent where a session stands (status, state, next step, topics)
     Summarize {
         ids: Vec<String>,
+        /// Every session that needs one, but for those `[board] quiet` keeps quiet (an id still works)
         #[arg(long)]
         all: bool,
         /// Show what would run, call nothing

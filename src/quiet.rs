@@ -1,9 +1,10 @@
 //! `[board] quiet`: sessions a program started, kept quiet. A program that drives an agent (an app
 //! on the agent's SDK, a script's headless run) has a user of its own, so the agent's questions are
 //! not yours. A quiet session never moves itself to Needs you (`columns`), gets no summary from the
-//! daemon (`daemon::quiet_round`) and stays out of the steering clock (`clock::signals::left_out`).
-//! It is still indexed, found, listed and resumable. Each part reads the setting when it runs, so a
-//! switch on the board counts without a restart.
+//! daemon (`daemon::quiet_round`) or a bulk `eye summarize --all`, and stays out of the steering
+//! clock (`clock::signals::left_out`). It is still indexed, found, listed and resumable. Each part
+//! reads the setting when it runs, so a switch on the board counts without a restart; the picker
+//! and `eye ls` read it when they start.
 
 use crate::columns::{self, Input};
 use crate::config::Config;
