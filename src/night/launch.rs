@@ -33,12 +33,19 @@ pub const DENY: [&str; 11] = [
     "Bash(docker push*)",
 ];
 
-/// OpenCode's permission rules for a run: everything is allowed except what `DENY` names (the
-/// same commands, as OpenCode's patterns), and nothing outside the run's folder. `--auto` then
-/// approves whatever is not denied. The rules match the text of a tool call; they are not a
-/// sandbox (a shell command can still write anywhere), which is why the run needs
-/// `[night] allow_unsandboxed`. A run never updates OpenCode.
-pub fn opencode_permissions() -> String {
+/// The agent an OpenCode run is, defined only by the run's inline config: OpenCode applies an
+/// agent's own permissions after the global ones, so a run as the user's default agent would let
+/// that agent's permissions in the user's config beat the rules below (a real run pushed that way).
+pub const OPENCODE_AGENT: &str = "eye-night";
+
+/// OpenCode's config for a run as [`OPENCODE_AGENT`]: everything is allowed except what `DENY`
+/// names (the same commands, as OpenCode's patterns), nothing outside the run's folder, no
+/// sub-agents (a sub-agent is another agent, whose permissions the user's config sets: a real run's
+/// sub-agent pushed), the MCP servers `mcp` names switched off (their tools are not commands these
+/// rules can match) and no update. `--auto` then approves whatever is not denied. The rules match
+/// the text of a tool call; they are not a sandbox (a shell command can still write anywhere),
+/// which is why the run needs `[night] allow_unsandboxed`.
+pub fn opencode_permissions(mcp: &[String]) -> String {
     let mut bash = serde_json::Map::new();
     bash.insert("*".into(), "allow".into());
     for d in DENY {
@@ -48,12 +55,13 @@ pub fn opencode_permissions() -> String {
             .unwrap_or(d);
         bash.insert(pat.into(), "deny".into());
     }
-    serde_json::json!({"permission": {
+    let rules = serde_json::json!({
         "bash": bash,
         "edit": "allow",
-        "external_directory": "deny"
-    }, "autoupdate": false})
-    .to_string()
+        "external_directory": "deny",
+        "task": "deny"
+    });
+    crate::agents::opencode::agent_config(OPENCODE_AGENT, rules, mcp).to_string()
 }
 
 /// Package registries a sandboxed run may reach by default: `[night] network` replaces it.
@@ -141,8 +149,10 @@ pub fn agy_settings() -> String {
     .to_string()
 }
 
-/// The command of a run. `new_id` names the run's own session (Claude only); `guard` is the
-/// `--settings` JSON of its barrier (see `barrier`).
+/// The command of a run. `new_id` names the run's own session (Claude only); `guard` is what
+/// confines the run beyond its arguments: for Claude the `--settings` JSON of its barrier (see
+/// `barrier`), for OpenCode its inline config (`opencode_permissions`, with the MCP servers of the
+/// run's folder named; without a guard none are).
 pub fn build(
     cfg: &Config,
     run: &Run,
@@ -203,15 +213,18 @@ pub fn build(
             args.extend(["--model".into(), cfg.night.agy_model.trim().into()]);
         }
     } else if run.agent == "opencode" {
-        // `env` hands OpenCode a permission config for this run only; `--standalone` makes the
-        // server that applies it a private one, not OpenCode's background service
+        // `env` hands OpenCode a config for this run only; `--standalone` makes the server that
+        // applies it a private one, not OpenCode's background service
         program = "env".into();
+        let config = guard.map_or_else(|| opencode_permissions(&[]), String::from);
         args.extend([
-            format!("OPENCODE_CONFIG_CONTENT={}", opencode_permissions()),
+            format!("OPENCODE_CONFIG_CONTENT={config}"),
             exe.into(),
             "run".into(),
             "--standalone".into(),
             "--auto".into(),
+            "--agent".into(),
+            OPENCODE_AGENT.into(),
         ]);
         if !cfg.night.opencode_model.trim().is_empty() {
             args.extend(["-m".into(), cfg.night.opencode_model.trim().into()]);
@@ -402,22 +415,27 @@ pub fn start(
         if run.kind == "session" {
             stage_transcript(db, paths, agents, run, &iso.cwd)?;
         }
-        let guard = (run.agent == LEGACY_ID).then(|| {
-            // what the run must not touch: the planned folder and where the session began
-            let mut protect = vec![PathBuf::from(&run.folder)];
-            if let Some(c) = original_cwd(db, run) {
-                protect.push(c);
-            }
-            let copy = run.mode() == super::Mode::Copy;
-            if copy {
-                // a copy locks the whole repo, also when the run began in a sub-folder of it
-                if let Some(top) = iso::repo_root(probe, Path::new(&run.folder)) {
-                    protect.push(top);
+        let guard = if run.agent == "opencode" {
+            let mcp = crate::agents::opencode::mcp_servers_for_run(&agent.executable(), &iso.cwd);
+            Some(opencode_permissions(&mcp))
+        } else {
+            (run.agent == LEGACY_ID).then(|| {
+                // what the run must not touch: the planned folder and where the session began
+                let mut protect = vec![PathBuf::from(&run.folder)];
+                if let Some(c) = original_cwd(db, run) {
+                    protect.push(c);
                 }
-            }
-            let b = barrier::plan(&iso.root, &protect, copy);
-            barrier::settings(&b, &DENY, &cfg.night.network_list(), sandboxed)
-        });
+                let copy = run.mode() == super::Mode::Copy;
+                if copy {
+                    // a copy locks the whole repo, also when the run began in a sub-folder of it
+                    if let Some(top) = iso::repo_root(probe, Path::new(&run.folder)) {
+                        protect.push(top);
+                    }
+                }
+                let b = barrier::plan(&iso.root, &protect, copy);
+                barrier::settings(&b, &DENY, &cfg.night.network_list(), sandboxed)
+            })
+        };
         let spec = build(
             cfg,
             run,

@@ -1122,8 +1122,15 @@ fn the_opencode_command_carries_its_permission_rules_in_the_environment() {
     assert_eq!(c.program, "env");
     assert!(c.args[0].starts_with("OPENCODE_CONFIG_CONTENT="));
     assert_eq!(
-        &c.args[1..5],
-        ["/bin/opencode", "run", "--standalone", "--auto"]
+        &c.args[1..7],
+        [
+            "/bin/opencode",
+            "run",
+            "--standalone",
+            "--auto",
+            "--agent",
+            launch::OPENCODE_AGENT
+        ]
     );
     assert_eq!(after(&c.args, "-m"), "opencode/x-free");
     assert_eq!(c.cwd, Path::new("/w/x"));
@@ -1142,10 +1149,32 @@ fn the_opencode_command_carries_its_permission_rules_in_the_environment() {
         assert_eq!(bash[d], "deny", "{d}");
     }
     assert_eq!(rules["permission"]["external_directory"], "deny");
+    assert_eq!(rules["permission"]["task"], "deny");
     assert_eq!(rules["autoupdate"], false);
+    // the run's own agent has the same rules, so the user's agent permissions cannot beat them
+    let agent = &rules["agent"][launch::OPENCODE_AGENT];
+    assert_eq!(agent["permission"], rules["permission"]);
+    assert_eq!(agent["mode"], "primary");
     // the allow-all rule comes first: the last matching rule wins in OpenCode
     assert_eq!(bash.as_object().unwrap().keys().next().unwrap(), "*");
     assert_eq!(c.args.last().unwrap(), &run_of("opencode", "idea").prompt);
+}
+
+#[test]
+fn the_mcp_servers_of_an_opencode_runs_folder_are_switched_off_by_its_guard() {
+    let guard = launch::opencode_permissions(&["jira".into()]);
+    let c = launch::build(
+        &Config::default(),
+        &run_of("opencode", "idea"),
+        "/bin/opencode",
+        Path::new("/w/x"),
+        None,
+        Some(&guard),
+    );
+    assert_eq!(c.args[0], format!("OPENCODE_CONFIG_CONTENT={guard}"));
+    let rules: serde_json::Value = serde_json::from_str(&guard).unwrap();
+    assert_eq!(rules["mcp"]["jira"]["enabled"], false);
+    assert_eq!(rules["permission"]["bash"]["git push*"], "deny");
 }
 
 #[test]
