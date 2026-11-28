@@ -515,3 +515,107 @@ fn a_loose_round_with_no_sessions_stores_nothing() {
     loose_round(&p, &cfg);
     assert!(crate::loose::list(&db, None, true).unwrap().is_empty());
 }
+
+#[test]
+fn a_hook_that_wrote_as_the_queue_was_moved_aside_is_still_read() {
+    let (_t, p, db) = env();
+    let queue = hook::queue_path(&p);
+    let line = |id: &str, pad: usize| {
+        format!(
+            "{{\"event\":\"Stop\",\"session_id\":\"{id}\",\"ts\":5,\"pad\":\"{}\"}}\n",
+            "x".repeat(pad)
+        )
+    };
+    std::fs::create_dir_all(queue.parent().unwrap()).unwrap();
+    std::fs::write(&queue, line("early", QUEUE_ROTATE as usize)).unwrap();
+    assert_eq!(drain_queue(&db, &p, &agents()).unwrap(), 1);
+
+    // the daemon has read it all and is about to move it; a hook that had the file open writes now
+    let mut f = std::fs::File::open(&queue).unwrap();
+    let size = f.metadata().unwrap().len();
+    let mut late = std::fs::OpenOptions::new()
+        .append(true)
+        .open(&queue)
+        .unwrap();
+    std::io::Write::write_all(&mut late, line("late", 0).as_bytes()).unwrap();
+    assert_eq!(
+        rotate_queue(&db, &agents(), &queue, &mut f, size).unwrap(),
+        1
+    );
+    let seen = |id: &str| -> i64 {
+        db.conn
+            .query_row(
+                "SELECT count(*) FROM event WHERE session_id=?1",
+                [id],
+                |r| r.get(0),
+            )
+            .unwrap()
+    };
+    assert_eq!((seen("early"), seen("late")), (1, 1));
+    assert!(!queue.exists() && queue.with_extension("jsonl.old").exists());
+
+    // the next hook starts a new queue, read from its beginning
+    std::fs::write(&queue, line("next", 0)).unwrap();
+    assert_eq!(drain_queue(&db, &p, &agents()).unwrap(), 1);
+    assert_eq!(seen("next"), 1);
+}
+
+#[test]
+fn a_queue_that_cannot_be_moved_aside_is_not_read_again_from_the_start() {
+    let (_t, p, db) = env();
+    let queue = hook::queue_path(&p);
+    std::fs::create_dir_all(queue.parent().unwrap()).unwrap();
+    std::fs::write(
+        &queue,
+        format!(
+            "{{\"event\":\"Stop\",\"session_id\":\"a\",\"ts\":5,\"pad\":\"{}\"}}\n",
+            "x".repeat(QUEUE_ROTATE as usize)
+        ),
+    )
+    .unwrap();
+    assert_eq!(drain_queue(&db, &p, &agents()).unwrap(), 1);
+    // a folder where the moved file would go makes the move fail
+    std::fs::create_dir(queue.with_extension("jsonl.old")).unwrap();
+    assert_eq!(drain_queue(&db, &p, &agents()).unwrap(), 0);
+    assert_eq!(drain_queue(&db, &p, &agents()).unwrap(), 0, "and again");
+    let n: i64 = db
+        .conn
+        .query_row("SELECT count(*) FROM event WHERE session_id='a'", [], |r| {
+            r.get(0)
+        })
+        .unwrap();
+    assert_eq!(n, 1);
+}
+
+#[test]
+fn an_upgrade_waits_for_every_background_job_and_gives_up_after_the_limit() {
+    let jobs: Vec<Arc<AtomicBool>> = (0..4).map(|_| Arc::new(AtomicBool::new(true))).collect();
+    let refs: Vec<&AtomicBool> = jobs.iter().map(|j| j.as_ref()).collect();
+    // a job that never ends is waited for up to the limit, and then left
+    let t = Instant::now();
+    assert!(!wait_until_idle(&refs, Duration::from_millis(150)));
+    assert!(t.elapsed() >= Duration::from_millis(150));
+    // each job ends in its turn: the wait lasts until the last one has
+    let ending: Vec<_> = jobs
+        .iter()
+        .enumerate()
+        .map(|(i, j)| {
+            let j = j.clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(Duration::from_millis(100 * (i as u64 + 1)));
+                j.store(false, Ordering::SeqCst);
+            })
+        })
+        .collect();
+    let t = Instant::now();
+    assert!(wait_until_idle(&refs, Duration::from_secs(10)));
+    assert!(
+        t.elapsed() >= Duration::from_millis(350),
+        "{:?}",
+        t.elapsed()
+    );
+    for e in ending {
+        e.join().unwrap();
+    }
+    assert!(wait_until_idle(&[], Duration::ZERO), "no jobs, no wait");
+}

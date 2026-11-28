@@ -406,6 +406,15 @@ pub fn uninstall(o: &Opts, agents: &Agents) -> Result<Report> {
             "refusing to delete {}: it holds your home folder, so it is not eye's data folder",
             o.eye_home.display()
         );
+        // ... nor a folder that is not eye's at all (EYE_HOME left set to a project, say)
+        anyhow::ensure!(
+            !o.eye_home.exists()
+                || ["eye.db", "config.toml"]
+                    .iter()
+                    .any(|f| o.eye_home.join(f).is_file()),
+            "refusing to delete {}: it holds neither eye.db nor config.toml, so it is not eye's data folder",
+            o.eye_home.display()
+        );
     }
 
     // the daemon: stopped, and waited for, before its files go
@@ -985,6 +994,35 @@ mod tests {
         }
         let mut o = opts(t.path());
         o.purge = true;
+        assert!(uninstall(&o, &agents).is_ok());
+    }
+
+    #[test]
+    fn purge_refuses_a_folder_that_is_not_eyes() {
+        let t = tempfile::tempdir().unwrap();
+        let (agents, _) = claude(t.path());
+        let project = t.path().join("code");
+        std::fs::create_dir_all(project.join("src")).unwrap();
+        std::fs::write(project.join("src/main.rs"), "fn main() {}").unwrap();
+        let mut o = opts(t.path());
+        o.eye_home = project.clone();
+        o.purge = true;
+        let e = uninstall(&o, &agents).unwrap_err();
+        assert!(
+            format!("{e:#}").contains("neither eye.db nor config.toml"),
+            "{e:#}"
+        );
+        assert!(project.join("src/main.rs").exists());
+        // eye's own folder, by either file, goes; a folder that is not there is nothing to refuse
+        for file in ["eye.db", "config.toml"] {
+            let mine = t.path().join(format!("mine-{file}"));
+            std::fs::create_dir_all(&mine).unwrap();
+            std::fs::write(mine.join(file), "").unwrap();
+            o.eye_home = mine.clone();
+            uninstall(&o, &agents).unwrap();
+            assert!(!mine.exists(), "{file}");
+        }
+        o.eye_home = t.path().join("never-made");
         assert!(uninstall(&o, &agents).is_ok());
     }
 
