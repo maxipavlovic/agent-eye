@@ -615,6 +615,12 @@ pub fn run(paths: Paths, cfg: Config, port: u16, board: bool) -> Result<()> {
     crate::night::bin::note_running();
     let lock = Lock::acquire(&paths)?;
     log(&paths, &format!("daemon start pid {}", std::process::id()));
+    if board && cfg.board.enabled {
+        // The token lives next to a flag in the database. Asking now, before the worker thread
+        // opens the database too, keeps a new or migrating database from being opened twice at
+        // once; a failure shows again, and is logged, when the board starts.
+        let _ = server::ensure_token(&paths);
+    }
     let stop = Arc::new(AtomicBool::new(false));
     let worker_busy = Arc::new(AtomicBool::new(false));
     let mut watch = upgrade::Watch::of_this_process();

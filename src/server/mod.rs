@@ -98,9 +98,9 @@ pub fn new_state_with_face(
 }
 
 pub fn router(state: Shared) -> Router {
-    Router::new()
-        .route("/", get(face::face_index))
-        .route("/manifest.webmanifest", get(face::app_manifest))
+    // Behind the token: the API, and the manifest, whose start URL carries the token.
+    let private = Router::new()
+        .route(guard::MANIFEST, get(face::app_manifest))
         .route("/api/board", get(board::api_board))
         .route(
             "/api/prefs",
@@ -162,9 +162,21 @@ pub fn router(state: Shared) -> Router {
         .route("/api/night/{id}/open", post(night_routes::api_night_open))
         .route("/api/night/{id}/bring", post(night_routes::api_night_bring))
         .route("/api/events", get(run::api_events))
+        .route_layer(middleware::from_fn_with_state(state.clone(), guard::token));
+    // The page and its files hold nothing private: Host and Origin are enough. The page reads the
+    // token from `?t=` and sends it from then on.
+    Router::new()
+        .route("/", get(face::face_index))
+        .merge(private)
         .fallback(get(face::face_asset))
         .layer(axum::extract::DefaultBodyLimit::max(64 * 1024))
-        .layer(middleware::from_fn_with_state(state.clone(), api::log_chains))
-        .layer(middleware::from_fn_with_state(state.clone(), guard::guard))
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            api::log_chains,
+        ))
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            guard::host_and_origin,
+        ))
         .with_state(state)
 }

@@ -105,10 +105,13 @@ fn an_open_board_does_not_hold_the_restart_up() {
         format!("[board]\nenabled = true\nport = {port}\n"),
     )
     .unwrap();
-    let token = "e".repeat(64);
-    std::fs::write(home.join("board.token"), &token).unwrap();
+    std::fs::write(home.join("board.token"), "e".repeat(64)).unwrap();
     let mut daemon = start(t.path(), &[]);
     wait_for(&home.join("logs/daemon.log"), "board at", 1);
+    // the first start after an upgrade replaces a token made by an older eye
+    let token = std::fs::read_to_string(home.join("board.token")).unwrap();
+    assert_eq!(token.len(), 64);
+    assert_ne!(token, "e".repeat(64));
     let mut events = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
     write!(
         events,

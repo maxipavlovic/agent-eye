@@ -78,10 +78,23 @@ listens on `127.0.0.1:<port>` (default 7420) and on no other address. Every requ
 1. **Host**: only `127.0.0.1:<port>`, `localhost:<port>` and `[::1]:<port>` are served. A web page on
    another name that was pointed at 127.0.0.1 (DNS rebinding) keeps its own name in `Host` and gets
    a 403, even with the right token.
-2. **Token**: the secret in `~/.agent-eye/board.token` (32 random bytes, hex, mode 0600), as the
-   `eye_token` cookie (HttpOnly, SameSite=Strict) or the `X-Eye-Token` header. It is compared in
-   constant time. `eye board` prints the link with the token; the first visit trades it for the
-   cookie and redirects, so it does not stay in the address bar.
+2. **Token**: the secret in `~/.agent-eye/board.token` (32 random bytes, hex, mode 0600), sent in the
+   `X-Eye-Token` header of every API call, and compared in constant time. `eye board` prints the link
+   with the token. The page keeps the token in the browser's localStorage, which belongs to one
+   address (scheme, host **and port**), takes it out of the address bar and sends it itself. It is
+   never put in a cookie: a cookie goes to every server on `127.0.0.1` whatever its port, so a dev
+   server, a container's web page or an `ssh -L` forward would have received it. What keeps other
+   servers on loopback out: they never get the token (another port is another localStorage and
+   no cookie is set); a page of theirs cannot call the API, because the call needs the header, a
+   foreign `Origin` is refused on a write, and the API sends no CORS headers, so a browser does not
+   let their page read an answer or send the header; and the Host check (1) refuses their names.
+   The page and its files (`/`, `/assets/*`, the icons) need no token, because the page needs them
+   before it can send one: they are the same files as in the repository and hold nothing about you.
+   The app manifest, whose start address carries the token, is the one other route that takes it in
+   the address (`?t=`), because the browser fetches it and cannot send a header. The first start
+   after upgrading from 0.5.0-rc.3 or earlier replaces the token (once), because the old one was
+   also a cookie; open the link from `eye board` again. A cookie an older eye set is no longer
+   read, and the page clears it.
 3. **Origin**: a request that changes something (POST) must carry an `Origin` that is one of the
    loopback names above, so another website in your browser cannot make it.
 4. The web page is served with a strict Content-Security-Policy (own files only, no framing), and

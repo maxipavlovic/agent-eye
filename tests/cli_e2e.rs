@@ -896,3 +896,21 @@ fn board_on_with_a_port_writes_it_where_the_daemon_reads_it() {
     let cfg = std::fs::read_to_string(w.paths().config_path()).unwrap();
     assert!(cfg.contains("port = 7611"), "{cfg}");
 }
+
+#[test]
+fn the_board_link_has_a_new_token_once_after_an_upgrade_and_then_the_same_one() {
+    let w = World::new();
+    // an install from before: a token file and no flag in the database
+    let old = "d".repeat(64);
+    std::fs::write(w.paths().home.join("board.token"), &old).unwrap();
+    w.ok(&["board", "on", "--no-service"]);
+    let link = |w: &World| w.ok(&["board"]).trim().to_string();
+    let first = link(&w);
+    assert!(!first.contains(&old), "{first}");
+    assert!(first.contains("/?t="), "{first}");
+    assert_eq!(link(&w), first);
+    assert_eq!(
+        std::fs::read_to_string(w.paths().home.join("board.token")).unwrap(),
+        first.rsplit_once("t=").unwrap().1
+    );
+}

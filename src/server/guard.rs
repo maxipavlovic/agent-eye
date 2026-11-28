@@ -1,47 +1,59 @@
-//! Who may talk to the server: the token (header or cookie), the Host and Origin checks, and the
-//! token file.
+//! Who may talk to the server: the Host and Origin checks, the token (a request header, never a
+//! cookie) and the token file.
 
 use super::Shared;
+use crate::db::Db;
 use crate::paths::Paths;
 use crate::util::{hex, random_bytes};
 use anyhow::{Context, Result};
 use axum::extract::{Request, State};
-use axum::http::{header, HeaderMap, Method, StatusCode};
+use axum::http::{header, Method, StatusCode};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
-use std::os::unix::fs::OpenOptionsExt;
+use rusqlite::{Transaction, TransactionBehavior};
 
-/// Read `$EYE_HOME/board.token`, creating it (0600, 32 random bytes as hex) when missing.
+/// The `meta` key that says the token was replaced once. Up to 0.5.0-rc.3 the token also went into a
+/// cookie, which a browser sends to every other server on 127.0.0.1 whatever its port, so a token
+/// made before that may have left the machine.
+const ROTATED: &str = "board_token_rotated";
+
+/// The one route a browser fetches itself, so it cannot send the token header: the token may come
+/// in the address (`?t=`) here and nowhere else.
+pub(super) const MANIFEST: &str = "/manifest.webmanifest";
+
+fn read_token(p: &std::path::Path) -> Option<String> {
+    let t = std::fs::read_to_string(p).ok()?;
+    let t = t.trim();
+    (t.len() >= 32).then(|| t.to_string())
+}
+
+/// Read `$EYE_HOME/board.token`, creating it (0600, 32 random bytes as hex) when missing. The first
+/// time an install that already has a token gets here, the token is replaced (and `eye board`
+/// prints the new link); a flag in the database makes that happen once, whoever asks first.
 pub fn ensure_token(paths: &Paths) -> Result<String> {
     let p = paths.home.join("board.token");
-    if let Ok(t) = std::fs::read_to_string(&p) {
-        let t = t.trim().to_string();
-        if t.len() >= 32 {
-            crate::files::make_private(&p);
-            return Ok(t);
+    let db = Db::open(&paths.db_path())?;
+    // One writer at a time, so the daemon and `eye board` cannot both replace it
+    let tx = Transaction::new_unchecked(&db.conn, TransactionBehavior::Immediate)?;
+    let first = db.meta_get(ROTATED)?.is_none();
+    let token = match read_token(&p) {
+        Some(t) if !first => t,
+        _ => {
+            let t = hex(&random_bytes(32)?);
+            crate::files::write_private(&p, &t)
+                .with_context(|| format!("writing {}", p.display()))?;
+            t
         }
+    };
+    if first {
+        db.meta_set(ROTATED, "1")?;
     }
-    let t = hex(&random_bytes(32)?);
-    let mut f = std::fs::OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .mode(0o600)
-        .open(&p)
-        .with_context(|| format!("writing {}", p.display()))?;
-    std::io::Write::write_all(&mut f, t.as_bytes())?;
-    Ok(t)
+    tx.commit()?;
+    crate::files::make_private(&p);
+    Ok(token)
 }
 
 // ---------- guard: Host, Origin, token ----------
-
-pub(super) fn cookie_token(h: &HeaderMap) -> Option<String> {
-    let raw = h.get(header::COOKIE)?.to_str().ok()?;
-    raw.split(';')
-        .filter_map(|p| p.trim().split_once('='))
-        .find(|(k, _)| *k == "eye_token")
-        .map(|(_, v)| v.to_string())
-}
 
 pub(super) fn same(a: &str, b: &str) -> bool {
     a.len() == b.len()
@@ -58,9 +70,14 @@ pub(super) fn query_param(q: Option<&str>, key: &str) -> Option<String> {
         .map(|(_, v)| v.to_string())
 }
 
-pub(super) const PUBLIC_FILES: &[&str] = &["/favicon.svg", "/icon-192.png", "/icon-512.png"];
-
-pub(super) async fn guard(State(st): State<Shared>, req: Request, next: Next) -> Response {
+/// Every request: only the loopback names with the board's own port, and for a write an Origin
+/// that is one of them. The page and its files pass on this alone (they hold nothing private);
+/// the routes behind `token` need the secret as well.
+pub(super) async fn host_and_origin(
+    State(st): State<Shared>,
+    req: Request,
+    next: Next,
+) -> Response {
     // Only the loopback names with the board's own port: a page on another site that was pointed
     // at 127.0.0.1 (DNS rebinding) still sends its own name in Host, and is refused here.
     let hosts = [
@@ -91,52 +108,23 @@ pub(super) async fn guard(State(st): State<Shared>, req: Request, next: Next) ->
             return (StatusCode::FORBIDDEN, "missing or bad Origin header").into_response();
         }
     }
-    if req.method() == Method::GET && req.uri().path() == "/" {
-        if let Some(t) = query_param(req.uri().query(), "t") {
-            if same(&t, &st.token) {
-                // Keep the other query parameters (e.g. `?look=ink`); drop only the token.
-                let rest: Vec<&str> = req
-                    .uri()
-                    .query()
-                    .unwrap_or("")
-                    .split('&')
-                    .filter(|p| !p.is_empty() && !p.starts_with("t="))
-                    .collect();
-                let loc = if rest.is_empty() {
-                    "/".to_string()
-                } else {
-                    format!("/?{}", rest.join("&"))
-                };
-                return Response::builder()
-                    .status(StatusCode::SEE_OTHER)
-                    .header(header::LOCATION, loc)
-                    .header(
-                        header::SET_COOKIE,
-                        // A year, so the board installed as an app survives a browser restart.
-                        format!(
-                            "eye_token={}; HttpOnly; SameSite=Strict; Path=/; Max-Age=31536000",
-                            st.token
-                        ),
-                    )
-                    .body(axum::body::Body::empty())
-                    .unwrap_or_default();
-            }
-        }
-    }
-    // The app icons hold nothing private; browsers fetch them without the cookie.
-    if req.method() == Method::GET && PUBLIC_FILES.contains(&req.uri().path()) {
-        return next.run(req).await;
-    }
-    let ok = cookie_token(req.headers())
+    next.run(req).await
+}
+
+/// The API and the manifest: the token in `X-Eye-Token` (the manifest may take it as `?t=`). A
+/// cookie is not read, so a cookie an older eye set opens nothing.
+pub(super) async fn token(State(st): State<Shared>, req: Request, next: Next) -> Response {
+    let given = req
+        .headers()
+        .get("x-eye-token")
+        .and_then(|v| v.to_str().ok())
+        .map(String::from)
         .or_else(|| {
-            req.headers()
-                .get("x-eye-token")
-                .and_then(|v| v.to_str().ok())
-                .map(String::from)
-        })
-        .map(|t| same(&t, &st.token))
-        .unwrap_or(false);
-    if !ok {
+            (req.method() == Method::GET && req.uri().path() == MANIFEST)
+                .then(|| query_param(req.uri().query(), "t"))
+                .flatten()
+        });
+    if !given.is_some_and(|t| same(&t, &st.token)) {
         return (
             StatusCode::UNAUTHORIZED,
             format!(
@@ -157,19 +145,48 @@ mod tests {
     use crate::util::now_ms;
     use axum::body::Body;
     use serde_json::json;
-    use tower::ServiceExt;
+
+    fn bare(uri: &str) -> Request<Body> {
+        Request::builder()
+            .uri(uri)
+            .header("host", "127.0.0.1:7420")
+            .body(Body::empty())
+            .unwrap()
+    }
 
     #[tokio::test]
-    async fn face_routes_keep_the_guard() {
+    async fn the_page_and_its_files_need_no_token_and_the_api_does() {
         let d = face_dir();
         let e = env_face(Some(d.path().to_path_buf()));
-        for uri in ["/", "/assets/app-abc123.js", "/nothing"] {
-            let r = Request::builder()
+        // The page keeps the token from `?t=` and sends it itself, so it has to load without one.
+        for uri in ["/", "/?look=iris", "/assets/app-abc123.js"] {
+            let (st, _, body) = raw(&e, bare(uri)).await;
+            assert_eq!(st, StatusCode::OK, "{uri}");
+            assert!(!body.contains(TOKEN), "{uri}");
+        }
+        assert_eq!(raw(&e, bare("/nothing")).await.0, StatusCode::NOT_FOUND);
+        // Everything that holds sessions, and the manifest (its start URL has the token), does need it
+        for uri in [
+            "/api/board",
+            "/api/events",
+            "/api/sessions/x/export?format=html",
+            "/manifest.webmanifest",
+        ] {
+            assert_eq!(
+                raw(&e, bare(uri)).await.0,
+                StatusCode::UNAUTHORIZED,
+                "{uri}"
+            );
+            let wrong = Request::builder()
                 .uri(uri)
                 .header("host", "127.0.0.1:7420")
+                .header("x-eye-token", "nope")
                 .body(Body::empty())
                 .unwrap();
-            assert_eq!(raw(&e, r).await.0, StatusCode::UNAUTHORIZED, "{uri}");
+            assert_eq!(raw(&e, wrong).await.0, StatusCode::UNAUTHORIZED, "{uri}");
+        }
+        // the Host check comes before everything, the page included
+        for uri in ["/", "/assets/app-abc123.js", "/nothing", "/api/board"] {
             let r = Request::builder()
                 .uri(uri)
                 .header("host", "evil.example:7420")
@@ -178,27 +195,86 @@ mod tests {
                 .unwrap();
             assert_eq!(raw(&e, r).await.0, StatusCode::FORBIDDEN, "{uri}");
         }
-        // Other query parameters survive the redirect; the token does not.
-        let r = Request::builder()
-            .uri(format!("/?t={TOKEN}&look=ink"))
+    }
+
+    #[tokio::test]
+    async fn the_token_is_never_put_in_a_cookie() {
+        // A cookie goes to every server on 127.0.0.1 whatever its port; nothing eye sends sets one
+        // that holds the token, and the landing serves the page instead of redirecting.
+        let d = face_dir();
+        let e = env_face(Some(d.path().to_path_buf()));
+        let landing = format!("/?t={TOKEN}&look=ink");
+        let (st, h, body) = raw(&e, bare(&landing)).await;
+        assert_eq!(st, StatusCode::OK);
+        assert!(body.contains("<title>face</title>") && !body.contains(TOKEN));
+        for uri in [
+            landing.as_str(),
+            "/",
+            "/assets/app-abc123.js",
+            "/api/board",
+            "/api/search?q=x",
+            "/manifest.webmanifest",
+        ] {
+            let (_, h, _) = raw(&e, req("GET", uri, None)).await;
+            for v in h.get_all(header::SET_COOKIE) {
+                assert!(!v.to_str().unwrap().contains(TOKEN), "{uri}");
+            }
+        }
+        // the only Set-Cookie the landing sends takes the old cookie away
+        let set: Vec<_> = h.get_all(header::SET_COOKIE).iter().collect();
+        assert_eq!(set.len(), 1);
+        let c = set[0].to_str().unwrap();
+        assert!(c.starts_with("eye_token=;") && c.contains("Max-Age=0") && c.contains("Path=/"));
+    }
+
+    #[tokio::test]
+    async fn a_cookie_from_an_older_eye_opens_nothing_and_is_cleared_on_the_next_visit() {
+        let d = face_dir();
+        let e = env_face(Some(d.path().to_path_buf()));
+        let old = Request::builder()
+            .uri("/api/board")
             .header("host", "127.0.0.1:7420")
+            .header("cookie", format!("a=b; eye_token={TOKEN}"))
             .body(Body::empty())
             .unwrap();
-        let (st, h, _) = raw(&e, r).await;
-        assert_eq!(st, StatusCode::SEE_OTHER);
-        assert_eq!(h[header::LOCATION], "/?look=ink");
-        // The token link still sets the cookie and redirects.
-        let r = Request::builder()
-            .uri(format!("/?t={TOKEN}"))
+        assert_eq!(raw(&e, old).await.0, StatusCode::UNAUTHORIZED);
+        // a visit to the page, with or without the link, takes the cookie away
+        let visit = Request::builder()
+            .uri("/")
             .header("host", "127.0.0.1:7420")
+            .header("cookie", format!("a=b; eye_token={TOKEN}"))
             .body(Body::empty())
             .unwrap();
-        let (st, h, _) = raw(&e, r).await;
-        assert_eq!(st, StatusCode::SEE_OTHER);
-        assert!(h[header::SET_COOKIE]
-            .to_str()
-            .unwrap()
-            .starts_with("eye_token="));
+        let (st, h, _) = raw(&e, visit).await;
+        assert_eq!(st, StatusCode::OK);
+        let c = h[header::SET_COOKIE].to_str().unwrap();
+        assert!(
+            c.starts_with("eye_token=;") && c.contains("Max-Age=0"),
+            "{c}"
+        );
+        // and a visit with no old cookie sets nothing
+        let (_, h, _) = raw(&e, bare("/")).await;
+        assert!(h.get(header::SET_COOKIE).is_none());
+    }
+
+    #[tokio::test]
+    async fn the_address_carries_the_token_for_the_manifest_only() {
+        let d = face_dir();
+        let e = env_face(Some(d.path().to_path_buf()));
+        let (st, _, body) = raw(&e, bare(&format!("/manifest.webmanifest?t={TOKEN}"))).await;
+        assert_eq!(st, StatusCode::OK);
+        assert!(body.contains(&format!("/?t={TOKEN}")));
+        for uri in [
+            format!("/api/board?t={TOKEN}"),
+            format!("/api/events?t={TOKEN}"),
+            "/manifest.webmanifest?t=nope".to_string(),
+        ] {
+            assert_eq!(
+                raw(&e, bare(&uri)).await.0,
+                StatusCode::UNAUTHORIZED,
+                "{uri}"
+            );
+        }
     }
 
     #[tokio::test]
@@ -217,33 +293,13 @@ mod tests {
             .insert("host", "evil.example:7420".parse().unwrap());
         assert_eq!(call(&e, bad_host).await.0, StatusCode::FORBIDDEN);
 
-        let wrong = Request::builder()
-            .uri("/?t=nope")
-            .header("host", "localhost:7420")
-            .body(Body::empty())
-            .unwrap();
-        assert_eq!(call(&e, wrong).await.0, StatusCode::UNAUTHORIZED);
-
-        let login = Request::builder()
-            .uri(format!("/?t={TOKEN}"))
-            .header("host", "localhost:7420")
-            .body(Body::empty())
-            .unwrap();
-        let resp = e.app.clone().oneshot(login).await.unwrap();
-        assert_eq!(resp.status(), StatusCode::SEE_OTHER);
-        let cookie = resp.headers()[header::SET_COOKIE]
-            .to_str()
-            .unwrap()
-            .to_string();
-        assert!(cookie.contains("HttpOnly") && cookie.contains("SameSite=Strict"));
-
-        let with_cookie = Request::builder()
+        let with_token = Request::builder()
             .uri("/api/board")
-            .header("host", "127.0.0.1:7420")
-            .header("cookie", format!("a=b; eye_token={TOKEN}"))
+            .header("host", "localhost:7420")
+            .header("x-eye-token", TOKEN)
             .body(Body::empty())
             .unwrap();
-        assert_eq!(call(&e, with_cookie).await.0, StatusCode::OK);
+        assert_eq!(call(&e, with_token).await.0, StatusCode::OK);
 
         let mut bad_origin = req("POST", "/api/ideas", Some(json!({"title": "x"})));
         bad_origin
@@ -257,13 +313,18 @@ mod tests {
         assert_eq!(call(&e, ok_origin).await.0, StatusCode::OK);
     }
 
-    #[test]
-    fn token_file_is_private_and_stable() {
+    fn home() -> (tempfile::TempDir, Paths) {
         let tmp = tempfile::tempdir().unwrap();
         let paths = Paths {
             home: tmp.path().join("h"),
         };
         paths.ensure_home().unwrap();
+        (tmp, paths)
+    }
+
+    #[test]
+    fn token_file_is_private_and_stable() {
+        let (_tmp, paths) = home();
         let t1 = ensure_token(&paths).unwrap();
         assert_eq!(t1.len(), 64);
         assert_eq!(ensure_token(&paths).unwrap(), t1);
@@ -272,6 +333,58 @@ mod tests {
             std::os::unix::fs::PermissionsExt::mode(&mode.permissions()) & 0o777,
             0o600
         );
+    }
+
+    #[test]
+    fn a_token_made_before_the_cookie_was_dropped_is_replaced_once() {
+        let (_tmp, paths) = home();
+        let old = "a".repeat(64);
+        std::fs::write(paths.home.join("board.token"), &old).unwrap();
+        let new = ensure_token(&paths).unwrap();
+        assert_ne!(new, old);
+        assert_eq!(new.len(), 64);
+        assert_eq!(
+            std::fs::read_to_string(paths.home.join("board.token")).unwrap(),
+            new
+        );
+        // once: every later look (the daemon, `eye board`) gets the same one
+        for _ in 0..3 {
+            assert_eq!(ensure_token(&paths).unwrap(), new);
+        }
+        let mode = std::fs::metadata(paths.home.join("board.token")).unwrap();
+        assert_eq!(
+            std::os::unix::fs::PermissionsExt::mode(&mode.permissions()) & 0o777,
+            0o600
+        );
+    }
+
+    #[test]
+    fn a_new_install_gets_its_token_without_a_second_one() {
+        let (_tmp, paths) = home();
+        let first = ensure_token(&paths).unwrap();
+        // the flag is already set: a restart keeps this token
+        assert_eq!(ensure_token(&paths).unwrap(), first);
+        // a token the person put there by hand after that is theirs
+        let mine = "b".repeat(48);
+        std::fs::write(paths.home.join("board.token"), &mine).unwrap();
+        assert_eq!(ensure_token(&paths).unwrap(), mine);
+    }
+
+    #[test]
+    fn two_askers_at_once_agree_on_the_replaced_token() {
+        let (_tmp, paths) = home();
+        std::fs::write(paths.home.join("board.token"), "c".repeat(64)).unwrap();
+        let handles: Vec<_> = (0..6)
+            .map(|_| {
+                let p = Paths {
+                    home: paths.home.clone(),
+                };
+                std::thread::spawn(move || ensure_token(&p).unwrap())
+            })
+            .collect();
+        let tokens: Vec<String> = handles.into_iter().map(|h| h.join().unwrap()).collect();
+        assert!(tokens.iter().all(|t| *t == tokens[0]), "{tokens:?}");
+        assert_eq!(ensure_token(&paths).unwrap(), tokens[0]);
     }
 
     #[tokio::test]
