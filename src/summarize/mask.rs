@@ -152,7 +152,7 @@ mod tests {
         ];
         for (text, secret, kept) in cases {
             let m = mask_secrets(&text);
-            assert!(!m.contains(&secret), "{secret} leaked: {m}");
+            assert!(!m.contains(secret), "{secret} leaked: {m}");
             assert!(m.contains(kept), "{kept:?} missing: {m}");
         }
     }
