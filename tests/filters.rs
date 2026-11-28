@@ -265,3 +265,42 @@ fn a_folder_excluded_after_indexing_is_not_archived_mirrored_or_packed() {
         "its copy is not touched"
     );
 }
+
+#[test]
+fn archive_all_on_the_command_line_leaves_out_a_folder_excluded_since() {
+    let tmp = tempfile::tempdir().unwrap();
+    let claude = tmp.path().join("claude");
+    session(&claude, 1, WORK, "cli", "mark-own");
+    session(&claude, 4, LATER, "cli", "mark-later");
+    let eye = |args: &[&str]| {
+        let out = std::process::Command::new(env!("CARGO_BIN_EXE_agent-eye"))
+            .env("HOME", tmp.path())
+            .env("EYE_HOME", tmp.path().join("eye"))
+            .env("EYE_CLAUDE_DIR", &claude)
+            .env("NO_COLOR", "1")
+            .args(args)
+            .stdin(std::process::Stdio::null())
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "{args:?}: {out:?}");
+        String::from_utf8_lossy(&out.stdout).into_owned()
+    };
+    eye(&["scan"]);
+    std::fs::write(
+        tmp.path().join("eye/config.toml"),
+        format!("[exclude]\npaths = [\"{LATER}\"]\n"),
+    )
+    .unwrap();
+    let said = eye(&["archive", "--all"]);
+    assert!(said.starts_with("archived 1 "), "{said}");
+    let copies = std::fs::read_dir(tmp.path().join("eye/archive"))
+        .unwrap()
+        .flatten()
+        .flat_map(|d| std::fs::read_dir(d.path()).unwrap().flatten())
+        .map(|f| f.file_name().to_string_lossy().into_owned())
+        .collect::<Vec<_>>();
+    assert_eq!(copies, [format!("{}.jsonl.zst", id(1))]);
+    // a session named on the command line is copied: it was asked for
+    let said = eye(&["archive", &id(4)]);
+    assert!(said.starts_with("archived 1 "), "{said}");
+}

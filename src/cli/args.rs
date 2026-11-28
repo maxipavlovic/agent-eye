@@ -496,7 +496,7 @@ pub enum Cmd {
     Uninstall {
         #[command(flatten)]
         a: SetupArgs,
-        /// Also delete eye's own data (index, archive, config)
+        /// Also delete eye's own data (index, archive, config); refuses a folder with no eye.db or config.toml
         #[arg(long)]
         purge: bool,
     },
