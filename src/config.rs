@@ -559,6 +559,21 @@ impl Config {
             crate::files::write_private(path, &default_toml())
                 .with_context(|| format!("writing {}", path.display()))?;
         }
+        Self::load(path)
+    }
+
+    /// Like [`Config::load_or_create`] for a command that only reads: a missing file that cannot
+    /// be written (a night run's sandbox) means the defaults.
+    pub fn load_reading(path: &Path) -> Result<Config> {
+        if !path.exists() && crate::files::write_private(path, &default_toml()).is_err() {
+            let mut cfg = Config::parse(&default_toml())?;
+            cfg.night_dir = path.parent().map(|p| p.join("night"));
+            return Ok(cfg);
+        }
+        Self::load(path)
+    }
+
+    fn load(path: &Path) -> Result<Config> {
         crate::files::make_private(path);
         let s =
             std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
@@ -996,6 +1011,21 @@ mod tests {
                 assert!(keys.contains(&k.as_str()), "{sec}.{k}");
             }
         }
+    }
+
+    #[test]
+    fn a_missing_config_that_cannot_be_written_is_the_defaults_for_a_command_that_reads() {
+        if crate::locked::as_root() {
+            return;
+        }
+        let tmp = tempfile::tempdir().unwrap();
+        let p = tmp.path().join("config.toml");
+        let _locked = crate::locked::Locked::new(tmp.path());
+        assert!(Config::load_or_create(&p).is_err());
+        let cfg = Config::load_reading(&p).unwrap();
+        assert_eq!(cfg.board.port, Config::default().board.port);
+        assert_eq!(cfg.night_dir, Some(tmp.path().join("night")));
+        assert!(!p.exists());
     }
 
     #[test]

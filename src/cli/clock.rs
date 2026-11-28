@@ -22,10 +22,11 @@ pub fn run(g: &Global, sub: Option<ClockCmd>, weeks: i64, json: bool, brief: boo
     if matches!(sub, Some(ClockCmd::Detect)) {
         return detect(g);
     }
-    let mut env = g.open()?;
+    let mut env = g.open_reading()?;
     // Sessions read before turns were kept get theirs now, so the numbers are whole. A one-line
-    // answer for an agent skips it: the daemon does this in the background.
-    if !brief {
+    // answer for an agent skips it, and so does a database that cannot be written: the daemon
+    // does this in the background.
+    if !brief && !env.db.is_read_only() {
         read_turns(&mut env)?;
     }
     let r = report::build(

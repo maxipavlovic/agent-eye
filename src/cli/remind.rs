@@ -10,7 +10,12 @@ pub fn run(g: &Global, args: &[String], note: Option<&str>, clear: bool) -> Resu
     if args.first().is_some_and(|a| a == "notify") {
         return notify(g, &args[1..]);
     }
-    let env = g.open()?;
+    let listing = matches!(args, [ls] if ls == "ls");
+    let env = if listing {
+        g.open_reading()?
+    } else {
+        g.open()?
+    };
     let now = now_ms();
     let Some((id, words)) = args.split_first() else {
         anyhow::bail!("say which session or idea");

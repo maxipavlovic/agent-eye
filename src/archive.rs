@@ -218,7 +218,8 @@ pub fn restore_if_missing(db: &Db, paths: &Paths, agents: &Agents, s: &Session) 
 }
 
 /// A session's transcript as a path that exists on disk: the live one, or a temporary copy made
-/// from the archive. The copy lives in `$EYE_HOME/tmp` and is removed when this is dropped.
+/// from the archive. The copy lives in `$EYE_HOME/tmp` (the system's temp folder where that cannot
+/// be written) and is removed when this is dropped.
 pub struct Readable {
     pub path: PathBuf,
     scratch: Option<PathBuf>,
@@ -244,15 +245,20 @@ pub fn readable(s: &Session, paths: &Paths, agent: &dyn Agent) -> Result<Readabl
     }
     let copy = copy_of(s, paths, agent);
     anyhow::ensure!(copy.exists(), "no transcript or archived copy to read");
-    let dir = paths
-        .home
-        .join("tmp")
-        .join(format!("read-{}", crate::util::new_uuid()?));
-    std::fs::DirBuilder::new()
-        .recursive(true)
-        .mode(0o700)
-        .create(&dir)
-        .with_context(|| format!("creating {}", dir.display()))?;
+    let name = format!("read-{}", crate::util::new_uuid()?);
+    let private = |dir: &Path| {
+        std::fs::DirBuilder::new()
+            .recursive(true)
+            .mode(0o700)
+            .create(dir)
+            .with_context(|| format!("creating {}", dir.display()))
+    };
+    // where eye's own folder cannot be written (a night run's sandbox) the system's temp folder serves
+    let mut dir = paths.home.join("tmp").join(&name);
+    if private(&dir).is_err() {
+        dir = std::env::temp_dir().join(format!("eye-{name}"));
+        private(&dir)?;
+    }
     let name = live
         .as_ref()
         .and_then(|p| p.file_name())
@@ -337,6 +343,25 @@ mod tests {
         std::fs::remove_file(&t).unwrap();
         restore_if_missing(&db, &paths, &agents, &session(&db)).unwrap();
         assert_eq!(std::fs::read_to_string(&t).unwrap(), "{\"a\":1}\n");
+    }
+
+    #[test]
+    fn an_archived_transcript_is_read_from_the_system_temp_folder_where_eyes_folder_is_locked() {
+        if crate::locked::as_root() {
+            return;
+        }
+        let (_tmp, paths, db, t, agents) = setup();
+        archive_session(&db, &paths, &agents, "abc").unwrap();
+        let original = std::fs::read(&t).unwrap();
+        std::fs::remove_file(&t).unwrap();
+        let s = db.session_by_id("abc").unwrap().unwrap();
+        let _locked = crate::locked::Locked::new(&paths.home);
+        let copy = readable(&s, &paths, agents.of_session(&s).unwrap().as_ref()).unwrap();
+        assert_eq!(std::fs::read(&copy.path).unwrap(), original);
+        assert!(!copy.path.starts_with(&paths.home));
+        let folder = copy.path.parent().unwrap().to_path_buf();
+        drop(copy);
+        assert!(!folder.exists());
     }
 
     #[test]

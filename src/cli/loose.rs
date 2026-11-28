@@ -28,12 +28,18 @@ pub fn run(g: &Global, sub: Option<LooseCmd>, session: Option<&str>, json: bool)
 
 /// A fresh scan in the foreground, stored, then the list.
 fn list(g: &Global, session: Option<&str>, json: bool) -> Result<()> {
-    let env = g.open()?;
+    let env = g.open_reading()?;
     if !env.cfg.loose.enabled {
         println!("leftovers are off ([loose] enabled = false in config.toml)");
         return Ok(());
     }
-    loose::scan_and_store(&env.db, &env.cfg, &env.agents, now_ms())?;
+    if env.db.is_read_only() {
+        eprintln!(
+            "eye: the list is what the daemon last stored; a fresh scan needs to write eye.db"
+        );
+    } else {
+        loose::scan_and_store(&env.db, &env.cfg, &env.agents, now_ms())?;
+    }
     let sid = session.map(|s| env.db.resolve_id(s)).transpose()?;
     let items = loose::list(&env.db, sid.as_deref(), false)?;
     if json {
