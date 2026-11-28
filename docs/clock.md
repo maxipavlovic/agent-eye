@@ -151,13 +151,15 @@ use for summaries, with the same call. What that call can and cannot do depends 
 |---|---|---|---|
 | Claude Code | none (`--tools ""`), no MCP servers, hooks off | none (`--no-session-persistence`) | |
 | Codex CLI | no tool-less mode: a read-only sandbox, so it can read files but not write or run anything that changes them, and the sandbox has no network | none (`--ephemeral`) | your config, hooks and rules are ignored |
-| agy | plan mode and `--sandbox`: agy's own changelog says plan mode does not edit or run commands; not tested here | the conversation is deleted after the call: its folder, database and row in `conversation_summaries.db`; `history.jsonl` is only edited while agy is closed | the run happens in a folder named `eye-ask-<uuid>`, which the scanner skips |
+| agy | not asked: plan mode and `--sandbox` are not checked on a real agy with a config of yours that allows everything, so agy writes summaries but never judges corrections (`security.md`) | the conversation is deleted after the call: its folder, database and row in `conversation_summaries.db`; `history.jsonl` is only edited while agy is closed | the run happens in a folder named `eye-ask-<uuid>`, which the scanner skips |
 | OpenCode | none: the run is an agent of its own with every permission denied and every tool off (shell, edits, web fetches and search, sub-agents, skills, code mode), and your MCP servers are switched off. Checked on a real OpenCode 2.3.2 | the session is deleted after the call, also after an invalid answer or a timeout | your global `AGENTS.md` is still read as instructions |
 
-The pass only asks an agent whose locked-down run is proven. Claude Code, Codex, agy and OpenCode
-are; OpenCode's run was checked on a real install with a config of yours that allows everything
-(`security.md`, "The OpenCode lock-down, checked"). An agent whose run is not proven is never asked:
-the pass sends nothing, and `judging` is `unavailable` with `judging_reason` saying so.
+The pass only asks an agent whose locked-down run is proven. Claude Code, Codex and OpenCode are;
+OpenCode's run was checked on a real install with a config of yours that allows everything
+(`security.md`, "The OpenCode lock-down, checked"). agy is not, yet. An agent whose run is not
+proven is never asked: the pass sends nothing, and `judging` is `unavailable` with
+`judging_reason` saying so. With agy as the summary agent, summaries keep working and corrections
+stay at zero until another agent is chosen (`[summary] agent`).
 
 - A word filter first: only prompts of 1,500 characters or fewer that contain one of *no, not,
   don't, never, stop, again, still, why, wrong, instead, too, shorter, simpler, concise, plain,

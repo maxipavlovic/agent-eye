@@ -107,7 +107,7 @@ pub trait Agent: Send + Sync + std::fmt::Debug {
         &[]
     }
     /// Is this agent's headless run proven to be locked down (nothing it can change or run, no
-    /// network, no session kept; Codex and agy can still read files, see `docs/security.md`), with a
+    /// network, no session kept; Codex can still read files, see `docs/security.md`), with a
     /// test of its runner? The corrections pass sends it prompt text with
     /// planted instructions in it only when it is, and a new agent gets summaries only then too
     /// (`may_summarize`). The default says no: an agent opts in when its lock-down is tested.

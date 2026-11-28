@@ -169,9 +169,12 @@ impl Agent for Agy {
         ID
     }
 
-    /// Proven by `the_flags_that_stop_tools_are_in_the_command` and `a_question_leaves_nothing_after_success_failure_and_timeout`.
+    /// No: the flags are tested (`the_flags_that_stop_tools_are_in_the_command`), but what plan
+    /// mode and `--sandbox` stop has not been checked on a real agy with a hostile user config
+    /// (`docs/security.md`). agy still writes summaries, as it did before 0.5; it is not sent
+    /// prompt text to judge until that check is done.
     fn judging_locked_down(&self) -> bool {
-        true
+        false
     }
 
     fn name(&self) -> &'static str {
