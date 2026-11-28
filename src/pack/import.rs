@@ -395,15 +395,18 @@ fn same_file(path: &Path, len: u64, sum: &super::Sum) -> bool {
             .is_ok_and(|(h, _)| h == sum.sha256)
 }
 
-/// Copy a file into place (0600, folders 0700), keeping its modification time.
+/// Copy a file into place (0600, folders 0700), keeping its modification time. The temp file is
+/// this process's own: the daemon may be copying the same session into the archive at that moment
+/// through `<name>.tmp`, and two writers on one file would leave a half copy in place.
 fn put(src: &Path, dest: &Path, mtime: i64) -> Result<()> {
     std::fs::DirBuilder::new()
         .recursive(true)
         .mode(0o700)
         .create(dest.parent().context("no parent")?)?;
     let tmp = dest.with_file_name(format!(
-        "{}.tmp",
-        dest.file_name().unwrap_or_default().to_string_lossy()
+        "{}.import-{}.tmp",
+        dest.file_name().unwrap_or_default().to_string_lossy(),
+        std::process::id()
     ));
     {
         let mut from = std::fs::File::open(src)?;
@@ -671,6 +674,26 @@ mod tests {
             archive_path_here("/elsewhere/a.zst", &manifest(), root, &r),
             None
         );
+    }
+
+    #[test]
+    fn a_file_is_put_through_a_temp_file_of_this_process_and_not_the_archives() {
+        let t = tempfile::tempdir().unwrap();
+        let (src, dest) = (t.path().join("src"), t.path().join("archive/a.jsonl.zst"));
+        std::fs::write(&src, "from the pack").unwrap();
+        // the daemon's copy of the same session, half written
+        std::fs::create_dir_all(dest.parent().unwrap()).unwrap();
+        let theirs = t.path().join("archive/a.jsonl.zst.tmp");
+        std::fs::write(&theirs, "half").unwrap();
+        put(&src, &dest, 1_700_000_000).unwrap();
+        assert_eq!(std::fs::read_to_string(&dest).unwrap(), "from the pack");
+        assert_eq!(std::fs::read_to_string(&theirs).unwrap(), "half");
+        let left: Vec<_> = std::fs::read_dir(dest.parent().unwrap())
+            .unwrap()
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(left.len(), 2, "no temp file of ours is left: {left:?}");
     }
 
     #[test]
