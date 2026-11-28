@@ -671,11 +671,14 @@ fn set_key(text: &str, header: &str, key: &str, value: &str) -> String {
             match found {
                 Some(i) => {
                     let indent = &lines[i][..lines[i].len() - lines[i].trim_start().len()];
-                    let comment = lines[i].find('#').map(|c| &lines[i][c..]);
-                    out[i] = match comment {
+                    // the old value may run over several lines (a list written one name per line)
+                    let from = lines[i].find('=').map_or(0, |e| e + 1);
+                    let (last, comment) = crate::config_edit::value_end(&lines, i, from);
+                    let new = match comment {
                         Some(c) => format!("{indent}{line}    {c}"),
                         None => format!("{indent}{line}"),
                     };
+                    out.splice(i..=last, [new]);
                 }
                 None => out.insert(h + 1, line),
             }
@@ -853,6 +856,35 @@ mod tests {
             .unwrap()
             .enabled_agent_ids()
             .is_empty());
+    }
+
+    #[test]
+    fn a_list_written_over_several_lines_is_replaced_whole() {
+        let src = "[agents]\nenabled = [\n  \"claude\",  # first\n  \"codex\",\n]  # followed\n\n\
+                   [board]\nquiet = [\n]\nport = 7500\n";
+        let t = set_agents_enabled(src, &["claude".to_string()]);
+        assert_eq!(
+            t,
+            "[agents]\nenabled = [\"claude\"]    # followed\n\n[board]\nquiet = [\n]\nport = 7500\n"
+        );
+        let t = set_key(src, "[board]", "quiet", "[\"app\"]");
+        assert!(
+            t.ends_with("[board]\nquiet = [\"app\"]\nport = 7500\n"),
+            "{t}"
+        );
+        let c = Config::parse(&t).unwrap();
+        assert_eq!(
+            (c.board.quiet, c.board.port),
+            (vec!["app".to_string()], 7500)
+        );
+        // a # or a bracket inside a string is part of the value, not a comment or its end
+        let t = set_key(
+            "[hide]\ncommands = [\"a#b\", \"]\",\n  \"c\"]  # mine\nmax_prompts = 1\n",
+            "[hide]",
+            "commands",
+            "[\"x\"]",
+        );
+        assert_eq!(t, "[hide]\ncommands = [\"x\"]    # mine\nmax_prompts = 1\n");
     }
 
     #[test]
