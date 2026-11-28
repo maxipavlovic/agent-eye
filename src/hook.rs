@@ -229,6 +229,8 @@ mod tests {
         assert_eq!(cut_session_id(br#"{"session_id":"#), None);
         assert_eq!(cut_session_id(br#"{"session_id":7}"#), None);
         assert_eq!(cut_session_id(br#"{"session_id":"abc"#), None);
+        let long = format!(r#"{{"session_id":"{}"}}"#, "a".repeat(SESSION_ID_MAX + 1));
+        assert_eq!(cut_session_id(long.as_bytes()), None);
     }
 
     #[test]
