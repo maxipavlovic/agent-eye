@@ -164,6 +164,7 @@ pub fn router(state: Shared) -> Router {
         .route("/api/events", get(run::api_events))
         .fallback(get(face::face_asset))
         .layer(axum::extract::DefaultBodyLimit::max(64 * 1024))
+        .layer(middleware::from_fn_with_state(state.clone(), api::log_chains))
         .layer(middleware::from_fn_with_state(state.clone(), guard::guard))
         .with_state(state)
 }

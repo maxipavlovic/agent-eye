@@ -1,10 +1,12 @@
 //! What every handler shares: the error type, the database handle, id lookup and the hidden set.
 
-use super::AppState;
+use super::{AppState, Shared};
 use crate::config::Config;
 use crate::db::Db;
 use anyhow::Result;
+use axum::extract::{Request, State};
 use axum::http::StatusCode;
+use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 use axum::Json;
 use serde::Deserialize;
@@ -12,25 +14,33 @@ use serde_json::{json, Value};
 
 // ---------- errors ----------
 
-/// An error answer: a status and `{"error": message}`, plus `"code"` when a client can act on it.
-pub struct ApiError(StatusCode, String, Option<&'static str>);
+/// An error answer: a status and `{"error": message}`, plus `"code"` when a client can act on it. The
+/// last part is the whole chain of causes of an error that was answered with its first sentence
+/// only: it can name paths, so it goes to the log (see `log_chains`), never to the client.
+pub struct ApiError(StatusCode, String, Option<&'static str>, Option<String>);
 
 impl ApiError {
     pub(super) fn bad(m: impl Into<String>) -> Self {
-        ApiError(StatusCode::BAD_REQUEST, m.into(), None)
+        ApiError(StatusCode::BAD_REQUEST, m.into(), None, None)
     }
     pub(super) fn not_found(m: impl Into<String>) -> Self {
-        ApiError(StatusCode::NOT_FOUND, m.into(), None)
+        ApiError(StatusCode::NOT_FOUND, m.into(), None, None)
     }
     /// A request that is fine in itself but cannot be done now; `code` is stable for clients.
     pub(super) fn conflict(code: &'static str, m: impl Into<String>) -> Self {
-        ApiError(StatusCode::CONFLICT, m.into(), Some(code))
+        ApiError(StatusCode::CONFLICT, m.into(), Some(code), None)
+    }
+    /// Keep the causes of `e` for the log; the answer says only what this error says.
+    pub(super) fn because(mut self, e: &anyhow::Error) -> Self {
+        self.3 = Some(format!("{e:#}"));
+        self
     }
 }
 
 impl From<anyhow::Error> for ApiError {
+    /// The first sentence only: the rest of the chain names files and folders.
     fn from(e: anyhow::Error) -> Self {
-        ApiError(StatusCode::INTERNAL_SERVER_ERROR, format!("{e:#}"), None)
+        ApiError(StatusCode::INTERNAL_SERVER_ERROR, e.to_string(), None, None).because(&e)
     }
 }
 
@@ -40,9 +50,14 @@ impl From<rusqlite::Error> for ApiError {
             StatusCode::INTERNAL_SERVER_ERROR,
             format!("database: {e}"),
             None,
+            None,
         )
     }
 }
+
+/// What `ApiError` leaves on a response for `log_chains`; it never reaches the client.
+#[derive(Clone)]
+struct Chain(String);
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
@@ -50,8 +65,25 @@ impl IntoResponse for ApiError {
             Some(code) => json!({"error": self.1, "code": code}),
             None => json!({"error": self.1}),
         };
-        (self.0, Json(body)).into_response()
+        let mut resp = (self.0, Json(body)).into_response();
+        if let Some(chain) = self.3 {
+            resp.extensions_mut().insert(Chain(chain));
+        }
+        resp
     }
+}
+
+/// Write the causes of an error that was answered with a short message to `logs/daemon.log`.
+pub(super) async fn log_chains(State(st): State<Shared>, req: Request, next: Next) -> Response {
+    let what = format!("{} {}", req.method(), req.uri().path());
+    let resp = next.run(req).await;
+    if let Some(Chain(chain)) = resp.extensions().get::<Chain>() {
+        crate::daemon::log(
+            &st.paths,
+            &format!("api {what}: {} {chain}", resp.status().as_u16()),
+        );
+    }
+    resp
 }
 
 pub(super) type ApiResult = Result<Json<Value>, ApiError>;
@@ -107,6 +139,51 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
     use std::time::Duration;
+
+    #[tokio::test]
+    async fn a_500_says_its_first_sentence_and_the_log_has_the_whole_chain() {
+        use crate::config::Config;
+        use crate::paths::Paths;
+        use axum::routing::get;
+        use axum::Router;
+        use http_body_util::BodyExt;
+        use tower::ServiceExt;
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths {
+            home: tmp.path().join("home"),
+        };
+        paths.ensure_home().unwrap();
+        let st = crate::server::new_state(paths, Config::default(), "t".repeat(48), 7420);
+        let app = Router::new()
+            .route(
+                "/boom",
+                get(|| async {
+                    let e = anyhow::anyhow!("No such file or directory (os error 2)")
+                        .context("opening /Users/someone/.agent-eye/eye.db")
+                        .context("saving the thing");
+                    Err::<Json<Value>, ApiError>(e.into())
+                }),
+            )
+            .layer(axum::middleware::from_fn_with_state(st, log_chains));
+        let resp = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri("/boom")
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
+        let body = resp.into_body().collect().await.unwrap().to_bytes();
+        let v: Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(v, json!({"error": "saving the thing"}));
+        let log = std::fs::read_to_string(tmp.path().join("home/logs/daemon.log")).unwrap();
+        assert!(
+            log.contains("api GET /boom: 500 saving the thing: opening /Users/someone/.agent-eye/eye.db: No such file"),
+            "{log}"
+        );
+    }
 
     #[tokio::test]
     async fn blocking_work_does_not_stall_the_runtime() {

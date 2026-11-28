@@ -10,7 +10,7 @@ JSON over HTTP on `127.0.0.1:<port>` (default 7420, `[board] port` in config). T
 - Every other request needs that cookie or the header `X-Eye-Token: <token>`; otherwise `401`.
 - `Host` must be `127.0.0.1:<port>`, `localhost:<port>` or `[::1]:<port>` (any case); otherwise `403`, whatever the token says. This stops a web page on another name that was pointed at 127.0.0.1 (DNS rebinding).
 - A non-GET request must carry an `Origin` header that is same-origin (`http://127.0.0.1:<port>`, `http://localhost:<port>` or `http://[::1]:<port>`); otherwise `403`.
-- Errors are `{"error": "<message>"}` with a 4xx/5xx status. Times are Unix milliseconds.
+- Errors are `{"error": "<message>"}` with a 4xx/5xx status. A 500 carries the first sentence of the error only; the whole chain of causes (which can name files and folders) goes to `logs/daemon.log`, as does the one of a conversation that cannot be read (404). Times are Unix milliseconds.
 
 ## Routes
 
