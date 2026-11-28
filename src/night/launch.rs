@@ -113,13 +113,29 @@ pub struct Spec {
     pub session_id: Option<String>,
 }
 
-/// A prompt that starts with `-` would be read as a flag.
-fn safe_prompt(p: &str) -> String {
-    if p.starts_with('-') {
-        format!("Task: {p}")
+/// What an idea run is told about where it works. Its prompt may name files that a worktree or a
+/// copy does not hold (notes nobody committed), and a run that cannot find them should stop and
+/// say so, not rebuild them from somewhere else. It is worded for every agent; the Claude barrier
+/// refuses a shell command that names the original folder (see `barrier::hook_command`), so a run
+/// is told what to do instead. `run.base_ref` is set when the folder is a repo.
+fn idea_preamble(run: &Run, cwd: &Path) -> String {
+    let orig = &run.folder;
+    // `wt.join("")` of a run at the top of its folder ends in a slash
+    let cwd: PathBuf = cwd.components().collect();
+    let made = if run.base_ref.is_some() {
+        format!("a checkout of the last commit of {orig}. Files that are not committed there (untracked notes, uncommitted edits) are not in it")
     } else {
-        p.to_string()
-    }
+        format!(
+            "a copy of {orig} made when the run started, without {}",
+            iso::SKIP.join(", ")
+        )
+    };
+    format!(
+        "Night run: you work in {cwd}, {made}. You may read files in {orig} but change nothing \
+         there; if a shell command that names it is refused, read the file with your file-reading \
+         tool. If something this task needs is missing, stop and say so. Do not push anything.",
+        cwd = cwd.display()
+    )
 }
 
 /// The name Claude Code gives the folder of a project's transcripts: every character that is not a
@@ -173,6 +189,7 @@ pub fn build(
 ) -> Spec {
     let cont = run.kind == "session";
     // A continued session remembers the paths of the original folder: say where the work goes.
+    // An idea run is told where it works as well.
     let prompt = if cont {
         format!(
             "Night run: you are continuing this session in an isolated copy of the project at {cwd}. \
@@ -183,7 +200,7 @@ pub fn build(
             p = run.prompt
         )
     } else {
-        safe_prompt(&run.prompt)
+        format!("{}\n\n{}", idea_preamble(run, cwd), run.prompt)
     };
     let mut args: Vec<String> = vec![];
     let mut session_id = None;
@@ -282,8 +299,9 @@ pub fn build(
 }
 
 /// Start a spec detached: own session and process group, output to `log`, exit code to `exit`.
-/// Returns the pid of the wrapper, which leads the group.
-pub fn spawn(spec: &Spec, log: &Path, exit: &Path) -> Result<i64> {
+/// Its `PATH` starts with `bin`, the folder of eye's own links (see `bin`). Returns the pid of the
+/// wrapper, which leads the group.
+pub fn spawn(spec: &Spec, bin: &Path, log: &Path, exit: &Path) -> Result<i64> {
     let out = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
@@ -299,6 +317,7 @@ pub fn spawn(spec: &Spec, log: &Path, exit: &Path) -> Result<i64> {
         .args(&spec.args)
         .current_dir(&spec.cwd)
         .env("EYE_NIGHT_EXIT", exit)
+        .env("PATH", super::bin::run_path(bin))
         .stdin(Stdio::null())
         .stdout(out)
         .stderr(err);
@@ -405,6 +424,9 @@ pub fn start(
     } else {
         true
     };
+    // the eye a run finds first is this one, before anything is made
+    let bin = super::bin::dir(paths);
+    let exe = super::bin::refresh(&bin)?;
     let dir = super::run_dir(paths, run.id);
     let slug = super::slug(&run.prompt);
     let iso = iso::prepare(
@@ -441,19 +463,27 @@ pub fn start(
                         protect.push(top);
                     }
                 }
-                let b = barrier::plan(&iso.root, &protect, copy);
+                let mut b = barrier::plan(&iso.root, &protect, copy);
+                // the sandbox must be able to run the `eye` the run finds on its PATH
+                b.allow_reading(&bin);
+                b.allow_reading(&exe);
                 barrier::settings(&b, &DENY, &cfg.night.network_list(), sandboxed)
             })
         };
+        // the repo's base commit is known only now that the run's folder is made
+        let made = Run {
+            base_ref: iso.base_ref.clone(),
+            ..run.clone()
+        };
         let spec = build(
             cfg,
-            run,
+            &made,
             &agent.executable(),
             &iso.cwd,
             new_id.as_deref(),
             guard.as_deref(),
         );
-        let pid = spawn(&spec, &dir.join("log"), &dir.join("exit"))?;
+        let pid = spawn(&spec, &bin, &dir.join("log"), &dir.join("exit"))?;
         Ok(Started {
             pid,
             pid_start: process_start(pid),

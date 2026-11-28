@@ -190,7 +190,10 @@ fn a_planned_idea_runs_in_a_worktree_and_comes_back_as_a_needs_you_card() {
     );
     let argv = std::fs::read_to_string(h.path().join("claude-argv.txt")).unwrap();
     for w in [
-        "-p Add a README line saying hello",
+        "-p Night run: you work in ",
+        "a checkout of the last commit of ",
+        "stop and say so",
+        "\n\nAdd a README line saying hello --session-id",
         "--session-id",
         "--disallowedTools",
         "git push",

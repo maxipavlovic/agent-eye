@@ -154,6 +154,8 @@ fn reads_everything(h: &Home) {
     assert!(h.ok(&["night", "ls"]).contains("night shift"));
     assert!(h.ok(&["usage"]).contains("no usage in this window"));
     assert!(h.ok(&["loose"]).contains("no leftovers"));
+    let said = String::from_utf8_lossy(&h.eye(&["loose"]).stderr).into_owned();
+    assert!(said.contains("what the daemon last stored"), "{said}");
     assert!(!h.ok(&["clock", "--brief"]).trim().is_empty());
     assert!(h.ok(&["clock"]).contains("Steering clock"));
     assert!(h.ok(&["remind", "ls"]).contains("no reminders"));

@@ -144,6 +144,24 @@ terminal UI does not have, so only ideas run on OpenCode.
 
 The prompt of a continued run starts with a note: it works in a copy at `<worktree>`, the earlier conversation mentions paths of the original folder, use the same files under the worktree and change nothing in the original. The note is only advice; the barrier above is what holds. See `security.md`.
 
+### What an idea run is told
+
+The prompt of an idea run starts with a note too, worded the same for every agent. It says:
+
+- which folder it works in, and that this is made from the last commit of your folder (for a folder that is not a repo, a copy made when the run started, without `node_modules`, `.git`, `target`, `.venv` and `dist`), so files that are not committed there, such as untracked notes, are not in it;
+- that it may read files in your folder but must change nothing there, and that where a shell command naming your folder is refused, it reads the file with its file-reading tool;
+- that when something the task needs is missing, it stops and says so, instead of rebuilding it from somewhere else;
+- that it does not push.
+
+Reads are still not blocked. The Claude hook that refuses a shell command naming your folder says so in its message ("a shell command may not name the original folder (...); work in the run folder, and read a file from the original with the file-reading tool (Read)"), and the one for the file tools says they write only in the run folder.
+
+### `eye` inside a run
+
+A run may call `eye` (the `/eye` skill does). Two things make that work.
+
+- **It is the same eye as the daemon.** The daemon's `PATH` puts the agents' folders first, so a copy of eye that sits next to an agent (an older one from a package manager) used to be the `eye` a run found. Every run, for every agent, now starts with `<eye home>/bin` first on its `PATH`. That folder holds only `eye` and `agent-eye`, links to the binary that starts the run, made again at each start (a start fails with a reason when that binary is gone). The sandbox of a Claude run may read the folder and the binary (`sandbox.filesystem.allowRead`), for the case where settings close the home folder to it.
+- **Reading needs no writing.** The sandbox lets a run write in its own folder only, not in `<eye home>`. So `eye find`, `ls`, `show` (also `--conversation`), `idea ls`, `night ls` and `log`, `usage`, `loose`, `clock`, `remind ls` and `resume --dry-run` open `eye.db` read-only when they cannot write it: no upgrade, no backup, and they leave the folder and `config.toml` as they are. They skip what they would refresh first (the back-fill behind `eye usage` and `eye clock`, the scan behind `eye loose`) and show what the daemon has stored; `eye loose` says so on stderr. A database of another schema is refused with the reason, since it cannot be upgraded there. A command that writes says that `eye.db` cannot be opened for writing. If a daemon has the database open, its changes are read through the log files it keeps; with no log files the file is read as it is; changes waiting in a log that cannot be read are refused, not skipped.
+
 ## What a run leaves
 
 When its process ends, eye stores the report (the run's last assistant message, secrets masked, at most 6000 characters), the diff stat (`git diff --stat <base>` plus the files git does not know yet; for a copy the list of changed and new files) and the leftovers of its session (the same list `eye loose` shows), marks its session **Needs you** with the next step "review the night run", and shows a desktop notice ("Night shift: 2 runs finished") when notices are on (`[remind] notify`). Status is `done` (exit 0), `failed` (anything else, with the last line of the log), `stopped` (a limit) or `skipped` (cancelled).

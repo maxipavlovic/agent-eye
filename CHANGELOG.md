@@ -8,6 +8,12 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 - A quiet session (`[board] quiet`) is a program's run, not your work: it is Running while it works and in the archive otherwise, instead of in Paused. It is still found and resumable, and a due reminder or a move by hand still puts it where you want it.
 
+### Fixed
+
+- Inside a night run's sandbox, `eye find`, `ls`, `show`, `idea ls` and the `/eye` skill stopped with "creating eye.db: Operation not permitted". The commands that only read (those, and `night ls`, `usage`, `loose`, `clock`, `remind ls`, `resume --dry-run`) now open `eye.db` read-only where they cannot write it, with no upgrade and no files made or changed, skip what they would refresh first, and refuse a database of another schema with the reason. A command that writes says that `eye.db` cannot be opened for writing, and never "creating".
+- A night run for an idea is told where it works: your folder's last commit, so notes you never committed are not in it; that it may read your folder but must change nothing there; that it stops and says so when something it needs is missing; and not to push. Before, it was given its prompt alone, and one that looked for untracked notes concluded that reads were blocked. The hook that refuses a shell command naming your folder now says what is refused and to read the file with the file-reading tool instead.
+- A night run finds the same `eye` as the daemon: every run, for every agent, starts with `<eye home>/bin` first on its `PATH`, a folder of `eye` and `agent-eye` links to the running binary, made again at each start. A run found an older copy next to the agent (a package manager's) before.
+
 ## 0.5.0-rc.2 - 2026-11-27
 
 ### Added

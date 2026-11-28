@@ -741,7 +741,7 @@ fn git(dir: &Path, args: &[&str]) -> String {
     String::from_utf8_lossy(&o.stdout).trim().to_string()
 }
 
-fn repo(dir: &Path) {
+pub(super) fn repo(dir: &Path) {
     std::fs::create_dir_all(dir.join("sub")).unwrap();
     git(dir, &["init", "-q", "-b", "main"]);
     std::fs::write(dir.join("a.txt"), "one\n").unwrap();
@@ -970,7 +970,7 @@ fn a_plain_folder_over_100_mb_is_refused_when_planned_and_what_is_skipped_does_n
 
 // ---------- command lines ----------
 
-fn run_of(agent: &str, kind: &str) -> Run {
+pub(super) fn run_of(agent: &str, kind: &str) -> Run {
     Run {
         id: 4,
         kind: kind.into(),
@@ -1000,10 +1000,8 @@ fn the_claude_command_denies_every_way_out_and_names_its_session() {
         Some("uuid-1"),
         None,
     );
-    assert_eq!(
-        s.args[..2],
-        ["-p".to_string(), "make it better".to_string()]
-    );
+    assert_eq!(s.args[0], "-p");
+    assert!(s.args[1].ends_with("\n\nmake it better"), "{}", s.args[1]);
     assert_eq!(after(&s.args, "--session-id"), "uuid-1");
     assert_eq!(s.session_id.as_deref(), Some("uuid-1"));
     assert_eq!(after(&s.args, "--permission-mode"), "auto");
@@ -1046,11 +1044,27 @@ fn accept_edits_mode_adds_an_allow_list_and_a_model_when_set() {
 
 #[test]
 fn a_prompt_that_starts_with_a_dash_is_not_read_as_a_flag() {
-    let cfg = Config::default();
     let mut r = run_of("claude", "idea");
     r.prompt = "--dangerously-skip-permissions".into();
-    let s = launch::build(&cfg, &r, "claude", Path::new("/w"), Some("u"), None);
-    assert_eq!(s.args[1], "Task: --dangerously-skip-permissions");
+    for agent in ["claude", "agy", "codex", "opencode"] {
+        r.agent = agent.into();
+        let s = launch::build(
+            &Config::default(),
+            &r,
+            agent,
+            Path::new("/w"),
+            Some("u"),
+            None,
+        );
+        // `-p <prompt>` for Claude and agy, the last argument for the others
+        let sent = if s.args[0] == "-p" {
+            &s.args[1]
+        } else {
+            s.args.last().unwrap()
+        };
+        assert!(sent.starts_with("Night run:"), "{agent}: {sent}");
+        assert!(sent.ends_with("--dangerously-skip-permissions"), "{agent}");
+    }
 }
 
 #[test]
@@ -1157,7 +1171,7 @@ fn the_opencode_command_carries_its_permission_rules_in_the_environment() {
     assert_eq!(agent["mode"], "primary");
     // the allow-all rule comes first: the last matching rule wins in OpenCode
     assert_eq!(bash.as_object().unwrap().keys().next().unwrap(), "*");
-    assert_eq!(c.args.last().unwrap(), &run_of("opencode", "idea").prompt);
+    assert!(c.args.last().unwrap().ends_with("\n\nmake it better"));
 }
 
 #[test]
@@ -1209,7 +1223,12 @@ fn a_started_opencode_run_reaches_the_program_with_its_rules() {
         None,
         None,
     );
-    launch::spawn(&c, &tmp.path().join("log"), &tmp.path().join("exit")).unwrap();
+    let (bin, log, exit) = (
+        tmp.path().join("bin"),
+        tmp.path().join("log"),
+        tmp.path().join("exit"),
+    );
+    launch::spawn(&c, &bin, &log, &exit).unwrap();
     for _ in 0..100 {
         if tmp.path().join("exit").exists() {
             break;
@@ -1224,7 +1243,7 @@ fn a_started_opencode_run_reaches_the_program_with_its_rules() {
 
 /// An OpenCode stand-in for `launch::start`: `debug config` does what the file `debug` says
 /// (`fail`, or print one server `jira`), and a run writes its arguments and inline config down.
-fn opencode_world(debug: &str) -> (tempfile::TempDir, Run, Paths, Config, Agents) {
+pub(super) fn opencode_world(debug: &str) -> (tempfile::TempDir, Run, Paths, Config, Agents) {
     let tmp = tempfile::tempdir().unwrap();
     let orig = tmp.path().join("proj");
     repo(&orig);
@@ -1374,7 +1393,7 @@ fn a_spawned_run_leads_its_own_group_logs_and_leaves_an_exit_code() {
         session_id: None,
     };
     let (log, exit) = (tmp.path().join("log"), tmp.path().join("exit"));
-    let pid = launch::spawn(&spec, &log, &exit).unwrap();
+    let pid = launch::spawn(&spec, &tmp.path().join("bin"), &log, &exit).unwrap();
     for _ in 0..100 {
         if exit.exists() {
             break;
@@ -1407,7 +1426,7 @@ fn hook_says(cmd: &str, input: &str) -> i32 {
     c.wait().unwrap().code().unwrap()
 }
 
-fn call(key: &str, value: &str) -> String {
+pub(super) fn call(key: &str, value: &str) -> String {
     serde_json::json!({ "tool_input": { key: value, "other": "x" }, "cwd": "/w" }).to_string()
 }
 
@@ -1529,6 +1548,7 @@ fn a_plain_folder_is_denied_whole() {
 #[test]
 fn the_settings_of_a_run_turn_the_sandbox_on_and_keep_the_push_deny_list() {
     let b = barrier::Barrier {
+        allow_read: vec![],
         allow_write: vec![PathBuf::from("/run/wt")],
         deny_write: vec![PathBuf::from("/orig/a.txt")],
         deny_edit: vec!["Edit(//orig/a.txt)".into()],
@@ -2058,7 +2078,7 @@ fn the_agy_command_runs_headless_with_accept_edits_the_sandbox_and_allow_rules()
         None,
     );
     assert_eq!(c.args[0], "-p");
-    assert_eq!(c.args[1], "make it better");
+    assert!(c.args[1].ends_with("\n\nmake it better"), "{}", c.args[1]);
     assert_eq!(after(&c.args, "--mode"), "accept-edits");
     assert!(c.args.iter().any(|a| a == "--sandbox"));
     assert_eq!(after(&c.args, "--model"), "gemini-3.8-flash-low");
@@ -2081,12 +2101,16 @@ fn the_agy_command_runs_headless_with_accept_edits_the_sandbox_and_allow_rules()
         deny.contains("command(git push)") && !deny.contains("*)"),
         "{deny}"
     );
-    // no model flag when none is set; a prompt that is a flag is not one
-    let mut r = run_of("agy", "idea");
-    r.prompt = "--x".into();
-    let c = launch::build(&Config::default(), &r, "agy", Path::new("/w"), None, None);
+    // no model flag when none is set
+    let c = launch::build(
+        &Config::default(),
+        &run_of("agy", "idea"),
+        "agy",
+        Path::new("/w"),
+        None,
+        None,
+    );
     assert!(!c.args.iter().any(|a| a == "--model"));
-    assert_eq!(c.args[1], "Task: --x");
 }
 
 #[test]

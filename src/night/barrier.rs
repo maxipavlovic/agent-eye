@@ -31,6 +31,10 @@ use std::path::{Path, PathBuf};
 pub struct Barrier {
     /// Writable for the sandbox: the run's folder and the git folders its commits write.
     pub allow_write: Vec<PathBuf>,
+    /// Readable for the sandbox even where the user's own settings close folders (`denyRead`,
+    /// or a home folder that is closed by default): the folder of `eye` links on the run's `PATH`
+    /// and the binary they point to. Left out of the settings when empty.
+    pub allow_read: Vec<PathBuf>,
     /// Not writable for the sandbox, whatever else allows it.
     pub deny_write: Vec<PathBuf>,
     /// `Edit` deny rules (they cover the Edit, Write and NotebookEdit tools; the sandbox reads
@@ -62,6 +66,17 @@ fn worktree_gitdir(root: &Path) -> Option<PathBuf> {
 /// refused (Linux binds the folder).
 fn ensure(dir: &Path) -> bool {
     std::fs::create_dir_all(dir).is_ok()
+}
+
+impl Barrier {
+    /// Let the sandbox read `p`, in both spellings when it is reached through a link.
+    pub fn allow_reading(&mut self, p: &Path) {
+        for s in spellings(p) {
+            if !self.allow_read.contains(&s) {
+                self.allow_read.push(s);
+            }
+        }
+    }
 }
 
 /// Work out the barrier of a run working in `root` (a worktree or a copy) and protecting
@@ -171,19 +186,23 @@ fn pat(s: &str) -> String {
 }
 
 /// The shell command of a PreToolUse hook that refuses a tool call naming a guarded folder. It
-/// reads the call as JSON on stdin and answers exit code 2, which blocks it. For the file tools
-/// (`bash` false) the `file_path` or `notebook_path` must not be in a guarded folder or climb out
-/// with `..`; for Bash the command must not contain the folder's path at all. That is a net for
-/// the mistake this exists for, an agent using a remembered absolute path, not for a command
-/// that builds the path some other way; the sandbox is what holds. A folder whose name has a quote
-/// or a backslash in it is left to the rules.
+/// reads the call as JSON on stdin and answers exit code 2, which blocks it, with a message that
+/// says what is refused and what to do instead (the run is shown it). For the file tools (`bash`
+/// false) the `file_path` or `notebook_path` must not be in a guarded folder or climb out with
+/// `..`; for Bash the command must not contain the folder's path at all. Reading is not refused:
+/// the Read tool is not hooked, so the message sends a run there. That is a net for the mistake
+/// this exists for, an agent using a remembered absolute path, not for a command that builds the
+/// path some other way; the sandbox is what holds. A folder whose name has a quote or a backslash
+/// in it is left to the rules.
 pub fn hook_command(guard: &[PathBuf], bash: bool) -> Option<String> {
     let mut pats = vec![];
+    let mut named = vec![];
     for g in guard {
         let t = g.to_string_lossy();
         if t.contains(['\'', '"', '\\', '$', '`', '\n']) {
             continue;
         }
+        named.push(t.to_string());
         let t = t.trim_end_matches('/');
         if bash {
             for tail in ["/", " ", "\"", "'", ";", "&", "|", ")"] {
@@ -200,8 +219,14 @@ pub fn hook_command(guard: &[PathBuf], bash: bool) -> Option<String> {
         pats.push("*_path\\\":\\\"*/../*".into());
         pats.push("*_path\\\":\\\"../*".into());
     }
+    let folders = named.join(", ");
+    let said = if bash {
+        format!("night run: a shell command may not name the original folder ({folders}), which belongs to you, not to the run; work in the run folder, and read a file from the original with the file-reading tool (Read)")
+    } else {
+        format!("night run: the file tools may write only in the run folder, not in the original folder ({folders}) and not through a path that climbs out of the run folder with ..")
+    };
     Some(format!(
-        "in=$(cat); case \"$in\" in {}) echo 'night run: this folder belongs to you, not to the run; work in the run folder' >&2; exit 2;; esac; exit 0",
+        "in=$(cat); case \"$in\" in {}) echo '{said}' >&2; exit 2;; esac; exit 0",
         pats.join("|")
     ))
 }
@@ -232,15 +257,19 @@ pub fn settings(b: &Barrier, deny: &[&str], network: &[String], sandboxed: bool)
         v["hooks"] = json!({ "PreToolUse": hooks });
     }
     if sandboxed {
+        let mut filesystem = json!({
+            "allowWrite": paths(&b.allow_write),
+            "denyWrite": paths(&b.deny_write),
+        });
+        if !b.allow_read.is_empty() {
+            filesystem["allowRead"] = Value::Array(paths(&b.allow_read));
+        }
         v["sandbox"] = json!({
             "enabled": true,
             "failIfUnavailable": true,
             "allowUnsandboxedCommands": false,
             "autoAllowBashIfSandboxed": true,
-            "filesystem": {
-                "allowWrite": paths(&b.allow_write),
-                "denyWrite": paths(&b.deny_write),
-            },
+            "filesystem": filesystem,
             "network": {
                 "allowedDomains": network,
                 "deniedDomains": super::launch::NETWORK_DENIED,
