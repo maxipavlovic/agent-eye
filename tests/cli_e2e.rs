@@ -877,3 +877,22 @@ fn export_of_one_session_writes_a_readable_page_to_standard_output() {
         "{html}"
     );
 }
+
+#[test]
+fn board_on_with_a_port_writes_it_where_the_daemon_reads_it() {
+    let w = World::new();
+    let said = w.ok(&["board", "on", "--no-service", "--port", "7611"]);
+    assert!(said.contains("http://127.0.0.1:7611/?t="), "{said}");
+    let cfg = std::fs::read_to_string(w.paths().config_path()).unwrap();
+    assert!(
+        cfg.contains("enabled = true") && cfg.contains("port = 7611"),
+        "{cfg}"
+    );
+    // later asks, with no port given, use the one in the file
+    assert!(w.ok(&["board"]).contains("http://127.0.0.1:7611/?t="));
+    // without --port the file's port stays
+    w.ok(&["board", "off", "--no-service"]);
+    w.ok(&["board", "on", "--no-service"]);
+    let cfg = std::fs::read_to_string(w.paths().config_path()).unwrap();
+    assert!(cfg.contains("port = 7611"), "{cfg}");
+}

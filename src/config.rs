@@ -722,7 +722,19 @@ pub fn write_night(path: &Path, key: &str, value: &str) -> Result<()> {
 
 /// Write `[board] enabled` into the config file (created from the defaults when missing).
 pub fn write_board_enabled(path: &Path, on: bool) -> Result<()> {
-    crate::config_edit::rewrite(path, |t| set_board_enabled(t, on))
+    write_board(path, on, None)
+}
+
+/// Write `[board] enabled`, and `[board] port` when one is given, in one go: the daemon serves the
+/// port the file names, so `eye board on --port N` has to put it there.
+pub fn write_board(path: &Path, on: bool, port: Option<u16>) -> Result<()> {
+    crate::config_edit::rewrite(path, |t| {
+        let t = set_board_enabled(t, on);
+        match port {
+            Some(p) => set_key(&t, "[board]", "port", &p.to_string()),
+            None => t,
+        }
+    })
 }
 
 /// Write `[remind] notify` into the config file (created from the defaults when missing).
@@ -758,6 +770,28 @@ mod tests {
                 .board
                 .enabled
         );
+    }
+
+    #[test]
+    fn writing_the_board_with_a_port_keeps_the_rest_and_the_comments() {
+        let t = tempfile::tempdir().unwrap();
+        let p = t.path().join("config.toml");
+        std::fs::write(&p, "[board]\nenabled = false # mine\nport = 7420\n\n[night]\nenabled = false\n").unwrap();
+        write_board(&p, true, Some(7555)).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(&p).unwrap(),
+            "[board]\nenabled = true    # mine\nport = 7555\n\n[night]\nenabled = false\n"
+        );
+        // no port given: the one in the file stays
+        write_board(&p, false, None).unwrap();
+        let c = Config::load_or_create(&p).unwrap();
+        assert_eq!((c.board.enabled, c.board.port), (false, 7555));
+        // a file with no [board] gets the section with both
+        let q = t.path().join("fresh.toml");
+        std::fs::write(&q, "[night]\nenabled = false\n").unwrap();
+        write_board(&q, true, Some(7600)).unwrap();
+        let c = Config::load_or_create(&q).unwrap();
+        assert_eq!((c.board.enabled, c.board.port), (true, 7600));
     }
 
     #[test]
