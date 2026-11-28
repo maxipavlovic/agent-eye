@@ -12,7 +12,7 @@
 
 use super::events::{from_v1, from_v2, Ev, Loaded};
 use super::turns;
-use crate::agents::Transcript;
+use crate::agents::{list_dir, Listing, Transcript};
 use crate::model::Stamp;
 use crate::util::valid_session_id;
 use anyhow::{Context, Result};
@@ -92,7 +92,9 @@ struct Row {
     count: i64,
 }
 
-fn list_table(c: &Connection, table: &str, msgs: &str) -> Vec<Row> {
+/// The sessions of one table pair. A table that is not there lists nothing; a database that
+/// cannot be read (busy, locked) is an error, so that the listing is not taken for complete.
+fn list_table(c: &Connection, table: &str, msgs: &str) -> rusqlite::Result<Vec<Row>> {
     // a session created archived (`opencode run --archived`: scripts, eye's own summaries) is out
     // of OpenCode's lists, so it is out of eye's too
     let live = if has_column(c, table, "time_archived") {
@@ -103,8 +105,10 @@ fn list_table(c: &Connection, table: &str, msgs: &str) -> Vec<Row> {
     let q = format!(
         "SELECT s.id, s.directory, s.parent_id, s.time_updated, (SELECT count(*) FROM {msgs} m WHERE m.session_id = s.id) FROM {table} s{live}"
     );
-    let Ok(mut st) = c.prepare(&q) else {
-        return vec![];
+    let mut st = match c.prepare(&q) {
+        Ok(st) => st,
+        Err(e) if e.to_string().contains("no such table") => return Ok(vec![]),
+        Err(e) => return Err(e),
     };
     let rows = st.query_map([], |r| {
         Ok(Row {
@@ -116,8 +120,8 @@ fn list_table(c: &Connection, table: &str, msgs: &str) -> Vec<Row> {
             updated: r.get::<_, Option<i64>>(3)?.unwrap_or(0),
             count: r.get(4)?,
         })
-    });
-    rows.into_iter().flatten().flatten().collect()
+    })?;
+    rows.collect()
 }
 
 fn project_dir(cwd: &str) -> String {
@@ -134,13 +138,22 @@ fn mtime(p: &Path) -> i64 {
 }
 
 /// Every session a person has, from the databases first and then the files of the older layout.
-pub fn scan(dir: &Path) -> Vec<Transcript> {
+pub fn scan(dir: &Path) -> Listing {
+    let mut complete = true;
     let mut out = vec![];
     let mut seen = HashSet::new();
     for db in databases(dir) {
-        let Some(c) = open(&db) else { continue };
-        let mut rows = list_table(&c, "session_v2", "session_message");
-        rows.extend(list_table(&c, "session", "message"));
+        let Some(c) = open(&db) else {
+            complete = false;
+            continue;
+        };
+        let mut rows = vec![];
+        for (table, msgs) in [("session_v2", "session_message"), ("session", "message")] {
+            match list_table(&c, table, msgs) {
+                Ok(r) => rows.extend(r),
+                Err(_) => complete = false,
+            }
+        }
         for r in rows {
             if r.parent || !valid_session_id(&r.id) || !seen.insert(r.id.clone()) {
                 continue;
@@ -156,13 +169,8 @@ pub fn scan(dir: &Path) -> Vec<Transcript> {
             });
         }
     }
-    let sessions = dir.join("storage/session");
-    for proj in std::fs::read_dir(&sessions).into_iter().flatten().flatten() {
-        for f in std::fs::read_dir(proj.path())
-            .into_iter()
-            .flatten()
-            .flatten()
-        {
+    for proj in list_dir(&dir.join("storage/session"), &mut complete) {
+        for f in list_dir(&proj.path(), &mut complete) {
             let path = f.path();
             let Some(id) = path.file_stem().and_then(|s| s.to_str()).map(String::from) else {
                 continue;
@@ -173,10 +181,14 @@ pub fn scan(dir: &Path) -> Vec<Transcript> {
             {
                 continue;
             }
-            let Some(info) = std::fs::read_to_string(&path)
-                .ok()
-                .and_then(|t| serde_json::from_str::<Value>(&t).ok())
-            else {
+            let text = match std::fs::read_to_string(&path) {
+                Ok(t) => t,
+                Err(e) => {
+                    complete &= e.kind() == std::io::ErrorKind::NotFound;
+                    continue;
+                }
+            };
+            let Ok(info) = serde_json::from_str::<Value>(&text) else {
                 continue;
             };
             if info
@@ -201,7 +213,10 @@ pub fn scan(dir: &Path) -> Vec<Transcript> {
         }
     }
     out.sort_by(|a, b| a.path.cmp(&b.path));
-    out
+    Listing {
+        files: out,
+        complete,
+    }
 }
 
 /// The stamp of a session of the file layout: the number of its message files and the newest time
@@ -228,7 +243,8 @@ pub fn stamp(path: &Path) -> Option<Stamp> {
     if let Some((db, id)) = split_db_path(path) {
         let c = open(&db)?;
         for (t, m) in [("session_v2", "session_message"), ("session", "message")] {
-            if let Some(r) = list_table(&c, t, m).into_iter().find(|r| r.id == id) {
+            let rows = list_table(&c, t, m).unwrap_or_default();
+            if let Some(r) = rows.into_iter().find(|r| r.id == id) {
                 return Some(Stamp {
                     size: r.count,
                     mtime: r.updated,

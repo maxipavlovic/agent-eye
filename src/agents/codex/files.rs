@@ -3,7 +3,7 @@
 //! gave them.
 
 use crate::agents::append_only::for_each_line;
-use crate::agents::{Stamp, Transcript};
+use crate::agents::{list_dir, Listing, Stamp, Transcript};
 use anyhow::Result;
 use regex::Regex;
 use serde_json::Value;
@@ -49,17 +49,14 @@ pub fn parse_file_name(name: &str) -> Option<(String, String)> {
     Some((c[1].to_string(), c[2].to_string()))
 }
 
-fn walk(dir: &Path, depth: usize, out: &mut Vec<Found>) {
-    let Ok(rd) = std::fs::read_dir(dir) else {
-        return;
-    };
-    for e in rd.flatten() {
+fn walk(dir: &Path, depth: usize, out: &mut Vec<Found>, complete: &mut bool) {
+    for e in list_dir(dir, complete) {
         let (path, Ok(md)) = (e.path(), e.metadata()) else {
             continue;
         };
         if md.is_dir() {
             if depth > 0 {
-                walk(&path, depth - 1, out);
+                walk(&path, depth - 1, out, complete);
             }
             continue;
         }
@@ -76,11 +73,13 @@ fn walk(dir: &Path, depth: usize, out: &mut Vec<Found>) {
 }
 
 /// Every rollout under a Codex folder, one per thread: when a thread has several files (a reverted
-/// thread, or one both live and archived) the newest wins. Sorted by path.
-pub fn find_rollouts(dir: &Path) -> Vec<Found> {
+/// thread, or one both live and archived) the newest wins. Sorted by path. The flag is false when a
+/// folder could not be read.
+pub fn find_rollouts(dir: &Path) -> (Vec<Found>, bool) {
+    let mut complete = true;
     let mut all = vec![];
-    walk(&dir.join(SESSIONS_DIR), 3, &mut all);
-    walk(&dir.join(ARCHIVED_DIR), 0, &mut all);
+    walk(&dir.join(SESSIONS_DIR), 3, &mut all, &mut complete);
+    walk(&dir.join(ARCHIVED_DIR), 0, &mut all, &mut complete);
     let mut best: HashMap<String, Found> = HashMap::new();
     for f in all {
         let newer = best
@@ -92,7 +91,7 @@ pub fn find_rollouts(dir: &Path) -> Vec<Found> {
     }
     let mut v: Vec<Found> = best.into_values().collect();
     v.sort_by(|a, b| a.path.cmp(&b.path));
-    v
+    (v, complete)
 }
 
 /// What a rollout is for a person looking at their sessions.
@@ -284,8 +283,13 @@ pub fn names(dir: &Path) -> Arc<Names> {
 pub fn delete_thread(dir: &Path, thread_id: &str) -> Result<Vec<String>> {
     let id = thread_id.to_ascii_lowercase();
     let mut all = vec![];
-    walk(&dir.join(SESSIONS_DIR), 3, &mut all);
-    walk(&dir.join(ARCHIVED_DIR), 0, &mut all);
+    let mut complete = true;
+    walk(&dir.join(SESSIONS_DIR), 3, &mut all, &mut complete);
+    walk(&dir.join(ARCHIVED_DIR), 0, &mut all, &mut complete);
+    anyhow::ensure!(
+        complete,
+        "a Codex folder could not be read; nothing removed"
+    );
     let mut gone = vec![];
     for f in all.into_iter().filter(|f| f.thread_id == id) {
         std::fs::remove_file(&f.path)?;
@@ -384,12 +388,13 @@ pub struct Index {
 /// A named session takes the change time of `session_index.jsonl` when that is newer than its
 /// rollout, so a rename (or an unnamed one) makes eye read it again and take the new title. The
 /// file's own time is used, not the time written in the line, so it does not depend on clocks.
-pub fn scan(dir: &Path, night_dir: Option<&Path>) -> (Vec<Transcript>, Index) {
+pub fn scan(dir: &Path, night_dir: Option<&Path>) -> (Listing, Index) {
     let names = names(dir);
     let renamed_at = Stamp::of_file(&dir.join(INDEX_FILE)).map_or(0, |s| s.mtime);
     let mut out = vec![];
     let mut index = Index::default();
-    for f in find_rollouts(dir) {
+    let (rollouts, complete) = find_rollouts(dir);
+    for f in rollouts {
         let Some(head) = head(&f.path, &f.thread_id) else {
             continue;
         };
@@ -434,7 +439,13 @@ pub fn scan(dir: &Path, night_dir: Option<&Path>) -> (Vec<Transcript>, Index) {
             Role::Hidden | Role::ExecRun => {}
         }
     }
-    (out, index)
+    (
+        Listing {
+            files: out,
+            complete,
+        },
+        index,
+    )
 }
 
 #[cfg(test)]
@@ -623,7 +634,8 @@ mod tests {
         write(&archived, "{}\n");
         write(&t.path().join("sessions/2026/11/09/notes.txt"), "x");
         write(&t.path().join("history.jsonl"), "{}\n");
-        let found = find_rollouts(t.path());
+        let (found, complete) = find_rollouts(t.path());
+        assert!(complete);
         assert_eq!(found.len(), 1);
         assert_eq!(found[0].path, archived);
         assert_eq!(found[0].month, "2026-11");

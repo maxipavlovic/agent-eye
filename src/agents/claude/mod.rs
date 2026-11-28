@@ -106,21 +106,16 @@ impl Claude {
 }
 
 /// Every `projects/<dir>/<session>.jsonl` under a Claude Code folder.
-fn transcript_files(dir: &Path) -> Vec<Transcript> {
+fn transcript_files(dir: &Path) -> Listing {
+    let mut complete = true;
     let mut out = vec![];
-    let Ok(rd) = std::fs::read_dir(dir.join("projects")) else {
-        return out;
-    };
-    for e in rd.flatten() {
+    for e in list_dir(&dir.join("projects"), &mut complete) {
         let project = e.path();
         if !project.is_dir() {
             continue;
         }
         let project_dir = e.file_name().to_string_lossy().into_owned();
-        let Ok(rd2) = std::fs::read_dir(&project) else {
-            continue;
-        };
-        for f in rd2.flatten() {
+        for f in list_dir(&project, &mut complete) {
             let p = f.path();
             if p.extension().and_then(|x| x.to_str()) != Some("jsonl") {
                 continue;
@@ -138,7 +133,10 @@ fn transcript_files(dir: &Path) -> Vec<Transcript> {
         }
     }
     out.sort_by(|a, b| a.path.cmp(&b.path));
-    out
+    Listing {
+        files: out,
+        complete,
+    }
 }
 
 /// A transcript file, buffered for reading line by line.
@@ -181,7 +179,7 @@ impl Agent for Claude {
         }
     }
 
-    fn transcripts(&self) -> Vec<Transcript> {
+    fn transcripts(&self) -> Listing {
         transcript_files(&self.dir)
     }
 

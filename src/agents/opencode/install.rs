@@ -172,7 +172,7 @@ pub fn doctor(c: &OpenCode, ctx: &InstallCtx) -> Vec<Check> {
         Ok(()) => Check::ok("`opencode run` has the flags summaries need"),
         Err(e) => Check::warn(format!("summaries: {e:#}")),
     });
-    let n = super::store::scan(&c.dir).len();
+    let n = super::store::scan(&c.dir).files.len();
     out.push(if n > 0 {
         Check::ok(format!("{n} sessions found under {}", show_path(&c.dir)))
     } else {

@@ -81,8 +81,8 @@ pub trait Agent: Send + Sync + std::fmt::Debug {
 
     // ---- sessions on disk ----
 
-    /// Every transcript of the agent, in a stable order.
-    fn transcripts(&self) -> Vec<Transcript>;
+    /// Every transcript of the agent, in a stable order, and whether the listing is complete.
+    fn transcripts(&self) -> Listing;
     /// Read a transcript: all of it, or what is new since `opts.since`. The adapter decides which.
     /// It may go on from the marker of the last read or, when it cannot (the session was
     /// rewritten, the marker means nothing any more), read everything and set `Delta::replaces`.

@@ -201,7 +201,7 @@ impl Agent for Agy {
         }
     }
 
-    fn transcripts(&self) -> Vec<Transcript> {
+    fn transcripts(&self) -> Listing {
         let (found, sums) = files::scan(&self.dir);
         *self.sums.lock().unwrap_or_else(|e| e.into_inner()) = sums;
         found

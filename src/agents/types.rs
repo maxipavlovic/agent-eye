@@ -41,6 +41,39 @@ pub struct Transcript {
     pub stamp: Stamp,
 }
 
+/// What an adapter found on disk. `complete` is false when a folder or database that should have
+/// been listed could not be (a permission hiccup, a network mount, a busy database): the files
+/// are then only some of the sessions, and a session missing from them is not known to be gone.
+#[derive(Debug, Clone)]
+pub struct Listing {
+    pub files: Vec<Transcript>,
+    pub complete: bool,
+}
+
+impl Listing {
+    /// A listing that read everything it looked at.
+    pub fn new(files: Vec<Transcript>) -> Listing {
+        Listing {
+            files,
+            complete: true,
+        }
+    }
+}
+
+/// The entries of a folder for a [`Listing`]. A folder that is not there is an empty one; any other
+/// error (it exists and cannot be read) clears `complete`.
+pub fn list_dir(dir: &std::path::Path, complete: &mut bool) -> Vec<std::fs::DirEntry> {
+    match std::fs::read_dir(dir) {
+        Ok(rd) => rd.flatten().collect(),
+        Err(e) => {
+            if e.kind() != std::io::ErrorKind::NotFound {
+                *complete = false;
+            }
+            vec![]
+        }
+    }
+}
+
 /// A real output found in a transcript: a pull request, an artifact, a commit, a folder.
 #[derive(Debug, Clone, PartialEq)]
 pub struct OutputHit {

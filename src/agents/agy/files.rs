@@ -3,7 +3,7 @@
 //! `brain/<id>/.system_generated/logs/transcript_full.jsonl` the plain JSON log of its steps that
 //! eye reads. Titles and folders are in `conversation_summaries.db`, prompts in `history.jsonl`.
 
-use crate::agents::Transcript;
+use crate::agents::{list_dir, Listing, Transcript};
 use crate::model::Stamp;
 use crate::util::{iso_to_ms, valid_session_id};
 use rusqlite::{Connection, OpenFlags};
@@ -431,14 +431,13 @@ fn project_dir(cwd: Option<&str>) -> String {
 }
 
 /// The conversations a person has: with a log, not a sub-agent's, not one eye started for a summary.
-pub fn scan(dir: &Path) -> (Vec<Transcript>, HashMap<String, Summary>) {
-    let Ok(rd) = std::fs::read_dir(dir.join(CONVERSATIONS)) else {
-        return (vec![], HashMap::new());
-    };
+pub fn scan(dir: &Path) -> (Listing, HashMap<String, Summary>) {
+    let mut complete = true;
+    let entries = list_dir(&dir.join(CONVERSATIONS), &mut complete);
     let mut sums = summaries(dir);
     let hist = history_folders(dir);
     let mut out = vec![];
-    for e in rd.flatten() {
+    for e in entries {
         let name = e.file_name().to_string_lossy().into_owned();
         let Some(id) = name.strip_suffix(".db").filter(|i| valid_session_id(i)) else {
             continue;
@@ -467,7 +466,13 @@ pub fn scan(dir: &Path) -> (Vec<Transcript>, HashMap<String, Summary>) {
         });
     }
     out.sort_by(|a, b| a.path.cmp(&b.path));
-    (out, sums)
+    (
+        Listing {
+            files: out,
+            complete,
+        },
+        sums,
+    )
 }
 
 /// A relative path made only of plain names (what an archived copy may hold).

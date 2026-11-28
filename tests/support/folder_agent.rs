@@ -9,8 +9,8 @@
 //! database in it is a snapshot made with `VACUUM INTO`.
 
 use agent_eye::agents::{
-    self, Agent, AgentRef, Delta, Detection, Invocation, ParseOpts, Stamp, StartPlan, StartRequest,
-    TailItem, Transcript, PROMPTS_CAP, REPLIES_CAP,
+    self, Agent, AgentRef, Delta, Detection, Invocation, Listing, ParseOpts, Stamp, StartPlan,
+    StartRequest, TailItem, Transcript, PROMPTS_CAP, REPLIES_CAP,
 };
 use agent_eye::archive::{compress_file, decompress_file};
 use agent_eye::config::AgentCfg;
@@ -183,10 +183,10 @@ impl Agent for FolderAgent {
         }
     }
 
-    fn transcripts(&self) -> Vec<Transcript> {
+    fn transcripts(&self) -> Listing {
         let mut out = vec![];
         let Ok(projects) = std::fs::read_dir(self.dir.join("sessions")) else {
-            return out;
+            return Listing::new(out);
         };
         for project in projects.flatten().filter(|p| p.path().is_dir()) {
             for s in std::fs::read_dir(project.path())
@@ -209,7 +209,7 @@ impl Agent for FolderAgent {
             }
         }
         out.sort_by(|a, b| a.path.cmp(&b.path));
-        out
+        Listing::new(out)
     }
 
     fn parse_transcript(&self, t: &Transcript, opts: &ParseOpts) -> Result<Delta> {

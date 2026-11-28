@@ -239,7 +239,7 @@ impl Agent for OpenCode {
         }
     }
 
-    fn transcripts(&self) -> Vec<Transcript> {
+    fn transcripts(&self) -> Listing {
         store::scan(&self.dir)
     }
 

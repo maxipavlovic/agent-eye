@@ -416,7 +416,7 @@ fn detection_looks_for_the_folder_and_the_program() {
     let here = Agy::new(tmp.path().to_path_buf()).with_executable("/nonexistent/agy");
     assert!(here.detect().installed);
     assert!(
-        here.transcripts().is_empty(),
+        here.transcripts().files.is_empty(),
         "no conversations folder, no sessions"
     );
     let line = here
