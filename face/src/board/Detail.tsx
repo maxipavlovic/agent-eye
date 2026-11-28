@@ -5,6 +5,7 @@ import type { CardDetail, ColumnId } from '../api/types';
 import { ago, isBusy, resumeLabel, snippetParts, tok } from '../format';
 import { LANE_LABEL } from './columns';
 import { copy } from './copy';
+import { exportSession } from './save';
 import { folderMissing, startButton } from './folder';
 import { Conversation } from './Conversation';
 import { openForget } from './Forget';
@@ -100,23 +101,13 @@ function Actions({ d, store }: { d: CardDetail; store: Store }) {
       {d.resumable && <button class="btn big" aria-keyshortcuts="R" title="Resume (R)" onClick={() => void store.resume(d.id)}>RESUME</button>}
       {d.resumable && d.resume_cmd && <button class="btn" aria-keyshortcuts="F" title="Resume as a new session branched from this one (F)" onClick={() => void store.resume(d.id, true)}><Keyed label="FORK" k="f" /></button>}
       {d.resume_cmd && <button class="btn" aria-keyshortcuts="C" title="Copy the resume command (C)" onClick={() => copy(d.resume_cmd!, store)}><Keyed label="COPY" k="c" /></button>}
-      <a class="btn" aria-keyshortcuts="E" href={`/api/sessions/${encodeURIComponent(d.id)}/export?format=html`} download title="Save this session as one readable page; secrets are masked (E)"><Keyed label="EXPORT" k="e" /></a>
+      <button class="btn" aria-keyshortcuts="E" title="Save this session as one readable page; secrets are masked (E)" onClick={() => void exportSession(store, d.id)}><Keyed label="EXPORT" k="e" /></button>
       {!why && <TonightButton d={d} store={store} />}
       <button class="btn ghost" aria-keyshortcuts="H" title="Hide this session from the board (H)" onClick={() => hideSession(store, d.id)}><Keyed label="HIDE" k="h" /></button>
       <button class="btn ghost" aria-keyshortcuts="X" title="Remove this session from eye, and optionally from its agent (X)" onClick={() => openForget(d)}>FORGET…</button>
       <MoveMenu d={d} store={store} />
     </div>
   );
-}
-
-/** Save the session as one readable page (E, and EXPORT in MORE): secrets are masked. */
-export function exportSession(id: string) {
-  const a = document.createElement('a');
-  a.href = `/api/sessions/${encodeURIComponent(id)}/export?format=html`;
-  a.download = '';
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
 }
 
 /** One action in MORE, with the key that does the same. */
@@ -132,7 +123,7 @@ function moreItems(d: CardDetail, store: Store): MoreItem[] {
   if (why) out.push({ ...tonight, why });
   if (d.resumable && d.resume_cmd) out.push({ label: 'FORK', key: 'F', title: 'Resume as a new session branched from this one', run: () => void store.resume(d.id, true) });
   if (d.resume_cmd) out.push({ label: 'COPY RESUME COMMAND', key: 'C', title: 'Copy the command that resumes it', run: () => copy(d.resume_cmd!, store) });
-  out.push({ label: 'EXPORT', key: 'E', title: 'Save this session as one readable page; secrets are masked', run: () => exportSession(d.id) });
+  out.push({ label: 'EXPORT', key: 'E', title: 'Save this session as one readable page; secrets are masked', run: () => void exportSession(store, d.id) });
   if (!why && canContinueTonight(d, store)) out.push(tonight);
   out.push({ label: 'REMIND ME…', key: 'M', title: 'Pick when eye moves it to Needs you', run: () => openRemind(d.id) });
   out.push({ label: 'HIDE', key: 'H', title: 'Hide this session from the board', run: () => hideSession(store, d.id) });

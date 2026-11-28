@@ -707,6 +707,8 @@ export interface Source {
   nightOpen(id: number): Promise<{ ok: boolean }>;
   /** Fetches a repo copy's night branch into the original repo (POST /api/night/:id/bring); the page asked first. */
   nightBring(id: number): Promise<{ ok: boolean; note?: string }>;
+  /** One session as a page to save (GET /api/sessions/:id/export): the engine's name for the file and its content. */
+  exportSession(id: string): Promise<{ name: string; blob: Blob }>;
   /** Calls onChange when the data changed; reports connection state. Returns unsubscribe. */
   subscribe(onChange: () => void, onState: (s: Connection) => void): () => void;
 }

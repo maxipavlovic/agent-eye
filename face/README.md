@@ -20,7 +20,7 @@ cd face && npm run watch                       # vite build --watch -> dist/
 EYE_FACE_DIR=face/dist eye serve --port 7441   # reads dist/ on every request, no cargo rebuild
 ```
 
-Open the URL `eye serve` prints (`/?t=<token>` sets the cookie). Reload after each rebuild. Use a temporary `EYE_HOME` and `EYE_CLAUDE_DIR` when experimenting.
+Open the URL `eye serve` prints (`/?t=<token>`: the page keeps the token in localStorage and sends it as `X-Eye-Token`). Reload after each rebuild. Use a temporary `EYE_HOME` and `EYE_CLAUDE_DIR` when experimenting.
 
 ## Layout
 

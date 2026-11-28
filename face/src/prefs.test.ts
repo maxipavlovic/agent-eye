@@ -9,7 +9,7 @@ const BAD = ['eye.iris.colour', 'eye.Iris.layout', 'eye.2iris.layout', 'eye.ir-i
 const answer = (status: number, body: unknown = {}) => Promise.resolve(new Response(JSON.stringify(body), { status }));
 
 describe('board settings', () => {
-  beforeEach(() => localStorage.clear());
+  beforeEach(() => { localStorage.clear(); localStorage.setItem('eye.token', 'd'.repeat(64)); });
   afterEach(() => vi.restoreAllMocks());
 
   it('knows the same keys as the engine', () => {
@@ -35,6 +35,23 @@ describe('board settings', () => {
     expect(await savePref('eye.look', 'ink')).toBe(true);
     // the browser's copy is written either way
     expect(localStorage.getItem('eye.look')).toBe('ink');
+  });
+
+  it('sends the token in a header and no cookie, and asks nothing without a token', async () => {
+    const f = vi.spyOn(globalThis, 'fetch').mockImplementation(() => answer(200));
+    await pullPrefs();
+    await savePref('eye.theme', 'dark');
+    for (const [, init] of f.mock.calls) {
+      expect(new Headers(init!.headers).get('X-Eye-Token')).toBe('d'.repeat(64));
+      expect(init!.credentials).toBe('omit');
+    }
+    f.mockClear();
+    localStorage.removeItem('eye.token');
+    await pullPrefs();
+    expect(await savePref('eye.look', 'iris')).toBe(true);
+    expect(f).not.toHaveBeenCalled();
+    // the browser's own copy is still written
+    expect(localStorage.getItem('eye.look')).toBe('iris');
   });
 
   it('saves with keepalive, so leaving the page right after does not cancel the request', async () => {

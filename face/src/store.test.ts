@@ -58,6 +58,7 @@ function source(over: Partial<Source> = {}): Source {
     setRemindSettings: async ({ notify }) => ({ notify, available: true }),
     settings: async () => { throw new Error('HTTP 404'); },
     saveSettings: async () => { throw new Error('HTTP 404'); },
+    exportSession: async () => ({ name: 'eye-x.html', blob: new Blob(['x']) }),
     subscribe: () => () => {},
     ...over,
   };
@@ -252,6 +253,7 @@ describe('accent', () => {
   });
 
   it('is sent to the engine with the other board settings', async () => {
+    localStorage.setItem('eye.token', 'e'.repeat(64));
     const f = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
     vi.stubGlobal('fetch', f);
     createStore(source()).setAccent('teal');
@@ -516,5 +518,17 @@ describe('loose ends', () => {
     await expect(store.looseSend('a')).resolves.toBe(true);
     expect(looseSend).toHaveBeenCalledWith('a', false);
     expect(store.toasts.value.at(-1)!.text).toBe('opened in iTerm');
+  });
+});
+
+describe('exportSession', () => {
+  it('hands over what the engine made, and says why in a toast when it made nothing', async () => {
+    const s = createStore(source());
+    const file = await s.exportSession('a');
+    expect(file?.name).toBe('eye-x.html');
+    expect(await file?.blob.text()).toBe('x');
+    const refused = createStore(source({ exportSession: async () => { throw new Error('no such session'); } }));
+    expect(await refused.exportSession('zzz')).toBeNull();
+    expect(refused.toasts.value.at(-1)).toMatchObject({ tone: 'error', text: 'no such session' });
   });
 });

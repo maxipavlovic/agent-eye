@@ -1,7 +1,7 @@
 // What every test shares: a fresh fixture home and a real `agent-eye serve` on it, per test, so
 // no test sees what another changed. Nothing here touches the real home of whoever runs it:
 // HOME, EYE_HOME and EYE_CLAUDE_DIR are temporary folders and PATH holds only fake agents.
-import { test as base, expect, type Page } from '@playwright/test';
+import { test as base, expect, type Page, type Request } from '@playwright/test';
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -28,7 +28,7 @@ export interface Eye {
   /** `http://127.0.0.1:<port>` */
   base: string;
   token: string;
-  /** The board's address with the token, which sets the cookie. */
+  /** The board's address with the token: the page keeps the token and drops it from the address. */
   url: string;
   env: NodeJS.ProcessEnv;
   /** GET or POST a JSON route. */
@@ -107,6 +107,13 @@ export const test = base.extend<{ look: string; eye: Eye; board: Page }>({
     page.on('requestfailed', (r) => problems.push(`request failed: ${r.url()} ${r.failure()?.errorText}`));
     page.on('response', (r) => { if (r.status() >= 400) problems.push(`http ${r.status()}: ${r.url()}`); });
     (page as Page & { problems: string[] }).problems = problems;
+    // what is in flight, but the event stream, which stays open for good (see `settled`)
+    const inflight = new Set<Request>();
+    const stream = (r: Request) => new URL(r.url()).pathname === '/api/events';
+    page.on('request', (r) => { if (!stream(r)) inflight.add(r); });
+    page.on('requestfinished', (r) => inflight.delete(r));
+    page.on('requestfailed', (r) => inflight.delete(r));
+    (page as Page & { inflight: Set<Request> }).inflight = inflight;
     await page.clock.setFixedTime(NOW);
     await page.goto(look === 'ink' ? eye.url : `${eye.url}&look=${look}`);
     // every test checks it really runs in its look, not in the default
@@ -117,6 +124,21 @@ export const test = base.extend<{ look: string; eye: Eye; board: Page }>({
 });
 
 export const problems = (p: Page) => (p as Page & { problems: string[] }).problems;
+
+/**
+ * Wait until the page has nothing in flight for half a second: what `networkidle` means, but the
+ * event stream, which the page reads with `fetch` and keeps open, does not count (the browser would
+ * never call the page idle).
+ */
+export async function settled(p: Page) {
+  const inflight = (p as Page & { inflight: Set<Request> }).inflight;
+  await p.waitForLoadState('load');
+  for (;;) {
+    await expect.poll(() => inflight.size).toBe(0);
+    await p.waitForTimeout(500);
+    if (inflight.size === 0) return;
+  }
+}
 
 /** A card on the board by part of its title. */
 export const card = (p: Page, title: RegExp | string) => p.getByRole('button', { name: title }).first();

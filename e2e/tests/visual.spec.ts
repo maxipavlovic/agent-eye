@@ -6,7 +6,7 @@
 import type { Page } from '@playwright/test';
 import { hintClock } from '../../face/src/data/clockStates';
 import { demoClock } from '../../face/src/data/clockSample';
-import { card, expect, test } from '../support';
+import { card, expect, settled, test } from '../support';
 
 const SCHEMES = ['light', 'dark'] as const;
 const WIDTHS = [1440, 1000] as const;
@@ -93,7 +93,7 @@ for (const scheme of SCHEMES) {
       for (const [name, open] of Object.entries(VIEWS)) {
         test(name, async ({ board }) => {
           await open(board);
-          await board.waitForLoadState('networkidle');
+          await settled(board);
           await board.evaluate(() => document.fonts.ready);
           await board.evaluate(() => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))));
           // the pointer rests in a corner, away from any hover state
@@ -115,7 +115,7 @@ for (const scheme of SCHEMES) {
     for (const name of ['hours', 'usage', 'settings', 'settings-model', 'settings-quiet']) {
       test(name, async ({ board }) => {
         await VIEWS[name]!(board);
-        await board.waitForLoadState('networkidle');
+        await settled(board);
         await board.evaluate(() => document.fonts.ready);
         await board.evaluate(() => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))));
         await board.mouse.move(355, 795);
@@ -165,7 +165,7 @@ for (const width of [1440, 1280]) {
           await card(board, /Fix stale tokens/).click({ button: 'right' });
           await expect(board.getByRole('menu')).toBeVisible();
         }
-        await board.waitForLoadState('networkidle');
+        await settled(board);
         await board.evaluate(() => document.fonts.ready);
         await board.evaluate(() => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))));
         await board.mouse.move(width - 5, 895);

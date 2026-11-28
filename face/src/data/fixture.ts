@@ -552,6 +552,7 @@ export function fixtureSource(demo = false): Source {
     nightOpen: () => delay({ ok: true }),
     settings: () => delay(structuredClone(SETTINGS)),
     saveSettings: () => Promise.reject(new Error('The sample board cannot save settings')),
+    exportSession: () => Promise.reject(new Error('The sample board has nothing to export')),
     remindSettings: () => delay({ ...notice }),
     setRemindSettings: (input) => {
       notice.notify = input.notify;

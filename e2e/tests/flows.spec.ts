@@ -1,7 +1,11 @@
 import { demoClock, emptyClock } from '../../face/src/data/clockSample';
 import { hintClock, tooFewClock } from '../../face/src/data/clockStates';
 import { spawn } from 'node:child_process';
-import { card, done, expect, lane, problems, sid, test } from '../support';
+import { card, done, expect, lane, problems, settled, sid, test } from '../support';
+
+/** Forget what the page keeps as settings, but not its token: that is how it gets in (the link is not opened again). */
+const forgetSettings = (p: import('@playwright/test').Page) =>
+  p.evaluate(() => { const t = localStorage.getItem('eye.token')!; localStorage.clear(); localStorage.setItem('eye.token', t); });
 
 test.describe('board', () => {
   test('loads with every lane and no console problems', async ({ board }) => {
@@ -11,7 +15,7 @@ test.describe('board', () => {
     // Done starts folded to a rail that says how many it holds
     await expect(done(board)).toHaveAccessibleName('Done, 4 cards. Unfold');
     await expect(board.getByRole('button', { name: /Tonight: 2/ })).toBeVisible();
-    await board.waitForLoadState('networkidle');
+    await settled(board);
     expect(problems(board)).toEqual([]);
   });
 
@@ -471,6 +475,75 @@ test.describe('night', () => {
   });
 });
 
+test.describe('access', () => {
+  test('the link\'s token is kept by the page, taken out of the address and never put in a cookie', async ({ board, eye, context }) => {
+    expect(new URL(board.url()).searchParams.has('t')).toBe(false);
+    expect(await board.evaluate(() => localStorage.getItem('eye.token'))).toBe(eye.token);
+    expect(await context.cookies()).toEqual([]);
+    // every call of the page carries the token in a header, and no address does
+    const calls: Array<{ url: string; token: string | undefined; cookie: string | undefined }> = [];
+    board.on('request', (r) => {
+      if (new URL(r.url()).pathname.startsWith('/api/')) calls.push({ url: r.url(), token: r.headers()['x-eye-token'], cookie: r.headers().cookie });
+    });
+    await board.reload();
+    await expect(board.getByRole('region', { name: /^needs you/i })).toBeVisible();
+    expect(calls.length).toBeGreaterThan(3);
+    for (const c of calls) {
+      expect(c.token, c.url).toBe(eye.token);
+      expect(c.cookie, c.url).toBeUndefined();
+      expect(c.url).not.toContain(eye.token);
+    }
+    expect(await context.cookies()).toEqual([]);
+  });
+
+  test('a page opened again without the link still has its token, as the installed app does after a restart', async ({ board, eye }) => {
+    await board.goto(eye.base + '/');
+    await expect(board.getByRole('region', { name: /^needs you/i })).toBeVisible();
+    await expect(board.locator('.err')).toHaveCount(0);
+  });
+
+  test('a page that never had the link says how to open the board and asks the API for nothing', async ({ page, eye }) => {
+    const asked: string[] = [];
+    page.on('request', (r) => { if (new URL(r.url()).pathname.startsWith('/api/')) asked.push(r.url()); });
+    await page.goto(eye.base + '/');
+    await expect(page.getByText(/run `eye board` in a terminal and open the link it prints/)).toBeVisible();
+    expect(asked).toEqual([]);
+  });
+
+  test('a token the engine refuses is dropped, and the page says the same words', async ({ page, eye }) => {
+    await page.goto(`${eye.base}/?t=${'f'.repeat(64)}`);
+    await expect(page.getByText(/run `eye board` in a terminal and open the link it prints/)).toBeVisible();
+    expect(new URL(page.url()).searchParams.has('t')).toBe(false);
+    expect(await page.evaluate(() => localStorage.getItem('eye.token'))).toBeNull();
+  });
+
+  test('a cookie from an older eye opens nothing, and the next visit takes it away', async ({ page, context, eye }) => {
+    await context.addCookies([{ name: 'eye_token', value: eye.token, url: eye.base }]);
+    expect((await context.request.get(`${eye.base}/api/board`)).status()).toBe(401);
+    await page.goto(`${eye.base}/`);
+    await expect.poll(async () => (await context.cookies()).filter((c) => c.name === 'eye_token')).toEqual([]);
+  });
+
+  test('the event stream works with the header: a change made elsewhere shows without a reload', async ({ board, eye }) => {
+    await expect(board.locator('.conn')).toHaveText(/LIVE/);
+    const stale = (await eye.api('/api/search?q=stale%20tokens')).results[0].card.id;
+    await expect(card(board, /Fix stale tokens/)).toBeVisible();
+    // the engine looks at its database every 2 s and tells the page about a change it sees after its first look
+    await board.waitForTimeout(2500);
+    await eye.api(`/api/cards/${stale}/hidden`, { hidden: true });
+    await expect(card(board, /Fix stale tokens/)).toHaveCount(0);
+  });
+
+  test('the app manifest is linked with the token in its address, and bare it is refused', async ({ board, eye }) => {
+    const href = await board.locator('link[rel=manifest]').getAttribute('href');
+    expect(href).toBe(`/manifest.webmanifest?t=${eye.token}`);
+    const m = await board.request.get(eye.base + href!);
+    expect(m.ok()).toBe(true);
+    expect((await m.json()).start_url).toBe(`/?t=${eye.token}`);
+    expect((await board.request.get(`${eye.base}/manifest.webmanifest`)).status()).toBe(401);
+  });
+});
+
 test.describe('export', () => {
   test('Export downloads one self-contained HTML page with the secret masked', async ({ board }) => {
     await card(board, /Fix stale tokens/).click();
@@ -496,7 +569,7 @@ test.describe('looks', () => {
     await expect(board.getByRole('region', { name: /^needs you/i })).toBeVisible();
     expect((await eye.api('/api/prefs'))['eye.look']).toBe(other);
     // a new page without ?look= opens in the saved look: the engine's, with this browser's copy gone
-    await board.evaluate(() => localStorage.clear());
+    await forgetSettings(board);
     await board.goto(eye.base + '/');
     await expect(board.locator('html')).toHaveAttribute('data-look', other);
     await expect(board.getByRole('region', { name: /^needs you/i })).toBeVisible();
@@ -534,7 +607,7 @@ test.describe('looks', () => {
     await pick(other);
     await expect(board.locator('.board.lanes')).toBeVisible();
     // the layout comes back from the engine, not only from this browser
-    await board.evaluate(() => localStorage.clear());
+    await forgetSettings(board);
     await pick(look);
     await expect(board.locator('.board.gridview')).toBeVisible();
     const prefs = await eye.api('/api/prefs');
