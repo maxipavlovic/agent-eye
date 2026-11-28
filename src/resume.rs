@@ -107,7 +107,7 @@ mod tests {
     use super::*;
     use crate::agents::Invocation;
     use crate::platform::terminal::Env;
-    use crate::platform::test_support::{script, stub};
+    use crate::platform::test_support::{read_when, script, stub};
     use std::path::Path;
 
     fn line(cwd: &str, id: &str) -> String {
@@ -211,7 +211,7 @@ mod tests {
             execute(&p).unwrap(),
             "opened in a new terminal (xdg-terminal-exec)"
         );
-        let args = std::fs::read_to_string(t.path().join("args")).unwrap();
+        let args = read_when(&t.path().join("args"), |t| t.ends_with('\n'));
         assert_eq!(
             args.lines().collect::<Vec<_>>(),
             ["sh", "-c", "cd '/tmp/a b' && claude --resume abcdef12"]
