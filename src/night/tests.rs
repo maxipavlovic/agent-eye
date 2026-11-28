@@ -568,12 +568,14 @@ fn a_run_that_ran_out_of_plan_starts_again_on_the_other_agent_when_allowed() {
     f.other = Some("codex".into());
     tick(&mut db, &f, &cfg);
     let (r1, r2) = (get(&db, 1).unwrap().unwrap(), get(&db, 2).unwrap().unwrap());
-    f.tails
-        .borrow_mut()
-        .insert(1, "Error: rate limit reached, try again at 9pm".into());
-    f.tails
-        .borrow_mut()
-        .insert(2, "Error: rate limit reached".into());
+    f.tails.borrow_mut().insert(
+        1,
+        "You've hit your session limit · resets 9pm (Europe/Madrid)".into(),
+    );
+    f.tails.borrow_mut().insert(
+        2,
+        "You've hit your session limit · resets 9pm (Europe/Madrid)".into(),
+    );
     f.end(&r1, 1);
     f.end(&r2, 1);
     tick(&mut db, &f, &cfg);
@@ -590,7 +592,7 @@ fn a_run_that_ran_out_of_plan_starts_again_on_the_other_agent_when_allowed() {
     // the one without it just failed, with the reason
     let r2 = get(&db, 2).unwrap().unwrap();
     assert_eq!(r2.status, "failed");
-    assert!(r2.why.unwrap().contains("rate limit"));
+    assert!(r2.why.unwrap().contains("hit your session limit"));
     assert!(get(&db, 4).unwrap().is_none());
 }
 
@@ -709,13 +711,6 @@ fn a_failed_run_keeps_the_last_line_of_its_log_as_the_reason() {
     let r = get(&db, 1).unwrap().unwrap();
     assert_eq!(r.status, "failed");
     assert_eq!(r.why.as_deref(), Some("exit 2: boom: no such file"));
-}
-
-#[test]
-fn rate_limit_words_are_found_and_ordinary_logs_are_not() {
-    assert!(sched::rate_limited("API Error: 429 too many requests"));
-    assert!(sched::rate_limited("You've hit your usage limit"));
-    assert!(!sched::rate_limited("tests passed, nothing to see"));
 }
 
 #[test]
@@ -2185,3 +2180,5 @@ fn a_session_kept_quiet_does_not_count_as_you_at_work() {
     assert!(!work("sdk-py", &cfg) && !work("sdk-ts", &cfg));
     assert!(work("cli", &cfg), "your own session still counts");
 }
+
+mod refusals;

@@ -131,7 +131,8 @@ pub fn prepare(
             .and_then(|(f, r)| f.strip_prefix(r).ok().map(Path::to_path_buf))
             .unwrap_or_default();
         if mode == Mode::Copy {
-            // hardlinked objects: fast and small; the base is what the repo's HEAD was at planning
+            // hardlinked objects: fast and small; the base is what the repo's HEAD is when the run
+            // starts
             let work = run_dir.join("work");
             p.git_act(
                 run_dir,

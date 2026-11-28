@@ -115,9 +115,11 @@ pub struct Spec {
 
 /// What an idea run is told about where it works. Its prompt may name files that a worktree or a
 /// copy does not hold (notes nobody committed), and a run that cannot find them should stop and
-/// say so, not rebuild them from somewhere else. It is worded for every agent; the Claude barrier
-/// refuses a shell command that names the original folder (see `barrier::hook_command`), so a run
-/// is told what to do instead. `run.base_ref` is set when the folder is a repo.
+/// say so, not rebuild them from somewhere else. It is worded the same for every agent except for
+/// what that agent's own barrier refuses: the Claude barrier refuses a shell command that names
+/// the original folder (see `barrier::hook_command`) and OpenCode's rules refuse its file tools
+/// outside the run's folder, so a run is told what to do instead. `run.base_ref` is set when the
+/// folder is a repo.
 fn idea_preamble(run: &Run, cwd: &Path) -> String {
     let orig = &run.folder;
     // `wt.join("")` of a run at the top of its folder ends in a slash
@@ -130,10 +132,18 @@ fn idea_preamble(run: &Run, cwd: &Path) -> String {
             iso::SKIP.join(", ")
         )
     };
+    // what is refused is what the agent's own barrier refuses: see `barrier` and `opencode_permissions`
+    let refused = match run.agent.as_str() {
+        LEGACY_ID => "; if a shell command that names it is refused, read the file with your file-reading tool".to_string(),
+        "opencode" => format!(
+            "; your file tools refuse a path outside {}, so read a file there with a shell command",
+            cwd.display()
+        ),
+        _ => String::new(),
+    };
     format!(
         "Night run: you work in {cwd}, {made}. You may read files in {orig} but change nothing \
-         there; if a shell command that names it is refused, read the file with your file-reading \
-         tool. If something this task needs is missing, stop and say so. Do not push anything.",
+         there{refused}. If something this task needs is missing, stop and say so. Do not push anything.",
         cwd = cwd.display()
     )
 }
@@ -413,20 +423,22 @@ pub fn start(
     let agent = agents
         .get(&run.agent)
         .with_context(|| format!("the agent '{}' is not enabled", run.agent))?;
-    // a Claude run needs its sandbox, or the user's say-so to go without, before anything is made
-    let sandboxed = if run.agent == LEGACY_ID {
-        barrier::gate(cfg)?
-    } else if run.agent == "agy" {
-        barrier::agy_gate(cfg)?
-    } else if run.agent == "opencode" {
-        barrier::gate_unsandboxed(cfg)?;
-        false
-    } else {
-        true
-    };
+    // each agent's own gate (a Claude run needs its sandbox, or the user's say-so to go without)
+    // before anything is made
+    let sandboxed = barrier::gate_for(cfg, &run.agent)?;
     // the eye a run finds first is this one, before anything is made
     let bin = super::bin::dir(paths);
     let exe = super::bin::refresh(&bin)?;
+    if super::bin::replaced() {
+        crate::daemon::log(
+            paths,
+            &format!(
+                "night: run {} found {} replaced on disk since eye started, so `eye` inside it is a newer one than the daemon; run `eye restart`",
+                run.id,
+                exe.display()
+            ),
+        );
+    }
     let dir = super::run_dir(paths, run.id);
     let slug = super::slug(&run.prompt);
     let iso = iso::prepare(

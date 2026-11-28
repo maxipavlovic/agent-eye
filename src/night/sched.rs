@@ -45,7 +45,7 @@ pub trait Sys {
     fn log_tail(&self, run: &Run) -> String;
     /// Index what the run wrote, find its session, report and diff.
     fn collect(&self, db: &mut Db, run: &Run) -> Collected;
-    /// The other enabled agent, when there is one.
+    /// The other enabled agent that may run at night (its gate passes), when there is one.
     fn other_agent(&self, agent: &str) -> Option<String>;
     fn notify(&self, title: &str, body: &str);
 }
@@ -58,22 +58,34 @@ pub struct Pass {
     pub stopped: Vec<i64>,
 }
 
-/// Words in the end of a log that mean the plan is out.
-pub fn rate_limited(text: &str) -> bool {
-    let t = text.to_lowercase();
-    [
-        "rate limit",
-        "rate-limit",
-        "usage limit",
-        "limit reached",
-        "quota",
-        "too many requests",
-        "429",
-        "hit your limit",
-        "out of credits",
-    ]
-    .iter()
-    .any(|w| t.contains(w))
+/// Is this line of a log the agent saying its plan is out? Only the agent's own wording counts, at
+/// the start of a line after an `Error:` label (Antigravity's carries the API's status code after
+/// some words of its own): a run's output can hold words like "429" or "quota" when its task is
+/// about them. Claude's and Antigravity's wording was seen in their own files; Codex's and
+/// OpenCode's is as their CLIs are documented to word it, not seen on this machine.
+fn is_limit_line(agent: &str, line: &str) -> bool {
+    let line = line.trim().to_lowercase();
+    let line = line
+        .strip_prefix("error:")
+        .map_or(line.as_str(), str::trim_start);
+    match agent {
+        crate::agents::LEGACY_ID => {
+            (line.starts_with("you've hit your") && line.contains("limit"))
+                || line.starts_with("api error: 429")
+        }
+        "codex" => {
+            line.starts_with("you've hit your usage limit")
+                || line.starts_with("exceeded retry limit, last status: 429")
+        }
+        "agy" => line.contains("resource_exhausted (code"),
+        "opencode" => line.starts_with("rate limit") || line.starts_with("too many requests"),
+        _ => false,
+    }
+}
+
+/// Does the end of a run's log hold its agent's own rate-limit line?
+pub fn rate_limited(agent: &str, text: &str) -> bool {
+    text.lines().any(|l| is_limit_line(agent, l))
 }
 
 fn limits_of(db: &Db, agent: &str) -> Option<crate::usage::PlanLimits> {
@@ -189,7 +201,7 @@ fn finish(db: &mut Db, sys: &dyn Sys, run: &Run) -> Result<()> {
     };
     // out of plan: the same idea goes on in the other agent, when the run allows it
     let mut why = why;
-    if status == FAILED && run.kind == "idea" && run.switch_ok && rate_limited(&tail) {
+    if status == FAILED && run.kind == "idea" && run.switch_ok && rate_limited(&run.agent, &tail) {
         if let Some(other) = sys.other_agent(&run.agent) {
             db.conn.execute(
                 "INSERT INTO night_run(kind, idea_id, agent, switch_ok, folder, prompt, night, status, limit_kind, limit_value, created_at)
@@ -366,6 +378,14 @@ pub fn start_run(db: &Db, sys: &dyn Sys, mut run: Run, allow_switch: bool) -> Re
                 run.limit_value = None;
             }
         }
+    }
+    // a limit that is passed before the run starts would only stop it a minute after it began
+    if let Some(why) = limit_hit(db, &run, now) {
+        db.conn.execute(
+            "UPDATE night_run SET status='failed', why=?2, ended_at=?3 WHERE id=?1 AND status='starting'",
+            params![run.id, format!("already above its limit: {why}"), sys.now()],
+        )?;
+        return Ok(false);
     }
     match sys.start(&run) {
         Ok(s) => {
@@ -546,7 +566,7 @@ impl Sys for RealSys<'_> {
         self.agents
             .iter()
             .map(|a| a.id().to_string())
-            .find(|id| id != agent)
+            .find(|id| id != agent && super::barrier::gate_for(self.cfg, id).is_ok())
     }
 
     fn notify(&self, title: &str, body: &str) {

@@ -34,7 +34,7 @@ fn git(dir: &Path, args: &[&str]) -> String {
 /// reads it, and prints. `FAKE_MODE=ratelimit` prints a rate-limit message and fails.
 const FAKE_CLAUDE: &str = r#"#!/bin/sh
 echo "$@" > "$HOME/claude-argv.txt"
-if [ "$FAKE_MODE" = ratelimit ]; then echo "Error: rate limit reached for your plan" >&2; exit 1; fi
+if [ "$FAKE_MODE" = ratelimit ]; then echo "You've hit your session limit · resets 9pm (Europe/Madrid)" >&2; exit 1; fi
 sid=""
 while [ $# -gt 0 ]; do
   if [ "$1" = "--session-id" ]; then sid="$2"; fi

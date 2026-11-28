@@ -68,22 +68,33 @@ impl Limit {
             )
         };
         let num = |x: &str| x.trim().parse::<f64>().ok().filter(|n| *n > 0.0);
+        // a limit that is 0 once rounded would end the run the moment it starts
+        let least_one = |v: i64| {
+            anyhow::ensure!(v >= 1, "'{s}' rounds to 0, so the run would stop at once");
+            Ok(v)
+        };
         if let Some(n) = t.strip_suffix('%') {
             let n = num(n).ok_or_else(bad)?;
             anyhow::ensure!(n <= 100.0, "a weekly limit is a percent from 1 to 100");
-            return Ok(Limit::WeeklyPercent(n.round() as i64));
+            return Ok(Limit::WeeklyPercent(least_one(n.round() as i64)?));
         }
         if let Some(n) = t.strip_suffix('M') {
-            return Ok(Limit::Tokens((num(n).ok_or_else(bad)? * 1e6) as i64));
+            return Ok(Limit::Tokens(least_one(
+                (num(n).ok_or_else(bad)? * 1e6) as i64,
+            )?));
         }
         if let Some(n) = t.strip_suffix('k').or_else(|| t.strip_suffix('K')) {
-            return Ok(Limit::Tokens((num(n).ok_or_else(bad)? * 1e3) as i64));
+            return Ok(Limit::Tokens(least_one(
+                (num(n).ok_or_else(bad)? * 1e3) as i64,
+            )?));
         }
         if let Some(n) = t.strip_suffix('h') {
-            return Ok(Limit::Minutes((num(n).ok_or_else(bad)? * 60.0) as i64));
+            return Ok(Limit::Minutes(least_one(
+                (num(n).ok_or_else(bad)? * 60.0) as i64,
+            )?));
         }
         if let Some(n) = t.strip_suffix("min").or_else(|| t.strip_suffix('m')) {
-            return Ok(Limit::Minutes(num(n).ok_or_else(bad)? as i64));
+            return Ok(Limit::Minutes(least_one(num(n).ok_or_else(bad)? as i64)?));
         }
         Err(bad())
     }
