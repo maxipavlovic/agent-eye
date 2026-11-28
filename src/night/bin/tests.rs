@@ -113,3 +113,51 @@ fn the_shell_finds_the_link_before_an_older_eye_on_the_path() {
         bin.join("eye").to_string_lossy()
     );
 }
+
+#[test]
+fn two_starters_that_change_the_links_at_once_do_not_fail_each_other() {
+    let tmp = tempfile::tempdir().unwrap();
+    let exes = [
+        program(tmp.path(), "eye-a", "echo a"),
+        program(tmp.path(), "eye-b", "echo b"),
+    ];
+    let bin = tmp.path().join("bin");
+    let failures: Vec<String> = std::thread::scope(|s| {
+        let starters: Vec<_> = (0..6)
+            .map(|n| {
+                let (bin, exes) = (&bin, &exes);
+                s.spawn(move || {
+                    (0..150)
+                        .filter_map(|i| link_to(bin, &exes[(n + i) % 2]).err())
+                        .map(|e| format!("{e:#}"))
+                        .collect::<Vec<_>>()
+                })
+            })
+            .collect();
+        starters
+            .into_iter()
+            .flat_map(|h| h.join().unwrap())
+            .collect()
+    });
+    assert!(failures.is_empty(), "{failures:?}");
+    // nobody leaves a temporary link behind
+    assert_eq!(names(&bin), ["agent-eye", "eye"]);
+}
+
+#[test]
+fn a_binary_replaced_at_the_same_path_is_told_from_the_one_that_runs() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join("agent-eye");
+    std::fs::write(&path, "old").unwrap();
+    let running = identity(&path);
+    assert!(running.is_some());
+    assert!(!replaced_since(running, &path), "the same file");
+    // a package manager puts a new file at the same path
+    let new = tmp.path().join("new");
+    std::fs::write(&new, "new").unwrap();
+    std::fs::rename(&new, &path).unwrap();
+    assert!(replaced_since(running, &path));
+    // nothing known, or nothing there now, is not a replacement
+    assert!(!replaced_since(None, &path));
+    assert!(!replaced_since(running, &tmp.path().join("gone")));
+}

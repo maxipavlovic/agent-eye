@@ -566,6 +566,7 @@ pub fn tick(db: &mut Db, paths: &Paths, cfg: &Config) -> Result<()> {
 /// When its binary is upgraded on disk, it stops the same way and starts the new one in its place.
 pub fn run(paths: Paths, cfg: Config, port: u16, board: bool) -> Result<()> {
     paths.ensure_home()?;
+    crate::night::bin::note_running();
     let lock = Lock::acquire(&paths)?;
     log(&paths, &format!("daemon start pid {}", std::process::id()));
     let stop = Arc::new(AtomicBool::new(false));
