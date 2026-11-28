@@ -65,9 +65,14 @@ CREATE VIRTUAL TABLE IF NOT EXISTS session_fts USING fts5(session_id UNINDEXED, 
 CREATE VIRTUAL TABLE IF NOT EXISTS session_fts_vocab USING fts5vocab(session_fts, 'row');
 "#;
 
+mod readonly;
+pub use readonly::explain;
+
 /// The SQLite database of sessions, streams, outputs, ideas, events and read cursors.
 pub struct Db {
     pub conn: Connection,
+    /// Opened by [`Db::open_reading`] where the file cannot be written: nothing here may write.
+    read_only: bool,
 }
 
 /// How far something was read: the marker the adapter gave back, and the stamp it had then.
@@ -87,12 +92,19 @@ impl Db {
     /// `-shm` files the same rights.
     pub fn open(path: &Path) -> Result<Db> {
         use std::os::unix::fs::OpenOptionsExt;
+        let existed = path.exists();
         std::fs::OpenOptions::new()
             .append(true)
             .create(true)
             .mode(0o600)
             .open(path)
-            .with_context(|| format!("creating {}", path.display()))?;
+            .with_context(|| {
+                if existed {
+                    format!("{} cannot be opened for writing", path.display())
+                } else {
+                    format!("creating {}", path.display())
+                }
+            })?;
         crate::files::make_private(path);
         let conn = Connection::open(path).with_context(|| format!("opening {}", path.display()))?;
         let _upgrading = crate::backup::before_upgrade(&conn, path, SCHEMA_VERSION);
@@ -108,7 +120,10 @@ impl Db {
         conn.busy_timeout(std::time::Duration::from_secs(5))?;
         conn.pragma_update(None, "journal_mode", "WAL")?;
         conn.pragma_update(None, "synchronous", "NORMAL")?;
-        let db = Db { conn };
+        let db = Db {
+            conn,
+            read_only: false,
+        };
         db.migrate()?;
         Ok(db)
     }

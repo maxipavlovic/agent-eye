@@ -22,7 +22,11 @@ fn confirm(question: &str) -> Result<bool> {
 }
 
 pub fn run(g: &Global, c: IdeaCmd) -> Result<()> {
-    let env = g.open()?;
+    let env = if matches!(c, IdeaCmd::Ls { .. }) {
+        g.open_reading()?
+    } else {
+        g.open()?
+    };
     let check_agent = |a: &Option<String>| -> Result<()> {
         match a.as_deref().map(str::trim).filter(|a| !a.is_empty()) {
             Some(id) => {

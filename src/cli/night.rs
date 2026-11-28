@@ -26,7 +26,7 @@ pub fn run(g: &Global, sub: Option<NightCmd>) -> Result<()> {
             Ok(())
         }
         NightCmd::Log { run } => {
-            let env = g.open()?;
+            let env = g.open_reading()?;
             night::get(&env.db, run)?.context("no such run")?;
             print!(
                 "{}",
@@ -151,7 +151,7 @@ fn what(r: &Run) -> String {
 }
 
 fn ls(g: &Global, json: bool) -> Result<()> {
-    let env = g.open()?;
+    let env = g.open_reading()?;
     let runs = night::list(&env.db, false)?;
     let now = now_ms();
     if json {

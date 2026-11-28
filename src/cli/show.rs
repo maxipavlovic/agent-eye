@@ -76,7 +76,7 @@ pub fn scan(g: &Global, full: bool, json: bool) -> Result<()> {
 }
 
 pub fn find(g: &Global, words: &[String], limit: usize, all: bool, json: bool) -> Result<()> {
-    let env = g.open()?;
+    let env = g.open_reading()?;
     let hidden = if all {
         Default::default()
     } else {
@@ -141,7 +141,7 @@ pub fn ls(
             );
         }
     }
-    let env = g.open()?;
+    let env = g.open_reading()?;
     let now = now_ms();
     let hidden = if all {
         Default::default()
@@ -227,7 +227,7 @@ pub fn hide(g: &Global, id: &str, hide: bool) -> Result<()> {
 }
 
 pub fn show(g: &Global, id: &str, json: bool, conversation: bool, n: usize) -> Result<()> {
-    let env = g.open()?;
+    let env = g.open_reading()?;
     let id = env.db.resolve_id(id)?;
     let s = env.db.session_by_id(&id)?.context("session vanished")?;
     if conversation {
@@ -370,7 +370,11 @@ pub fn show(g: &Global, id: &str, json: bool, conversation: bool, n: usize) -> R
 }
 
 pub fn resume(g: &Global, id: &str, dry_run: bool, fork: bool) -> Result<()> {
-    let env = g.open()?;
+    let env = if dry_run {
+        g.open_reading()?
+    } else {
+        g.open()?
+    };
     let id = env.db.resolve_id(id)?;
     let s = env.db.session_by_id(&id)?.context("session vanished")?;
     let (agent, _) = env.agents.runnable(&s).map_err(anyhow::Error::msg)?;

@@ -39,6 +39,9 @@ pub mod hook;
 pub mod ideas;
 /// Install, uninstall and doctor.
 pub mod install;
+/// A folder nobody can write, for tests.
+#[cfg(test)]
+pub(crate) mod locked;
 /// What a session left behind: servers still running, commits on no remote, and the like.
 pub mod loose;
 /// Putting a session in a column by hand.

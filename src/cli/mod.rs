@@ -63,6 +63,16 @@ impl Global {
         Ok(cfg)
     }
 
+    /// The config as written, for a command that only reads: a missing one that cannot be
+    /// written is the defaults.
+    fn config_reading(&self, paths: &Paths) -> Result<Config> {
+        let mut cfg = Config::load_reading(&paths.config_path())?;
+        if let Some(d) = &self.claude_dir {
+            cfg.override_agent_dir(agents::LEGACY_ID, d.clone());
+        }
+        Ok(cfg)
+    }
+
     /// The config without creating it (for commands that must not write: install, doctor).
     pub fn config_read_only(&self, paths: &Paths) -> Config {
         let mut cfg = crate::install::read_config(paths);
@@ -78,6 +88,28 @@ impl Global {
         paths.ensure_home()?;
         let cfg = self.config(&paths)?;
         let db = Db::open(&paths.db_path())?;
+        let agents = agents::enabled(&cfg);
+        Ok(Env {
+            paths,
+            cfg,
+            db,
+            agents,
+        })
+    }
+
+    /// Like [`Global::open`], for a command that only reads. It works where eye's folder cannot
+    /// be written, as in a night run's sandbox: the folder and the config are left as they are,
+    /// and the database is opened read-only (see [`Db::open_reading`]). Whatever such a command
+    /// would refresh first (a scan, a back-fill) it skips when `env.db.is_read_only()`.
+    pub fn open_reading(&self) -> Result<Env> {
+        let paths = self.paths()?;
+        if let Err(e) = paths.ensure_home() {
+            if !paths.home.is_dir() {
+                return Err(e);
+            }
+        }
+        let cfg = self.config_reading(&paths)?;
+        let db = Db::open_reading(&paths.db_path())?;
         let agents = agents::enabled(&cfg);
         Ok(Env {
             paths,

@@ -18,9 +18,12 @@ pub fn run(g: &Global, days: i64, by: &str, by_day: bool, json: bool) -> Result<
             by.name()
         );
     }
-    let mut env = g.open()?;
-    // Sessions read before usage by day existed are counted now, so the numbers are whole.
-    backfill::run_all(&mut env.db, &env.paths, &env.agents)?;
+    let mut env = g.open_reading()?;
+    // Sessions read before usage by day existed are counted now, so the numbers are whole. A
+    // database that cannot be written shows what the daemon has counted.
+    if !env.db.is_read_only() {
+        backfill::run_all(&mut env.db, &env.paths, &env.agents)?;
+    }
     let now = now_ms();
     let r = report::build(
         &env.db.conn,
