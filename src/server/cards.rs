@@ -701,7 +701,10 @@ mod tests {
         // known session, no transcript and no archive copy
         let (st, v) = call(&e, get("/api/cards/aaaaaaaa-1/conversation")).await;
         assert_eq!(st, StatusCode::NOT_FOUND);
-        assert_eq!(v["error"], "the conversation of this session cannot be read");
+        assert_eq!(
+            v["error"],
+            "the conversation of this session cannot be read"
+        );
         let mut r = get("/api/cards/aaaaaaaa-1/conversation");
         r.headers_mut().remove("x-eye-token");
         assert_eq!(call(&e, r).await.0, StatusCode::UNAUTHORIZED);
@@ -713,15 +716,14 @@ mod tests {
         add_session(&e.db, "aaaaaaaa-1", "t", None, 1, now_ms());
         // a transcript that is there and cannot be opened: the open error names its path
         write_transcript(&e, "aaaaaaaa-1", 1);
-        let path: String = e
-            .db
-            .conn
-            .query_row(
-                "SELECT transcript_path FROM session WHERE id='aaaaaaaa-1'",
-                [],
-                |r| r.get(0),
-            )
-            .unwrap();
+        let path: String =
+            e.db.conn
+                .query_row(
+                    "SELECT transcript_path FROM session WHERE id='aaaaaaaa-1'",
+                    [],
+                    |r| r.get(0),
+                )
+                .unwrap();
         std::fs::set_permissions(&path, std::os::unix::fs::PermissionsExt::from_mode(0o000))
             .unwrap();
         // a process that may read anything (root in a container) is not refused: nothing to test
@@ -734,8 +736,7 @@ mod tests {
         // the log has the path and the cause
         let log = std::fs::read_to_string(e._tmp.path().join("home/logs/daemon.log")).unwrap();
         assert!(
-            log.contains("GET /api/cards/aaaaaaaa-1/conversation: 404")
-                && log.contains(&path),
+            log.contains("GET /api/cards/aaaaaaaa-1/conversation: 404") && log.contains(&path),
             "{log}"
         );
     }

@@ -776,7 +776,11 @@ mod tests {
     fn writing_the_board_with_a_port_keeps_the_rest_and_the_comments() {
         let t = tempfile::tempdir().unwrap();
         let p = t.path().join("config.toml");
-        std::fs::write(&p, "[board]\nenabled = false # mine\nport = 7420\n\n[night]\nenabled = false\n").unwrap();
+        std::fs::write(
+            &p,
+            "[board]\nenabled = false # mine\nport = 7420\n\n[night]\nenabled = false\n",
+        )
+        .unwrap();
         write_board(&p, true, Some(7555)).unwrap();
         assert_eq!(
             std::fs::read_to_string(&p).unwrap(),
