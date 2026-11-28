@@ -4,6 +4,8 @@
  * they survive cleared site data.
  */
 
+import { apiFetch, token } from './data/auth';
+
 /** Settings every look shares. */
 const SHARED = ['eye.theme', 'eye.accent', 'eye.look'] as const;
 
@@ -25,10 +27,12 @@ export function keepPrefsLocal(): void {
 
 /** Copy the engine's saved settings into this browser's storage; quietly does nothing offline. */
 export async function pullPrefs(timeoutMs = 800): Promise<void> {
+  // Without the token the engine has nothing to give; the board then says how to get in
+  if (!token()) return;
   try {
     const ctl = new AbortController();
     const t = setTimeout(() => ctl.abort(), timeoutMs);
-    const res = await fetch('/api/prefs', { credentials: 'same-origin', signal: ctl.signal });
+    const res = await apiFetch('/api/prefs', { signal: ctl.signal });
     clearTimeout(t);
     if (!res.ok) return;
     const saved: unknown = await res.json();
@@ -46,13 +50,12 @@ export async function pullPrefs(timeoutMs = 800): Promise<void> {
  */
 export async function savePref(key: PrefKey, value: string, timeoutMs = 3000): Promise<boolean> {
   try { localStorage.setItem(key, value); } catch { /* storage blocked */ }
-  if (!engine) return true;
+  if (!engine || !token()) return true;
   const ctl = new AbortController();
   const t = setTimeout(() => ctl.abort(), timeoutMs);
   try {
-    const res = await fetch('/api/prefs', {
+    const res = await apiFetch('/api/prefs', {
       method: 'POST',
-      credentials: 'same-origin',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ [key]: value }),
       // a page that goes away right after (a reload, a link) must not cancel the save

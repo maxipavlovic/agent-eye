@@ -632,11 +632,12 @@ impl Config {
     }
 
     /// Is `cwd` inside an excluded folder, or (with `[exclude] temp`, the default) a temp folder?
+    /// A folder covers itself and what is below it, by whole names: `/a/b` does not cover `/a/bc`.
     pub fn is_excluded(&self, cwd: &str) -> bool {
         self.exclude
             .paths
             .iter()
-            .any(|p| !p.is_empty() && cwd.starts_with(p.as_str()))
+            .any(|p| !p.is_empty() && Path::new(cwd).starts_with(p))
             || (self.exclude.temp && crate::util::is_temp_folder(cwd))
     }
 }
@@ -670,11 +671,14 @@ fn set_key(text: &str, header: &str, key: &str, value: &str) -> String {
             match found {
                 Some(i) => {
                     let indent = &lines[i][..lines[i].len() - lines[i].trim_start().len()];
-                    let comment = lines[i].find('#').map(|c| &lines[i][c..]);
-                    out[i] = match comment {
+                    // the old value may run over several lines (a list written one name per line)
+                    let from = lines[i].find('=').map_or(0, |e| e + 1);
+                    let (last, comment) = crate::config_edit::value_end(&lines, i, from);
+                    let new = match comment {
                         Some(c) => format!("{indent}{line}    {c}"),
                         None => format!("{indent}{line}"),
                     };
+                    out.splice(i..=last, [new]);
                 }
                 None => out.insert(h + 1, line),
             }
@@ -718,7 +722,19 @@ pub fn write_night(path: &Path, key: &str, value: &str) -> Result<()> {
 
 /// Write `[board] enabled` into the config file (created from the defaults when missing).
 pub fn write_board_enabled(path: &Path, on: bool) -> Result<()> {
-    crate::config_edit::rewrite(path, |t| set_board_enabled(t, on))
+    write_board(path, on, None)
+}
+
+/// Write `[board] enabled`, and `[board] port` when one is given, in one go: the daemon serves the
+/// port the file names, so `eye board on --port N` has to put it there.
+pub fn write_board(path: &Path, on: bool, port: Option<u16>) -> Result<()> {
+    crate::config_edit::rewrite(path, |t| {
+        let t = set_board_enabled(t, on);
+        match port {
+            Some(p) => set_key(&t, "[board]", "port", &p.to_string()),
+            None => t,
+        }
+    })
 }
 
 /// Write `[remind] notify` into the config file (created from the defaults when missing).
@@ -754,6 +770,32 @@ mod tests {
                 .board
                 .enabled
         );
+    }
+
+    #[test]
+    fn writing_the_board_with_a_port_keeps_the_rest_and_the_comments() {
+        let t = tempfile::tempdir().unwrap();
+        let p = t.path().join("config.toml");
+        std::fs::write(
+            &p,
+            "[board]\nenabled = false # mine\nport = 7420\n\n[night]\nenabled = false\n",
+        )
+        .unwrap();
+        write_board(&p, true, Some(7555)).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(&p).unwrap(),
+            "[board]\nenabled = true    # mine\nport = 7555\n\n[night]\nenabled = false\n"
+        );
+        // no port given: the one in the file stays
+        write_board(&p, false, None).unwrap();
+        let c = Config::load_or_create(&p).unwrap();
+        assert_eq!((c.board.enabled, c.board.port), (false, 7555));
+        // a file with no [board] gets the section with both
+        let q = t.path().join("fresh.toml");
+        std::fs::write(&q, "[night]\nenabled = false\n").unwrap();
+        write_board(&q, true, Some(7600)).unwrap();
+        let c = Config::load_or_create(&q).unwrap();
+        assert_eq!((c.board.enabled, c.board.port), (true, 7600));
     }
 
     #[test]
@@ -855,6 +897,35 @@ mod tests {
     }
 
     #[test]
+    fn a_list_written_over_several_lines_is_replaced_whole() {
+        let src = "[agents]\nenabled = [\n  \"claude\",  # first\n  \"codex\",\n]  # followed\n\n\
+                   [board]\nquiet = [\n]\nport = 7500\n";
+        let t = set_agents_enabled(src, &["claude".to_string()]);
+        assert_eq!(
+            t,
+            "[agents]\nenabled = [\"claude\"]    # followed\n\n[board]\nquiet = [\n]\nport = 7500\n"
+        );
+        let t = set_key(src, "[board]", "quiet", "[\"app\"]");
+        assert!(
+            t.ends_with("[board]\nquiet = [\"app\"]\nport = 7500\n"),
+            "{t}"
+        );
+        let c = Config::parse(&t).unwrap();
+        assert_eq!(
+            (c.board.quiet, c.board.port),
+            (vec!["app".to_string()], 7500)
+        );
+        // a # or a bracket inside a string is part of the value, not a comment or its end
+        let t = set_key(
+            "[hide]\ncommands = [\"a#b\", \"]\",\n  \"c\"]  # mine\nmax_prompts = 1\n",
+            "[hide]",
+            "commands",
+            "[\"x\"]",
+        );
+        assert_eq!(t, "[hide]\ncommands = [\"x\"]    # mine\nmax_prompts = 1\n");
+    }
+
+    #[test]
     fn set_enabled_key_missing() {
         let t = set_board_enabled(
             "# top\n[board]\nport = 1  # mine\n[exclude]\npaths = []\n",
@@ -948,6 +1019,17 @@ mod tests {
         assert_eq!(expand_tilde("~/c"), PathBuf::from(&home).join("c"));
         assert_eq!(expand_tilde("~"), PathBuf::from(&home));
         assert_eq!(expand_tilde("/a/~b"), PathBuf::from("/a/~b"));
+    }
+
+    #[test]
+    fn an_excluded_folder_covers_whole_names_only() {
+        let c = Config::parse("[exclude]\npaths=[\"/a/b\", \"/c/d/\"]").unwrap();
+        for covered in ["/a/b", "/a/b/", "/a/b/src", "/c/d", "/c/d/e"] {
+            assert!(c.is_excluded(covered), "{covered}");
+        }
+        for not in ["/a/bc", "/a/bc/x", "/a", "/c/dd", "/c/dd/e"] {
+            assert!(!c.is_excluded(not), "{not}");
+        }
     }
 
     #[test]

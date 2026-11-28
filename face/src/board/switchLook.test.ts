@@ -4,7 +4,9 @@ import type { Store } from '../store';
 import { switchLook } from './switchLook';
 
 describe('switching the look', () => {
-  beforeEach(() => localStorage.clear());
+  // the engine is only asked by a page that has its token
+  const signIn = () => localStorage.setItem('eye.token', 'f'.repeat(64));
+  beforeEach(() => { localStorage.clear(); signIn(); });
   afterEach(() => vi.restoreAllMocks());
 
   it('puts the browser back on its look when the engine refuses the new one, and says so', async () => {
@@ -15,6 +17,7 @@ describe('switching the look', () => {
     expect(localStorage.getItem('eye.look')).toBe('ink');
     // nothing saved before: nothing saved after
     localStorage.clear();
+    signIn();
     await switchLook(store, 'iris');
     expect(localStorage.getItem('eye.look')).toBeNull();
     expect(store.toast).toHaveBeenCalledTimes(2);

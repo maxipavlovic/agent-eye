@@ -218,8 +218,8 @@ pub fn doctor(a: &Agy, _ctx: &InstallCtx) -> Vec<Check> {
             show_path(&a.dir.join("conversation_summaries.db"))
         )));
     }
-    let (found, _) = super::files::scan(&a.dir);
-    match found.iter().max_by_key(|f| f.stamp.mtime) {
+    let (listing, _) = super::files::scan(&a.dir);
+    match listing.files.iter().max_by_key(|f| f.stamp.mtime) {
         Some(f) => {
             let tokens = HashSet::new();
             let opts = ParseOpts {

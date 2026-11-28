@@ -112,6 +112,44 @@ describe('the panel keys and the keys list', () => {
     await vi.waitFor(() => expect(setHidden).toHaveBeenCalledWith(id, true));
   });
 
+  it('E, EXPORT and the MORE item all save the file the engine made for them, and the panel holds no link into the API', async () => {
+    const exportSession = vi.fn(async (_id: string) => ({ name: 'eye-abc-fix.html', blob: new Blob(['<html>']) }));
+    const made: Blob[] = [];
+    URL.createObjectURL = (b: Blob | MediaSource) => { made.push(b as Blob); return `blob:eye-${made.length}`; };
+    URL.revokeObjectURL = () => {};
+    const saved: Array<{ download: string; href: string }> = [];
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) { saved.push({ download: this.download, href: this.href }); });
+    const m = await mount({ exportSession });
+    session(m).click();
+    await vi.waitFor(() => expect(m.$('.page .qmove')).not.toBeNull());
+    const id = m.store.selected.value!;
+    // a plain link cannot send the token: the page asks for the file itself
+    expect(m.$$('.page a[href*="/api/"]')).toEqual([]);
+    press('e');
+    await vi.waitFor(() => expect(saved).toHaveLength(1));
+    expect(exportSession).toHaveBeenLastCalledWith(id);
+    expect(saved[0]).toEqual({ download: 'eye-abc-fix.html', href: 'blob:eye-1' });
+    [...m.$$<HTMLButtonElement>('.page button')].find((b) => text(b) === 'EXPORT')!.click();
+    await vi.waitFor(() => expect(saved).toHaveLength(2));
+    [...m.$$<HTMLButtonElement>('.page .ptop button')].find((b) => text(b) === 'MORE ▾')!.click();
+    await vi.waitFor(() => expect(m.$('.page [role=menu]')).not.toBeNull());
+    [...m.$$<HTMLButtonElement>('.page [role=menuitem]')].find((b) => text(b.querySelector('span')) === 'EXPORT')!.click();
+    await vi.waitFor(() => expect(saved).toHaveLength(3));
+    expect(exportSession).toHaveBeenCalledTimes(3);
+    vi.restoreAllMocks();
+  });
+
+  it('an export the engine refuses says why in a toast and saves nothing', async () => {
+    const saved = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    const m = await mount({ exportSession: async () => { throw new Error('no such session'); } });
+    session(m).click();
+    await vi.waitFor(() => expect(m.$('.page .qmove')).not.toBeNull());
+    press('e');
+    await vi.waitFor(() => expect(m.store.toasts.value.at(-1)).toMatchObject({ tone: 'error', text: 'no such session' }));
+    expect(saved).not.toHaveBeenCalled();
+    vi.restoreAllMocks();
+  });
+
   it('shows each key on its button, the way RESUME shows R, and beside each action in MORE', async () => {
     const m = await open();
     const keyed = (sel: string) => text(m.$(`${sel} u`));

@@ -169,7 +169,7 @@ impl Agent for Codex {
     /// The sessions a person has: rollouts of `codex exec` runs, helper threads and sub-agents are
     /// left out (a sub-agent is a child stream of its parent). A session renamed after its last
     /// message shows the time of the rename as its change time, so it is read again.
-    fn transcripts(&self) -> Vec<Transcript> {
+    fn transcripts(&self) -> Listing {
         let (found, index) = files::scan(&self.dir, self.night_dir.as_deref());
         *self.index.lock().unwrap_or_else(|e| e.into_inner()) = index;
         found

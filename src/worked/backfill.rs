@@ -8,6 +8,7 @@
 use super::store;
 use crate::agents::Agents;
 use crate::archive;
+use crate::config::Config;
 use crate::db::Db;
 use crate::model::Session;
 use crate::paths::Paths;
@@ -38,8 +39,11 @@ fn enabled_ids(agents: &Agents) -> String {
     serde_json::json!(agents.iter().map(|a| a.id()).collect::<Vec<_>>()).to_string()
 }
 
-/// Count up to `limit` sessions that have no timeline yet, the most recently active first.
-pub fn run_batch(db: &mut Db, paths: &Paths, agents: &Agents, limit: usize) -> Result<Pass> {
+/// Count up to `limit` sessions that have no timeline yet, the most recently active first. A
+/// session in a folder that is excluded now (it may have been indexed before it was) is marked as
+/// done with no hours, as the scan leaves it out.
+pub fn run_batch(db: &mut Db, paths: &Paths, cfg: &Config, limit: usize) -> Result<Pass> {
+    let agents = &crate::agents::enabled(cfg);
     let enabled = enabled_ids(agents);
     let ids: Vec<String> = db
         .conn
@@ -65,14 +69,19 @@ pub fn run_batch(db: &mut Db, paths: &Paths, agents: &Agents, limit: usize) -> R
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
         // A normal read may have counted the session since the query above.
         if !store::is_counted(&tx, id)? {
-            match read(&s, paths, agents) {
-                Ok(events) => {
-                    store::record(&tx, id, &events, true)?;
-                    pass.counted += 1;
-                }
-                Err(_) => {
-                    store::mark_unreadable(&tx, id)?;
-                    pass.unreadable += 1;
+            if s.cwd.as_deref().is_some_and(|c| cfg.is_excluded(c)) {
+                store::record(&tx, id, &[], true)?;
+                pass.counted += 1;
+            } else {
+                match read(&s, paths, agents) {
+                    Ok(events) => {
+                        store::record(&tx, id, &events, true)?;
+                        pass.counted += 1;
+                    }
+                    Err(_) => {
+                        store::mark_unreadable(&tx, id)?;
+                        pass.unreadable += 1;
+                    }
                 }
             }
         }
@@ -83,10 +92,10 @@ pub fn run_batch(db: &mut Db, paths: &Paths, agents: &Agents, limit: usize) -> R
 }
 
 /// Count every session that has no timeline yet, in batches of `BATCH`.
-pub fn run_all(db: &mut Db, paths: &Paths, agents: &Agents) -> Result<Pass> {
+pub fn run_all(db: &mut Db, paths: &Paths, cfg: &Config) -> Result<Pass> {
     let mut total = Pass::default();
     loop {
-        let pass = run_batch(db, paths, agents, BATCH)?;
+        let pass = run_batch(db, paths, cfg, BATCH)?;
         total.counted += pass.counted;
         total.unreadable += pass.unreadable;
         total.left = pass.left;

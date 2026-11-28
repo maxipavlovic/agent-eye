@@ -9,8 +9,10 @@ use crate::install::{ALIAS_NAME, BIN_NAME};
 use crate::paths::Paths;
 use anyhow::{bail, Context, Result};
 use std::ffi::{OsStr, OsString};
-use std::os::unix::fs::DirBuilderExt;
+use std::os::unix::fs::{DirBuilderExt, MetadataExt};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::OnceLock;
 
 /// The folder of links, inside eye's own.
 pub fn dir(paths: &Paths) -> PathBuf {
@@ -22,8 +24,37 @@ pub fn dir(paths: &Paths) -> PathBuf {
 /// finds it missing.
 pub fn refresh(dir: &Path) -> Result<PathBuf> {
     let exe = std::env::current_exe().context("finding the running eye")?;
+    note_running();
     link_to(dir, &exe)?;
     Ok(exe)
+}
+
+/// A file as the disk knows it: device and inode, after links.
+fn identity(path: &Path) -> Option<(u64, u64)> {
+    let m = std::fs::metadata(path).ok()?;
+    Some((m.dev(), m.ino()))
+}
+
+/// The file this process was started from, noted once.
+static RUNNING: OnceLock<Option<(u64, u64)>> = OnceLock::new();
+
+/// Note which file this process runs, so that a later start can tell when a package manager has
+/// put another file at the same path (the links go to the path, not to the file). The daemon notes
+/// it as it starts; any other process notes it at its first start of a run.
+pub fn note_running() {
+    RUNNING.get_or_init(|| identity(&std::env::current_exe().ok()?));
+}
+
+/// Is the file at `path` another one than `was`? Nothing known, or nothing there, says no.
+fn replaced_since(was: Option<(u64, u64)>, path: &Path) -> bool {
+    was.zip(identity(path)).is_some_and(|(was, now)| was != now)
+}
+
+/// Does the path of the running binary now lead to another file than the one this process runs?
+/// Then `eye` in a run is newer than the daemon until the daemon restarts.
+pub fn replaced() -> bool {
+    let now = std::env::current_exe().ok();
+    now.is_some_and(|p| replaced_since(RUNNING.get().copied().flatten(), &p))
 }
 
 fn link_to(dir: &Path, exe: &Path) -> Result<()> {
@@ -43,13 +74,27 @@ fn link_to(dir: &Path, exe: &Path) -> Result<()> {
         if std::fs::read_link(&link).is_ok_and(|t| t == exe) {
             continue;
         }
-        let tmp = dir.join(format!(".{name}.link"));
-        let _ = std::fs::remove_file(&tmp);
-        std::os::unix::fs::symlink(exe, &tmp)
-            .and_then(|()| std::fs::rename(&tmp, &link))
-            .with_context(|| format!("linking {}", link.display()))?;
+        // a name of its own: two starters (the daemon and `run-now --wait`) can change the links
+        // at the same moment
+        let tmp = dir.join(format!(
+            ".{name}.{}.{}.link",
+            std::process::id(),
+            next_temp()
+        ));
+        let linked =
+            std::os::unix::fs::symlink(exe, &tmp).and_then(|()| std::fs::rename(&tmp, &link));
+        if linked.is_err() {
+            let _ = std::fs::remove_file(&tmp);
+        }
+        linked.with_context(|| format!("linking {}", link.display()))?;
     }
     Ok(())
+}
+
+/// A number no other call of this process has had.
+fn next_temp() -> u64 {
+    static N: AtomicU64 = AtomicU64::new(0);
+    N.fetch_add(1, Ordering::Relaxed)
 }
 
 /// The `PATH` of a run: the folder of links, then the `PATH` eye has.

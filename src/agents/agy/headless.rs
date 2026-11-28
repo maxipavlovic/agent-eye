@@ -11,11 +11,31 @@ use crate::agents::{HeadlessReply, HeadlessRequest};
 use crate::util::{head_chars, new_uuid, valid_session_id};
 use anyhow::{Context, Result};
 use serde_json::{json, Value};
+use std::fs::File;
 use std::io::Read;
-use std::os::unix::fs::DirBuilderExt;
+use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
+
+/// The file in the work folder that one question at a time holds (`flock`).
+const GATE: &str = "agy-ask.lock";
+
+/// Wait for the turn to ask agy, and keep it until the returned file is dropped. A question's
+/// clean-up leaves `history.jsonl` and the caches alone while any agy conversation is open
+/// (`files::delete`), and a question running beside it is one: questions side by side
+/// (`[summary] concurrency`) could leave the masked excerpt in agy's up-arrow history. The lock
+/// is a file, so a question from another eye process waits too.
+fn one_at_a_time(work_dir: &Path) -> Result<File> {
+    let gate = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .mode(0o600)
+        .open(work_dir.join(GATE))
+        .context("opening the lock of agy's questions")?;
+    gate.lock().context("waiting for another question to agy")?;
+    Ok(gate)
+}
 
 /// The folder a question runs in. When it goes out of scope the question's conversation is deleted
 /// from agy's folder (`agy`), then the folder itself.
@@ -139,6 +159,8 @@ fn command_args(prompt: String, schema: &Value, model: &str) -> Vec<String> {
 
 pub fn ask(a: &Agy, req: &HeadlessRequest) -> Result<HeadlessReply> {
     std::fs::create_dir_all(req.work_dir)?;
+    // declared before the scratch folder, so it is let go after the folder's clean-up
+    let _turn = one_at_a_time(req.work_dir)?;
     let dir = req.work_dir.join(format!("{ASK_PREFIX}{}", new_uuid()?));
     std::fs::DirBuilder::new().mode(0o700).create(&dir)?;
     let mut scratch = Scratch {
@@ -393,12 +415,51 @@ mod tests {
         (ask(&a, &req), t)
     }
 
-    /// Neither the run's folder nor the conversation it made is left.
+    /// Neither the run's folder nor the conversation it made is left (the lock file stays: it is
+    /// one empty file in eye's own work folder).
     fn assert_clean(t: &tempfile::TempDir) {
         let agy = t.path().join("agy");
         assert!(left(&agy).is_empty(), "{:?}", left(&agy));
         assert!(!agy.join("conversations/asked-run.db").exists());
-        assert_eq!(std::fs::read_dir(t.path().join("work")).unwrap().count(), 0);
+        let work: Vec<_> = std::fs::read_dir(t.path().join("work"))
+            .unwrap()
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(work, [GATE]);
+    }
+
+    /// `[summary] concurrency` asks side by side. A clean-up leaves `history.jsonl` and the caches
+    /// alone while any conversation is open (`files::delete`), and a question that is still running
+    /// is one: with two at once, the masked excerpt of the first could stay in agy's history.
+    #[test]
+    fn two_questions_at_once_run_one_after_the_other() {
+        let t = tempfile::tempdir().unwrap();
+        let (agy, work) = (t.path().join("agy"), t.path().join("work"));
+        let marks = t.path().join("marks");
+        std::fs::create_dir_all(&marks).unwrap();
+        let said = r#"{"conversation_id":"asked-run","status":"SUCCESS","response":"","structured_output":{"a":1}}"#;
+        let body = format!(
+            "touch '{m}/busy.'$$\nsleep 0.3\nset -- '{m}'/busy.*\n[ $# -gt 1 ] && touch '{m}/overlap'\nrm '{m}/busy.'$$\nprintf '%s' '{said}'",
+            m = marks.display()
+        );
+        let a = Agy::new(agy.clone()).with_executable(&stub(t.path(), &agy, &body));
+        let schema = json!({"type":"object"});
+        let req = HeadlessRequest {
+            model: "",
+            system: "sys",
+            input: "in",
+            schema: &schema,
+            work_dir: &work,
+            timeout: Duration::from_secs(30),
+        };
+        std::thread::scope(|s| {
+            let runs: Vec<_> = (0..2).map(|_| s.spawn(|| ask(&a, &req))).collect();
+            for run in runs {
+                assert_eq!(run.join().unwrap().unwrap().output["a"], 1);
+            }
+        });
+        assert!(!marks.join("overlap").exists(), "two questions ran at once");
     }
 
     /// agy has no flag to keep a run from making a conversation, so every way a question can end
@@ -422,10 +483,13 @@ mod tests {
         let writer = std::thread::spawn(move || {
             for _ in 0..200 {
                 std::thread::sleep(Duration::from_millis(10));
-                let folder = std::fs::read_dir(&work)
-                    .ok()
-                    .and_then(|d| d.flatten().next())
-                    .map(|e| e.path());
+                // the question's folder, not the lock file that sits beside it
+                let folder = std::fs::read_dir(&work).ok().and_then(|d| {
+                    d.flatten().map(|e| e.path()).find(|p| {
+                        p.file_name()
+                            .is_some_and(|n| n.to_string_lossy().starts_with(ASK_PREFIX))
+                    })
+                });
                 if let Some(folder) = folder {
                     std::fs::create_dir_all(&agy).unwrap();
                     summaries(&agy, &[("asked-run", &folder)]);

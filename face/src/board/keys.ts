@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'preact/hooks';
 import type { Store } from '../store';
 import { copy } from './copy';
-import { exportSession, ideaAct } from './Detail';
+import { ideaAct } from './Detail';
+import { exportSession } from './save';
 import { ideaForm } from './IdeaForm';
 import { closeForget, forgetFor, openForget } from './Forget';
 import { keyHelp } from './KeyHelp';
@@ -117,7 +118,7 @@ function panelAct(store: Store, d: NonNullable<Store['detail']['value']>, k: str
       return true;
     }
     case 'e':
-      exportSession(d.id);
+      void exportSession(store, d.id);
       return true;
     case 'x':
       openForget(d);

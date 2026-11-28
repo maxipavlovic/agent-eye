@@ -1,21 +1,15 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { liveSource } from './live';
+import { token } from './auth';
 
-class FakeES {
-  static last: FakeES;
-  listeners: Record<string, Array<() => void>> = {};
-  onopen: (() => void) | null = null;
-  onerror: (() => void) | null = null;
-  closed = false;
-  constructor(readonly url: string) { FakeES.last = this; }
-  addEventListener(t: string, f: () => void) { (this.listeners[t] ??= []).push(f); }
-  close() { this.closed = true; }
-}
+const TOKEN = 'a'.repeat(64);
 
+/** Every call: no cookies, the token in the header. */
+const SIGNED = expect.objectContaining({ credentials: 'omit' });
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 
-beforeEach(() => { vi.stubGlobal('EventSource', FakeES); });
+beforeEach(() => { localStorage.clear(); localStorage.setItem('eye.token', TOKEN); });
 afterEach(() => { vi.unstubAllGlobals(); });
 
 describe('liveSource requests', () => {
@@ -24,7 +18,23 @@ describe('liveSource requests', () => {
     vi.stubGlobal('fetch', f);
     const b = await liveSource().board();
     expect(b.archive_count).toBe(0);
-    expect(f).toHaveBeenCalledWith('/api/board', { credentials: 'same-origin' });
+    expect(f).toHaveBeenCalledWith('/api/board', SIGNED);
+  });
+
+  it('sends the token in a header on every call, reads and writes alike, and never a cookie', async () => {
+    const f = vi.fn().mockResolvedValue(json(200, { id: 'x' }));
+    vi.stubGlobal('fetch', f);
+    const s = liveSource();
+    await s.board();
+    await s.move('abc', 'done');
+    for (const [, init] of f.mock.calls as Array<[string, RequestInit]>) {
+      expect(new Headers(init.headers).get('X-Eye-Token')).toBe(TOKEN);
+      expect(init.credentials).toBe('omit');
+    }
+    // the POST keeps its own header too
+    expect(new Headers((f.mock.calls[1]![1] as RequestInit).headers).get('content-type')).toBe('application/json');
+    // and the token is never in an address
+    for (const [url] of f.mock.calls as Array<[string]>) expect(url).not.toContain(TOKEN);
   });
 
   it('sends confirm: true with a stop or remove, and not with an ignore', async () => {
@@ -95,7 +105,7 @@ describe('liveSource requests', () => {
     vi.stubGlobal('fetch', f);
     const r = await liveSource().agents();
     expect(r.agents[0]!.short).toBe('Claude');
-    expect(f).toHaveBeenCalledWith('/api/agents', { credentials: 'same-origin' });
+    expect(f).toHaveBeenCalledWith('/api/agents', SIGNED);
   });
 
   it('asks for usage over a number of days', async () => {
@@ -103,7 +113,7 @@ describe('liveSource requests', () => {
     vi.stubGlobal('fetch', f);
     const r = await liveSource().usage(30);
     expect(r.days).toBe(30);
-    expect(f).toHaveBeenCalledWith('/api/usage?days=30', { credentials: 'same-origin' });
+    expect(f).toHaveBeenCalledWith('/api/usage?days=30', SIGNED);
   });
 
   it('asks for the steering clock over a number of weeks', async () => {
@@ -111,14 +121,14 @@ describe('liveSource requests', () => {
     vi.stubGlobal('fetch', f);
     const r = await liveSource().clock(8);
     expect(r.enabled).toBe(true);
-    expect(f).toHaveBeenCalledWith('/api/clock?weeks=8', { credentials: 'same-origin' });
+    expect(f).toHaveBeenCalledWith('/api/clock?weeks=8', SIGNED);
   });
 
   it('asks for the daily series', async () => {
     const f = vi.fn().mockResolvedValue(json(200, { days: 14, rows: [] }));
     vi.stubGlobal('fetch', f);
     await liveSource().usage(14, 'model');
-    expect(f).toHaveBeenCalledWith('/api/usage?days=14&series=model', { credentials: 'same-origin' });
+    expect(f).toHaveBeenCalledWith('/api/usage?days=14&series=model', SIGNED);
   });
 
   it('sends the idea agent when one is chosen', async () => {
@@ -149,7 +159,7 @@ describe('liveSource requests', () => {
     vi.stubGlobal('fetch', f);
     const s = liveSource();
     expect(await s.remindSettings()).toEqual({ notify: true, available: true });
-    expect(f).toHaveBeenCalledWith('/api/remind/settings', { credentials: 'same-origin' });
+    expect(f).toHaveBeenCalledWith('/api/remind/settings', SIGNED);
     await s.setRemindSettings({ notify: false });
     expect(f.mock.calls[1]![0]).toBe('/api/remind/settings');
     expect(f.mock.calls[1]![1]).toMatchObject({ method: 'POST', body: '{"notify":false}' });
@@ -162,7 +172,7 @@ describe('liveSource requests', () => {
     vi.stubGlobal('fetch', f);
     const s = liveSource();
     await s.settings();
-    expect(f).toHaveBeenCalledWith('/api/settings', { credentials: 'same-origin' });
+    expect(f).toHaveBeenCalledWith('/api/settings', SIGNED);
     await s.saveSettings({ 'night.parallel': 3 });
     expect(f.mock.calls[1]![0]).toBe('/api/settings');
     expect(f.mock.calls[1]![1]).toMatchObject({ method: 'POST', body: '{"night.parallel":3}' });
@@ -175,9 +185,39 @@ describe('liveSource requests', () => {
     await expect(liveSource().resume('a', false)).rejects.toThrow('Workspace not trusted');
   });
 
-  it('explains a 401', async () => {
+  it('explains a 401, and forgets a token the engine refused', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('missing token', { status: 401 })));
     await expect(liveSource().board()).rejects.toThrow(/eye board/);
+    expect(token()).toBeNull();
+  });
+
+  it('without a token says how to open the board and asks nothing', async () => {
+    localStorage.clear();
+    const f = vi.fn();
+    vi.stubGlobal('fetch', f);
+    await expect(liveSource().board()).rejects.toMatchObject({ status: 401, message: expect.stringMatching(/`eye board`.*link/) });
+    await expect(liveSource().exportSession('a')).rejects.toMatchObject({ status: 401 });
+    expect(f).not.toHaveBeenCalled();
+  });
+
+  it('fetches an export with the token and names the file as the engine does', async () => {
+    const f = vi.fn().mockResolvedValue(new Response('<html>page</html>', { status: 200, headers: { 'content-disposition': 'attachment; filename="eye-abc-fix-it.html"' } }));
+    vi.stubGlobal('fetch', f);
+    const file = await liveSource().exportSession('a b');
+    expect(f.mock.calls[0]![0]).toBe('/api/sessions/a%20b/export?format=html');
+    expect(new Headers((f.mock.calls[0]![1] as RequestInit).headers).get('X-Eye-Token')).toBe(TOKEN);
+    expect(file.name).toBe('eye-abc-fix-it.html');
+    expect(await file.blob.text()).toBe('<html>page</html>');
+    // no name from the engine: one of our own
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('x', { status: 200 })));
+    expect((await liveSource().exportSession('abc')).name).toBe('eye-abc.html');
+  });
+
+  it('turns a refused export into the engine\'s message', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json(404, { error: 'no such session' })));
+    await expect(liveSource().exportSession('zzz')).rejects.toMatchObject({ status: 404, message: 'no such session' });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('boom', { status: 500 })));
+    await expect(liveSource().exportSession('zzz')).rejects.toMatchObject({ status: 500, message: 'HTTP 500' });
   });
 
   it('reports an unreachable server', async () => {
@@ -192,24 +232,8 @@ describe('liveSource requests', () => {
 });
 
 describe('liveSource.subscribe', () => {
-  it('maps events to onChange and connection states', () => {
-    const onChange = vi.fn();
-    const states: string[] = [];
-    const off = liveSource().subscribe(onChange, (s) => states.push(s));
-    const es = FakeES.last;
-    expect(es.url).toBe('/api/events');
-    expect(states).toEqual(['connecting']);
-    es.onopen!();
-    es.listeners['board-changed']![0]!();
-    expect(onChange).toHaveBeenCalledTimes(1);
-    es.onerror!();
-    es.onerror!();
-    es.onerror!();
-    es.onopen!();
-    expect(states).toEqual(['connecting', 'live', 'connecting', 'connecting', 'offline', 'live']);
-    off();
-    expect(es.closed).toBe(true);
-  });
+  // the event stream itself is tested in events.test.ts; here only the page's own refresh
+  beforeEach(() => { vi.stubGlobal('fetch', vi.fn().mockReturnValue(new Promise(() => {}))); });
 
   it('refreshes when the tab becomes visible, and stops after unsubscribe', () => {
     const onChange = vi.fn();

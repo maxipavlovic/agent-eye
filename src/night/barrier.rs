@@ -186,14 +186,16 @@ fn pat(s: &str) -> String {
 }
 
 /// The shell command of a PreToolUse hook that refuses a tool call naming a guarded folder. It
-/// reads the call as JSON on stdin and answers exit code 2, which blocks it, with a message that
-/// says what is refused and what to do instead (the run is shown it). For the file tools (`bash`
-/// false) the `file_path` or `notebook_path` must not be in a guarded folder or climb out with
-/// `..`; for Bash the command must not contain the folder's path at all. Reading is not refused:
-/// the Read tool is not hooked, so the message sends a run there. That is a net for the mistake
-/// this exists for, an agent using a remembered absolute path, not for a command that builds the
-/// path some other way; the sandbox is what holds. A folder whose name has a quote or a backslash
-/// in it is left to the rules.
+/// reads the call as JSON text on stdin and answers exit code 2, which blocks it, with a message
+/// that says what is refused and what to do instead (the run is shown it). For the file tools
+/// (`bash` false) the `file_path` or `notebook_path` must not be in a guarded folder or climb out
+/// with `..`; for Bash the folder's path must not follow the command's key anywhere in the call,
+/// so a `description` that names it is refused too. In the JSON a quote, newline or tab after the
+/// path is `\"`, `\n` or `\t`, so a backslash ends a path as well. Reading is not refused: the
+/// Read tool is not hooked, so the message sends a run there. That is a net for the mistake this
+/// exists for, an agent using a remembered absolute path, not for a command that builds the path
+/// some other way; the sandbox is what holds. A folder whose name has a quote or a backslash in
+/// it is left to the rules.
 pub fn hook_command(guard: &[PathBuf], bash: bool) -> Option<String> {
     let mut pats = vec![];
     let mut named = vec![];
@@ -205,7 +207,7 @@ pub fn hook_command(guard: &[PathBuf], bash: bool) -> Option<String> {
         named.push(t.to_string());
         let t = t.trim_end_matches('/');
         if bash {
-            for tail in ["/", " ", "\"", "'", ";", "&", "|", ")"] {
+            for tail in ["/", " ", "\"", "'", ";", "&", "|", ")", "\\", ":"] {
                 pats.push(format!("*command\\\":\\\"*{}*", pat(&format!("{t}{tail}"))));
             }
         } else {
@@ -221,7 +223,7 @@ pub fn hook_command(guard: &[PathBuf], bash: bool) -> Option<String> {
     }
     let folders = named.join(", ");
     let said = if bash {
-        format!("night run: a shell command may not name the original folder ({folders}), which belongs to you, not to the run; work in the run folder, and read a file from the original with the file-reading tool (Read)")
+        format!("night run: a shell call that names the original folder ({folders}), in its command or its description, is refused; it belongs to you, not to the run; work in the run folder, and read a file from the original with the file-reading tool (Read)")
     } else {
         format!("night run: the file tools may write only in the run folder, not in the original folder ({folders}) and not through a path that climbs out of the run folder with ..")
     };
@@ -341,6 +343,18 @@ pub fn gate_unsandboxed(cfg: &Config) -> Result<()> {
         "OpenCode has no sandbox: its permission rules refuse git push, gh, ssh, the publish commands and edits outside the run's folder, but a shell command could still write anywhere. eye does not start an OpenCode night run unless [night] allow_unsandboxed = true"
     );
     Ok(())
+}
+
+/// Whether a night run of `agent` may start, whatever the agent: its own gate, or none for an
+/// agent that confines itself. Returns whether the run will be confined. This is what decides
+/// that a run switched to another agent can start at all.
+pub fn gate_for(cfg: &Config, agent: &str) -> Result<bool> {
+    match agent {
+        crate::agents::LEGACY_ID => gate(cfg),
+        "agy" => agy_gate(cfg),
+        "opencode" => gate_unsandboxed(cfg).map(|()| false),
+        _ => Ok(true),
+    }
 }
 
 pub fn gate_with(cfg: &Config, avail: Result<(), String>) -> Result<bool> {

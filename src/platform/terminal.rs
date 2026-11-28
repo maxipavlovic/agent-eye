@@ -364,7 +364,7 @@ fn prune(dir: &Path, now: SystemTime) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::platform::test_support::{script, stub};
+    use crate::platform::test_support::{read_when, script, stub};
     use std::os::unix::fs::PermissionsExt;
 
     /// A machine in a temp folder: `bin` is its whole `PATH`, `apps` its application folder.
@@ -424,11 +424,12 @@ mod tests {
             );
         }
         fn args(&self, name: &str) -> Vec<String> {
-            std::fs::read_to_string(self.bin.join(format!("{name}.args")))
-                .unwrap()
-                .lines()
-                .map(String::from)
-                .collect()
+            read_when(&self.bin.join(format!("{name}.args")), |t| {
+                t.ends_with('\n')
+            })
+            .lines()
+            .map(String::from)
+            .collect()
         }
     }
 

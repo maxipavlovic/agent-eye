@@ -11,13 +11,15 @@ use crate::paths::Paths;
 use crate::quiet::Quiet;
 use crate::util::{fmt_ts, head_chars, now_ms};
 use anyhow::{Context, Result};
-use regex::Regex;
 use rusqlite::params;
 use serde_json::{json, Value};
 use std::collections::VecDeque;
 use std::path::Path;
-use std::sync::{mpsc, Arc, LazyLock, Mutex};
+use std::sync::{mpsc, Arc, Mutex};
 use std::time::{Duration, Instant};
+
+mod mask;
+pub use mask::mask_secrets;
 
 const PROMPT: &str = include_str!("summarize_prompt.txt");
 
@@ -28,34 +30,6 @@ fn system_prompt(agent: &str) -> String {
 /// Most bytes of excerpt sent for one session.
 pub const EXCERPT_CAP: usize = 48_000;
 const TIMEOUT: Duration = Duration::from_secs(120);
-
-static MASKS: LazyLock<Vec<(Regex, &'static str)>> = LazyLock::new(|| {
-    let m = |p: &str, r: &'static str| (Regex::new(p).expect("static regex"), r);
-    vec![
-        m(
-            r"(?s)-----BEGIN [A-Z ]*PRIVATE KEY-----.*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)",
-            "[masked]",
-        ),
-        m(r"AKIA[0-9A-Z]{16}", "[masked]"),
-        m(r"gh[pousr]_[A-Za-z0-9]{36,}", "[masked]"),
-        m(r"xox[abpr]-[A-Za-z0-9-]{10,}", "[masked]"),
-        m(r"eyJ[\w-]+\.[\w-]+\.[\w-]+", "[masked]"),
-        m(r"Bearer\s+[A-Za-z0-9._-]{16,}", "Bearer [masked]"),
-        m(
-            r#"(?i)(api[_-]?key|secret|token|password|passwd|authorization)(\s*[:=]\s*)("?)[^\s"']{8,}"#,
-            "$1$2$3[masked]",
-        ),
-    ]
-});
-
-/// Replace API keys, tokens, passwords and private keys with `[masked]` (best effort).
-pub fn mask_secrets(text: &str) -> String {
-    let mut t = text.to_string();
-    for (re, rep) in MASKS.iter() {
-        t = re.replace_all(&t, *rep).into_owned();
-    }
-    t
-}
 
 /// FNV-1a: stable across Rust versions, unlike `DefaultHasher`.
 pub(crate) fn hash_hex(s: &str) -> String {
@@ -579,34 +553,6 @@ mod tests {
         assert_eq!(summary_model(&cfg, &claude()), "opus");
     }
 
-    #[test]
-    fn masks_secrets() {
-        // made-up secrets, assembled at run time so no token-shaped literal sits in the code
-        let gh = format!("{}_{}", "ghp", "abcdefghijklmnopqrstuvwxyzABCDEFGHIJ12");
-        let t = &format!(
-            "key AKIAABCDEFGHIJKLMNOP and {gh} and xoxb-1234567890-abc \
-                 jwt eyJhbGciOi.eyJzdWIiOi.SflKxwRJSM Authorization: Bearer abcdefghijklmnop12345 \
-                 password=hunter2hunter2 api_key: \"sk12345678\" short token=abc\n\
-                 -----BEGIN RSA PRIVATE KEY-----\nMIIE\nabc\n-----END RSA PRIVATE KEY-----\nafter"
-        );
-        let m = mask_secrets(t);
-        for bad in [
-            "AKIAABCDEFGHIJKLMNOP",
-            "ghp_abc",
-            "xoxb-1234",
-            "eyJhbGci",
-            "abcdefghijklmnop12345",
-            "hunter2hunter2",
-            "sk12345678",
-            "MIIE",
-        ] {
-            assert!(!m.contains(bad), "{bad} leaked in {m}");
-        }
-        assert!(m.contains("password=[masked]"));
-        assert!(m.contains("token=abc"));
-        assert!(m.contains("after"));
-    }
-
     fn fixture_session(path: &Path) -> Session {
         Session {
             id: "s1".into(),
@@ -676,6 +622,34 @@ mod tests {
         assert!(!ex.text.contains("Read:"));
         assert!(ex.text.contains("error: boom failed"));
         assert!(ex.text.contains("[assistant] Running the build"));
+    }
+
+    /// `docs/security.md` says it: a failed call adds `error:` and the first 160 characters of its
+    /// text, masked like the rest of the excerpt. A call that worked adds no output.
+    #[test]
+    fn a_failed_tool_call_puts_its_first_160_characters_in_the_excerpt_masked() {
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("t.jsonl");
+        let said = format!("cat: .env: password=hunter2hunter2 {}", "z".repeat(300));
+        assert_eq!(said.chars().take(160).filter(|c| *c == 'z').count(), 125);
+        let text = [
+            line("user", json!("show me the env")),
+            line(
+                "assistant",
+                json!([{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"cat .env"}}]),
+            ),
+            line(
+                "user",
+                json!([{"type":"tool_result","tool_use_id":"t1","is_error":true,"content":said}]),
+            ),
+        ]
+        .concat();
+        std::fs::write(&p, text).unwrap();
+        let db = Db::open_memory().unwrap();
+        let ex = build_excerpt(&db, &claude(), &fixture_session(&p)).unwrap();
+        let failed = ex.text.lines().find(|l| l.contains("error:")).unwrap();
+        assert!(failed.contains("password=[masked]"), "{failed}");
+        assert_eq!(failed.matches('z').count(), 125, "{failed}");
     }
 
     #[test]

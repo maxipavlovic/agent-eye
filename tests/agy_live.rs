@@ -234,7 +234,7 @@ fn the_source_column_is_the_raw_origin_when_agy_writes_one() {
     )
     .unwrap();
     let a = h.agy();
-    let t = a.transcripts().pop().unwrap();
+    let t = a.transcripts().files.pop().unwrap();
     assert_eq!(
         a.origin_raw(&t.path).as_deref(),
         Some("CORTEX_TRAJECTORY_SOURCE_CLI")
@@ -273,7 +273,7 @@ fn a_sub_agent_is_a_child_stream_of_its_parent_and_its_tokens_are_read() {
     )
     .unwrap();
     let a = h.agy();
-    let ts = a.transcripts();
+    let ts = a.transcripts().files;
     assert_eq!(ts.len(), 1, "only the parent is a session");
     let sub = a.subagents(&ts[0]);
     assert_eq!(sub.children.len(), 1);
@@ -412,7 +412,7 @@ fn a_restored_archive_is_a_conversation_agy_can_open_again() {
     );
     assert!(!folder.join("eye-conversation.db").exists());
     assert!(!folder.join("eye-summary.json").exists());
-    assert_eq!(a.transcripts().len(), 1, "it is a session again");
+    assert_eq!(a.transcripts().files.len(), 1, "it is a session again");
     // a copy read for a board (not agy's own folder) keeps its snapshot and writes nothing of agy's
     let elsewhere = tmp.path().join("read");
     a.unarchive(&copy, &elsewhere).unwrap();
@@ -438,7 +438,7 @@ fn a_database_agy_closed_is_still_read() {
         }
     }
     let a = h.agy();
-    let t = a.transcripts().pop().unwrap();
+    let t = a.transcripts().files.pop().unwrap();
     let opts_tokens = HashSet::new();
     let d = a
         .parse_transcript(

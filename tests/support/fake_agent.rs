@@ -7,8 +7,8 @@
 //! ends with a footer.
 
 use agent_eye::agents::{
-    self, append_only, Agent, AgentRef, Delta, Detection, Invocation, ParseOpts, Stamp, StartPlan,
-    StartRequest, TailItem, Transcript, PROMPTS_CAP, REPLIES_CAP,
+    self, append_only, Agent, AgentRef, Delta, Detection, Invocation, Listing, ParseOpts, Stamp,
+    StartPlan, StartRequest, TailItem, Transcript, PROMPTS_CAP, REPLIES_CAP,
 };
 use agent_eye::config::AgentCfg;
 use agent_eye::conversation::Message;
@@ -52,10 +52,10 @@ impl Agent for Fake {
         }
     }
 
-    fn transcripts(&self) -> Vec<Transcript> {
+    fn transcripts(&self) -> Listing {
         let mut out = vec![];
         let Ok(rd) = std::fs::read_dir(self.dir.join("logs")) else {
-            return out;
+            return Listing::new(out);
         };
         for project in rd.flatten().filter(|p| p.path().is_dir()) {
             for f in std::fs::read_dir(project.path())
@@ -77,7 +77,7 @@ impl Agent for Fake {
             }
         }
         out.sort_by(|a, b| a.path.cmp(&b.path));
-        out
+        Listing::new(out)
     }
 
     fn parse_transcript(&self, file: &Transcript, opts: &ParseOpts) -> Result<Delta> {

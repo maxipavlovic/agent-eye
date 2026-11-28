@@ -212,6 +212,16 @@ fn backup_and_write(
         bak = Some(b);
     }
     let target = std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
+    // The agent may have saved its settings since eye read them (the backup took a moment too):
+    // writing now would take that save back out.
+    if std::fs::read_to_string(&target).unwrap_or_default() != old_text {
+        if let Some(b) = &bak {
+            let _ = std::fs::remove_file(b);
+        }
+        anyhow::bail!(
+            "{file} changed while eye was working on it; nothing was written (run it again)"
+        );
+    }
     let mode = std::fs::metadata(&target)
         .map(|m| m.permissions().mode() & 0o777)
         .unwrap_or(0o600);
@@ -413,6 +423,24 @@ mod tests {
             std::fs::read_to_string(&real).unwrap(),
             "{\n  \"a\": 1\n}\n"
         );
+    }
+
+    /// Claude Code and Codex save their settings while eye installs: a file that is not what eye
+    /// read is left as the agent wrote it, and the install says to run again.
+    #[test]
+    fn a_settings_file_saved_since_it_was_read_is_not_overwritten() {
+        let t = tempfile::tempdir().unwrap();
+        let p = t.path().join("settings.json");
+        std::fs::write(&p, "{\"theme\": \"dark\"}\n").unwrap();
+        let err =
+            backup_and_write(&p, "{}\n", "{\n  \"hooks\": {}\n}\n", "settings.json").unwrap_err();
+        assert!(err.to_string().contains("changed while"), "{err}");
+        assert_eq!(
+            std::fs::read_to_string(&p).unwrap(),
+            "{\"theme\": \"dark\"}\n"
+        );
+        let names: Vec<_> = std::fs::read_dir(t.path()).unwrap().flatten().collect();
+        assert_eq!(names.len(), 1, "no backup of a write that did not happen");
     }
 
     #[test]

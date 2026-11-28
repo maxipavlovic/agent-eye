@@ -2,10 +2,8 @@ import type {
   Agent, ArchivePage, Board, Card, CardDetail, ClockReport, Connection, ConversationPage, Idea, IdeaInput, MoveTarget, RemindInput, ResumePlan,
   FolderCheck, NightRun, NightState, RemindSettings, SearchHit, SettingsInput, SettingsState, Source, StartPlan, UsageReport,
 } from '../api/types';
-
-const UNAUTHORIZED = 'Not signed in: open the link that `eye board` prints.';
-/** Consecutive event-stream errors before the badge says offline. */
-const OFFLINE_AFTER = 3;
+import { apiFetch, forgetToken, NO_ACCESS, token } from './auth';
+import { listen } from './events';
 
 export class ApiError extends Error {
   constructor(message: string, readonly status: number) {
@@ -14,28 +12,47 @@ export class ApiError extends Error {
   }
 }
 
-async function call<T>(path: string, init?: { method: 'POST'; body: unknown }): Promise<T> {
+/** Ask the engine. No token, a token it refuses and an engine that is down are each an `ApiError` that says what to do. */
+async function send(path: string, init?: RequestInit): Promise<Response> {
+  // Without the token the engine would only say no: do not ask
+  if (!token()) throw new ApiError(NO_ACCESS, 401);
   let res: Response;
   try {
-    res = await fetch(path, init
-      ? { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify(init.body) }
-      : { credentials: 'same-origin' });
+    res = await apiFetch(path, init);
   } catch {
     throw new ApiError('Cannot reach eye. Is `eye serve` running?', 0);
   }
-  if (res.status === 401) throw new ApiError(UNAUTHORIZED, 401);
+  if (res.status === 401) {
+    forgetToken();
+    throw new ApiError(NO_ACCESS, 401);
+  }
+  return res;
+}
+
+function failure(data: unknown, status: number): ApiError {
+  const msg = data && typeof data === 'object' && 'error' in data ? String((data as { error: unknown }).error) : `HTTP ${status}`;
+  return new ApiError(msg, status);
+}
+
+async function call<T>(path: string, init?: { method: 'POST'; body: unknown }): Promise<T> {
+  const res = await send(path, init
+    ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(init.body) }
+    : undefined);
   let data: unknown = null;
   try { data = await res.json(); } catch { /* not JSON */ }
-  if (!res.ok) {
-    const msg = data && typeof data === 'object' && 'error' in data ? String((data as { error: unknown }).error) : `HTTP ${res.status}`;
-    throw new ApiError(msg, res.status);
-  }
+  if (!res.ok) throw failure(data, res.status);
   return data as T;
+}
+
+/** The file name the engine gives an export, from its `Content-Disposition`. */
+function exportName(res: Response, id: string): string {
+  const named = /filename="([^"]+)"/.exec(res.headers.get('content-disposition') ?? '');
+  return named?.[1] ?? `eye-${id}.html`;
 }
 
 const enc = encodeURIComponent;
 
-/** A Source over the real eye API, same origin. The cookie comes from the `/?t=<token>` redirect. */
+/** A Source over the real eye API, same origin. Every call carries the token the page took from the `/?t=<token>` link. */
 export function liveSource(): Source {
   return {
     name: 'live',
@@ -74,18 +91,17 @@ export function liveSource(): Source {
     saveSettings: (input: SettingsInput) => call<SettingsState>('/api/settings', { method: 'POST', body: input }),
     remindSettings: () => call<RemindSettings>('/api/remind/settings'),
     setRemindSettings: (input) => call<RemindSettings>('/api/remind/settings', { method: 'POST', body: input }),
+    exportSession: async (id) => {
+      const res = await send(`/api/sessions/${enc(id)}/export?format=html`);
+      if (!res.ok) throw failure(await res.json().catch(() => null), res.status);
+      return { name: exportName(res, id), blob: await res.blob() };
+    },
     subscribe(onChange, onState) {
-      let errors = 0;
-      const set = (s: Connection) => onState(s);
-      const es = new EventSource('/api/events');
-      es.onopen = () => { errors = 0; set('live'); };
-      es.addEventListener('board-changed', () => onChange());
-      es.onerror = () => { errors++; set(errors >= OFFLINE_AFTER ? 'offline' : 'connecting'); };
+      const stop = listen(onChange, onState);
       const onVisible = () => { if (document.visibilityState === 'visible') onChange(); };
       document.addEventListener('visibilitychange', onVisible);
-      set('connecting');
       return () => {
-        es.close();
+        stop();
         document.removeEventListener('visibilitychange', onVisible);
       };
     },

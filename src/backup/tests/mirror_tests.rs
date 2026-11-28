@@ -1,10 +1,13 @@
 use super::*;
 use std::os::unix::fs::PermissionsExt;
 
-fn mirror_cfg(m: &Path) -> BackupCfg {
-    BackupCfg {
-        mirror: m.to_string_lossy().into_owned(),
-        ..BackupCfg::default()
+fn mirror_cfg(m: &Path) -> Config {
+    Config {
+        backup: BackupCfg {
+            mirror: m.to_string_lossy().into_owned(),
+            ..BackupCfg::default()
+        },
+        ..Config::default()
     }
 }
 
@@ -17,16 +20,16 @@ fn a_relative_mirror_is_skipped_with_that_reason_and_doctor_says_so() {
         ..BackupCfg::default()
     };
     assert!(cfg.mirror_dir().unwrap_err().contains("absolute"));
-    let s = take(&db.conn, &h.paths, &cfg, &Reason::Manual).unwrap();
+    let all = Config {
+        backup: cfg,
+        ..Config::default()
+    };
+    let s = take(&db.conn, &h.paths, &all, &Reason::Manual).unwrap();
     assert!(s.path.exists(), "the local snapshot is made anyway");
     let Some(mirror::State::Failed(_, why)) = mirror::state(&h.paths) else {
         panic!("not noted");
     };
     assert!(why.contains("absolute path or start with ~"), "{why}");
-    let all = Config {
-        backup: cfg,
-        ..Config::default()
-    };
     let l = lines(&h, &all);
     let m = l.iter().find(|l| l.1.starts_with("backup mirror")).unwrap();
     assert!(!m.0 && m.1.contains("absolute"), "{m:?}");
@@ -100,7 +103,7 @@ fn the_archive_follows_the_mirror_only_where_a_file_changed_and_nothing_is_delet
     std::fs::create_dir_all(m.join("archive")).unwrap();
     std::fs::write(m.join("archive/keep-me.txt"), b"mine").unwrap();
     let mut cfg = mirror_cfg(&m);
-    cfg.mirror_archive = true;
+    cfg.backup.mirror_archive = true;
     take(&db.conn, &h.paths, &cfg, &Reason::Manual).unwrap();
     let copy = |n: &str| m.join("archive/-proj").join(n);
     assert_eq!(std::fs::read(copy("a.jsonl.zst")).unwrap(), b"first");
@@ -141,6 +144,67 @@ fn the_archive_follows_the_mirror_only_where_a_file_changed_and_nothing_is_delet
     assert!(m.join("archive/keep-me.txt").exists());
 }
 
+#[test]
+fn a_disk_that_rounds_times_is_not_copied_to_again_but_a_real_change_is() {
+    let h = home();
+    let db = db_with(&h.paths, 1);
+    let arch = h.paths.home.join("archive/-proj");
+    std::fs::create_dir_all(&arch).unwrap();
+    std::fs::write(arch.join("a.jsonl.zst"), b"first").unwrap();
+    let m = h.paths.home.join("disk");
+    std::fs::create_dir_all(&m).unwrap();
+    let mut cfg = mirror_cfg(&m);
+    cfg.backup.mirror_archive = true;
+    take(&db.conn, &h.paths, &cfg, &Reason::Manual).unwrap();
+    let copy = m.join("archive/-proj/a.jsonl.zst");
+    let set_time = |plus: u64| {
+        let t = std::fs::metadata(arch.join("a.jsonl.zst"))
+            .unwrap()
+            .modified()
+            .unwrap();
+        std::fs::File::options()
+            .write(true)
+            .open(&copy)
+            .unwrap()
+            .set_modified(t + std::time::Duration::from_secs(plus))
+            .unwrap();
+    };
+    // a disk that keeps whole seconds, or even seconds, gives a time up to a second or two off
+    std::fs::write(&copy, b"FIRST").unwrap();
+    set_time(1);
+    take(&db.conn, &h.paths, &cfg, &Reason::Manual).unwrap();
+    assert_eq!(std::fs::read(&copy).unwrap(), b"FIRST", "not copied again");
+    set_time(5);
+    take(&db.conn, &h.paths, &cfg, &Reason::Manual).unwrap();
+    assert_eq!(std::fs::read(&copy).unwrap(), b"first", "a changed time is");
+}
+
+#[test]
+fn the_archive_follows_the_mirror_without_the_sessions_exclude_leaves_out() {
+    let h = home();
+    let db = db_with(&h.paths, 1);
+    let arch = h.paths.home.join("archive/-proj");
+    std::fs::create_dir_all(&arch).unwrap();
+    for (id, cwd) in [("mine", "/work/p"), ("secret", "/work/secret")] {
+        let file = arch.join(format!("{id}.jsonl.zst"));
+        std::fs::write(&file, id).unwrap();
+        db.conn
+            .execute(
+                "INSERT OR REPLACE INTO session(id, cwd, archive_path) VALUES(?1, ?2, ?3)",
+                (id, cwd, file.to_string_lossy()),
+            )
+            .unwrap();
+    }
+    let m = h.paths.home.join("disk");
+    std::fs::create_dir_all(&m).unwrap();
+    let mut cfg = mirror_cfg(&m);
+    cfg.backup.mirror_archive = true;
+    cfg.exclude.paths = vec!["/work/secret".into()];
+    take(&db.conn, &h.paths, &cfg, &Reason::Manual).unwrap();
+    assert!(m.join("archive/-proj/mine.jsonl.zst").exists());
+    assert!(!m.join("archive/-proj/secret.jsonl.zst").exists());
+}
+
 fn lines(h: &Home, cfg: &Config) -> Vec<(bool, String)> {
     checks(&h.paths, cfg, crate::util::now_ms())
         .into_iter()
@@ -163,7 +227,7 @@ fn doctor_says_what_the_snapshots_and_the_mirror_are_doing() {
     let l = lines(&h, &cfg);
     assert!(!l[0].0 && l[0].1.contains("none yet"), "{l:?}");
     assert!(l.contains(&(true, "database check: ok".to_string())));
-    take(&db.conn, &h.paths, &cfg.backup, &Reason::Daily).unwrap();
+    take(&db.conn, &h.paths, &cfg, &Reason::Daily).unwrap();
     let l = lines(&h, &cfg);
     assert!(
         l[0].0 && l[0].1.starts_with("backups: 1 snapshots") && l[0].1.contains("(daily)"),
@@ -202,11 +266,13 @@ fn doctor_reports_a_missing_or_failing_mirror() {
     std::fs::create_dir_all(h.paths.home.join("disk")).unwrap();
     let l = mirror_line(&h, &cfg);
     assert!(l.0 && l.1.contains("no copy made yet"), "{l:?}");
-    mirror::sync(&h.paths, &cfg.backup, &h.paths.home.join("nope"));
+    mirror::sync(&h.paths, &cfg.backup, &h.paths.home.join("nope"), || {
+        Ok(vec![])
+    });
     let l = mirror_line(&h, &cfg);
     assert!(!l.0 && l.1.contains("failed"), "{l:?}");
     let db = db_with(&h.paths, 1);
-    take(&db.conn, &h.paths, &cfg.backup, &Reason::Manual).unwrap();
+    take(&db.conn, &h.paths, &cfg, &Reason::Manual).unwrap();
     let l = mirror_line(&h, &cfg);
     assert!(l.0 && l.1.contains("last copy"), "{l:?}");
 }

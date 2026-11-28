@@ -3,8 +3,8 @@
 //! may), and its `ask` works, so a test that counts the calls sees one if it is asked.
 
 use crate::agents::{
-    Agent, AgentRef, Delta, Detection, HeadlessReply, HeadlessRequest, Invocation, ParseOpts,
-    StartPlan, StartRequest, TailItem, Transcript,
+    Agent, AgentRef, Delta, Detection, HeadlessReply, HeadlessRequest, Invocation, Listing,
+    ParseOpts, StartPlan, StartRequest, TailItem, Transcript,
 };
 use crate::conversation::Message;
 use anyhow::Result;
@@ -26,7 +26,7 @@ impl Agent for Unproven {
     fn detect(&self) -> Detection {
         self.0.detect()
     }
-    fn transcripts(&self) -> Vec<Transcript> {
+    fn transcripts(&self) -> Listing {
         self.0.transcripts()
     }
     fn parse_transcript(&self, t: &Transcript, opts: &ParseOpts) -> Result<Delta> {

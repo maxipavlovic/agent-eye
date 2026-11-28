@@ -116,7 +116,12 @@ fn live_status_comes_from_the_turn_times_and_an_archived_session_is_not_a_sessio
         !oc.live_status_shows_prompts(),
         "the plugin shows prompts, not the row"
     );
-    let ids: Vec<String> = oc.transcripts().into_iter().map(|t| t.session_id).collect();
+    let ids: Vec<String> = oc
+        .transcripts()
+        .files
+        .into_iter()
+        .map(|t| t.session_id)
+        .collect();
     assert!(
         ids.contains(&"ses_busy".to_string()) && !ids.contains(&"ses_arch".to_string()),
         "{ids:?}"
@@ -403,6 +408,7 @@ fn the_archive_keeps_opencodes_export_and_restore_puts_the_session_back() {
     let oc = w.adapter();
     let t = oc
         .transcripts()
+        .files
         .into_iter()
         .find(|t| t.session_id == id)
         .unwrap();
@@ -447,6 +453,7 @@ fn a_copy_made_without_opencode_reads_but_does_not_restore() {
     let oc = w.adapter();
     let t = oc
         .transcripts()
+        .files
         .into_iter()
         .find(|t| t.session_id == id)
         .unwrap();

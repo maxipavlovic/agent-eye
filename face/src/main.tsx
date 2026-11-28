@@ -3,6 +3,11 @@ import { createStore } from './store';
 import { liveSource } from './data/live';
 import { looks, pickLook } from './looks';
 import { pullPrefs } from './prefs';
+import { adoptToken, linkManifest } from './data/auth';
+
+// The link carries the token: keep it, take it out of the address, then ask for anything.
+adoptToken();
+linkManifest();
 
 // Saved settings first, so the theme and layout are right on the first frame.
 void pullPrefs().then(async () => {

@@ -165,8 +165,8 @@ pub fn doctor(c: &Codex, _ctx: &InstallCtx) -> Vec<Check> {
         Ok(()) => Check::ok("`codex exec` has the flags summaries need"),
         Err(e) => Check::warn(format!("summaries: {e:#}")),
     });
-    let (files, _) = super::files::scan(&c.dir, c.night_dir.as_deref());
-    match files.iter().max_by_key(|f| f.stamp.mtime) {
+    let (listing, _) = super::files::scan(&c.dir, c.night_dir.as_deref());
+    match listing.files.iter().max_by_key(|f| f.stamp.mtime) {
         Some(f) => {
             let tokens = HashSet::new();
             let opts = ParseOpts {

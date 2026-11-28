@@ -156,7 +156,7 @@ pub fn doctor(c: &Claude, _ctx: &InstallCtx) -> Vec<Check> {
         ))),
         _ => out.push(Check::warn("could not run `claude --version`")),
     }
-    match newest_transcript(super::transcript_files(&c.dir)) {
+    match newest_transcript(super::transcript_files(&c.dir).files) {
         Some(f) => {
             let tokens = HashSet::new();
             let opts = ParseOpts {

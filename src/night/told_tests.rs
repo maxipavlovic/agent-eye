@@ -46,7 +46,6 @@ fn an_idea_run_is_told_where_it_works_whatever_the_agent() {
             "you work in /w/run/wt, a checkout of the last commit of /Users/me/app",
             "Files that are not committed there (untracked notes, uncommitted edits) are not in it",
             "You may read files in /Users/me/app but change nothing there",
-            "if a shell command that names it is refused, read the file with your file-reading tool",
             "If something this task needs is missing, stop and say so",
             "Do not push anything",
         ] {
@@ -57,6 +56,32 @@ fn an_idea_run_is_told_where_it_works_whatever_the_agent() {
         for name in ["Claude", "Codex", "agy", "OpenCode", "Antigravity"] {
             assert!(!told.contains(name), "{agent} names {name}: {told}");
         }
+    }
+}
+
+#[test]
+fn what_is_refused_is_told_the_way_the_agent_meets_it() {
+    // Claude's hook refuses a shell command that names the folder; its file tool still reads
+    let told = sent("claude", &repo_run("claude"));
+    assert!(
+        told.contains("change nothing there; if a shell command that names it is refused, read the file with your file-reading tool. If something"),
+        "{told}"
+    );
+    // OpenCode's rules refuse its file tools outside the run folder; its shell reads anything
+    let told = sent("opencode", &repo_run("opencode"));
+    assert!(
+        told.contains("change nothing there; your file tools refuse a path outside /w/run/wt, so read a file there with a shell command. If something"),
+        "{told}"
+    );
+    assert!(!told.contains("file-reading tool"), "{told}");
+    // Codex and agy refuse nothing that names the folder: nothing to say about it
+    for agent in ["codex", "agy"] {
+        let told = sent(agent, &repo_run(agent));
+        assert!(
+            told.contains("change nothing there. If something"),
+            "{agent}: {told}"
+        );
+        assert!(!told.contains("refused"), "{agent}: {told}");
     }
 }
 
@@ -157,7 +182,7 @@ fn hook_output(cmd: &str, input: &str) -> (i32, String) {
 }
 
 #[test]
-fn the_bash_hook_says_a_command_may_not_name_the_folder_and_where_to_read_instead() {
+fn the_bash_hook_says_a_call_that_names_the_folder_is_refused_and_where_to_read_instead() {
     let guard = vec![
         PathBuf::from("/Users/me/app"),
         PathBuf::from("/Users/me/lib"),
@@ -168,9 +193,9 @@ fn the_bash_hook_says_a_command_may_not_name_the_folder_and_where_to_read_instea
         assert_eq!(code, 2, "{c}");
         assert_eq!(
             said,
-            "night run: a shell command may not name the original folder (/Users/me/app, /Users/me/lib), \
-             which belongs to you, not to the run; work in the run folder, and read a file from the \
-             original with the file-reading tool (Read)",
+            "night run: a shell call that names the original folder (/Users/me/app, /Users/me/lib), in its \
+             command or its description, is refused; it belongs to you, not to the run; work in the run \
+             folder, and read a file from the original with the file-reading tool (Read)",
             "{c}"
         );
     }
@@ -179,6 +204,58 @@ fn the_bash_hook_says_a_command_may_not_name_the_folder_and_where_to_read_instea
         hook_output(&bash, &call("command", "ls /w/run/wt")),
         (0, String::new())
     );
+}
+
+/// What the Bash hook does with one command, as Claude Code hands it over: JSON on stdin, so a
+/// quote, newline or tab in the command arrives escaped.
+fn bash_hook_exit(command: &str) -> i32 {
+    let guard = vec![PathBuf::from("/Users/me/app")];
+    let bash = barrier::hook_command(&guard, true).unwrap();
+    hook_output(&bash, &call("command", command)).0
+}
+
+#[test]
+fn the_bash_hook_refuses_the_folder_in_every_way_a_json_command_can_spell_it() {
+    for c in [
+        "ls /Users/me/app",
+        "cat /Users/me/app/notes.md",
+        "ls '/Users/me/app'",
+        "ls \"/Users/me/app\"",
+        "cat \"/Users/me/app/notes.md\"",
+        "cd /Users/me/app\nls",
+        "cd \"/Users/me/app\"\ntouch x",
+        "cd \"/Users/me/app\" && touch x",
+        "ls /Users/me/app\t-la",
+        "ls /Users/me/app\r\nls",
+        "PATH=/Users/me/app:$PATH make",
+        "echo hi >/Users/me/app/x",
+        "rsync -a wt/ /Users/me/app/",
+        "(cd /Users/me/app)",
+    ] {
+        assert_eq!(bash_hook_exit(c), 2, "{c:?}");
+    }
+    // another folder, and the run's own, stay open
+    for c in [
+        "ls /Users/me/application",
+        "ls \"/Users/me/application\"",
+        "cd /Users/me/app-two\nls",
+        "ls /w/run/wt",
+    ] {
+        assert_eq!(bash_hook_exit(c), 0, "{c:?}");
+    }
+}
+
+#[test]
+fn the_bash_hook_also_refuses_a_call_whose_description_names_the_folder() {
+    // the hook reads the call as text, not as JSON, so this is refused too: the message says so
+    let guard = vec![PathBuf::from("/Users/me/app")];
+    let bash = barrier::hook_command(&guard, true).unwrap();
+    let call =
+        serde_json::json!({"tool_input": {"command": "ls", "description": "list /Users/me/app"}})
+            .to_string();
+    let (code, said) = hook_output(&bash, &call);
+    assert_eq!(code, 2);
+    assert!(said.contains("in its command or its description"), "{said}");
 }
 
 #[test]
@@ -345,7 +422,8 @@ fn a_started_claude_run_lets_its_sandbox_read_what_its_path_points_to() {
     wait_for(&super::run_dir(&paths, 7).join("exit"));
     let v: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(bin.join("settings.json")).unwrap()).unwrap();
-    // without a sandbox on this machine there is nothing to open
+    // the settings carry the sandbox exactly when this machine has one
+    assert_eq!(v.get("sandbox").is_some(), barrier::available().is_ok());
     if let Some(sandbox) = v.get("sandbox") {
         let read: Vec<&str> = sandbox["filesystem"]["allowRead"]
             .as_array()

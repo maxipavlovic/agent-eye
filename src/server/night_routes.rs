@@ -4,7 +4,7 @@
 
 use super::api::{blocking, open_db, resolve, ApiError, ApiResult};
 use super::Shared;
-use crate::config::Config;
+use crate::config::{Config, PARALLEL_RANGE};
 use crate::night::{self, clock, Limit, PlanOpts};
 use crate::util::now_ms;
 use axum::extract::{Path, State};
@@ -63,20 +63,28 @@ pub(super) async fn api_night_settings(
     State(st): State<Shared>,
     Json(b): Json<SettingsBody>,
 ) -> ApiResult {
-    let path = st.paths.config_path();
-    let bad = |e: anyhow::Error| ApiError::bad(format!("{e:#}"));
+    // Check every value first, then write them all in one go: a bad one leaves nothing written
+    let mut keys = Vec::new();
     if let Some(w) = &b.window {
         let w = clock::Window::parse(w).map_err(ApiError::bad)?;
-        crate::config::write_night(&path, "window", &format!("{:?}", w.text())).map_err(bad)?;
+        keys.push(("[night]", "window", format!("{:?}", w.text())));
     }
     if let Some(n) = b.parallel {
-        if !(1..=8).contains(&n) {
-            return Err(ApiError::bad("parallel is a number from 1 to 8"));
+        if !PARALLEL_RANGE.contains(&n) {
+            return Err(ApiError::bad(format!(
+                "parallel is a number from {} to {}",
+                PARALLEL_RANGE.start(),
+                PARALLEL_RANGE.end()
+            )));
         }
-        crate::config::write_night(&path, "parallel", &n.to_string()).map_err(bad)?;
+        keys.push(("[night]", "parallel", n.to_string()));
     }
     if let Some(on) = b.enabled {
-        crate::config::write_night(&path, "enabled", &on.to_string()).map_err(bad)?;
+        keys.push(("[night]", "enabled", on.to_string()));
+    }
+    if !keys.is_empty() {
+        crate::config::write_keys(&st.paths.config_path(), &keys)
+            .map_err(|e| ApiError::bad(format!("{e:#}")))?;
     }
     let db = open_db(&st)?;
     Ok(Json(state_json(&st, &db)?))
@@ -326,6 +334,48 @@ mod tests {
         }
         let (_, v) = call(&e, req("GET", "/api/night", None)).await;
         assert_eq!(v["window"], "23:00-05:00");
+    }
+
+    #[tokio::test]
+    async fn one_bad_value_leaves_the_good_ones_of_the_same_request_unwritten() {
+        let e = env();
+        let path = e._tmp.path().join("home/config.toml");
+        call(&e, req("GET", "/api/night", None)).await;
+        let before = std::fs::read_to_string(&path).ok();
+        for body in [
+            json!({"window": "23:00-05:00", "parallel": 0}),
+            json!({"enabled": true, "window": "23:00-05:00", "parallel": 99}),
+            json!({"enabled": true, "window": "nonsense"}),
+        ] {
+            let (st, v) = call(&e, req("POST", "/api/night/settings", Some(body))).await;
+            assert_eq!(st, StatusCode::BAD_REQUEST, "{v}");
+            assert_eq!(std::fs::read_to_string(&path).ok(), before);
+        }
+        // the message names the one range the settings panel uses
+        let (_, v) = call(
+            &e,
+            req("POST", "/api/night/settings", Some(json!({"parallel": 9}))),
+        )
+        .await;
+        assert_eq!(v["error"], "parallel is a number from 1 to 8");
+        // and a good request still writes all its keys
+        let (st, v) = call(
+            &e,
+            req(
+                "POST",
+                "/api/night/settings",
+                Some(json!({"enabled": true, "window": "22:00-04:00", "parallel": 8})),
+            ),
+        )
+        .await;
+        assert_eq!(st, StatusCode::OK, "{v}");
+        let cfg = std::fs::read_to_string(&path).unwrap();
+        assert!(
+            cfg.contains("window = \"22:00-04:00\"")
+                && cfg.contains("parallel = 8")
+                && cfg.contains("enabled = true"),
+            "{cfg}"
+        );
     }
 
     #[tokio::test]

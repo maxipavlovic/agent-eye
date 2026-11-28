@@ -3,7 +3,8 @@
 
 use anyhow::Result;
 use serde_json::Value;
-use std::os::unix::fs::PermissionsExt;
+use std::io::Write;
+use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
 /// Pretty JSON (2-space) with a trailing newline, the form tools write their settings files in.
@@ -59,16 +60,31 @@ pub fn make_private(p: &Path) {
     }
 }
 
-/// Write `text` to `p` through a temp file and a rename, with the given mode.
+/// Write `text` to `p` through a temp file and a rename, with the given mode. The temp file is
+/// made new (a leftover of a crash, or a link put there, is removed, never written through), has
+/// the mode from the start, and is on disk before the rename, so a power cut leaves the old file
+/// or the new one, not an empty one.
 pub fn write_file(p: &Path, text: &[u8], mode: u32) -> Result<()> {
     if let Some(d) = p.parent() {
         std::fs::create_dir_all(d)?;
     }
     let tmp = p.with_extension("eye-tmp");
-    std::fs::write(&tmp, text)?;
-    std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(mode))?;
-    std::fs::rename(&tmp, p)?;
-    Ok(())
+    let _ = std::fs::remove_file(&tmp);
+    let mut f = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(mode)
+        .open(&tmp)?;
+    // the umask may have taken bits off the mode it was created with
+    f.set_permissions(std::fs::Permissions::from_mode(mode))?;
+    let done = f
+        .write_all(text)
+        .and_then(|()| f.sync_all())
+        .and_then(|()| std::fs::rename(&tmp, p));
+    if done.is_err() {
+        let _ = std::fs::remove_file(&tmp);
+    }
+    Ok(done?)
 }
 
 /// `<name>.eye-backup-<timestamp>` next to `p`.
@@ -124,5 +140,42 @@ mod tests {
             0o600
         );
         assert!(!p.with_extension("eye-tmp").exists());
+    }
+
+    #[test]
+    fn write_file_never_writes_through_a_link_left_where_its_temp_file_goes() {
+        let t = tempfile::tempdir().unwrap();
+        let p = t.path().join("settings.json");
+        let precious = t.path().join("precious");
+        std::fs::write(&precious, "keep me").unwrap();
+        std::os::unix::fs::symlink(&precious, p.with_extension("eye-tmp")).unwrap();
+        write_file(&p, b"new", 0o644).unwrap();
+        assert_eq!(std::fs::read_to_string(&precious).unwrap(), "keep me");
+        assert_eq!(std::fs::read_to_string(&p).unwrap(), "new");
+        assert!(!std::fs::symlink_metadata(&p).unwrap().is_symlink());
+        // a temp file a crash left behind is replaced, whatever mode it had
+        let tmp = p.with_extension("eye-tmp");
+        std::fs::write(&tmp, "half").unwrap();
+        std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o666)).unwrap();
+        write_file(&p, b"newer", 0o600).unwrap();
+        assert_eq!(std::fs::read_to_string(&p).unwrap(), "newer");
+        assert_eq!(
+            std::fs::metadata(&p).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+        assert!(!tmp.exists());
+    }
+
+    #[test]
+    fn a_write_that_fails_leaves_the_old_file_and_no_temp_file() {
+        let t = tempfile::tempdir().unwrap();
+        let p = t.path().join("a");
+        write_file(&p, b"old", 0o600).unwrap();
+        // a folder where the file would go: the rename fails
+        let q = t.path().join("dir");
+        std::fs::create_dir_all(q.join("inside")).unwrap();
+        assert!(write_file(&q, b"x", 0o600).is_err());
+        assert!(!q.with_extension("eye-tmp").exists());
+        assert_eq!(std::fs::read_to_string(&p).unwrap(), "old");
     }
 }

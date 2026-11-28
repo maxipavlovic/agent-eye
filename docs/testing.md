@@ -44,7 +44,10 @@ is never enabled in a release.
 Flows: board loads with no console problems; search (words, a typo, a pasted link); the panel and
 its sections; D in the panel; right-click menus; Remind me on the card and in the panel; the idea
 form with TONIGHT; the usage panel; LEFTOVERS (Ignore asks first, Stop ends a process the test
-started); the Tonight list; export (from MORE) downloads one HTML page with the secret masked; the
+started); the Tonight list; export (from MORE) downloads one HTML page with the secret masked; access
+(the page keeps the link's token in localStorage and takes it out of the address, sends it in a header on
+every call and sets no cookie, says how to open the board without one, drops one the engine refuses,
+ignores and clears an old cookie, keeps its event stream live and links the manifest with the token); the
 look picker (the engine remembers the look, each look keeps its own layout, an unknown `?look=` is
 ignored); in iris, each lane's fact and timeline. Every flow runs in both looks: the projects
 `chromium` and `webkit` open the board in ink, `chromium-iris` and `webkit-iris` in iris, and each test

@@ -108,16 +108,14 @@ pub fn snapshot(conn: &Connection, dir: &Path, reason: &Reason) -> Result<Snapsh
 
 /// Snapshot, then rotate, then copy to the mirror when there is one. The snapshot is the part
 /// that must work; a mirror that fails is noted for `eye doctor` and does not fail the snapshot.
-pub fn take(
-    conn: &Connection,
-    paths: &Paths,
-    cfg: &BackupCfg,
-    reason: &Reason,
-) -> Result<Snapshot> {
+/// The archive follows the mirror without the sessions `[exclude]` leaves out.
+pub fn take(conn: &Connection, paths: &Paths, cfg: &Config, reason: &Reason) -> Result<Snapshot> {
     let dir = dir(paths);
     let snap = snapshot(conn, &dir, reason)?;
-    rotate(&dir, cfg);
-    mirror::sync(paths, cfg, &snap.path);
+    rotate(&dir, &cfg.backup);
+    mirror::sync(paths, &cfg.backup, &snap.path, || {
+        crate::archive::left_out_copies(conn, cfg)
+    });
     Ok(snap)
 }
 
@@ -139,7 +137,7 @@ pub fn daily_if_due(
     if newest.is_some_and(|t| now_ms - t < DAILY_EVERY_MS) {
         return Ok(None);
     }
-    take(conn, paths, &cfg.backup, &Reason::Daily).map(Some)
+    take(conn, paths, cfg, &Reason::Daily).map(Some)
 }
 
 /// How long an upgrade waits for another process that is upgrading the same database.
@@ -198,7 +196,7 @@ pub fn before_upgrade(conn: &Connection, db_path: &Path, target: i64) -> Option<
     if lock.is_some() && !needs_upgrade(conn, target) {
         return lock;
     }
-    if let Err(e) = take(conn, &paths, &cfg.backup, &Reason::PreUpgrade(target)) {
+    if let Err(e) = take(conn, &paths, &cfg, &Reason::PreUpgrade(target)) {
         eprintln!("eye: no backup before the upgrade to schema {target}: {e:#}");
     }
     lock

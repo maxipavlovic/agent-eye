@@ -72,6 +72,8 @@ export interface Store {
   saveSettings(input: SettingsInput): Promise<SettingsState | null>;
   /** Messages of a session, newest page first; null (quietly) when they cannot be had. */
   conversation(id: string, before?: number | null, limit?: number): Promise<ConversationPage | null>;
+  /** One session as a page to save, with its file name; null after a toast says why there is none. */
+  exportSession(id: string): Promise<{ name: string; blob: Blob } | null>;
   /** True when saved; on failure a toast says why and the caller keeps the form open. */
   /** The saved idea's card (its `idea_id` plans it for tonight), or null after a toast says why. */
   addIdea(input: IdeaInput): Promise<Card | null>;
@@ -359,6 +361,15 @@ export function createStore(src: Source, { defaultTheme = 'auto' }: { defaultThe
     }
   }
 
+  async function exportSession(id: string) {
+    try {
+      return await src.exportSession(id);
+    } catch (e) {
+      fail(e);
+      return null;
+    }
+  }
+
   async function resume(id: string, fork = false) {
     try {
       const plan = await src.resume(id, false, fork);
@@ -523,7 +534,7 @@ export function createStore(src: Source, { defaultTheme = 'auto' }: { defaultThe
   return {
     source: src.name,
     board, selected, detail, query, results, searching, connection, themePref, accent, theme, toasts, agents, notice, night, needsYou, clockHint, error,
-    open, close, search, move, setHidden, forget, resume, usage, clock, settings, saveSettings, conversation, addIdea, editIdea, startIdea, folderCheck: (path) => src.folderCheck(path), remind, looseAct, looseActAll, looseSend, loadNotice, loadClockHint, setNotice, loadNight, nightSettings, nightPlan, nightCancel, nightLimit, nightDiscard, nightOpen, nightBring,
+    open, close, search, move, setHidden, forget, resume, usage, clock, settings, saveSettings, conversation, exportSession, addIdea, editIdea, startIdea, folderCheck: (path) => src.folderCheck(path), remind, looseAct, looseActAll, looseSend, loadNotice, loadClockHint, setNotice, loadNight, nightSettings, nightPlan, nightCancel, nightLimit, nightDiscard, nightOpen, nightBring,
     archive: (offset, limit = 50) => src.archive(offset, limit),
     setTheme, setAccent, toast, dismissToast, refresh,
   };

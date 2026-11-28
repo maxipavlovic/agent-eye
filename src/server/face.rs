@@ -2,7 +2,7 @@
 //! installable-app manifest.
 
 use super::{AppState, Shared};
-use axum::extract::State;
+use axum::extract::{Request, State};
 use axum::http::{header, StatusCode};
 use axum::response::{IntoResponse, Response};
 use serde_json::json;
@@ -75,16 +75,35 @@ pub(super) fn face_response(name: &str, body: Vec<u8>) -> Response {
         .into_response()
 }
 
-/// `/`: the face when there is one, else a plain notice.
-pub(super) async fn face_index(State(st): State<Shared>) -> Response {
-    match face_file(&st, "index.html") {
+/// Clear the cookie that 0.5.0-rc.3 and earlier set: the browser still holds one, and it carried
+/// the token to every other server on 127.0.0.1.
+const OLD_COOKIE_GONE: &str = "eye_token=; Max-Age=0; Path=/; HttpOnly; SameSite=Strict";
+
+/// `/`: the face when there is one, else a plain notice. It holds nothing private, so it needs no
+/// token: the page keeps the token from `?t=` itself and sends it with every call.
+pub(super) async fn face_index(State(st): State<Shared>, req: Request) -> Response {
+    let old_cookie = req
+        .headers()
+        .get_all(header::COOKIE)
+        .iter()
+        .filter_map(|v| v.to_str().ok())
+        .any(|c| c.split(';').any(|p| p.trim().starts_with("eye_token=")));
+    let landing = super::guard::query_param(req.uri().query(), "t").is_some();
+    let mut resp = match face_file(&st, "index.html") {
         Some(body) => face_response("index.html", body),
         None => static_page("text/html; charset=utf-8", NO_FACE_HTML),
+    };
+    if old_cookie || landing {
+        resp.headers_mut().append(
+            header::SET_COOKIE,
+            header::HeaderValue::from_static(OLD_COOKIE_GONE),
+        );
     }
+    resp
 }
 
-/// The installable-app description. It needs the token like every page, and its start URL carries
-/// the token, so the installed app logs itself in on every launch even after the cookie is gone.
+/// The installable-app description. It needs the token like the API, and its start URL carries the
+/// token, so the installed app logs itself in on every launch, whatever its own storage holds.
 pub(super) async fn app_manifest(State(st): State<Shared>) -> Response {
     let body = json!({
         "name": "agent-eye",
@@ -232,7 +251,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn app_icons_need_no_token_and_the_manifest_logs_in() {
+    async fn the_manifest_needs_the_token_and_its_start_url_carries_it() {
         let d = face_dir();
         std::fs::write(d.path().join("favicon.svg"), "<svg/>").unwrap();
         let e = env_face(Some(d.path().to_path_buf()));
@@ -244,13 +263,7 @@ mod tests {
                 .unwrap()
         };
         assert_eq!(raw(&e, bare("/favicon.svg")).await.0, StatusCode::OK);
-        for uri in [
-            "/",
-            "/assets/app-abc123.js",
-            "/api/board",
-            "/secret.txt",
-            "/manifest.webmanifest",
-        ] {
+        for uri in ["/api/board", "/manifest.webmanifest"] {
             assert_eq!(
                 raw(&e, bare(uri)).await.0,
                 StatusCode::UNAUTHORIZED,
@@ -263,12 +276,6 @@ mod tests {
         assert_eq!(h[header::CONTENT_TYPE], "application/manifest+json");
         let m: Value = serde_json::from_str(&body).unwrap();
         assert_eq!(m["start_url"], format!("/?t={TOKEN}"));
-        // The token link's cookie lasts a year.
-        let (_, h, _) = raw(&e, bare(&format!("/?t={TOKEN}"))).await;
-        assert!(h[header::SET_COOKIE]
-            .to_str()
-            .unwrap()
-            .contains("Max-Age=31536000"));
     }
 
     #[tokio::test]

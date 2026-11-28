@@ -37,7 +37,8 @@ const LOOSE_EVERY: Duration = Duration::from_secs(300);
 const LOOSE_MIN_GAP: Duration = Duration::from_secs(20);
 /// How often the night shift looks at its runs.
 const NIGHT_EVERY: Duration = Duration::from_secs(60);
-/// The longest an upgrade restart waits for a snapshot or a summary round to finish.
+/// The longest an upgrade restart waits for the background jobs (snapshot, summaries, the night
+/// shift, usage, loose ends) to finish.
 const RESTART_WAIT: Duration = Duration::from_secs(60);
 const LOG_MAX: u64 = 10 << 20;
 const QUEUE_ROTATE: u64 = 1 << 20;
@@ -373,16 +374,49 @@ pub fn drain_queue(db: &Db, paths: &Paths, agents: &Agents) -> Result<usize> {
     if offset > size {
         offset = 0;
     }
-    if offset == size {
-        if size > QUEUE_ROTATE {
-            let _ = std::fs::rename(&p, p.with_extension("jsonl.old"));
-            meta_set(&db.conn, "queue_offset", "0")?;
-        }
+    if offset < size {
+        return drain_from(db, agents, &mut f, offset, size);
+    }
+    if size > QUEUE_ROTATE {
+        return rotate_queue(db, agents, &p, &mut f, size);
+    }
+    Ok(0)
+}
+
+/// A queue that was read to its end and has grown big is moved aside, and the next hook starts a
+/// new one. A hook that opened the old file before the move still writes into it, so what came
+/// after `size` is read from the moved file before the offset starts again at 0.
+fn rotate_queue(
+    db: &Db,
+    agents: &Agents,
+    p: &std::path::Path,
+    f: &mut std::fs::File,
+    size: u64,
+) -> Result<usize> {
+    if std::fs::rename(p, p.with_extension("jsonl.old")).is_err() {
         return Ok(0);
     }
+    let end = f.metadata()?.len();
+    let n = if end > size {
+        drain_from(db, agents, f, size, end)?
+    } else {
+        0
+    };
+    meta_set(&db.conn, "queue_offset", "0")?;
+    Ok(n)
+}
+
+/// Apply the complete lines of `f` between `offset` and `end`, and remember where they stopped.
+fn drain_from(
+    db: &Db,
+    agents: &Agents,
+    f: &mut std::fs::File,
+    offset: u64,
+    end: u64,
+) -> Result<usize> {
     f.seek(SeekFrom::Start(offset))?;
     let mut buf = Vec::new();
-    f.take(size - offset).read_to_end(&mut buf)?;
+    f.take(end - offset).read_to_end(&mut buf)?;
     let mut n = 0;
     let mut used = 0usize;
     let mut newest: Option<i64> = None;
@@ -413,12 +447,14 @@ pub fn drain_queue(db: &Db, paths: &Paths, agents: &Agents) -> Result<usize> {
 pub type QuietRow = (String, i64, bool, Option<String>);
 
 /// Sessions with no activity for `quiet_minutes`, or whose SessionEnd arrived after their last
-/// activity, and that are not busy.
+/// activity, and that are not busy. A folder `[exclude]` leaves out has none: nothing is summarized
+/// or archived there, even when the session was indexed before the folder was excluded.
 pub fn quiet_sessions(db: &Db, cfg: &Config, now: i64) -> Result<Vec<QuietRow>> {
     let quiet_ms = cfg.summary.quiet_minutes as i64 * 60_000;
     let mut st = db.conn.prepare(
         "SELECT s.id, s.last_activity_at,
-                (s.summary_at IS NULL OR s.last_activity_at > s.summary_at) AS needs_summary, s.origin
+                (s.summary_at IS NULL OR s.last_activity_at > s.summary_at) AS needs_summary, s.origin,
+                s.cwd
          FROM session s
          WHERE s.transcript_state='present' AND s.kind IS NOT 'history_only'
            AND s.live_status IS NOT 'busy' AND s.last_activity_at IS NOT NULL
@@ -429,13 +465,23 @@ pub fn quiet_sessions(db: &Db, cfg: &Config, now: i64) -> Result<Vec<QuietRow>> 
     )?;
     let rows = st.query_map(params![now, quiet_ms], |r| {
         Ok((
-            r.get::<_, String>(0)?,
-            r.get::<_, i64>(1)?,
-            r.get::<_, bool>(2)?,
-            r.get::<_, Option<String>>(3)?,
+            (
+                r.get::<_, String>(0)?,
+                r.get::<_, i64>(1)?,
+                r.get::<_, bool>(2)?,
+                r.get::<_, Option<String>>(3)?,
+            ),
+            r.get::<_, Option<String>>(4)?,
         ))
     })?;
-    Ok(rows.collect::<rusqlite::Result<_>>()?)
+    let mut out = vec![];
+    for row in rows {
+        let (row, cwd) = row?;
+        if !cwd.is_some_and(|c| cfg.is_excluded(&c)) {
+            out.push(row);
+        }
+    }
+    Ok(out)
 }
 
 /// One worker round: summarize recent quiet sessions (when enabled), then archive every quiet
@@ -529,7 +575,7 @@ pub fn tick(db: &mut Db, paths: &Paths, cfg: &Config) -> Result<()> {
             ),
         );
     }
-    match worked::backfill::run_batch(db, paths, &agents::enabled(cfg), worked::backfill::BATCH) {
+    match worked::backfill::run_batch(db, paths, cfg, worked::backfill::BATCH) {
         Ok(p) if p.counted + p.unreadable > 0 => log(
             paths,
             &format!(
@@ -566,8 +612,15 @@ pub fn tick(db: &mut Db, paths: &Paths, cfg: &Config) -> Result<()> {
 /// When its binary is upgraded on disk, it stops the same way and starts the new one in its place.
 pub fn run(paths: Paths, cfg: Config, port: u16, board: bool) -> Result<()> {
     paths.ensure_home()?;
+    crate::night::bin::note_running();
     let lock = Lock::acquire(&paths)?;
     log(&paths, &format!("daemon start pid {}", std::process::id()));
+    if board && cfg.board.enabled {
+        // The token lives next to a flag in the database. Asking now, before the worker thread
+        // opens the database too, keeps a new or migrating database from being opened twice at
+        // once; a failure shows again, and is logged, when the board starts.
+        let _ = server::ensure_token(&paths);
+    }
     let stop = Arc::new(AtomicBool::new(false));
     let worker_busy = Arc::new(AtomicBool::new(false));
     let mut watch = upgrade::Watch::of_this_process();
@@ -664,10 +717,10 @@ pub fn run(paths: Paths, cfg: Config, port: u16, board: bool) -> Result<()> {
                 }
                 if watch.as_mut().is_some_and(|w| w.upgraded()) {
                     log(&paths, "the binary was upgraded; restarting into it");
-                    let since = Instant::now();
-                    while busy.load(Ordering::SeqCst) && since.elapsed() < RESTART_WAIT {
-                        std::thread::sleep(Duration::from_millis(200));
-                    }
+                    wait_until_idle(
+                        &[&busy, &loose_busy, &night_busy, &usage_busy],
+                        RESTART_WAIT,
+                    );
                     upgraded.store(true, Ordering::SeqCst);
                     server::ask_shutdown();
                     break;
@@ -712,6 +765,18 @@ pub fn run(paths: Paths, cfg: Config, port: u16, board: bool) -> Result<()> {
         return Err(upgrade::restart(&bin));
     }
     result
+}
+
+/// Wait until none of the background jobs runs, or `limit` has passed. True when all are done.
+fn wait_until_idle(jobs: &[&AtomicBool], limit: Duration) -> bool {
+    let since = Instant::now();
+    while jobs.iter().any(|j| j.load(Ordering::SeqCst)) {
+        if since.elapsed() >= limit {
+            return false;
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    true
 }
 
 mod upgrade;

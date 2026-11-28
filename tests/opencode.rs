@@ -420,5 +420,5 @@ fn detection_and_an_empty_folder() {
     );
     let here = OpenCode::new(tmp.path().to_path_buf()).with_executable("/nonexistent/opencode");
     assert!(here.detect().installed);
-    assert!(here.transcripts().is_empty());
+    assert!(here.transcripts().files.is_empty());
 }

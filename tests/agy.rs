@@ -416,7 +416,7 @@ fn detection_looks_for_the_folder_and_the_program() {
     let here = Agy::new(tmp.path().to_path_buf()).with_executable("/nonexistent/agy");
     assert!(here.detect().installed);
     assert!(
-        here.transcripts().is_empty(),
+        here.transcripts().files.is_empty(),
         "no conversations folder, no sessions"
     );
     let line = here
@@ -426,4 +426,18 @@ fn detection_looks_for_the_folder_and_the_program() {
         (line["event"].as_str(), line["session_id"].as_str()),
         (Some("Stop"), Some("c1"))
     );
+}
+
+/// agy's `-p` run (`--mode plan --sandbox`) has not been checked on a real agy with a hostile user
+/// config, so it still writes summaries, as it did before 0.5, but is not sent prompt text to judge.
+#[test]
+fn agy_writes_summaries_but_is_not_asked_to_judge_corrections() {
+    let mut cfg = Config::parse("[agents]\nenabled = [\"agy\"]\n").unwrap();
+    cfg.summary.enabled = true;
+    let agents = agents::enabled(&cfg);
+    assert!(!agents.get("agy").unwrap().judging_locked_down());
+    assert!(agents.summary_agent(&cfg).is_some());
+    let (state, why) = agent_eye::clock::judging::judge(&cfg, &agents).unwrap_err();
+    assert_eq!(state, agent_eye::clock::judging::Judging::Unavailable);
+    assert!(why.contains("Antigravity CLI"), "{why}");
 }

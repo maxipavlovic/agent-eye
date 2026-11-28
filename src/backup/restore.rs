@@ -198,7 +198,7 @@ pub fn pre_restore_copy(
     if quick_check(&conn).is_some() {
         return Ok(None);
     }
-    let snap = super::take(&conn, paths, &cfg.backup, reason)
+    let snap = super::take(&conn, paths, cfg, reason)
         .context("could not keep a copy of the current database, so nothing was changed")?;
     Ok(Some(snap.path))
 }

@@ -96,11 +96,13 @@ pub fn archive(g: &Global, id: Option<&str>, all: bool) -> Result<()> {
     };
     let (mut copied, mut same, mut none, mut bytes) = (0, 0, 0, 0u64);
     for i in ids {
+        // `--all` leaves out what is not on disk and what `[exclude]` leaves out; a named session
+        // is copied because it was asked for
         if !all
-            || env
-                .db
-                .session_by_id(&i)?
-                .is_some_and(|s| s.transcript_state.as_deref() == Some("present"))
+            || env.db.session_by_id(&i)?.is_some_and(|s| {
+                s.transcript_state.as_deref() == Some("present")
+                    && !archive::is_left_out(&env.cfg, &s)
+            })
         {
             match archive::archive_session(&env.db, &env.paths, &env.agents, &i)? {
                 archive::Archived::Copied(n) => {

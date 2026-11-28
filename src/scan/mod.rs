@@ -139,13 +139,19 @@ fn scan_agent(
     ignore_dirs.sort();
     ignore_dirs.dedup();
 
-    let files = agent.transcripts();
+    let listing = agent.transcripts();
+    let files = &listing.files;
+    let away = sessions_away(&db.conn, agent.id())?;
     let mut hits: Vec<(String, usize)> = vec![];
-    for f in &files {
+    for f in files {
         stats.files_seen += 1;
         let key = f.path.to_string_lossy().into_owned();
         let cursor = db.cursor_get(&key)?;
-        if !full && cursor.as_ref().is_some_and(|c| c.stamp == f.stamp) {
+        // a transcript that is back is read even when its stamp is the one of the last read
+        if !full
+            && !away.contains(&f.session_id)
+            && cursor.as_ref().is_some_and(|c| c.stamp == f.stamp)
+        {
             continue;
         }
         // A first read, a full scan and a transcript that came back (deleted, history-only) read
@@ -235,10 +241,13 @@ fn scan_agent(
     let tx = db
         .conn
         .transaction_with_behavior(TransactionBehavior::Immediate)?;
-    for f in &files {
+    for f in files {
         children::scan(&tx, agent, f, full)?;
     }
-    mark_missing(&tx, agent.id(), &files)?;
+    // a listing that could not be read whole says nothing about the sessions it lacks
+    if listing.complete {
+        mark_missing(&tx, agent.id(), files)?;
+    }
     tx.commit()?;
 
     let transcript_ids: HashSet<String> = files.iter().map(|f| f.session_id.clone()).collect();
@@ -251,6 +260,18 @@ fn scan_agent(
     live::apply_live(&tx, agent)?;
     tx.commit()?;
     Ok(())
+}
+
+/// Sessions of this agent whose transcript is not there as far as the database knows: deleted,
+/// archived (eye holds the only copy) or known from the history file alone.
+fn sessions_away(conn: &Connection, agent_id: &str) -> Result<HashSet<String>> {
+    Ok(conn
+        .prepare(
+            "SELECT id FROM session WHERE agent=?1 \
+             AND (transcript_state IN ('deleted','archived') OR kind='history_only')",
+        )?
+        .query_map([agent_id], |r| r.get(0))?
+        .collect::<rusqlite::Result<_>>()?)
 }
 
 fn revived(conn: &Connection, sid: &str) -> Result<bool> {

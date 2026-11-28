@@ -1,5 +1,6 @@
 use super::*;
 use crate::locked::{as_root, Locked};
+use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 
 /// A folder with a database in it.
@@ -115,10 +116,45 @@ fn changes_waiting_in_a_log_that_cannot_be_read_are_refused_not_skipped() {
     let _locked = Locked::new(home.0.path());
     let e = Db::open_reading(&home.db()).err().unwrap().to_string();
     assert!(
-        e.contains("-wal") && e.contains("run eye once where it can write"),
+        e.contains("-wal")
+            && e.contains("-shm")
+            && e.contains("run eye once where it can write")
+            && e.contains("SQLite said"),
         "{e}"
     );
     assert_eq!(home.files(), ["eye.db", "eye.db-wal"]);
+}
+
+#[test]
+fn a_database_file_that_cannot_be_read_is_said_so_even_when_a_log_waits() {
+    if as_root() {
+        return;
+    }
+    let source = Home::new();
+    let _writer = writer_with_a_log(&source.db());
+    let home = Home::new();
+    for suffix in ["", "-wal"] {
+        std::fs::copy(beside(&source.db(), suffix), beside(&home.db(), suffix)).unwrap();
+    }
+    std::fs::set_permissions(home.db(), std::fs::Permissions::from_mode(0o000)).unwrap();
+    let e = format!("{:#}", Db::open_reading(&home.db()).err().unwrap());
+    assert!(e.contains("Permission denied"), "{e}");
+    assert!(!e.contains("-shm"), "{e}");
+}
+
+#[test]
+fn only_a_failure_to_open_the_log_files_is_blamed_on_them() {
+    let failure = |code| {
+        anyhow::Error::from(rusqlite::Error::SqliteFailure(
+            rusqlite::ffi::Error::new(code),
+            None,
+        ))
+    };
+    assert!(cannot_open_log(&failure(rusqlite::ffi::SQLITE_CANTOPEN)));
+    assert!(cannot_open_log(&failure(rusqlite::ffi::SQLITE_READONLY)));
+    assert!(!cannot_open_log(&failure(rusqlite::ffi::SQLITE_NOTADB)));
+    assert!(!cannot_open_log(&failure(rusqlite::ffi::SQLITE_BUSY)));
+    assert!(!cannot_open_log(&anyhow::anyhow!("something else")));
 }
 
 #[test]

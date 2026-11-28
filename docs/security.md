@@ -13,7 +13,7 @@ machine, and how to report a problem.
   `~/.claude/settings.json`, for Codex CLI `~/.codex/hooks.json`). Each call is
   `<path>/agent-eye hook <Event>` (with `--agent codex` for Codex); it reads JSON on stdin,
   appends one short line to a local file, prints nothing and exits 0. Other tools' entries in that
-  file are never touched, a backup is made, and `eye uninstall` puts the file back. A settings file
+  file are never touched, a backup is made, a file the agent saved in the meantime is left as the agent wrote it (the install says to run it again), and `eye uninstall` puts the file back. A settings file
   that is not 2-space JSON is rewritten in that form (same entries, new layout), after the backup;
   install says so. Codex runs a hook only after you trust it once with `/hooks`; eye never touches
   Codex's trust or its `notify` setting. For Codex the `PostToolUse` hook runs after every tool call
@@ -78,10 +78,23 @@ listens on `127.0.0.1:<port>` (default 7420) and on no other address. Every requ
 1. **Host**: only `127.0.0.1:<port>`, `localhost:<port>` and `[::1]:<port>` are served. A web page on
    another name that was pointed at 127.0.0.1 (DNS rebinding) keeps its own name in `Host` and gets
    a 403, even with the right token.
-2. **Token**: the secret in `~/.agent-eye/board.token` (32 random bytes, hex, mode 0600), as the
-   `eye_token` cookie (HttpOnly, SameSite=Strict) or the `X-Eye-Token` header. It is compared in
-   constant time. `eye board` prints the link with the token; the first visit trades it for the
-   cookie and redirects, so it does not stay in the address bar.
+2. **Token**: the secret in `~/.agent-eye/board.token` (32 random bytes, hex, mode 0600), sent in the
+   `X-Eye-Token` header of every API call, and compared in constant time. `eye board` prints the link
+   with the token. The page keeps the token in the browser's localStorage, which belongs to one
+   address (scheme, host **and port**), takes it out of the address bar and sends it itself. It is
+   never put in a cookie: a cookie goes to every server on `127.0.0.1` whatever its port, so a dev
+   server, a container's web page or an `ssh -L` forward would have received it. What keeps other
+   servers on loopback out: they never get the token (another port is another localStorage and
+   no cookie is set); a page of theirs cannot call the API, because the call needs the header, a
+   foreign `Origin` is refused on a write, and the API sends no CORS headers, so a browser does not
+   let their page read an answer or send the header; and the Host check (1) refuses their names.
+   The page and its files (`/`, `/assets/*`, the icons) need no token, because the page needs them
+   before it can send one: they are the same files as in the repository and hold nothing about you.
+   The app manifest, whose start address carries the token, is the one other route that takes it in
+   the address (`?t=`), because the browser fetches it and cannot send a header. The first start
+   after upgrading from 0.5.0-rc.3 or earlier replaces the token (once), because the old one was
+   also a cookie; open the link from `eye board` again. A cookie an older eye set is no longer
+   read, and the page clears it.
 3. **Origin**: a request that changes something (POST) must carry an `Origin` that is one of the
    loopback names above, so another website in your browser cannot make it.
 4. The web page is served with a strict Content-Security-Policy (own files only, no framing), and
@@ -127,14 +140,20 @@ eye does not read the credential files that sit next to an agent's live-session 
 Only for **summaries**, and only through the agent you already use (for Claude Code: `claude -p`,
 run from an empty folder, with no tools, no MCP servers and no hooks, no transcript kept; for Codex
 CLI: `codex exec --ephemeral --ignore-user-config --ignore-rules -s read-only` from an empty folder,
-nothing kept; for agy: `agy -p --output-format json --mode plan --sandbox` with a JSON schema, and the conversation it makes is deleted afterwards (folder, database and its row in `conversation_summaries.db`; `history.jsonl` only while agy is closed); for
+nothing kept; for agy: `agy -p --output-format json --mode plan --sandbox` with a JSON schema, and the conversation it makes is deleted afterwards (folder, database and its row in `conversation_summaries.db`; `history.jsonl` only while agy is closed). Questions to agy run one at a time (a lock in eye's work folder), because a clean-up leaves `history.jsonl` alone while any agy conversation is open, and a second question running beside it would be one; for
 OpenCode: `opencode run --format json --archived --agent eye-ask --standalone` with an inline config that defines that agent, denies every permission by default (`*`) for it and for every other agent, switches every tool off and switches your MCP servers off, so the shell, edits, web fetches and search, sub-agents, skills, code mode and MCP tools are all closed, and the session it makes is deleted afterwards; checked on a real OpenCode, see "The OpenCode lock-down, checked" below). For each
 quiet session eye sends a short excerpt: the title, the folder and branch, the first prompt (up to
 2,000 characters), the agent's own recap of the session, the last 30 messages (each cut to 1,500
-characters), one line per tool call (no file contents, no tool output), the outputs list, the names
-of sub-agents, and the previous summary. Before it is sent, the
-excerpt is **masked** for API keys, cloud and GitHub tokens, Slack tokens, JWTs, bearer tokens,
-`password=`/`token=`/`secret=` values and private keys. Masking is best effort, not a guarantee.
+characters), one line per tool call (no file contents and no tool output, with one exception: a
+failed call adds `error:` and the first 160 characters of its error text, for Claude Code, Codex CLI
+and agy, so a failing `cat .env` or a stack trace puts a few words of itself in the excerpt, masked
+like the rest), the outputs list, the names of sub-agents, and the previous summary. Before it is
+sent, the excerpt is **masked** for the API keys of Anthropic, OpenAI, Google, GitLab, GitHub and
+npm, AWS, GitHub and Slack tokens, JWTs, bearer tokens, Basic authorization headers, a password
+inside an address (`https://user:password@host/`), private keys, and the value of a name like
+`password`, `token`, `secret`, `api_key` or `aws_secret_access_key`, written as `token=…`,
+`"token": "…"` or `--token …`. Masking is best effort, not a guarantee: a secret with no name and
+no known prefix goes as it is.
 
 Sessions that are hidden, archived, or in an excluded folder are skipped. `[summary] enabled =
 false` turns summaries off completely, and then nothing is sent anywhere. Summaries use your agent's
@@ -192,9 +211,9 @@ not the model's).
 
 `[clock] idle = true` makes the daemon read, once a minute, how long it has been since the last keyboard or mouse input: on macOS the `HIDIdleTime` value from `ioreg -c IOHIDSystem`, on Linux the `IdleHint` and `IdleSinceHint` of your graphical session from `loginctl show-session` (the session is found with `loginctl show-user`). It reads that one number. It never sees which keys, which window or which application, and nothing leaves the machine. Only stretches of 5 minutes or more are stored (start and end). It is off by default; `eye doctor` says whether the daemon can read it and whether it is on.
 
-Whether an agent may be asked at all follows its adapter. An agent says its run is locked down (`judging_locked_down`) only when a test of its runner proves it: Claude Code, Codex CLI, agy and OpenCode do. The corrections pass asks only an agent that says so. Summaries follow the same rule with one exception kept so an update never switches them off: an agent that wrote summaries before 0.5 (Claude Code, Codex CLI, agy and OpenCode) still does, whether or not it says so. An agent added from 0.5 on writes summaries only when it says its run is locked down.
+Whether an agent may be asked at all follows its adapter. An agent says its run is locked down (`judging_locked_down`) only when a test of its runner proves it: Claude Code, Codex CLI and OpenCode do (OpenCode's run was also checked on a real install, see above). agy does not yet: its flags are tested, but what plan mode and `--sandbox` stop has not been checked on a real agy with a config of yours that allows everything, so a planted line in a prompt could in principle make it read files or send the excerpt somewhere. The corrections pass asks only an agent that says so, so it never asks agy; summaries are different and keep working through agy. Summaries follow the same rule with one exception kept so an update never switches them off: an agent that wrote summaries before 0.5 (Claude Code, Codex CLI, agy and OpenCode) still does, whether or not it says so. An agent added from 0.5 on writes summaries only when it says its run is locked down.
 
-The corrections pass (`[clock] llm`, on when summaries are on) sends **prompts of 1,500 characters or fewer that contain a word like "no", "wrong" or "again", each with the last 700 characters of the reply before it**, masked the way summary excerpts are, to the agent and model that write summaries, through the same call, so what it can do is what the summary call can do: Claude Code has no tools, no MCP servers and no hooks; Codex CLI has no tool-less mode, so it runs in a read-only sandbox with no network (it can read files, not change them or send anything); agy runs in plan mode with `--sandbox` (its changelog says plan mode does not edit or run commands; not tested here) and its conversation is deleted afterwards; OpenCode runs as an agent of its own with every permission denied, every tool off and your MCP servers off (checked on a real OpenCode, see below) and its session is deleted afterwards. No agent keeps a session. Sessions in excluded folders are never sent. It runs once a night, not while you are at work, (up to 300 exchanges) and with `eye clock detect`. `[clock] llm = false` stops it.
+The corrections pass (`[clock] llm`, on when summaries are on) sends **prompts of 1,500 characters or fewer that contain a word like "no", "wrong" or "again", each with the last 700 characters of the reply before it**, masked the way summary excerpts are, to the agent and model that write summaries, through the same call, so what it can do is what the summary call can do: Claude Code has no tools, no MCP servers and no hooks; Codex CLI has no tool-less mode, so it runs in a read-only sandbox with no network (it can read files, not change them or send anything); agy is not asked at all (see above), and when it writes summaries it runs in plan mode with `--sandbox` (its changelog says plan mode does not edit or run commands; not tested here) and its conversation is deleted afterwards; OpenCode runs as an agent of its own with every permission denied, every tool off and your MCP servers off (checked on a real OpenCode, see below) and its session is deleted afterwards. No agent keeps a session. Sessions in excluded folders are never sent. It runs once a night, not while you are at work, (up to 300 exchanges) and with `eye clock detect`. `[clock] llm = false` stops it.
 
 ## Commands built from session data
 

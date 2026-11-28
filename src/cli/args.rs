@@ -252,6 +252,7 @@ pub enum BackupCmd {
 pub enum BoardCmd {
     /// Turn the web board on and restart the daemon
     On {
+        /// Serve on this port from now on (written to `[board] port`)
         #[arg(long)]
         port: Option<u16>,
         /// Open it in the browser
@@ -401,6 +402,7 @@ pub enum Cmd {
     Board {
         #[command(subcommand)]
         sub: Option<BoardCmd>,
+        /// Print the link for this port (a board `serve` runs elsewhere); `board on --port` sets it
         #[arg(long)]
         port: Option<u16>,
         /// Open it in the browser
@@ -496,7 +498,7 @@ pub enum Cmd {
     Uninstall {
         #[command(flatten)]
         a: SetupArgs,
-        /// Also delete eye's own data (index, archive, config)
+        /// Also delete eye's own data (index, archive, config); refuses a folder with no eye.db or config.toml
         #[arg(long)]
         purge: bool,
     },

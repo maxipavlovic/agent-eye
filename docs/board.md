@@ -1,6 +1,6 @@
 # The board
 
-The board is a web page the daemon serves on your machine: every session as a card, in lanes that say who acts next. `eye board on` turns it on and `eye board` prints its address (`http://127.0.0.1:7420/?t=<token>`); `eye board off` turns it off. It is off by default, and only your browser on this machine can open it (see `security.md`).
+The board is a web page the daemon serves on your machine: every session as a card, in lanes that say who acts next. `eye board on` turns it on and `eye board` prints its address (`http://127.0.0.1:7420/?t=<token>`); `eye board off` turns it off. It is off by default, and only your browser on this machine can open it (see `security.md`). Open the link once in each browser: the page keeps its token in that browser's local storage and takes it out of the address, so the bookmark or the installed app opens without it. Clearing the site's data, or a new token (the first start after upgrading from 0.5.0-rc.3 or earlier makes one), means opening the link from `eye board` again; until then the page says so.
 
 ## Lanes
 

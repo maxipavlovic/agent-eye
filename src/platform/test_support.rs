@@ -4,13 +4,28 @@ use super::service::Timing;
 use std::fs::{set_permissions, Permissions};
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 /// A program in `dir` that runs `body`.
 pub(crate) fn script(dir: &Path, name: &str, body: &str) {
     let p = dir.join(name);
     std::fs::write(&p, format!("#!/bin/sh\n{body}\n")).unwrap();
     set_permissions(&p, Permissions::from_mode(0o755)).unwrap(); // NOSONAR: a test stub must run
+}
+
+/// What the program that wrote `path` left there, waited for: a terminal is started detached and
+/// not waited for beyond a moment, so on a busy machine it may not have written yet when the call
+/// that started it returns. Polls until `ready` accepts the text, for ten seconds at most, then
+/// gives back what is there.
+pub(crate) fn read_when(path: &Path, ready: impl Fn(&str) -> bool) -> String {
+    let until = Instant::now() + Duration::from_secs(10);
+    loop {
+        let text = std::fs::read_to_string(path).unwrap_or_default();
+        if ready(&text) || Instant::now() >= until {
+            return text;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
 }
 
 /// A program in `dir` that appends its arguments to `<dir>/<name>.log` and exits with `code`.

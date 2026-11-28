@@ -60,11 +60,13 @@ pub fn board(g: &Global, sub: Option<BoardCmd>, port: Option<u16>, open: bool) -
 fn switch(g: &Global, sub: BoardCmd) -> Result<()> {
     let paths = g.paths()?;
     paths.ensure_home()?;
-    let (on, no_service) = match &sub {
-        BoardCmd::On { no_service, .. } => (true, *no_service),
-        BoardCmd::Off { no_service } => (false, *no_service),
+    let (on, no_service, port) = match &sub {
+        BoardCmd::On {
+            no_service, port, ..
+        } => (true, *no_service, *port),
+        BoardCmd::Off { no_service } => (false, *no_service, None),
     };
-    config::write_board_enabled(&paths.config_path(), on)?;
+    config::write_board(&paths.config_path(), on, port)?;
     let mut o = crate::install::Opts::resolve(&paths, None, None)?;
     o.no_service = no_service;
     let mut report = Report::default();

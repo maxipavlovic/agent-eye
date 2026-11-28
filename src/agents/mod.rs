@@ -81,8 +81,8 @@ pub trait Agent: Send + Sync + std::fmt::Debug {
 
     // ---- sessions on disk ----
 
-    /// Every transcript of the agent, in a stable order.
-    fn transcripts(&self) -> Vec<Transcript>;
+    /// Every transcript of the agent, in a stable order, and whether the listing is complete.
+    fn transcripts(&self) -> Listing;
     /// Read a transcript: all of it, or what is new since `opts.since`. The adapter decides which.
     /// It may go on from the marker of the last read or, when it cannot (the session was
     /// rewritten, the marker means nothing any more), read everything and set `Delta::replaces`.
@@ -107,7 +107,7 @@ pub trait Agent: Send + Sync + std::fmt::Debug {
         &[]
     }
     /// Is this agent's headless run proven to be locked down (nothing it can change or run, no
-    /// network, no session kept; Codex and agy can still read files, see `docs/security.md`), with a
+    /// network, no session kept; Codex can still read files, see `docs/security.md`), with a
     /// test of its runner? The corrections pass sends it prompt text with
     /// planted instructions in it only when it is, and a new agent gets summaries only then too
     /// (`may_summarize`). The default says no: an agent opts in when its lock-down is tested.

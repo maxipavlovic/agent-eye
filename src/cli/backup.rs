@@ -18,7 +18,7 @@ pub fn run(g: &Global, sub: Option<BackupCmd>) -> Result<()> {
 /// A snapshot by hand, which works whether automatic ones are on or not.
 fn now(g: &Global) -> Result<()> {
     let env = g.open()?;
-    let snap = backup::take(&env.db.conn, &env.paths, &env.cfg.backup, &Reason::Manual)?;
+    let snap = backup::take(&env.db.conn, &env.paths, &env.cfg, &Reason::Manual)?;
     println!(
         "snapshot {} ({:.1} MB)",
         show_path(&snap.path),

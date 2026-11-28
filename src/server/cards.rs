@@ -330,8 +330,10 @@ pub(super) async fn api_conversation(
             s.agent
         ))
     })?;
-    let all = conversation::read(&s, &st.paths, agent.as_ref())
-        .map_err(|e| ApiError::not_found(format!("{e:#}")))?;
+    // The causes name the transcript's path: they go to the log, not to the answer
+    let all = conversation::read(&s, &st.paths, agent.as_ref()).map_err(|e| {
+        ApiError::not_found("the conversation of this session cannot be read").because(&e)
+    })?;
     Ok(Json(conversation::page(&all, limit, q.before).to_json()))
 }
 
@@ -699,10 +701,44 @@ mod tests {
         // known session, no transcript and no archive copy
         let (st, v) = call(&e, get("/api/cards/aaaaaaaa-1/conversation")).await;
         assert_eq!(st, StatusCode::NOT_FOUND);
-        assert!(v["error"].as_str().unwrap().contains("no transcript"));
+        assert_eq!(
+            v["error"],
+            "the conversation of this session cannot be read"
+        );
         let mut r = get("/api/cards/aaaaaaaa-1/conversation");
         r.headers_mut().remove("x-eye-token");
         assert_eq!(call(&e, r).await.0, StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn a_conversation_that_cannot_be_read_does_not_name_the_transcripts_path() {
+        let e = env();
+        add_session(&e.db, "aaaaaaaa-1", "t", None, 1, now_ms());
+        // a transcript that is there and cannot be opened: the open error names its path
+        write_transcript(&e, "aaaaaaaa-1", 1);
+        let path: String =
+            e.db.conn
+                .query_row(
+                    "SELECT transcript_path FROM session WHERE id='aaaaaaaa-1'",
+                    [],
+                    |r| r.get(0),
+                )
+                .unwrap();
+        std::fs::set_permissions(&path, std::os::unix::fs::PermissionsExt::from_mode(0o000))
+            .unwrap();
+        // a process that may read anything (root in a container) is not refused: nothing to test
+        if std::fs::File::open(&path).is_ok() {
+            return;
+        }
+        let (st, v) = call(&e, req("GET", "/api/cards/aaaaaaaa-1/conversation", None)).await;
+        assert_eq!(st, StatusCode::NOT_FOUND);
+        assert!(!v.to_string().contains(&path), "{v}");
+        // the log has the path and the cause
+        let log = std::fs::read_to_string(e._tmp.path().join("home/logs/daemon.log")).unwrap();
+        assert!(
+            log.contains("GET /api/cards/aaaaaaaa-1/conversation: 404") && log.contains(&path),
+            "{log}"
+        );
     }
 
     #[tokio::test]
