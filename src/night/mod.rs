@@ -11,12 +11,15 @@
 //! Nothing runs unless `[night] enabled = true` and a run is planned. See `docs/night.md`.
 
 pub mod barrier;
+pub mod bin;
 pub mod clock;
 pub mod iso;
 pub mod launch;
 pub mod sched;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod told_tests;
 
 use crate::agents::Agents;
 use crate::config::Config;
