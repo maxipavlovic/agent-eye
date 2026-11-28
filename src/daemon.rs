@@ -529,7 +529,7 @@ pub fn tick(db: &mut Db, paths: &Paths, cfg: &Config) -> Result<()> {
             ),
         );
     }
-    match worked::backfill::run_batch(db, paths, &agents::enabled(cfg), worked::backfill::BATCH) {
+    match worked::backfill::run_batch(db, paths, cfg, worked::backfill::BATCH) {
         Ok(p) if p.counted + p.unreadable > 0 => log(
             paths,
             &format!(

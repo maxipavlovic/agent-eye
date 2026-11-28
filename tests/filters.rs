@@ -69,8 +69,8 @@ fn rows(db: &Db, ids: &[u32]) -> Vec<(String, i64)> {
             }
             _ => continue,
         };
-        // the back-fill's note that it has been to a session: it is how an excluded one is not asked for again
-        if t == "turn_state" {
+        // the back-fills' note that they have been to a session: it is how an excluded one is not asked for again
+        if t == "turn_state" || t == "worked_state" {
             continue;
         }
         for n in ids {
@@ -120,10 +120,14 @@ fn left_out_sessions_gain_no_rows_in_any_table_from_any_pass() {
     // the clock's other writers: the pass first, then the summaries; each is asked only about
     // sessions it may read
     let log = |n: &str| std::fs::read_to_string(bin.join("calls.log")).is_ok_and(|t| t.contains(n));
-    db.conn.execute("DELETE FROM turn", []).unwrap();
-    db.conn.execute("DELETE FROM turn_state", []).unwrap();
+    for table in ["turn", "turn_state", "worked_hour", "worked_state"] {
+        db.conn
+            .execute(&format!("DELETE FROM {table}"), [])
+            .unwrap();
+    }
     let before = rows(&db, &[2, 3, 4]);
     agent_eye::turns::backfill::run_all(&mut db, &paths, &cfg).unwrap();
+    agent_eye::worked::backfill::run_all(&mut db, &paths, &cfg).unwrap();
     scan(&mut db, &cfg, true).unwrap();
     let agents = agent_eye::agents::enabled(&cfg);
     agent_eye::clock::pass::run(&db, &paths, &cfg, &agents, 1_793_600_000_000, &mut |_| {})

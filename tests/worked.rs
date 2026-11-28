@@ -87,8 +87,7 @@ impl Env {
     }
 
     fn backfill(&mut self) -> backfill::Pass {
-        let agents = self.agents();
-        backfill::run_all(&mut self.db, &self.paths, &agents).unwrap()
+        backfill::run_all(&mut self.db, &self.paths, &self.cfg).unwrap()
     }
 
     /// (active ms, prompts, events) over the session.
@@ -231,11 +230,10 @@ fn a_batch_counts_the_newest_sessions_first_and_says_what_is_left() {
         )
         .unwrap();
     e.forget_hours();
-    let agents = e.agents();
-    let pass = backfill::run_batch(&mut e.db, &e.paths, &agents, 1).unwrap();
+    let pass = backfill::run_batch(&mut e.db, &e.paths, &e.cfg, 1).unwrap();
     assert_eq!((pass.counted, pass.left), (1, 1));
     assert!(store::load(&e.db.conn, SID).unwrap().is_some());
-    let pass = backfill::run_batch(&mut e.db, &e.paths, &agents, 1).unwrap();
+    let pass = backfill::run_batch(&mut e.db, &e.paths, &e.cfg, 1).unwrap();
     assert_eq!((pass.unreadable, pass.left), (1, 0));
 }
 
