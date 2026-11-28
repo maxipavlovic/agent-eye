@@ -478,6 +478,6 @@ fn no_daily_snapshot_when_automatic_ones_are_off_but_a_manual_one_works() {
             .is_none()
     );
     assert!(list(&dir(&h.paths)).is_empty());
-    take(&db.conn, &h.paths, &cfg.backup, &Reason::Manual).unwrap();
+    take(&db.conn, &h.paths, &cfg, &Reason::Manual).unwrap();
     assert_eq!(list(&dir(&h.paths)).len(), 1);
 }

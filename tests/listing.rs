@@ -187,7 +187,7 @@ fn a_transcript_that_comes_back_is_present_again(archived: bool) {
     let file = project_of(&w.homes.claude, CLAUDE_A).join(format!("{CLAUDE_A}.jsonl"));
     if archived {
         let agents = agents::enabled(&w.homes.cfg);
-        archive::archive_all(&w.db, &w.paths, &agents).unwrap();
+        archive::archive_all(&w.db, &w.paths, &agents, &w.homes.cfg).unwrap();
     }
     let away = file.with_extension("away");
     std::fs::rename(&file, &away).unwrap();

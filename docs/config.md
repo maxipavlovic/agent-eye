@@ -108,7 +108,7 @@ Throw-away sessions ("/clear", "exit", "cd ..") are left out of the board, searc
 
 | Key | Default | Meaning |
 |---|---|---|
-| `paths` | `[]` | Folder prefixes eye ignores completely: sessions started there are never indexed. |
+| `paths` | `[]` | Folders eye ignores completely: sessions started there, or anywhere below, are never indexed. A folder is matched by whole names (`/a/b` does not cover `/a/bc`). A session indexed before you added its folder stays in the database and the archive until you forget it (`eye forget --folder <path>`), but from then on eye does not summarize it or copy its transcript again, and leaves its transcript out of the mirror and the pack. |
 | `temp` | `true` | Sessions started in a temp folder (`/tmp`, `/var/tmp`, the system temp folder; Claude Code's scratchpads live there) are not indexed, so test and scratch runs stay off the board. `false` indexes them, e.g. for testing. Sessions indexed before stay until you forget them (`eye forget --folder /tmp`). |
 
 ## `[outputs]`

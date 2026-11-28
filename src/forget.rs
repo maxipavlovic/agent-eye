@@ -133,7 +133,7 @@ pub fn forget(
             open.join(", ")
         );
     }
-    let snap = backup::take(&db.conn, paths, &cfg.backup, &Reason::Manual)
+    let snap = backup::take(&db.conn, paths, cfg, &Reason::Manual)
         .context("making a snapshot before forgetting anything")?;
     let known = crate::agents::known(cfg);
     let mut outcomes = vec![];
@@ -233,6 +233,14 @@ fn remove_rows(conn: &Connection, s: &Session, tombstone: bool) -> Result<()> {
                 )?;
                 tx.execute(
                     "UPDATE idea SET from_session_id=NULL WHERE from_session_id=?1",
+                    [&s.id],
+                )?;
+            }
+            // a run that continued the session keeps its row: its worktree, branch and log are
+            // still on disk, and the row is how DISCARD finds them
+            "night_run" => {
+                tx.execute(
+                    "UPDATE night_run SET session_id=NULL WHERE session_id=?1",
                     [&s.id],
                 )?;
             }

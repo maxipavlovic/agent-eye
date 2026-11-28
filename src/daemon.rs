@@ -413,12 +413,14 @@ pub fn drain_queue(db: &Db, paths: &Paths, agents: &Agents) -> Result<usize> {
 pub type QuietRow = (String, i64, bool, Option<String>);
 
 /// Sessions with no activity for `quiet_minutes`, or whose SessionEnd arrived after their last
-/// activity, and that are not busy.
+/// activity, and that are not busy. A folder `[exclude]` leaves out has none: nothing is summarized
+/// or archived there, even when the session was indexed before the folder was excluded.
 pub fn quiet_sessions(db: &Db, cfg: &Config, now: i64) -> Result<Vec<QuietRow>> {
     let quiet_ms = cfg.summary.quiet_minutes as i64 * 60_000;
     let mut st = db.conn.prepare(
         "SELECT s.id, s.last_activity_at,
-                (s.summary_at IS NULL OR s.last_activity_at > s.summary_at) AS needs_summary, s.origin
+                (s.summary_at IS NULL OR s.last_activity_at > s.summary_at) AS needs_summary, s.origin,
+                s.cwd
          FROM session s
          WHERE s.transcript_state='present' AND s.kind IS NOT 'history_only'
            AND s.live_status IS NOT 'busy' AND s.last_activity_at IS NOT NULL
@@ -429,13 +431,23 @@ pub fn quiet_sessions(db: &Db, cfg: &Config, now: i64) -> Result<Vec<QuietRow>> 
     )?;
     let rows = st.query_map(params![now, quiet_ms], |r| {
         Ok((
-            r.get::<_, String>(0)?,
-            r.get::<_, i64>(1)?,
-            r.get::<_, bool>(2)?,
-            r.get::<_, Option<String>>(3)?,
+            (
+                r.get::<_, String>(0)?,
+                r.get::<_, i64>(1)?,
+                r.get::<_, bool>(2)?,
+                r.get::<_, Option<String>>(3)?,
+            ),
+            r.get::<_, Option<String>>(4)?,
         ))
     })?;
-    Ok(rows.collect::<rusqlite::Result<_>>()?)
+    let mut out = vec![];
+    for row in rows {
+        let (row, cwd) = row?;
+        if !cwd.is_some_and(|c| cfg.is_excluded(&c)) {
+            out.push(row);
+        }
+    }
+    Ok(out)
 }
 
 /// One worker round: summarize recent quiet sessions (when enabled), then archive every quiet

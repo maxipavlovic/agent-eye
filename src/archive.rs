@@ -3,11 +3,12 @@
 //! `Agent::unarchive`). By default that is one zstd file per session.
 
 use crate::agents::{Agent, Agents, LEGACY_ID};
+use crate::config::Config;
 use crate::db::{meta_set, Db};
 use crate::model::Session;
 use crate::paths::Paths;
 use anyhow::{Context, Result};
-use rusqlite::params;
+use rusqlite::{params, Connection};
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 
@@ -136,12 +137,36 @@ pub fn archive_session(db: &Db, paths: &Paths, agents: &Agents, id: &str) -> Res
     Ok(Archived::Copied(size))
 }
 
-/// Archive every session that has a transcript on disk.
-pub fn archive_all(db: &Db, paths: &Paths, agents: &Agents) -> Result<Vec<(String, Archived)>> {
+/// Is this session in a folder `[exclude]` leaves out? It was indexed before the folder was
+/// excluded, and from then on its transcript is not copied, mirrored or packed.
+pub fn is_left_out(cfg: &Config, s: &Session) -> bool {
+    s.cwd.as_deref().is_some_and(|c| cfg.is_excluded(c))
+}
+
+/// The copies in the archive of sessions in left-out folders: the mirror and the pack skip them.
+pub fn left_out_copies(conn: &Connection, cfg: &Config) -> Result<Vec<PathBuf>> {
+    let rows: Vec<(String, String)> = conn
+        .prepare("SELECT cwd, archive_path FROM session WHERE cwd IS NOT NULL AND archive_path IS NOT NULL")?
+        .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?
+        .collect::<rusqlite::Result<_>>()?;
+    Ok(rows
+        .into_iter()
+        .filter(|(cwd, _)| cfg.is_excluded(cwd))
+        .map(|(_, copy)| PathBuf::from(copy))
+        .collect())
+}
+
+/// Archive every session that has a transcript on disk, except those in left-out folders.
+pub fn archive_all(
+    db: &Db,
+    paths: &Paths,
+    agents: &Agents,
+    cfg: &Config,
+) -> Result<Vec<(String, Archived)>> {
     let ids: Vec<String> = db
         .all_sessions()?
         .into_iter()
-        .filter(|s| s.transcript_state.as_deref() == Some("present"))
+        .filter(|s| s.transcript_state.as_deref() == Some("present") && !is_left_out(cfg, s))
         .map(|s| s.id)
         .collect();
     let mut out = vec![];
@@ -376,7 +401,7 @@ mod tests {
             Archived::Copied(_)
         ));
         assert!(matches!(
-            archive_all(&db, &paths, &agents).unwrap()[0].1,
+            archive_all(&db, &paths, &agents, &Config::default()).unwrap()[0].1,
             Archived::Unchanged
         ));
     }

@@ -64,7 +64,7 @@ fn world() -> World {
         db,
     };
     scan(&mut w.db, &w.cfg, false).unwrap();
-    archive::archive_all(&w.db, &w.paths, &w.agents()).unwrap();
+    archive::archive_all(&w.db, &w.paths, &w.agents(), &w.cfg).unwrap();
     w
 }
 
@@ -198,6 +198,48 @@ fn forgetting_removes_the_rows_and_the_archive_and_leaves_the_agent_copy_and_oth
     scan(&mut again, &w.cfg, false).unwrap();
     assert!(again.session_by_id(CLAUDE_A).unwrap().is_some());
     // (an agent copy that stays brings the session back at the next scan)
+}
+
+#[test]
+fn forgetting_a_session_keeps_the_night_runs_that_continued_it() {
+    let w = world();
+    for (kind, worktree) in [("continue", Some("/x/eye/night/run-1")), ("idea", None)] {
+        sql(
+            &w.db.conn,
+            "INSERT INTO night_run(kind, session_id, agent, folder, prompt, night, status, worktree, created_at)
+             VALUES(?1, ?2, 'claude', '/x', 'go on', '2026-11-01', 'done', ?3, 1)",
+            (kind, CLAUDE_A, worktree),
+        );
+    }
+    sql(
+        &w.db.conn,
+        "INSERT INTO night_run(kind, session_id, run_session_id, agent, folder, prompt, night, status, created_at)
+         VALUES('continue', ?1, ?2, 'claude', '/x', 'go on', '2026-11-01', 'done', 1)",
+        (CLAUDE_B, CLAUDE_A),
+    );
+    w.forget(&[CLAUDE_A], false).unwrap();
+    let runs: Vec<String> = w
+        .db
+        .conn
+        .prepare(
+            "SELECT kind || ' ' || coalesce(session_id, '-') || ' ' || coalesce(run_session_id, '-')
+                    || ' ' || coalesce(worktree, '-')
+             FROM night_run ORDER BY id",
+        )
+        .unwrap()
+        .query_map([], |r| r.get(0))
+        .unwrap()
+        .collect::<rusqlite::Result<_>>()
+        .unwrap();
+    assert_eq!(
+        runs,
+        [
+            "continue - - /x/eye/night/run-1".to_string(),
+            "idea - - -".to_string(),
+            format!("continue {CLAUDE_B} - -"),
+        ],
+        "the rows stay, without the link to the forgotten session"
+    );
 }
 
 #[test]

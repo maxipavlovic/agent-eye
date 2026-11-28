@@ -68,7 +68,7 @@ pub fn export(
             }
             let work = pack::Scratch::new(&env.paths.home, "export-stdout")?;
             let out = work.dir.join(&name);
-            let done = pack::export(&env.db, &env.paths, &env.agents, &out)?;
+            let done = pack::export(&env.db, &env.paths, &env.agents, &env.cfg, &out)?;
             to_stdout(&out)?;
             let c = &done.counts;
             eprintln!(
@@ -81,7 +81,7 @@ pub fn export(
             return Ok(());
         }
         let out = target(to, &name)?;
-        let done = pack::export(&env.db, &env.paths, &env.agents, &out)?;
+        let done = pack::export(&env.db, &env.paths, &env.agents, &env.cfg, &out)?;
         let c = &done.counts;
         println!("{}", show_path(&done.path));
         println!(

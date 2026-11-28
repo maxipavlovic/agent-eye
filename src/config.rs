@@ -632,11 +632,12 @@ impl Config {
     }
 
     /// Is `cwd` inside an excluded folder, or (with `[exclude] temp`, the default) a temp folder?
+    /// A folder covers itself and what is below it, by whole names: `/a/b` does not cover `/a/bc`.
     pub fn is_excluded(&self, cwd: &str) -> bool {
         self.exclude
             .paths
             .iter()
-            .any(|p| !p.is_empty() && cwd.starts_with(p.as_str()))
+            .any(|p| !p.is_empty() && Path::new(cwd).starts_with(p))
             || (self.exclude.temp && crate::util::is_temp_folder(cwd))
     }
 }
@@ -948,6 +949,17 @@ mod tests {
         assert_eq!(expand_tilde("~/c"), PathBuf::from(&home).join("c"));
         assert_eq!(expand_tilde("~"), PathBuf::from(&home));
         assert_eq!(expand_tilde("/a/~b"), PathBuf::from("/a/~b"));
+    }
+
+    #[test]
+    fn an_excluded_folder_covers_whole_names_only() {
+        let c = Config::parse("[exclude]\npaths=[\"/a/b\", \"/c/d/\"]").unwrap();
+        for covered in ["/a/b", "/a/b/", "/a/b/src", "/c/d", "/c/d/e"] {
+            assert!(c.is_excluded(covered), "{covered}");
+        }
+        for not in ["/a/bc", "/a/bc/x", "/a", "/c/dd", "/c/dd/e"] {
+            assert!(!c.is_excluded(not), "{not}");
+        }
     }
 
     #[test]

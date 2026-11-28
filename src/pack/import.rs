@@ -17,7 +17,9 @@ use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 
 /// Tables that are never merged session by session, though they may have a `session_id` column.
-const NOT_MERGED: [&str; 4] = ["event", "cursor", "meta", "idea"];
+/// A night run belongs to the machine that ran it: its folder, worktree and process mean nothing
+/// on another one, and its idea is numbered by that machine's ideas.
+const NOT_MERGED: [&str; 5] = ["event", "cursor", "meta", "idea", "night_run"];
 
 /// A checked pack and what importing it would change. Holds the unpacked files until dropped.
 pub struct Plan {

@@ -8,8 +8,12 @@ use crate::paths::Paths;
 use anyhow::{bail, Context, Result};
 use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 const STATE_FILE: &str = "mirror.state";
+/// Modified times that differ by less than this are the same: FAT keeps two-second times, and a
+/// copy made there must not look changed every day.
+const TIME_GRAIN: Duration = Duration::from_secs(2);
 
 /// How the last copy to the mirror ended, as `eye doctor` shows it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -46,8 +50,14 @@ fn record(paths: &Paths, state: &State) {
 }
 
 /// Copy `newest` (a snapshot just made) to the mirror, rotate there, and copy the archive when
-/// asked to. Without a mirror it does nothing; the outcome is kept for `eye doctor`.
-pub fn sync(paths: &Paths, cfg: &BackupCfg, newest: &Path) {
+/// asked to, without the copies `left_out` names (asked for only then). Without a mirror it does
+/// nothing; the outcome is kept for `eye doctor`.
+pub fn sync(
+    paths: &Paths,
+    cfg: &BackupCfg,
+    newest: &Path,
+    left_out: impl FnOnce() -> Result<Vec<PathBuf>>,
+) {
     let mirror = match cfg.mirror_dir() {
         Ok(Some(m)) => m,
         Ok(None) => return,
@@ -58,7 +68,8 @@ pub fn sync(paths: &Paths, cfg: &BackupCfg, newest: &Path) {
     };
     let result = copy_snapshot(&mirror, newest, cfg).and_then(|()| {
         if cfg.mirror_archive {
-            copy_archive(&paths.home.join("archive"), &mirror.join("archive"))?;
+            let skip = left_out()?;
+            copy_archive(&paths.home.join("archive"), &mirror.join("archive"), &skip)?;
         }
         Ok(())
     });
@@ -85,7 +96,8 @@ fn copy_snapshot(mirror: &Path, newest: &Path, cfg: &BackupCfg) -> Result<()> {
     let copied = std::fs::copy(newest, &tmp)
         .with_context(|| format!("copying to {}", mirror.display()))
         .and_then(|_| {
-            std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600))?;
+            // a disk that keeps no modes (FAT, exFAT) refuses this: the copy is still good
+            let _ = std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600));
             std::fs::rename(&tmp, &dest).with_context(|| format!("writing {}", dest.display()))
         });
     if copied.is_err() {
@@ -97,16 +109,20 @@ fn copy_snapshot(mirror: &Path, newest: &Path, cfg: &BackupCfg) -> Result<()> {
 }
 
 /// Copy the files of `from` into `to` (folders as they are in `from`) when they are not there yet
-/// or their size or modified time differ. Nothing in `to` is ever deleted.
-pub fn copy_archive(from: &Path, to: &Path) -> Result<()> {
+/// or their size or modified time differ, leaving out what is in or under `skip`. Nothing in `to`
+/// is ever deleted.
+pub fn copy_archive(from: &Path, to: &Path, skip: &[PathBuf]) -> Result<()> {
     if !from.is_dir() {
         return Ok(());
     }
     for entry in std::fs::read_dir(from)?.flatten() {
         let (src, dest) = (entry.path(), to.join(entry.file_name()));
+        if skip.iter().any(|p| src.starts_with(p)) {
+            continue;
+        }
         let md = entry.metadata()?;
         if md.is_dir() {
-            copy_archive(&src, &dest)?;
+            copy_archive(&src, &dest, skip)?;
         } else if md.is_file() && changed(&md, &dest) {
             std::fs::DirBuilder::new()
                 .recursive(true)
@@ -120,25 +136,32 @@ pub fn copy_archive(from: &Path, to: &Path) -> Result<()> {
 }
 
 fn changed(src: &std::fs::Metadata, dest: &Path) -> bool {
-    match std::fs::metadata(dest) {
-        Ok(d) => d.len() != src.len() || d.modified().ok() != src.modified().ok(),
-        Err(_) => true,
-    }
+    let Ok(d) = std::fs::metadata(dest) else {
+        return true;
+    };
+    let apart = match (d.modified(), src.modified()) {
+        (Ok(a), Ok(b)) => a.max(b).duration_since(a.min(b)).unwrap_or_default() >= TIME_GRAIN,
+        _ => false,
+    };
+    d.len() != src.len() || apart
 }
 
 /// Copy through a temp file so a half copy is never taken for a finished one, and give the copy
-/// the original's modified time, which is how a later run knows it is unchanged.
+/// the original's modified time, which is how a later run knows it is unchanged. A disk that
+/// keeps no modes or times (FAT, exFAT) refuses those two settings; the copy is still good.
 fn copy_file(src: &Path, dest: &Path, md: &std::fs::Metadata) -> Result<()> {
     let mut name = dest.file_name().unwrap_or_default().to_os_string();
     name.push(".eye-tmp");
     let tmp = dest.with_file_name(name);
     let done = std::fs::copy(src, &tmp)
         .and_then(|_| {
-            std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600))?;
-            std::fs::File::options()
-                .write(true)
-                .open(&tmp)?
-                .set_modified(md.modified()?)?;
+            let _ = std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600));
+            if let (Ok(file), Ok(time)) = (
+                std::fs::File::options().write(true).open(&tmp),
+                md.modified(),
+            ) {
+                let _ = file.set_modified(time);
+            }
             std::fs::rename(&tmp, dest)
         })
         .with_context(|| format!("copying {}", src.display()));

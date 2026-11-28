@@ -67,7 +67,8 @@ saves the stream in eye's temp folder, checks it like a file and asks its questi
 
 A pack is one file (a zstd-compressed tar) with the database, the whole transcript archive and a
 copy of the transcripts that are still with the agent but not archived yet, so it holds every
-session eye knows, plus a manifest with the sha256 of each file. Upload the file to Google Drive
+session eye knows (the transcripts of sessions in folders `[exclude] paths` leaves out are not
+copied, archived or not), plus a manifest with the sha256 of each file. Upload the file to Google Drive
 or any storage by hand; it is the same data as `~/.agent-eye`, so treat it that way (see
 [security.md](security.md)): encrypt it before it leaves the machine (above), or keep it somewhere
 only you can read. No `board.token` is in it.
@@ -83,7 +84,8 @@ keeps the old database as a `pre-import` snapshot (last 3 kept).
 - **A machine with sessions**: sessions whose id is not here are added with their rows; a session
   that exists here keeps the local row unless the pack's last activity is newer; ideas are added
   when no idea has the same title, folder and creation time; archive files are copied when missing
-  or older here. Hook events and read positions are not merged; the next scan rebuilds them.
+  or older here. Hook events, read positions and night runs are not merged: the next scan rebuilds
+  the first two, and a night run belongs to the machine that ran it.
 - **Another home folder**: when the pack's home differs from this machine's (`/Users/max` on a Mac,
   `/home/max` on Linux) every path in the sessions and the ideas' folders is rewritten, including
   Claude's folder names (`-Users-max-code` becomes `-home-max-code`). The plan shows the rewrite.
@@ -101,8 +103,14 @@ mirror_archive = true            # also copy the transcript archive
 Each snapshot is copied into the folder and rotated there. A folder that is missing (a disk that is
 not plugged in) is skipped and never created; the local snapshot is made anyway. With
 `mirror_archive`, files of `~/.agent-eye/archive/` whose size or time changed are copied into
-`<mirror>/archive/`; nothing is ever deleted there. A synced mirror folder carries the data off the
+`<mirror>/archive/`; nothing is ever deleted there. Transcripts of sessions in folders that
+`[exclude] paths` leaves out are not copied. A synced mirror folder carries the data off the
 machine: see [security.md](security.md).
+
+Give each machine its own mirror folder. Snapshot names do not say which machine made them, and
+each machine rotates the folder with its own keep rules, so two machines that share one delete each
+other's older snapshots. A disk that keeps no file modes or exact times (FAT, exFAT) is fine: eye
+skips what such a disk refuses, and treats times less than two seconds apart as the same.
 
 ## Doctor
 

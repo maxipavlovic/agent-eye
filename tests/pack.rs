@@ -331,7 +331,7 @@ impl Local {
 
 fn export_to(l: &Local, db: &Db, file: &Path) {
     let agents = agent_eye::agents::enabled(&l.cfg);
-    pack::export(db, &l.paths, &agents, file).unwrap();
+    pack::export(db, &l.paths, &agents, &l.cfg, file).unwrap();
 }
 
 fn import_in(l: &Local, file: &Path) -> pack::Plan {
@@ -374,7 +374,23 @@ fn merging_adds_new_sessions_takes_newer_rows_and_adds_only_new_ideas() {
             [S2],
         )
         .unwrap();
-    agent_eye::archive::archive_all(&da, &a.paths, &agent_eye::agents::enabled(&a.cfg)).unwrap();
+    // night runs belong to the machine that ran them: here S1 and S2 were continued by runs, and
+    // C has a run of its own for S1
+    for (db, session, folder) in [
+        (&da, S1, "/a/work"),
+        (&da, S2, "/a/work"),
+        (&dc, S1, "/c/work"),
+    ] {
+        db.conn
+            .execute(
+                "INSERT INTO night_run(kind, session_id, agent, folder, prompt, night, status, created_at)
+                 VALUES('continue', ?1, 'claude', ?2, 'go on', '2026-11-01', 'done', 1)",
+                [session, folder],
+            )
+            .unwrap();
+    }
+    agent_eye::archive::archive_all(&da, &a.paths, &agent_eye::agents::enabled(&a.cfg), &a.cfg)
+        .unwrap();
     let pack_file = t.path().join("a.eyepack");
     export_to(&a, &da, &pack_file);
     drop((da, dc));
@@ -412,6 +428,16 @@ fn merging_adds_new_sessions_takes_newer_rows_and_adds_only_new_ideas() {
     assert_eq!(found("newer"), 1);
     assert_eq!(found("older"), 0, "the replaced row's text is gone");
     assert_eq!(found("gamma"), 1);
+    // the night runs of this machine stay as they were, and the pack's are not brought in
+    let runs: Vec<(String, String)> = db
+        .conn
+        .prepare("SELECT session_id, folder FROM night_run ORDER BY id")
+        .unwrap()
+        .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))
+        .unwrap()
+        .collect::<rusqlite::Result<_>>()
+        .unwrap();
+    assert_eq!(runs, [(S1.to_string(), "/c/work".to_string())]);
     // the turns travel with their session: a new session brings them, a newer one replaces them
     let turns = |id: &str| {
         count(

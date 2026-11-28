@@ -47,7 +47,7 @@ fn restoring_an_older_snapshot_and_scanning_brings_back_the_newer_session() {
     let mut db = Db::open(&paths.db_path()).unwrap();
     scan(&mut db, &cfg, false).unwrap();
     assert_eq!(sessions(&db), 1);
-    backup::take(&db.conn, &paths, &cfg.backup, &Reason::Manual).unwrap();
+    backup::take(&db.conn, &paths, &cfg, &Reason::Manual).unwrap();
 
     std::fs::write(
         proj.join(format!("{S2}.jsonl")),

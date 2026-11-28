@@ -3,6 +3,7 @@
 use super::{host_name, mtime_secs, Counts, Item, Live, Manifest, Scratch, Sum, FORMAT};
 use crate::agents::Agents;
 use crate::archive;
+use crate::config::Config;
 use crate::db::{Db, SCHEMA_VERSION};
 use crate::paths::Paths;
 use anyhow::{Context, Result};
@@ -71,15 +72,17 @@ fn config_for_pack(text: &str) -> String {
 
 /// Transcripts still with their agent that the archive does not hold in their current state: a
 /// copy of each, in the archive's form, goes to `live/<agent>/<project dir>/<archive name>`.
+/// Sessions in folders `[exclude]` leaves out have none.
 fn live_copies(
     db: &Db,
     paths: &Paths,
     agents: &Agents,
+    cfg: &Config,
     work: &Path,
 ) -> Result<(Vec<Item>, Vec<Live>)> {
     let (mut items, mut live) = (vec![], vec![]);
     for (n, s) in db.all_sessions()?.into_iter().enumerate() {
-        if s.transcript_state.as_deref() != Some("present") {
+        if s.transcript_state.as_deref() != Some("present") || archive::is_left_out(cfg, &s) {
             continue;
         }
         let (Some(agent), Some(src), Some(pd)) = (
@@ -125,8 +128,15 @@ fn live_copies(
     Ok((items, live))
 }
 
-/// Make the pack at `out` (a file that must not exist yet) from this eye home.
-pub fn export(db: &Db, paths: &Paths, agents: &Agents, out: &Path) -> Result<Exported> {
+/// Make the pack at `out` (a file that must not exist yet) from this eye home. The transcripts of
+/// sessions in folders `[exclude]` leaves out, archived or not, are not in it.
+pub fn export(
+    db: &Db,
+    paths: &Paths,
+    agents: &Agents,
+    cfg: &Config,
+    out: &Path,
+) -> Result<Exported> {
     let work = Scratch::new(&paths.home, "export")?;
     let mut items: Vec<Item> = vec![];
 
@@ -141,12 +151,14 @@ pub fn export(db: &Db, paths: &Paths, agents: &Agents, out: &Path) -> Result<Exp
 
     let mut archived = vec![];
     walk(&paths.home.join("archive"), "archive", &mut archived);
+    let left_out = archive::left_out_copies(&db.conn, cfg)?;
+    archived.retain(|i| !left_out.iter().any(|p| i.src.starts_with(p)));
     let archive_files = archived.len() as u64;
     items.extend(archived);
 
     let build = work.dir.join("live");
     std::fs::create_dir_all(&build)?;
-    let (live_items, live) = live_copies(db, paths, agents, &build)?;
+    let (live_items, live) = live_copies(db, paths, agents, cfg, &build)?;
     let live_files = live_items.len() as u64;
     items.extend(live_items);
 
