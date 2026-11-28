@@ -483,10 +483,13 @@ mod tests {
         let writer = std::thread::spawn(move || {
             for _ in 0..200 {
                 std::thread::sleep(Duration::from_millis(10));
-                let folder = std::fs::read_dir(&work)
-                    .ok()
-                    .and_then(|d| d.flatten().next())
-                    .map(|e| e.path());
+                // the question's folder, not the lock file that sits beside it
+                let folder = std::fs::read_dir(&work).ok().and_then(|d| {
+                    d.flatten().map(|e| e.path()).find(|p| {
+                        p.file_name()
+                            .is_some_and(|n| n.to_string_lossy().starts_with(ASK_PREFIX))
+                    })
+                });
                 if let Some(folder) = folder {
                     std::fs::create_dir_all(&agy).unwrap();
                     summaries(&agy, &[("asked-run", &folder)]);
