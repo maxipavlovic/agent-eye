@@ -79,14 +79,17 @@ impl Db {
     }
 
     fn open_read_only(path: &Path) -> Result<Db> {
+        // SQLite says only "unable to open" for a file it cannot read: say what is wrong with it
+        std::fs::File::open(path).with_context(|| format!("reading {}", path.display()))?;
         let conn = match read_only_conn(path, false) {
             Ok(c) => c,
             Err(_) if wal_is_empty(path) => read_only_conn(path, true)
                 .with_context(|| format!("reading {}", path.display()))?,
-            Err(_) => bail!(
-                "{} has changes waiting in its -wal file, and reading them needs an -shm file beside it that cannot be made here: run eye once where it can write",
+            Err(e) if cannot_open_log(&e) => bail!(
+                "{} has changes waiting in its -wal file, and reading them needs an -shm file beside it that cannot be made here: run eye once where it can write (SQLite said: {e})",
                 path.display()
             ),
+            Err(e) => return Err(e).with_context(|| format!("reading {}", path.display())),
         };
         let db = Db {
             conn,
@@ -114,6 +117,16 @@ impl Db {
             bail!("{shown} is from a newer eye (schema {version}; this eye reads {SCHEMA_VERSION}): use the newer eye here")
         }
     }
+}
+
+/// Is this what SQLite says when the log files it needs cannot be opened or made? Anything else
+/// (a file that is not a database, one that cannot be read) is not about them.
+fn cannot_open_log(e: &anyhow::Error) -> bool {
+    matches!(
+        e.downcast_ref::<rusqlite::Error>(),
+        Some(rusqlite::Error::SqliteFailure(f, _))
+            if matches!(f.code, ErrorCode::CannotOpen | ErrorCode::ReadOnly)
+    )
 }
 
 /// True when no change waits in the `-wal` file: it is not there, or it holds nothing.
