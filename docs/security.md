@@ -13,7 +13,7 @@ machine, and how to report a problem.
   `~/.claude/settings.json`, for Codex CLI `~/.codex/hooks.json`). Each call is
   `<path>/agent-eye hook <Event>` (with `--agent codex` for Codex); it reads JSON on stdin,
   appends one short line to a local file, prints nothing and exits 0. Other tools' entries in that
-  file are never touched, a backup is made, and `eye uninstall` puts the file back. A settings file
+  file are never touched, a backup is made, a file the agent saved in the meantime is left as the agent wrote it (the install says to run it again), and `eye uninstall` puts the file back. A settings file
   that is not 2-space JSON is rewritten in that form (same entries, new layout), after the backup;
   install says so. Codex runs a hook only after you trust it once with `/hooks`; eye never touches
   Codex's trust or its `notify` setting. For Codex the `PostToolUse` hook runs after every tool call

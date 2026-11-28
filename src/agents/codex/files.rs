@@ -292,30 +292,67 @@ pub fn delete_thread(dir: &Path, thread_id: &str) -> Result<Vec<String>> {
         gone.push(crate::util::show_path(&f.path));
     }
     let index = dir.join(INDEX_FILE);
-    if let Ok(text) = std::fs::read_to_string(&index) {
-        let keep: Vec<&str> = text
-            .lines()
-            .filter(|l| {
-                serde_json::from_str::<Value>(l)
-                    .ok()
-                    .and_then(|v| str_at(&v, &["id"]).map(str::to_ascii_lowercase))
-                    .is_none_or(|i| i != id)
-            })
-            .collect();
-        if keep.len() != text.lines().count() {
-            let tmp = index.with_extension("jsonl.eye-tmp");
-            let mut out = keep.join("\n");
-            if !keep.is_empty() {
-                out.push('\n');
-            }
-            let perms = std::fs::metadata(&index)?.permissions();
-            std::fs::write(&tmp, out)?;
-            std::fs::set_permissions(&tmp, perms)?;
-            std::fs::rename(&tmp, &index)?;
-            gone.push(format!("its line in {}", crate::util::show_path(&index)));
-        }
+    let is_thread = |line: &str| {
+        serde_json::from_str::<Value>(line)
+            .ok()
+            .and_then(|v| str_at(&v, &["id"]).map(str::to_ascii_lowercase))
+            .is_some_and(|i| i == id)
+    };
+    let shown = crate::util::show_path(&index);
+    match rewrite_index(&index, is_thread)? {
+        Rewrite::Written => gone.push(format!("its line in {shown}")),
+        Rewrite::Moving => gone.push(format!(
+            "its line in {shown} NOT removed: Codex kept writing to it (run forget again)"
+        )),
+        Rewrite::Untouched => {}
     }
     Ok(gone)
+}
+
+/// How many times the index is read again when Codex wrote to it meanwhile.
+const INDEX_TRIES: usize = 3;
+
+/// What `rewrite_index` did.
+#[derive(Debug, PartialEq, Eq)]
+enum Rewrite {
+    /// Nothing to take out, or no file.
+    Untouched,
+    Written,
+    /// The file changed under every try, so nothing was written.
+    Moving,
+}
+
+/// Write the index again without the lines `drop` picks. Codex appends to it (a new thread, a
+/// rename) while eye works, and a line appended between the read and the rename would be lost. So
+/// the new text goes to a temp file first, and replaces the index only if the index still has the
+/// size and time it was read with; if not, it is read again.
+fn rewrite_index(index: &Path, drop: impl Fn(&str) -> bool) -> Result<Rewrite> {
+    for _ in 0..INDEX_TRIES {
+        let Some(seen) = Stamp::of_file(index) else {
+            return Ok(Rewrite::Untouched);
+        };
+        let Ok(text) = std::fs::read_to_string(index) else {
+            return Ok(Rewrite::Untouched);
+        };
+        let keep: Vec<&str> = text.lines().filter(|l| !drop(l)).collect();
+        if keep.len() == text.lines().count() {
+            return Ok(Rewrite::Untouched);
+        }
+        let tmp = index.with_extension("jsonl.eye-tmp");
+        let mut out = keep.join("\n");
+        if !keep.is_empty() {
+            out.push('\n');
+        }
+        let perms = std::fs::metadata(index)?.permissions();
+        std::fs::write(&tmp, out)?;
+        std::fs::set_permissions(&tmp, perms)?;
+        if Stamp::of_file(index) == Some(seen) {
+            std::fs::rename(&tmp, index)?;
+            return Ok(Rewrite::Written);
+        }
+        let _ = std::fs::remove_file(&tmp);
+    }
+    Ok(Rewrite::Moving)
 }
 
 /// A sub-agent of a session.
@@ -427,6 +464,69 @@ mod tests {
         }
     }
     use serde_json::json;
+
+    fn index_line(id: &str) -> String {
+        format!("{{\"id\":\"{id}\",\"thread_name\":\"n\"}}\n")
+    }
+
+    fn append(path: &Path, text: &str) {
+        use std::io::Write;
+        std::fs::OpenOptions::new()
+            .append(true)
+            .open(path)
+            .unwrap()
+            .write_all(text.as_bytes())
+            .unwrap();
+    }
+
+    /// Codex names a thread while eye decides which lines of the index to drop: the new line
+    /// must still be there afterwards.
+    #[test]
+    fn a_line_codex_appends_while_the_index_is_rewritten_is_kept() {
+        let t = tempfile::tempdir().unwrap();
+        let index = t.path().join(INDEX_FILE);
+        std::fs::write(&index, index_line("a") + &index_line("b")).unwrap();
+        let first = std::cell::Cell::new(true);
+        let done = rewrite_index(&index, |l| {
+            if first.replace(false) {
+                append(&index, &index_line("c"));
+            }
+            l.contains("\"a\"")
+        })
+        .unwrap();
+        assert_eq!(done, Rewrite::Written);
+        assert_eq!(
+            std::fs::read_to_string(&index).unwrap(),
+            index_line("b") + &index_line("c")
+        );
+        assert!(!index.with_extension("jsonl.eye-tmp").exists());
+    }
+
+    #[test]
+    fn an_index_that_keeps_changing_is_left_alone_and_says_so() {
+        let t = tempfile::tempdir().unwrap();
+        let index = t.path().join(INDEX_FILE);
+        std::fs::write(&index, index_line("a")).unwrap();
+        let done = rewrite_index(&index, |l| {
+            append(&index, &index_line("more"));
+            l.contains("\"a\"")
+        })
+        .unwrap();
+        assert_eq!(done, Rewrite::Moving);
+        let text = std::fs::read_to_string(&index).unwrap();
+        assert!(text.starts_with(&index_line("a")), "nothing was taken out");
+        assert!(!index.with_extension("jsonl.eye-tmp").exists());
+        // and with nothing to take out, or no file, nothing is written
+        std::fs::write(&index, index_line("b")).unwrap();
+        assert_eq!(
+            rewrite_index(&index, |l| l.contains("\"a\"")).unwrap(),
+            Rewrite::Untouched
+        );
+        assert_eq!(
+            rewrite_index(&t.path().join("none"), |_| true).unwrap(),
+            Rewrite::Untouched
+        );
+    }
 
     #[test]
     fn rollout_file_names_carry_the_month_and_the_thread() {
